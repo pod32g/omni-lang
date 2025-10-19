@@ -1,0 +1,30 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name iterate3
+      Params [
+        items: array<int>
+      ]
+      Return int
+      Body
+        Block {
+          ForStmt {
+            Target item
+            Iterable
+              Identifier items
+            Body
+              Block {
+                ReturnStmt {
+                  Value
+                    Identifier item
+                }
+              }
+          }
+          ReturnStmt {
+            Value
+              Literal int 3
+          }
+        }
+    }
+  ]
+}

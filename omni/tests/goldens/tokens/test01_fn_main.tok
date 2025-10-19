@@ -1,0 +1,8 @@
+1:1	FUNC	"func"
+1:6	IDENT	"main"
+1:10	LPAREN	"("
+1:11	RPAREN	")"
+1:13	LBRACE	"{"
+2:3	RETURN	"return"
+3:1	RBRACE	"}"
+4:1	EOF	""

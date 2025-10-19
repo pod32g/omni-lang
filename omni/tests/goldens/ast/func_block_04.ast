@@ -1,0 +1,23 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name sum4
+      Params [
+        a: int
+        b: int
+      ]
+      Return int
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Binary +
+                Binary +
+                  Identifier a
+                  Identifier b
+                Literal int 4
+          }
+        }
+    }
+  ]
+}

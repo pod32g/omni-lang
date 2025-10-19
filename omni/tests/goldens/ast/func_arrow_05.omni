@@ -1,0 +1,1 @@
+func f5(x:int):int => x + 5

@@ -1,0 +1,15 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name f3
+      Params [
+        x: int
+      ]
+      Return int
+      ExprBody
+        Binary +
+          Identifier x
+          Literal int 3
+    }
+  ]
+}

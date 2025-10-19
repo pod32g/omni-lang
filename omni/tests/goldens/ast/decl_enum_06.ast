@@ -1,0 +1,24 @@
+Module {
+  Decls [
+    EnumDecl {
+      Name Enum6
+      Variants [
+        LOW
+        MEDIUM
+        HIGH
+      ]
+    }
+    FuncDecl {
+      Name chooseEnum6
+      Return Enum6
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Member LOW
+                Identifier Enum6
+          }
+        }
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name check4
+      Params [
+        v: int
+      ]
+      Return int
+      Body
+        Block {
+          IfStmt {
+            Cond
+              Binary >
+                Identifier v
+                Literal int 4
+            Then
+              Block {
+                ReturnStmt {
+                  Value
+                    Identifier v
+                }
+              }
+            Else
+              Block {
+                ReturnStmt {
+                  Value
+                    Literal int 3
+                }
+              }
+          }
+        }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+enum Enum4 { ONE TWO }
+
+func chooseEnum4():Enum4 {
+  return Enum4.ONE
+}

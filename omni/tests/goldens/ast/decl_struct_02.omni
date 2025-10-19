@@ -1,0 +1,8 @@
+struct Pair2 {
+  left:int
+  right:int
+}
+
+func makePair2():Pair2 {
+  return Pair2{ left:2, right:3 }
+}

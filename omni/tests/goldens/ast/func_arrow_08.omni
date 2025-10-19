@@ -1,0 +1,1 @@
+func f8(x:int):int => x + 8

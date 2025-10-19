@@ -1,0 +1,6 @@
+func loop8():int {
+  for i:int = 0; i < 8; i++ {
+    return i
+  }
+  return 8
+}

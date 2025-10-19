@@ -1,0 +1,38 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name loop5
+      Return int
+      Body
+        Block {
+          ForStmt {
+            Init
+              ShortVarDecl {
+                Name i
+                Type int
+                Value
+                  Literal int 0
+              }
+            Cond
+              Binary <
+                Identifier i
+                Literal int 5
+            Post
+              IncrementStmt ++
+                Identifier i
+            Body
+              Block {
+                ReturnStmt {
+                  Value
+                    Identifier i
+                }
+              }
+          }
+          ReturnStmt {
+            Value
+              Literal int 5
+          }
+        }
+    }
+  ]
+}

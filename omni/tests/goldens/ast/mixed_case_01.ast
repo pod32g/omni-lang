@@ -1,0 +1,56 @@
+Module {
+  Imports [
+    Import std.io
+  ]
+  Decls [
+    LetDecl {
+      Name threshold1
+      Type int
+      Value
+        Literal int 10
+    }
+    FuncDecl {
+      Name process1
+      Params [
+        values: array<int>
+      ]
+      Return int
+      Body
+        Block {
+          BindingStmt var {
+            Name sum
+            Type int
+            Value
+              Literal int 0
+          }
+          ForStmt {
+            Target value
+            Iterable
+              Identifier values
+            Body
+              Block {
+                IfStmt {
+                  Cond
+                    Binary >
+                      Identifier value
+                      Identifier threshold1
+                  Then
+                    Block {
+                      ExprStmt
+                        Assignment
+                          Identifier sum
+                          Binary +
+                            Identifier sum
+                            Identifier value
+                    }
+                }
+              }
+          }
+          ReturnStmt {
+            Value
+              Identifier sum
+          }
+        }
+    }
+  ]
+}

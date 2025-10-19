@@ -1,0 +1,2 @@
+let value1:int = 1
+var counter1:int = value1 + 1

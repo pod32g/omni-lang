@@ -1,0 +1,18 @@
+Module {
+  Decls [
+    LetDecl {
+      Name value3
+      Type int
+      Value
+        Literal int 3
+    }
+    VarDecl {
+      Name counter3
+      Type int
+      Value
+        Binary +
+          Identifier value3
+          Literal int 1
+    }
+  ]
+}

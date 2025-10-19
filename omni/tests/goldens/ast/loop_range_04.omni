@@ -1,0 +1,6 @@
+func iterate4(items:array<int>):int {
+  for item in items {
+    return item
+  }
+  return 4
+}

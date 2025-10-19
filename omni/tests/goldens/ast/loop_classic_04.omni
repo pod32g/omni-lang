@@ -1,0 +1,6 @@
+func loop4():int {
+  for i:int = 0; i < 4; i++ {
+    return i
+  }
+  return 4
+}

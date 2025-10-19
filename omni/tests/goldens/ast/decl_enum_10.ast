@@ -1,0 +1,23 @@
+Module {
+  Decls [
+    EnumDecl {
+      Name Enum10
+      Variants [
+        TRUE
+        FALSE
+      ]
+    }
+    FuncDecl {
+      Name chooseEnum10
+      Return Enum10
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Member TRUE
+                Identifier Enum10
+          }
+        }
+    }
+  ]
+}

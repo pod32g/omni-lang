@@ -1,0 +1,7 @@
+struct Node3 {
+  value:int
+}
+
+func makeNode3():array<Node3> {
+  return [Node3{ value:3 }, Node3{ value:4 }]
+}

@@ -1,0 +1,24 @@
+Module {
+  Decls [
+    EnumDecl {
+      Name Enum7
+      Variants [
+        SMALL
+        MEDIUM
+        LARGE
+      ]
+    }
+    FuncDecl {
+      Name chooseEnum7
+      Return Enum7
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Member SMALL
+                Identifier Enum7
+          }
+        }
+    }
+  ]
+}

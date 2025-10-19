@@ -1,0 +1,25 @@
+Module {
+  Decls [
+    EnumDecl {
+      Name Enum5
+      Variants [
+        NORTH
+        SOUTH
+        EAST
+        WEST
+      ]
+    }
+    FuncDecl {
+      Name chooseEnum5
+      Return Enum5
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Member NORTH
+                Identifier Enum5
+          }
+        }
+    }
+  ]
+}

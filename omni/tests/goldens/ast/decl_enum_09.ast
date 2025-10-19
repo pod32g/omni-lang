@@ -1,0 +1,24 @@
+Module {
+  Decls [
+    EnumDecl {
+      Name Enum9
+      Variants [
+        EARTH
+        WIND
+        FIRE
+      ]
+    }
+    FuncDecl {
+      Name chooseEnum9
+      Return Enum9
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Member EARTH
+                Identifier Enum9
+          }
+        }
+    }
+  ]
+}

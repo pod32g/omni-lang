@@ -1,0 +1,2 @@
+let flag:bool = true
+if false { return }

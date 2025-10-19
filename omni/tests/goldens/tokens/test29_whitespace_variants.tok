@@ -1,0 +1,7 @@
+1:4	LET	"let"
+1:8	IDENT	"spaced"
+1:17	COLON	":"
+1:21	IDENT	"int"
+1:27	ASSIGN	"="
+1:31	INT	"5"
+2:1	EOF	""

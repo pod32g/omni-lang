@@ -1,0 +1,3 @@
+func maps5():map<string,int> {
+  return { "a":5, "b":6 }
+}

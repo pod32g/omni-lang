@@ -1,0 +1,27 @@
+Module {
+  Decls [
+    StructDecl {
+      Name Pair3
+      Fields [
+        left: int
+        right: int
+      ]
+    }
+    FuncDecl {
+      Name makePair3
+      Return Pair3
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              StructLiteral Pair3 {
+                left
+                  Literal int 3
+                right
+                  Literal int 4
+              }
+          }
+        }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+1:1	LET	"let"
+1:5	IDENT	"ptr"
+1:9	ASSIGN	"="
+1:11	IDENT	"node"
+1:15	ARROW	"->"
+1:17	IDENT	"next"
+2:1	EOF	""

@@ -1,0 +1,2 @@
+let x:int = 1 // trailing comment
+let y:int = 2 // next line comment

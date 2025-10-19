@@ -1,0 +1,5 @@
+enum Enum3 { RED GREEN BLUE }
+
+func chooseEnum3():Enum3 {
+  return Enum3.RED
+}

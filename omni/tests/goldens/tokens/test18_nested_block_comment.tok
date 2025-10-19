@@ -1,0 +1,7 @@
+1:31	LET	"let"
+1:35	IDENT	"y"
+1:36	COLON	":"
+1:37	IDENT	"int"
+1:41	ASSIGN	"="
+1:43	INT	"2"
+2:1	EOF	""

@@ -1,0 +1,1 @@
+func sq(x:int):int => x * x

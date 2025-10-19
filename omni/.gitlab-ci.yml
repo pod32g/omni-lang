@@ -1,0 +1,31 @@
+stages:
+  - lint
+  - test
+  - build
+
+variables:
+  GOFLAGS: "-count=1"
+
+fmt:
+  stage: lint
+  image: golang:1.22
+  script:
+    - make fmt
+
+lint:
+  stage: lint
+  image: golang:1.22
+  script:
+    - make lint
+
+test:
+  stage: test
+  image: golang:1.22
+  script:
+    - make test
+
+build:
+  stage: build
+  image: golang:1.22
+  script:
+    - make build

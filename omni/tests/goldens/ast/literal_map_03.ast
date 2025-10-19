@@ -1,0 +1,22 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name maps3
+      Return map<string,int>
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              MapLiteral {
+                Entry
+                  Literal string "a"
+                  Literal int 3
+                Entry
+                  Literal string "b"
+                  Literal int 4
+              }
+          }
+        }
+    }
+  ]
+}

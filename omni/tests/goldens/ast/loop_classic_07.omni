@@ -1,0 +1,6 @@
+func loop7():int {
+  for i:int = 0; i < 7; i++ {
+    return i
+  }
+  return 7
+}

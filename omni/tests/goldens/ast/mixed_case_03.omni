@@ -1,0 +1,13 @@
+import std.io
+
+let threshold3:int = 30
+
+func process3(values:array<int>):int {
+  var sum:int = 0
+  for value in values {
+    if value > threshold3 {
+      sum = sum + value
+    }
+  }
+  return sum
+}

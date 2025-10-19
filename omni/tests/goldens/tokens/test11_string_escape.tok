@@ -1,0 +1,7 @@
+1:1	LET	"let"
+1:5	IDENT	"s"
+1:6	COLON	":"
+1:7	IDENT	"string"
+1:14	ASSIGN	"="
+1:16	STRING	"\"hello\\nworld\\\"\\t\""
+2:1	EOF	""

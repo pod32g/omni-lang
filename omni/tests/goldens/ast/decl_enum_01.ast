@@ -1,0 +1,24 @@
+Module {
+  Decls [
+    EnumDecl {
+      Name Enum1
+      Variants [
+        ALPHA
+        BETA
+        GAMMA
+      ]
+    }
+    FuncDecl {
+      Name chooseEnum1
+      Return Enum1
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Member ALPHA
+                Identifier Enum1
+          }
+        }
+    }
+  ]
+}

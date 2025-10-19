@@ -1,0 +1,6 @@
+func loop3():int {
+  for i:int = 0; i < 3; i++ {
+    return i
+  }
+  return 3
+}

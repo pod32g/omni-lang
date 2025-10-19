@@ -1,0 +1,30 @@
+Module {
+  Decls [
+    StructDecl {
+      Name Node6
+      Fields [
+        value: int
+      ]
+    }
+    FuncDecl {
+      Name makeNode6
+      Return array<Node6>
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              ArrayLiteral [
+                StructLiteral Node6 {
+                  value
+                    Literal int 6
+                }
+                StructLiteral Node6 {
+                  value
+                    Literal int 7
+                }
+              ]
+          }
+        }
+    }
+  ]
+}

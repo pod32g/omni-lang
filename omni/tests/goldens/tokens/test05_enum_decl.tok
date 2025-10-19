@@ -1,0 +1,8 @@
+1:1	ENUM	"enum"
+1:6	IDENT	"Color"
+1:12	LBRACE	"{"
+1:14	IDENT	"RED"
+1:18	IDENT	"GREEN"
+1:24	IDENT	"BLUE"
+1:29	RBRACE	"}"
+2:1	EOF	""

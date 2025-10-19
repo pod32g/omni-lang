@@ -1,0 +1,5 @@
+1:1	IMPORT	"import"
+1:8	IDENT	"std"
+1:11	DOT	"."
+1:12	IDENT	"io"
+2:1	EOF	""

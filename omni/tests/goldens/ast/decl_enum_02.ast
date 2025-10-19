@@ -1,0 +1,25 @@
+Module {
+  Decls [
+    EnumDecl {
+      Name Enum2
+      Variants [
+        SPRING
+        SUMMER
+        FALL
+        WINTER
+      ]
+    }
+    FuncDecl {
+      Name chooseEnum2
+      Return Enum2
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Member SPRING
+                Identifier Enum2
+          }
+        }
+    }
+  ]
+}

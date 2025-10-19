@@ -1,0 +1,1 @@
+func f10(x:int):int => x + 10

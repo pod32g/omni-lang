@@ -1,0 +1,7 @@
+func check2(v:int):int {
+  if v > 2 {
+    return v
+  } else {
+    return 1
+  }
+}

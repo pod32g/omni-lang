@@ -1,0 +1,24 @@
+Module {
+  Decls [
+    EnumDecl {
+      Name Enum8
+      Variants [
+        COPPER
+        SILVER
+        GOLD
+      ]
+    }
+    FuncDecl {
+      Name chooseEnum8
+      Return Enum8
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Member COPPER
+                Identifier Enum8
+          }
+        }
+    }
+  ]
+}
