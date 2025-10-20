@@ -89,8 +89,8 @@ test:
     - rustup default stable
   script:
     - cd omni
-    - make build-rust
     - make build-runtime
+    - make build-rust
     - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
     - make test
   coverage: '/coverage: \d+\.\d+%/'
