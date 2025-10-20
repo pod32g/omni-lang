@@ -600,7 +600,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Roadmap
 
-### Version 1.0 (Current)
+### Version 0.2.0 (Current)
 - ✅ Basic language features (variables, functions, control flow)
 - ✅ Complete compiler pipeline (lexer, parser, AST, type checker, MIR)
 - ✅ VM backend with comprehensive intrinsics

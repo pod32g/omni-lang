@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+- Advanced type system with generics and union types
+- MIR optimization passes and advanced features
+- Complete native code generation with Cranelift
+- Language features: concurrency, error handling, metaprogramming
+- Production readiness: performance optimization, security, deployment
+- Ecosystem development: package registry, community building
+
+## [0.2.0] - 2025-10-20
+
 ### Added
 - Comprehensive import system with alias support
 - String concatenation with mixed types using `+` operator
@@ -18,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standard library intrinsics for math, string, and I/O operations
 - Type inference improvements for mixed-type expressions
 - Enhanced diagnostic messages for better developer experience
+- Comprehensive roadmap with 6 development phases
+- Visual roadmap with ASCII diagrams and progress indicators
 
 ### Changed
 - Updated all examples to use new import syntax
@@ -25,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced type checker with better error reporting
 - Updated documentation to reflect new features
 - Regenerated golden test files with improved error messages
+- Optimized string operations with object pooling
+- Replaced VM switch statement with efficient jump table dispatch
 
 ### Fixed
 - Fixed e2e tests on macOS by skipping Cranelift-specific tests
@@ -32,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed unary expression handling in MIR generation
 - Fixed import resolution for both std and local modules
 - Fixed VM intrinsic function dispatch
+- Removed unused code and fixed linting issues
 
 ### Technical Details
 - **VM Coverage**: Improved from 23.5% to 65.7%
@@ -40,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Import System**: Supports both `import std.io as io` and `import math_utils` syntax
 - **String Operations**: Automatic type conversion for mixed string/integer concatenation
 - **Unary Operations**: Full support for `-` (negation) and `!` (logical NOT)
+- **Performance**: ~290ns/op string concat, ~23ns/op instruction dispatch
 
 ## [0.1.0] - 2025-10-20
 
@@ -103,7 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Version History
 
 - **v0.1.0**: Initial release with basic language features
-- **v0.2.0** (Unreleased): Enhanced with import system, string operations, and comprehensive testing
+- **v0.2.0**: Enhanced with import system, string operations, comprehensive testing, and roadmap
 
 ## Contributing
 
