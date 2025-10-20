@@ -135,13 +135,23 @@ func (p *Parser) parseImport() (*ast.ImportDecl, error) {
 			break
 		}
 	}
+
+	alias := ""
+	// Optional: "as <alias>"
+	if p.match(lexer.TokenAs) { // requires lexer to have TokenAs for 'as'
+		a := p.expect(lexer.TokenIdentifier)
+		alias = a.Lexeme
+	}
+
 	last := p.previous()
 	span := lexer.Span{Start: tok.Span.Start, End: last.Span.End}
-	return &ast.ImportDecl{SpanInfo: span, Path: parts}, nil
+	return &ast.ImportDecl{SpanInfo: span, Path: parts, Alias: alias}, nil
 }
 
 func (p *Parser) parseDecl() (ast.Decl, error) {
 	switch p.peekKind() {
+	case lexer.TokenImport:
+		return p.parseImport()
 	case lexer.TokenLet:
 		return p.parseLetDecl(false)
 	case lexer.TokenVar:
@@ -699,6 +709,10 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 	tok := p.advance()
 	switch tok.Kind {
 	case lexer.TokenIdentifier:
+		// Check if this is a std identifier that should be parsed as qualified
+		if tok.Lexeme == "std" {
+			return p.parseQualifiedIdentifier(tok)
+		}
 		return &ast.IdentifierExpr{SpanInfo: tok.Span, Name: tok.Lexeme}, nil
 	case lexer.TokenIntLiteral:
 		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralInt, Value: tok.Lexeme}, nil
@@ -927,6 +941,25 @@ func (p *Parser) errorAt(tok lexer.Token, format string, args ...interface{}) er
 		Span:    tok.Span,
 		Line:    lineText,
 	}
+}
+
+// parseQualifiedIdentifier parses an identifier and any following qualified parts.
+func (p *Parser) parseQualifiedIdentifier(tok lexer.Token) (ast.Expr, error) {
+	name := tok.Lexeme
+	span := tok.Span
+
+	// Check for qualified access (e.g., std.io.println)
+	for p.peekKind() == lexer.TokenDot {
+		p.advance() // consume the dot
+		nextTok := p.advance()
+		if nextTok.Kind != lexer.TokenIdentifier {
+			return nil, p.errorAtCurrent("expected identifier after dot")
+		}
+		name += "." + nextTok.Lexeme
+		span = lexer.Span{Start: span.Start, End: nextTok.Span.End}
+	}
+
+	return &ast.IdentifierExpr{SpanInfo: span, Name: name}, nil
 }
 
 func splitLines(input string) []string {

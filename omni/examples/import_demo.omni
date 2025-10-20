@@ -1,0 +1,27 @@
+// Comprehensive import demonstration
+import std.io as io
+import math_utils
+import string_utils as str
+
+func main(): int {
+    // Use std library with alias
+    io.println("=== Import Demo ===")
+    
+    // Use local module without alias
+    let result1: int = math_utils.add(10, 20)
+    let result2: int = math_utils.multiply(5, 6)
+    
+    // Use local module with alias
+    let len: int = str.length("hello")
+    let combined: string = str.concat("hello", "world")
+    
+    io.println("Math results:")
+    io.println("10 + 20 = " + result1)
+    io.println("5 * 6 = " + result2)
+    
+    io.println("String results:")
+    io.println("Length of 'hello': " + len)
+    io.println("Combined: " + combined)
+    
+    return result1 + result2 + len
+}

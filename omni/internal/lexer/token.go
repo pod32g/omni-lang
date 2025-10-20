@@ -24,6 +24,7 @@ const (
 	TokenStruct
 	TokenEnum
 	TokenImport
+	TokenAs
 	TokenIf
 	TokenElse
 	TokenFor
@@ -80,6 +81,7 @@ var kindNames = map[Kind]string{
 	TokenStruct:        "STRUCT",
 	TokenEnum:          "ENUM",
 	TokenImport:        "IMPORT",
+	TokenAs:            "AS",
 	TokenIf:            "IF",
 	TokenElse:          "ELSE",
 	TokenFor:           "FOR",

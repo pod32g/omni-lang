@@ -315,6 +315,8 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		return mirValue{ID: sym.Value, Type: sym.Type}, nil
 	case *ast.BinaryExpr:
 		return fb.emitBinary(e)
+	case *ast.UnaryExpr:
+		return fb.emitUnary(e)
 	case *ast.CallExpr:
 		return fb.emitCall(e)
 	case *ast.StructLiteralExpr:
@@ -323,6 +325,8 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		return fb.emitArrayLiteral(e)
 	case *ast.MapLiteralExpr:
 		return fb.emitMapLiteral(e)
+	case *ast.MemberExpr:
+		return fb.emitMemberAccess(e)
 	case *ast.AssignmentExpr:
 		if err := fb.lowerStmt(&ast.AssignmentStmt{SpanInfo: e.SpanInfo, Left: e.Left, Right: e.Right}); err != nil {
 			return mirValue{}, err
@@ -384,6 +388,23 @@ func (fb *functionBuilder) emitBinary(expr *ast.BinaryExpr) (mirValue, error) {
 	if isComparison(expr.Op) || isLogical(expr.Op) {
 		resultType = "bool"
 	}
+
+	// Handle string concatenation specially (string + string, string + int, int + string)
+	if expr.Op == "+" && (left.Type == "string" || right.Type == "string") {
+		resultType = "string"
+		inst := mir.Instruction{
+			ID:   id,
+			Op:   "strcat",
+			Type: resultType,
+			Operands: []mir.Operand{
+				valueOperand(left.ID, left.Type),
+				valueOperand(right.ID, right.Type),
+			},
+		}
+		fb.block.Instructions = append(fb.block.Instructions, inst)
+		return mirValue{ID: id, Type: resultType}, nil
+	}
+
 	inst := mir.Instruction{
 		ID:   id,
 		Op:   mapBinaryOp(expr.Op),
@@ -397,14 +418,103 @@ func (fb *functionBuilder) emitBinary(expr *ast.BinaryExpr) (mirValue, error) {
 	return mirValue{ID: id, Type: resultType}, nil
 }
 
+func (fb *functionBuilder) emitUnary(expr *ast.UnaryExpr) (mirValue, error) {
+	operand, err := fb.lowerExpr(expr.Expr)
+	if err != nil {
+		return mirValue{}, err
+	}
+
+	id := fb.fn.NextValue()
+	resultType := operand.Type
+
+	// Map unary operators to MIR instructions
+	var op string
+	switch expr.Op {
+	case "-":
+		op = "neg"
+	case "!":
+		op = "not"
+	default:
+		return mirValue{}, fmt.Errorf("mir builder: unsupported unary operator %q", expr.Op)
+	}
+
+	inst := mir.Instruction{
+		ID:   id,
+		Op:   op,
+		Type: resultType,
+		Operands: []mir.Operand{
+			valueOperand(operand.ID, operand.Type),
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, inst)
+	return mirValue{ID: id, Type: resultType}, nil
+}
+
 func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 	id := fb.fn.NextValue()
 	operands := []mir.Operand{}
 	calleeName := "<unknown>"
 	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok {
 		calleeName = ident.Name
+	} else if member, ok := expr.Callee.(*ast.MemberExpr); ok {
+		// Handle module member access (e.g., math_utils.add)
+		if ident, ok := member.Target.(*ast.IdentifierExpr); ok {
+			calleeName = ident.Name + "." + member.Member
+		} else {
+			return mirValue{}, fmt.Errorf("mir builder: unsupported member access target in call")
+		}
 	}
+	// Normalize alias-only module calls like io.println -> std.io.println
+	if !strings.HasPrefix(calleeName, "std.") && strings.Contains(calleeName, ".") {
+		// Best-effort normalization: if the first segment matches a known std submodule
+		parts := strings.Split(calleeName, ".")
+		switch parts[0] {
+		case "io", "math", "string", "str", "array", "os", "collections":
+			if parts[0] == "str" {
+				// Map str to std.string
+				calleeName = "std.string." + parts[1]
+			} else {
+				calleeName = "std." + calleeName
+			}
+		}
+	}
+
+	// Handle function calls
+	resultType := inferTypePlaceholder
 	operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: calleeName})
+
+	if strings.HasPrefix(calleeName, "std.") {
+		// For std functions, determine return type based on function name
+		if strings.Contains(calleeName, "io.") {
+			resultType = "void"
+		} else if strings.Contains(calleeName, "math.") {
+			resultType = "int"
+		} else if strings.Contains(calleeName, "string.") {
+			if strings.Contains(calleeName, "length") {
+				resultType = "int"
+			} else if strings.Contains(calleeName, "concat") {
+				resultType = "string"
+			} else {
+				resultType = "string"
+			}
+		} else {
+			resultType = "void"
+		}
+	} else if strings.Contains(calleeName, ".") {
+		// For imported module functions, try to get signature from function signatures
+		if sig, exists := fb.sigs[calleeName]; exists {
+			resultType = sig.Return
+		} else {
+			// Fallback: assume int return for unknown imported functions
+			resultType = "int"
+		}
+	} else {
+		// Regular local function call
+		if sig, exists := fb.sigs[calleeName]; exists {
+			resultType = sig.Return
+		}
+	}
+
 	for _, arg := range expr.Args {
 		value, err := fb.lowerExpr(arg)
 		if err != nil {
@@ -412,10 +522,7 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 		}
 		operands = append(operands, valueOperand(value.ID, value.Type))
 	}
-	resultType := inferTypePlaceholder
-	if sig, exists := fb.sigs[calleeName]; exists {
-		resultType = sig.Return
-	}
+
 	inst := mir.Instruction{
 		ID:       id,
 		Op:       "call",
@@ -424,6 +531,17 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 	}
 	fb.block.Instructions = append(fb.block.Instructions, inst)
 	return mirValue{ID: id, Type: resultType}, nil
+}
+
+func (fb *functionBuilder) emitMemberAccess(expr *ast.MemberExpr) (mirValue, error) {
+	// Handle module member access (e.g., math_utils.add)
+	if _, ok := expr.Target.(*ast.IdentifierExpr); ok {
+		// Check if it's a function call context (this will be handled by the caller)
+		// For now, just return a placeholder that indicates this is a qualified function
+		return mirValue{ID: mir.InvalidValue, Type: "func"}, nil
+	}
+
+	return mirValue{}, fmt.Errorf("mir builder: unsupported member access target type %T", expr.Target)
 }
 
 func (fb *functionBuilder) emitStructLiteral(expr *ast.StructLiteralExpr) (mirValue, error) {

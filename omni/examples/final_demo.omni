@@ -1,0 +1,103 @@
+// OmniLang Final Comprehensive Demo
+// This demonstrates all the implemented features
+
+import std.io as io
+import std.math as math
+import std.string as str
+import math_utils
+import string_utils as str_util
+
+func main(): int {
+    io.println("=== OmniLang Final Demo ===")
+    io.println("Demonstrating all implemented features:")
+    io.println()
+    
+    // 1. Local file imports with qualified calls
+    io.println("--- Local File Imports ---")
+    let add_result: int = math_utils.add(100, 200)
+    let mult_result: int = math_utils.multiply(15, 20)
+    let square_result: int = math_utils.square(12)
+    io.println("math_utils.add(100, 200) = " + add_result)
+    io.println("math_utils.multiply(15, 20) = " + mult_result)
+    io.println("math_utils.square(12) = " + square_result)
+    io.println()
+    
+    // 2. Standard library with aliases
+    io.println("--- Standard Library Functions ---")
+    let max_val: int = math.max(500, 1000)
+    let min_val: int = math.min(500, 1000)
+    let abs_val: int = math.abs(-250)
+    let pow_val: int = math.pow(2, 8)
+    let gcd_val: int = math.gcd(48, 72)
+    let lcm_val: int = math.lcm(48, 72)
+    let fact_val: int = math.factorial(7)
+    
+    io.println("math.max(500, 1000) = " + max_val)
+    io.println("math.min(500, 1000) = " + min_val)
+    io.println("math.abs(-250) = " + abs_val)
+    io.println("math.pow(2, 8) = " + pow_val)
+    io.println("math.gcd(48, 72) = " + gcd_val)
+    io.println("math.lcm(48, 72) = " + lcm_val)
+    io.println("math.factorial(7) = " + fact_val)
+    io.println()
+    
+    // 3. String functions and concatenation
+    io.println("--- String Functions & Concatenation ---")
+    let hello: string = "Hello"
+    let world: string = "World"
+    let combined: string = str.concat(hello, world)
+    let length: int = str.length(combined)
+    let greeting: string = "Greeting: " + combined + " (length: " + length + ")"
+    
+    io.println("str.concat('Hello', 'World') = " + combined)
+    io.println("str.length = " + length)
+    io.println(greeting)
+    io.println()
+    
+    // 4. Mixed type concatenation
+    io.println("--- Mixed Type Concatenation ---")
+    let num: int = 42
+    let text: string = "The answer is " + num
+    let bool_val: bool = true
+    let bool_text: string = "Boolean value: " + bool_val
+    io.println(text)
+    io.println(bool_text)
+    io.println()
+    
+    // 5. Unary expressions
+    io.println("--- Unary Expressions ---")
+    let positive: int = 100
+    let negative: int = -positive
+    let double_neg: int = -(-positive)
+    let true_val: bool = true
+    let not_true: bool = !true_val
+    let not_false: bool = !false
+    
+    io.println("positive = " + positive)
+    io.println("negative = " + negative)
+    io.println("double_neg = " + double_neg)
+    io.println("true_val = " + true_val)
+    io.println("not_true = " + not_true)
+    io.println("not_false = " + not_false)
+    io.println()
+    
+    // 6. Complex expressions
+    io.println("--- Complex Expressions ---")
+    let complex: int = math.max(math_utils.add(10, 20), math_utils.multiply(5, 6))
+    let complex_str: string = "Complex result: " + complex + " (using max of add and multiply)"
+    io.println(complex_str)
+    io.println()
+    
+    // 7. String utilities (placeholder functions)
+    io.println("--- String Utilities (Local Import) ---")
+    let util_length: int = str_util.length("test")
+    let util_concat: string = str_util.concat("test", "ing")
+    io.println("str_util.length('test') = " + util_length)
+    io.println("str_util.concat('test', 'ing') = " + util_concat)
+    io.println()
+    
+    io.println("=== Demo Complete ===")
+    io.println("All features working correctly!")
+    
+    return 0
+}

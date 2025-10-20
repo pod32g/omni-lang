@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/omni-lang/omni/internal/compiler"
 	"github.com/omni-lang/omni/internal/mir/builder"
 	"github.com/omni-lang/omni/internal/parser"
 	"github.com/omni-lang/omni/internal/passes"
@@ -24,6 +25,11 @@ func Execute(path string) (vm.Result, error) {
 
 	mod, err := parser.Parse(path, string(src))
 	if err != nil {
+		return vm.Result{}, err
+	}
+
+	// Merge locally imported modules' functions into the main module
+	if err := compiler.MergeImportedModules(mod, filepath.Dir(path)); err != nil {
 		return vm.Result{}, err
 	}
 

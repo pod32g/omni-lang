@@ -23,10 +23,14 @@ func (m *Module) node()            {}
 type ImportDecl struct {
 	SpanInfo lexer.Span
 	Path     []string
+	// Alias, when non-empty, provides the local name used to reference the
+	// imported module path (e.g., import std.io as io).
+	Alias string
 }
 
 func (i *ImportDecl) Span() lexer.Span { return i.SpanInfo }
 func (i *ImportDecl) node()            {}
+func (i *ImportDecl) decl()            {}
 
 // Decl captures top-level declarations.
 type Decl interface {

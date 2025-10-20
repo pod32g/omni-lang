@@ -1,0 +1,10 @@
+// Example: Using local file imports
+import math_utils
+
+func main(): int {
+    let result1: int = math_utils.add(5, 3)
+    let result2: int = math_utils.multiply(4, 6)
+    let result3: int = math_utils.square(7)
+    
+    return result1 + result2 + result3
+}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/omni-lang/omni/internal/ast"
 	"github.com/omni-lang/omni/internal/mir"
 	"github.com/omni-lang/omni/internal/mir/builder"
 	"github.com/omni-lang/omni/internal/mir/printer"
@@ -79,6 +80,11 @@ func Compile(cfg Config) error {
 		return err
 	}
 
+	// Merge locally imported modules' functions into the main module so the VM can resolve them
+	if err := MergeImportedModules(mod, filepath.Dir(cfg.InputPath)); err != nil {
+		return err
+	}
+
 	if err := checker.Check(cfg.InputPath, string(src), mod); err != nil {
 		return err
 	}
@@ -105,6 +111,57 @@ func Compile(cfg Config) error {
 	default:
 		return fmt.Errorf("unsupported backend: %s", backend)
 	}
+}
+
+// MergeImportedModules loads imported local modules and appends their function declarations
+// into the root module with namespaced names (aliasOrSegment.funcName) so that calls like
+// `math_utils.add` resolve at runtime. std imports are ignored here (handled as intrinsics).
+func MergeImportedModules(mod *ast.Module, baseDir string) error {
+	loader := NewModuleLoader()
+	// Prefer absolute path of the current file directory first to avoid cwd issues
+	if baseDir != "" {
+		if abs, err := filepath.Abs(baseDir); err == nil {
+			loader.AddSearchPath(abs)
+		} else if baseDir != "." {
+			loader.AddSearchPath(baseDir)
+		}
+	}
+
+	// Collect imports from both Module.Imports and top-level decls
+	imports := make([]*ast.ImportDecl, 0, len(mod.Imports))
+	imports = append(imports, mod.Imports...)
+	for _, d := range mod.Decls {
+		if imp, ok := d.(*ast.ImportDecl); ok {
+			imports = append(imports, imp)
+		}
+	}
+
+	for _, imp := range imports {
+		if len(imp.Path) == 0 {
+			continue
+		}
+		// Skip std imports (handled elsewhere)
+		if imp.Path[0] == "std" {
+			continue
+		}
+		imported, err := loader.LoadModule(imp.Path)
+		if err != nil {
+			return fmt.Errorf("load import %s: %w", strings.Join(imp.Path, "."), err)
+		}
+		local := imp.Alias
+		if local == "" {
+			local = imp.Path[len(imp.Path)-1]
+		}
+		// Append cloned function decls with namespaced names
+		for _, d := range imported.Decls {
+			if fn, ok := d.(*ast.FuncDecl); ok {
+				cloned := *fn
+				cloned.Name = local + "." + fn.Name
+				mod.Decls = append(mod.Decls, &cloned)
+			}
+		}
+	}
+	return nil
 }
 
 func compileVM(cfg Config, emit string, mod *mir.Module) error {

@@ -17,6 +17,7 @@ var keywords = map[string]Kind{
 	"struct": TokenStruct,
 	"enum":   TokenEnum,
 	"import": TokenImport,
+	"as":     TokenAs,
 	"if":     TokenIf,
 	"else":   TokenElse,
 	"for":    TokenFor,

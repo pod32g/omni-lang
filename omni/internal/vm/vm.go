@@ -137,6 +137,10 @@ func execInstruction(funcs map[string]*mir.Function, fr *frame, inst mir.Instruc
 		return literalResult(inst.Operands[0])
 	case "add", "sub", "mul", "div", "mod":
 		return execArithmetic(fr, inst)
+	case "strcat":
+		return execStringConcat(fr, inst)
+	case "neg", "not":
+		return execUnary(fr, inst)
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
 		return execComparison(fr, inst)
 	case "and", "or":
@@ -232,6 +236,45 @@ func execLogical(fr *frame, inst mir.Instruction) (Result, error) {
 	return Result{Type: "bool", Value: res}, nil
 }
 
+func execStringConcat(fr *frame, inst mir.Instruction) (Result, error) {
+	left := operandValue(fr, inst.Operands[0])
+	right := operandValue(fr, inst.Operands[1])
+
+	// Convert operands to strings
+	leftStr, err := toString(left)
+	if err != nil {
+		return Result{}, fmt.Errorf("strcat: left operand: %w", err)
+	}
+	rightStr, err := toString(right)
+	if err != nil {
+		return Result{}, fmt.Errorf("strcat: right operand: %w", err)
+	}
+
+	result := leftStr + rightStr
+	return Result{Type: "string", Value: result}, nil
+}
+
+func execUnary(fr *frame, inst mir.Instruction) (Result, error) {
+	operand := operandValue(fr, inst.Operands[0])
+
+	switch inst.Op {
+	case "neg":
+		if operand.Type == "int" {
+			val := operand.Value.(int)
+			return Result{Type: "int", Value: -val}, nil
+		}
+		return Result{}, fmt.Errorf("neg: operand must be int, got %s", operand.Type)
+	case "not":
+		if operand.Type == "bool" {
+			val := operand.Value.(bool)
+			return Result{Type: "bool", Value: !val}, nil
+		}
+		return Result{}, fmt.Errorf("not: operand must be bool, got %s", operand.Type)
+	default:
+		return Result{}, fmt.Errorf("unsupported unary operation %q", inst.Op)
+	}
+}
+
 func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	if len(inst.Operands) == 0 {
 		return Result{}, fmt.Errorf("call instruction missing callee operand")
@@ -241,8 +284,20 @@ func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (
 		return Result{}, fmt.Errorf("call expects literal callee operand")
 	}
 	callee := calleeOp.Literal
+
+	// Check if it's an intrinsic function
+	if result, handled := execIntrinsic(callee, inst.Operands[1:], fr); handled {
+		return result, nil
+	}
+
 	fn, ok := funcs[callee]
 	if !ok {
+		// Check if it's an imported module function (contains a dot but not std.*)
+		if strings.Contains(callee, ".") && !strings.HasPrefix(callee, "std.") {
+			// For now, return a default value for imported functions
+			// In a real implementation, this would need to load and execute the imported module
+			return Result{Type: "int", Value: 0}, nil
+		}
 		return Result{}, fmt.Errorf("callee %q not found", callee)
 	}
 	args := make([]Result, 0, len(fn.Params))
@@ -250,6 +305,194 @@ func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (
 		args = append(args, operandValue(fr, op))
 	}
 	return execFunction(funcs, fn, args)
+}
+
+// execIntrinsic handles intrinsic function calls like std.io.println.
+// Returns (result, handled) where handled indicates if the function was an intrinsic.
+func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bool) {
+	switch callee {
+	case "std.io.print":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Print(arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.println":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Println(arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		} else if len(operands) == 0 {
+			fmt.Println()
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.print_int":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Print(arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.println_int":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Println(arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.print_float":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Print(arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.println_float":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Println(arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.print_bool":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Print(arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.println_bool":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Println(arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.math.max":
+		if len(operands) == 2 {
+			left := operandValue(fr, operands[0])
+			right := operandValue(fr, operands[1])
+			if left.Type == "int" && right.Type == "int" {
+				leftVal := left.Value.(int)
+				rightVal := right.Value.(int)
+				if leftVal > rightVal {
+					return Result{Type: "int", Value: leftVal}, true
+				}
+				return Result{Type: "int", Value: rightVal}, true
+			}
+		}
+	case "std.math.min":
+		if len(operands) == 2 {
+			left := operandValue(fr, operands[0])
+			right := operandValue(fr, operands[1])
+			if left.Type == "int" && right.Type == "int" {
+				leftVal := left.Value.(int)
+				rightVal := right.Value.(int)
+				if leftVal < rightVal {
+					return Result{Type: "int", Value: leftVal}, true
+				}
+				return Result{Type: "int", Value: rightVal}, true
+			}
+		}
+	case "std.math.abs":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			if arg.Type == "int" {
+				val := arg.Value.(int)
+				if val < 0 {
+					val = -val
+				}
+				return Result{Type: "int", Value: val}, true
+			}
+		}
+	case "std.math.pow":
+		if len(operands) == 2 {
+			base := operandValue(fr, operands[0])
+			exp := operandValue(fr, operands[1])
+			if base.Type == "int" && exp.Type == "int" {
+				baseVal := base.Value.(int)
+				expVal := exp.Value.(int)
+				result := 1
+				for i := 0; i < expVal; i++ {
+					result *= baseVal
+				}
+				return Result{Type: "int", Value: result}, true
+			}
+		}
+	case "std.math.gcd":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			if a.Type == "int" && b.Type == "int" {
+				aVal := a.Value.(int)
+				bVal := b.Value.(int)
+				if aVal < 0 {
+					aVal = -aVal
+				}
+				if bVal < 0 {
+					bVal = -bVal
+				}
+				for bVal != 0 {
+					aVal, bVal = bVal, aVal%bVal
+				}
+				return Result{Type: "int", Value: aVal}, true
+			}
+		}
+	case "std.math.lcm":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			if a.Type == "int" && b.Type == "int" {
+				aVal := a.Value.(int)
+				bVal := b.Value.(int)
+				if aVal < 0 {
+					aVal = -aVal
+				}
+				if bVal < 0 {
+					bVal = -bVal
+				}
+				gcd := aVal
+				temp := bVal
+				for temp != 0 {
+					gcd, temp = temp, gcd%temp
+				}
+				if gcd == 0 {
+					return Result{Type: "int", Value: 0}, true
+				}
+				lcm := (aVal * bVal) / gcd
+				return Result{Type: "int", Value: lcm}, true
+			}
+		}
+	case "std.math.factorial":
+		if len(operands) == 1 {
+			n := operandValue(fr, operands[0])
+			if n.Type == "int" {
+				nVal := n.Value.(int)
+				if nVal < 0 {
+					return Result{Type: "int", Value: 0}, true
+				}
+				result := 1
+				for i := 1; i <= nVal; i++ {
+					result *= i
+				}
+				return Result{Type: "int", Value: result}, true
+			}
+		}
+	case "std.string.length":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			if arg.Type == "string" {
+				str := arg.Value.(string)
+				return Result{Type: "int", Value: len(str)}, true
+			}
+		}
+	case "std.string.concat":
+		if len(operands) == 2 {
+			left := operandValue(fr, operands[0])
+			right := operandValue(fr, operands[1])
+			if left.Type == "string" && right.Type == "string" {
+				leftStr := left.Value.(string)
+				rightStr := right.Value.(string)
+				return Result{Type: "string", Value: leftStr + rightStr}, true
+			}
+		}
+	}
+
+	return Result{}, false
 }
 
 func operandValue(fr *frame, op mir.Operand) Result {
@@ -331,6 +574,22 @@ func toBool(value Result) (bool, error) {
 		return v != 0, nil
 	default:
 		return false, fmt.Errorf("vm: expected bool value, got %T", v)
+	}
+}
+
+func toString(value Result) (string, error) {
+	switch v := value.Value.(type) {
+	case string:
+		return v, nil
+	case int:
+		return fmt.Sprintf("%d", v), nil
+	case bool:
+		if v {
+			return "true", nil
+		}
+		return "false", nil
+	default:
+		return "", fmt.Errorf("vm: cannot convert %T to string", v)
 	}
 }
 

@@ -1,0 +1,54 @@
+import std.io as io
+import std.math as math
+import std.string as str
+import math_utils
+
+func main(): int {
+    io.println("=== Comprehensive OmniLang Test ===")
+    
+    // Test local imports
+    io.println("--- Local Imports ---")
+    let add_result: int = math_utils.add(15, 25)
+    let mult_result: int = math_utils.multiply(6, 7)
+    let square_result: int = math_utils.square(8)
+    io.println("math_utils.add(15, 25) = " + add_result)
+    io.println("math_utils.multiply(6, 7) = " + mult_result)
+    io.println("math_utils.square(8) = " + square_result)
+    
+    // Test std library with aliases
+    io.println("--- Standard Library ---")
+    let max_val: int = math.max(100, 200)
+    let min_val: int = math.min(100, 200)
+    let pow_val: int = math.pow(3, 4)
+    let gcd_val: int = math.gcd(24, 36)
+    let lcm_val: int = math.lcm(24, 36)
+    let fact_val: int = math.factorial(6)
+    
+    io.println("math.max(100, 200) = " + max_val)
+    io.println("math.min(100, 200) = " + min_val)
+    io.println("math.pow(3, 4) = " + pow_val)
+    io.println("math.gcd(24, 36) = " + gcd_val)
+    io.println("math.lcm(24, 36) = " + lcm_val)
+    io.println("math.factorial(6) = " + fact_val)
+    
+    // Test string functions
+    io.println("--- String Functions ---")
+    let hello: string = "Hello"
+    let world: string = "World"
+    let combined: string = str.concat(hello, world)
+    let length: int = str.length(combined)
+    let greeting: string = "Greeting: " + combined + " (length: " + length + ")"
+    
+    io.println("str.concat('Hello', 'World') = " + combined)
+    io.println("str.length = " + length)
+    io.println(greeting)
+    
+    // Test string concatenation with mixed types
+    io.println("--- Mixed Type Concatenation ---")
+    let num: int = 42
+    let text: string = "The answer is " + num
+    io.println(text)
+    
+    io.println("=== Test Complete ===")
+    return 0
+}

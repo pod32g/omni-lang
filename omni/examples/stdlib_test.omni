@@ -1,0 +1,37 @@
+import std.io as io
+import std.math as math
+import std.string as str
+
+func main(): int {
+    io.println("=== Standard Library Test ===")
+    
+    // Math functions
+    let max_val: int = math.max(10, 20)
+    let min_val: int = math.min(10, 20)
+    let abs_val: int = math.abs(-15)
+    let pow_val: int = math.pow(2, 3)
+    let gcd_val: int = math.gcd(12, 18)
+    let lcm_val: int = math.lcm(12, 18)
+    let fact_val: int = math.factorial(5)
+    
+    io.println("Math results:")
+    io.println("max(10, 20) = " + max_val)
+    io.println("min(10, 20) = " + min_val)
+    io.println("abs(-15) = " + abs_val)
+    io.println("pow(2, 3) = " + pow_val)
+    io.println("gcd(12, 18) = " + gcd_val)
+    io.println("lcm(12, 18) = " + lcm_val)
+    io.println("factorial(5) = " + fact_val)
+    
+    // String functions
+    let hello: string = "Hello"
+    let world: string = "World"
+    let combined: string = str.concat(hello, world)
+    let length: int = str.length(combined)
+    
+    io.println("String results:")
+    io.println("concat('Hello', 'World') = " + combined)
+    io.println("length = " + length)
+    
+    return 0
+}

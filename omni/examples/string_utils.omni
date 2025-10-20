@@ -1,0 +1,15 @@
+// String utilities module
+func length(s: string): int {
+    // For now, return a placeholder
+    return 0
+}
+
+func concat(a: string, b: string): string {
+    // For now, return a placeholder
+    return ""
+}
+
+func uppercase(s: string): string {
+    // For now, return a placeholder
+    return ""
+}

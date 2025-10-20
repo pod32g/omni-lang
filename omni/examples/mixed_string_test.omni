@@ -1,0 +1,6 @@
+func main(): string {
+    let num: int = 42
+    let text: string = "The answer is "
+    let result: string = text + num
+    return result
+}
