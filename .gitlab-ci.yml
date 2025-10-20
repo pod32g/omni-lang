@@ -161,8 +161,12 @@ package:
     - build-windows
   before_script:
     - cd omni
-    - apt-get update && apt-get install -y zip tar gzip
+    - apt-get update && apt-get install -y zip tar gzip curl
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - source $HOME/.cargo/env
+    - rustup default stable
   script:
+    - make build-rust
     - make package
   artifacts:
     paths:
