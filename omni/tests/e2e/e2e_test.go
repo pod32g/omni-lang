@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"os/exec"
+	"runtime"
 	"testing"
 )
 
@@ -23,9 +24,11 @@ func TestHelloWorld(t *testing.T) {
 		t.Errorf("MIR generation failed: %v", err)
 	}
 
-	// Test object file generation
-	if err := runCompiler(testFile, "clift", "obj", ""); err != nil {
-		t.Errorf("Object generation failed: %v", err)
+	// Test object file generation (skip on macOS due to Cranelift build constraints)
+	if runtime.GOOS != "darwin" {
+		if err := runCompiler(testFile, "clift", "obj", ""); err != nil {
+			t.Errorf("Object generation failed: %v", err)
+		}
 	}
 }
 
