@@ -133,10 +133,11 @@ integration-test:
     - EXIT_CODE=0; ./test_basic || EXIT_CODE=$?; if [ $EXIT_CODE -ne 42 ]; then echo "Expected exit code 42, got $EXIT_CODE"; exit 1; fi
     - ./bin/omnic -backend c -emit asm test_basic.omni -o test_basic.s
     - test -f test_basic.s
-    - ./bin/omnic -backend c -O O2 -emit exe test_basic.omni -o test_basic_opt
+    - ./bin/omnic -backend c -O O2 -emit exe test_basic.omni -o test_basic_opt 2>&1 || echo "omnic command failed with exit code $?"
     - ls -la test_basic_opt || echo "test_basic_opt not found"
     - EXIT_CODE=0; ./test_basic_opt || EXIT_CODE=$?; if [ $EXIT_CODE -ne 42 ]; then echo "Expected exit code 42, got $EXIT_CODE"; exit 1; fi
-    - ./bin/omnic -backend c -debug -emit exe test_basic.omni -o test_basic_debug
+    - ./bin/omnic -backend c -debug -emit exe test_basic.omni -o test_basic_debug 2>&1 || echo "omnic debug command failed with exit code $?"
+    - ls -la test_basic_debug || echo "test_basic_debug not found"
     - EXIT_CODE=0; ./test_basic_debug || EXIT_CODE=$?; if [ $EXIT_CODE -ne 42 ]; then echo "Expected exit code 42, got $EXIT_CODE"; exit 1; fi
     - rm -f test_basic* test_basic.s
   rules:
