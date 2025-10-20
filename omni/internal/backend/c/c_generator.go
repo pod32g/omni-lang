@@ -233,7 +233,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		if len(inst.Operands) > 0 {
 			funcName := g.getOperandValue(inst.Operands[0])
 			cFuncName := g.mapFunctionName(funcName)
-			
+
 			// Handle void function calls differently
 			if inst.Type == "void" {
 				g.output.WriteString(fmt.Sprintf("  %s(", cFuncName))
@@ -406,7 +406,7 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_min"
 	case "std.math.toString":
 		return "omni_int_to_string"
-	
+
 	// IO functions
 	case "std.io.print":
 		return "omni_print_string"
@@ -424,7 +424,7 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_print_bool"
 	case "std.io.println_bool":
 		return "omni_println_bool"
-	
+
 	default:
 		return funcName
 	}

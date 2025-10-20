@@ -107,10 +107,15 @@ func Compile(cfg Config) error {
 		return err
 	}
 
-	pipeline := passes.NewPipeline("default")
-	if _, err := pipeline.Run(*mirMod); err != nil {
+	// Run MIR passes (constant folding disabled temporarily due to loop variable issues)
+	if err := passes.Verify(mirMod); err != nil {
 		return err
 	}
+	// TODO: Re-enable constant folding with proper handling of mutable variables
+	// pipeline := passes.NewPipeline("default")
+	// if _, err := pipeline.Run(*mirMod); err != nil {
+	// 	return err
+	// }
 
 	if cfg.Dump == "mir" {
 		fmt.Println(printer.Format(mirMod))

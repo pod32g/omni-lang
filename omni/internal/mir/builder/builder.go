@@ -307,7 +307,20 @@ func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
 }
 
 func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
-	// Create loop header block
+	// Save the current environment
+	originalEnv := make(map[string]symbol)
+	for k, v := range fb.env {
+		originalEnv[k] = v
+	}
+
+	// Handle initialization in current block (before loop)
+	if stmt.Init != nil {
+		if err := fb.lowerStmt(stmt.Init); err != nil {
+			return err
+		}
+	}
+
+	// Create loop header block (for condition check)
 	headerBlock := fb.newBlock("loop_header")
 
 	// Create loop body block
@@ -316,7 +329,7 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 	// Create loop exit block
 	exitBlock := fb.newBlock("loop_exit")
 
-	// First, branch from current block to header
+	// Branch from current block to header
 	currentBlock := fb.block
 	if currentBlock != nil {
 		currentBlock.Terminator = mir.Terminator{
@@ -325,17 +338,9 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 		}
 	}
 
-	// Handle initialization
-	if stmt.Init != nil {
-		fb.block = headerBlock
-		if err := fb.lowerStmt(stmt.Init); err != nil {
-			return err
-		}
-	}
-
-	// Handle condition check
+	// Handle condition check in header block
+	fb.block = headerBlock
 	if stmt.Condition != nil {
-		fb.block = headerBlock
 		condValue, err := fb.lowerExpr(stmt.Condition)
 		if err != nil {
 			return err
@@ -352,15 +357,20 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 		}
 	} else {
 		// No condition - always enter body
-		fb.block = headerBlock
 		fb.block.Terminator = mir.Terminator{
 			Op:       "br",
 			Operands: []mir.Operand{blockOperand(bodyBlock)},
 		}
 	}
 
-	// Handle loop body
+	// Handle loop body - preserve environment from header
+	bodyEnv := make(map[string]symbol)
+	for k, v := range fb.env {
+		bodyEnv[k] = v
+	}
 	fb.block = bodyBlock
+	fb.env = bodyEnv
+
 	if err := fb.lowerBlock(stmt.Body); err != nil {
 		return err
 	}
@@ -380,8 +390,9 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 		}
 	}
 
-	// Set current block to exit block
+	// Set current block to exit block and restore original environment
 	fb.block = exitBlock
+	fb.env = originalEnv
 	return nil
 }
 
