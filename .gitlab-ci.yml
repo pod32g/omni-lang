@@ -131,21 +131,21 @@ integration-test:
     - echo 'func main():int { return 42 }' > test_basic.omni
     - ./bin/omnic -backend c -emit exe test_basic.omni -o test_basic
     - ./test_basic
-    - test $? -eq 42
+    - if [ $? -ne 42 ]; then echo "Expected exit code 42, got $?"; exit 1; fi
     - ./bin/omnic -backend c -emit asm test_basic.omni -o test_basic.s
     - test -f test_basic.s
     - echo "Running optimization compilation..."
-    - ./bin/omnic -backend c -O O2 -emit exe test_basic.omni -o test_basic_opt -verbose 2>&1
+    - ./bin/omnic -backend c -O O2 -emit exe test_basic.omni -o test_basic_opt -verbose
     - echo "Optimization compilation finished with exit code: $?"
     - echo "Checking if test_basic_opt.c was created..."
-    - ls -la test_basic_opt.c || echo "test_basic_opt.c not found"
-    - ls -la test_basic_opt || echo "test_basic_opt not found"
+    - ls -la test_basic_opt.c
+    - ls -la test_basic_opt
     - ./test_basic_opt
-    - test $? -eq 42
+    - if [ $? -ne 42 ]; then echo "Expected exit code 42, got $?"; exit 1; fi
     - ./bin/omnic -backend c -debug -emit exe test_basic.omni -o test_basic_debug
-    - ls -la test_basic_debug || echo "test_basic_debug not found"
+    - ls -la test_basic_debug
     - ./test_basic_debug
-    - test $? -eq 42
+    - if [ $? -ne 42 ]; then echo "Expected exit code 42, got $?"; exit 1; fi
     - rm -f test_basic* test_basic.s
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
