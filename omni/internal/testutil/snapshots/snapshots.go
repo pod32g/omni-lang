@@ -12,6 +12,16 @@ import (
 func CompareText(t *testing.T, actual string, goldenPath string) {
 	t.Helper()
 
+	// Check if we should update golden files
+	if os.Getenv("UPDATE_GOLDENS") == "1" {
+		err := os.WriteFile(goldenPath, []byte(actual), 0644)
+		if err != nil {
+			t.Fatalf("write golden %s: %v", goldenPath, err)
+		}
+		t.Logf("Updated golden file: %s", goldenPath)
+		return
+	}
+
 	data, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatalf("read golden %s: %v", goldenPath, err)

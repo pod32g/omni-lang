@@ -1,6 +1,6 @@
 tests/goldens/types/unknown_type_25.omni:1:13: error: unknown type "Mystery25"
   let value25:Mystery25 = 1
-              ^~~ hint: import or declare the type before use
+              ~~~~~~~~~ hint: import or declare the type before use
 tests/goldens/types/unknown_type_25.omni:1:1: error: cannot assign int to Mystery25
   let value25:Mystery25 = 1
-  ^~~ hint: convert the expression to Mystery25 or change the variable type to int
+  ~~~~~~~~~~~~~~~~~~~~~~~~~ hint: convert the expression to Mystery25 or change the variable type to int
