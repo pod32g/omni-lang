@@ -97,6 +97,7 @@ build-linux:
   script:
     - make build-rust
     - make build
+    - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$LD_LIBRARY_PATH
     - make test
   artifacts:
     paths:
