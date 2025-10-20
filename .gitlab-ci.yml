@@ -189,9 +189,10 @@ build-linux:
     - rustup default stable
   script:
     - cd omni
+    - make build-runtime
     - make build-rust
     - make build
-    - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$LD_LIBRARY_PATH
+    - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
     - make test
   artifacts:
     paths:
@@ -213,6 +214,7 @@ build-macos:
     - rustup default stable
   script:
     - cd omni
+    - make build-runtime
     - make build-rust
     - GOOS=darwin GOARCH=amd64 make build
     - GOOS=darwin GOARCH=arm64 make build
@@ -235,6 +237,7 @@ build-windows:
     - rustup default stable
   script:
     - cd omni
+    - make build-runtime
     - make build-rust
     - GOOS=windows GOARCH=amd64 make build
   artifacts:
