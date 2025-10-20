@@ -20,13 +20,16 @@ This document provides a comprehensive tour of the OmniLang programming language
 ### Your First Program
 
 ```omni
+import std.io as io
+
 func main():int {
-    println("Hello, OmniLang!")
+    io.println("Hello, OmniLang!")
     return 0
 }
 ```
 
 This simple program demonstrates:
+- Import system with aliases
 - Function declaration with explicit return type
 - String literal
 - Return statement
@@ -36,13 +39,13 @@ This simple program demonstrates:
 
 ```bash
 # Run directly with VM
-go run ./cmd/omnir hello.omni
+./bin/omnir hello.omni
 
 # Compile to MIR
-go run ./cmd/omnic hello.omni -backend vm -emit mir
+./bin/omnic hello.omni -backend vm -emit mir
 
-# Compile to native object
-go run ./cmd/omnic hello.omni -backend clift -emit obj -o hello.o
+# Compile to native object (Linux only)
+./bin/omnic hello.omni -backend clift -emit obj -o hello.o
 ```
 
 ## Basic Syntax
@@ -502,6 +505,108 @@ func map_example():int {
     }
     
     return alice_score
+}
+```
+
+## Import System
+
+OmniLang supports both standard library imports and local file imports with alias support.
+
+### Standard Library Imports
+
+```omni
+// Import with alias
+import std.io as io
+import std.math as math
+import std.string as str
+
+// Import without alias (uses last segment)
+import std.io
+import std.math
+
+func main():int {
+    // Using aliased imports
+    io.println("Hello from std.io!")
+    let result:int = math.max(10, 20)
+    let combined:string = str.concat("Hello", "World")
+    
+    // Using non-aliased imports
+    std.io.println("Also works!")
+    
+    return 0
+}
+```
+
+### Local File Imports
+
+```omni
+// math_utils.omni
+func add(a:int, b:int):int {
+    return a + b
+}
+
+func multiply(a:int, b:int):int {
+    return a * b
+}
+
+// main.omni
+import math_utils
+import string_utils as str_util
+import std.io as io
+
+func main():int {
+    let result1:int = math_utils.add(10, 20)      // 30
+    let result2:int = math_utils.multiply(5, 6)   // 30
+    let combined:string = str_util.concat("Hello", "World")
+    
+    io.println("Results: " + result1 + ", " + result2)
+    return 0
+}
+```
+
+### String Concatenation
+
+OmniLang supports string concatenation with the `+` operator, including mixed types:
+
+```omni
+import std.io as io
+
+func main():int {
+    // String + String
+    let greeting:string = "Hello " + "World"
+    
+    // String + Integer (automatic conversion)
+    let name:string = "Alice"
+    let age:int = 30
+    let message:string = "Hello " + name + ", you are " + age + " years old"
+    
+    // Integer + String
+    let count:int = 42
+    let info:string = count + " items found"
+    
+    io.println(greeting)    // "Hello World"
+    io.println(message)     // "Hello Alice, you are 30 years old"
+    io.println(info)        // "42 items found"
+    
+    return 0
+}
+```
+
+### Unary Expressions
+
+OmniLang supports unary negation and logical NOT:
+
+```omni
+func main():int {
+    let x:int = 42
+    let negative:int = -x        // -42
+    let positive:int = -(-x)     // 42 (double negation)
+    
+    let flag:bool = true
+    let not_flag:bool = !flag    // false
+    let not_false:bool = !false  // true
+    
+    return 0
 }
 ```
 

@@ -1,0 +1,14 @@
+import math_utils
+
+func main(): int {
+    // Test undefined identifier
+    let result: int = undefined_variable
+    
+    // Test type mismatch
+    let text: string = 42
+    
+    // Test wrong function call
+    let value: int = math_utils.add(1, 2, 3)  // Too many arguments
+    
+    return 0
+}

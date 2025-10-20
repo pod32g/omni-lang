@@ -34,8 +34,10 @@ make test
 Create a file `hello.omni`:
 
 ```omni
+import std.io as io
+
 func main():int {
-    println("Hello, OmniLang!")
+    io.println("Hello, OmniLang!")
     return 0
 }
 ```
@@ -44,13 +46,13 @@ Compile and run:
 
 ```bash
 # Run with VM
-go run ./cmd/omnir hello.omni
+./bin/omnir hello.omni
 
 # Compile to MIR
-go run ./cmd/omnic hello.omni -backend vm -emit mir
+./bin/omnic hello.omni -backend vm -emit mir
 
-# Compile to native object
-go run ./cmd/omnic hello.omni -backend clift -emit obj -o hello.o
+# Compile to native object (Linux only)
+./bin/omnic hello.omni -backend clift -emit obj -o hello.o
 ```
 
 ## Language Features
@@ -96,6 +98,62 @@ y = 30
 
 // Type inference
 let z = 42  // inferred as int
+```
+
+### Imports
+
+```omni
+// Standard library imports
+import std.io as io
+import std.math as math
+import std.string as str
+
+// Local file imports
+import math_utils
+import string_utils as str_util
+
+// Using imported functions
+func main():int {
+    io.println("Hello from std.io!")
+    let result:int = math.max(10, 20)
+    let combined:string = str.concat("Hello", "World")
+    return 0
+}
+```
+
+### String Operations
+
+```omni
+import std.io as io
+
+func main():int {
+    // String concatenation with mixed types
+    let name:string = "Alice"
+    let age:int = 30
+    let message:string = "Hello " + name + ", you are " + age + " years old"
+    io.println(message)
+    
+    // String concatenation with other strings
+    let greeting:string = "Hello " + "World"
+    io.println(greeting)
+    
+    return 0
+}
+```
+
+### Unary Expressions
+
+```omni
+func main():int {
+    let x:int = 42
+    let negative:int = -x        // negation
+    let positive:int = -(-x)     // double negation
+    
+    let flag:bool = true
+    let not_flag:bool = !flag    // logical not
+    
+    return 0
+}
 ```
 
 ### Functions
@@ -207,12 +265,18 @@ OmniLang comes with a comprehensive standard library:
 ### I/O Functions
 
 ```omni
-import std.io
+import std.io as io
 
 func main():int {
-    std.io.println("Hello, World!")
-    std.io.print("Enter your name: ")
-    // std.io.read_line() // TODO: implement
+    // Basic output
+    io.println("Hello, World!")
+    io.print("Enter your name: ")
+    
+    // Typed output
+    io.println_int(42)
+    io.print_float(3.14)
+    io.println_bool(true)
+    
     return 0
 }
 ```
@@ -220,17 +284,23 @@ func main():int {
 ### Math Functions
 
 ```omni
-import std.math
+import std.math as math
 
 func main():int {
     let x:int = 15
     let y:int = 25
     
-    let max_val:int = std.math.max(x, y)
-    let min_val:int = std.math.min(x, y)
-    let gcd_val:int = std.math.gcd(x, y)
+    // Basic operations
+    let max_val:int = math.max(x, y)
+    let min_val:int = math.min(x, y)
+    let abs_val:int = math.abs(-42)
     
-    std.io.println_int(max_val)
+    // Advanced operations
+    let pow_val:int = math.pow(2, 8)        // 2^8 = 256
+    let gcd_val:int = math.gcd(48, 72)      // 24
+    let lcm_val:int = math.lcm(12, 18)      // 36
+    let fact_val:int = math.factorial(5)    // 120
+    
     return 0
 }
 ```
@@ -238,31 +308,44 @@ func main():int {
 ### String Operations
 
 ```omni
-import std.string
+import std.string as str
 
 func main():int {
     let s:string = "Hello, World!"
-    let len:int = std.string.length(s)
-    let upper:string = std.string.to_upper(s)
     
-    std.io.println_int(len)
-    std.io.println(upper)
+    // Basic operations
+    let len:int = str.length(s)             // 13
+    let combined:string = str.concat("Hello", "World")  // "HelloWorld"
+    
+    // String concatenation with + operator
+    let message:string = "Length: " + len
+    let greeting:string = "Hello " + "World"
+    
     return 0
 }
 ```
 
-### Array Operations
+### Local File Imports
 
 ```omni
-import std.array
+// math_utils.omni
+func add(a:int, b:int):int {
+    return a + b
+}
+
+func multiply(a:int, b:int):int {
+    return a * b
+}
+
+// main.omni
+import math_utils
+import std.io as io
 
 func main():int {
-    let numbers:array<int> = [1, 2, 3, 4, 5]
-    let len:int = std.array.length(numbers)
-    let first:int = std.array.get(numbers, 0)
+    let result1:int = math_utils.add(10, 20)      // 30
+    let result2:int = math_utils.multiply(5, 6)   // 30
     
-    std.io.println_int(len)
-    std.io.println_int(first)
+    io.println("Results: " + result1 + ", " + result2)
     return 0
 }
 ```
@@ -518,29 +601,35 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ## Roadmap
 
 ### Version 1.0 (Current)
-- ✅ Basic language features
-- ✅ Compiler pipeline
-- ✅ VM backend
-- ✅ Cranelift backend (stub)
-- ✅ Standard library (declarations)
+- ✅ Basic language features (variables, functions, control flow)
+- ✅ Complete compiler pipeline (lexer, parser, AST, type checker, MIR)
+- ✅ VM backend with comprehensive intrinsics
+- ✅ Import system (std library + local files with aliases)
+- ✅ String concatenation with mixed types
+- ✅ Unary expressions (-, !)
+- ✅ Comprehensive error messages with helpful hints
+- ✅ Extensive test coverage (65.7% VM, 83.2% lexer, 72.1% parser)
+- ✅ Edge case testing and integration tests
+- ✅ Cranelift backend (stub for Linux)
 
 ### Version 1.1 (Planned)
-- 🔄 Full Cranelift integration
-- 🔄 Import system
+- 🔄 Full Cranelift integration (macOS, Windows)
+- 🔄 Enhanced standard library functions
 - 🔄 Generic types
-- 🔄 Error handling improvements
+- 🔄 Pattern matching
+- 🔄 Memory management primitives
 
 ### Version 1.2 (Planned)
-- 📋 Memory management
 - 📋 Ownership system
-- 📋 Pattern matching
 - 📋 Concurrency primitives
+- 📋 Advanced optimizations
+- 📋 Package manager
 
 ### Version 2.0 (Future)
 - 📋 Garbage collection
-- 📋 Advanced optimizations
-- 📋 Package manager
 - 📋 IDE support
+- 📋 Advanced language features
+- 📋 Performance optimizations
 
 ## License
 

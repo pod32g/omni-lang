@@ -8,6 +8,38 @@ import (
 	"github.com/omni-lang/omni/internal/mir"
 )
 
+// instructionHandler defines the signature for instruction execution functions
+type instructionHandler func(map[string]*mir.Function, *frame, mir.Instruction) (Result, error)
+
+// instructionHandlers maps instruction names to their execution functions
+var instructionHandlers map[string]instructionHandler
+
+func init() {
+	instructionHandlers = map[string]instructionHandler{
+		"const":       execConst,
+		"add":         execArithmetic,
+		"sub":         execArithmetic,
+		"mul":         execArithmetic,
+		"div":         execArithmetic,
+		"mod":         execArithmetic,
+		"strcat":      execStringConcat,
+		"neg":         execUnary,
+		"not":         execUnary,
+		"cmp.eq":      execComparison,
+		"cmp.neq":     execComparison,
+		"cmp.lt":      execComparison,
+		"cmp.lte":     execComparison,
+		"cmp.gt":      execComparison,
+		"cmp.gte":     execComparison,
+		"and":         execLogical,
+		"or":          execLogical,
+		"call":        execCall,
+		"struct.init": execStructInit,
+		"array.init":  execArrayInit,
+		"map.init":    execMapInit,
+	}
+}
+
 const inferTypePlaceholder = "<infer>"
 
 // Result captures the outcome of executing the entry function.
@@ -132,29 +164,34 @@ func blockByOperand(blocks map[string]*mir.BasicBlock, op mir.Operand) (*mir.Bas
 }
 
 func execInstruction(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
-	switch inst.Op {
-	case "const":
-		return literalResult(inst.Operands[0])
-	case "add", "sub", "mul", "div", "mod":
-		return execArithmetic(fr, inst)
-	case "strcat":
-		return execStringConcat(fr, inst)
-	case "neg", "not":
-		return execUnary(fr, inst)
-	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
-		return execComparison(fr, inst)
-	case "and", "or":
-		return execLogical(fr, inst)
-	case "call":
-		return execCall(funcs, fr, inst)
-	case "struct.init", "array.init", "map.init":
-		return Result{Type: inst.Type, Value: nil}, nil
-	default:
+	handler, exists := instructionHandlers[inst.Op]
+	if !exists {
 		return Result{}, fmt.Errorf("unsupported instruction %q", inst.Op)
 	}
+	return handler(funcs, fr, inst)
 }
 
-func execArithmetic(fr *frame, inst mir.Instruction) (Result, error) {
+// execConst handles const instructions
+func execConst(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	return literalResult(inst.Operands[0])
+}
+
+// execStructInit handles struct initialization
+func execStructInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	return Result{Type: inst.Type, Value: nil}, nil
+}
+
+// execArrayInit handles array initialization
+func execArrayInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	return Result{Type: inst.Type, Value: nil}, nil
+}
+
+// execMapInit handles map initialization
+func execMapInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	return Result{Type: inst.Type, Value: nil}, nil
+}
+
+func execArithmetic(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	left := operandValue(fr, inst.Operands[0])
 	right := operandValue(fr, inst.Operands[1])
 	li, err := toInt(left)
@@ -187,7 +224,7 @@ func execArithmetic(fr *frame, inst mir.Instruction) (Result, error) {
 	return Result{Type: chooseType(inst.Type, left.Type), Value: res}, nil
 }
 
-func execComparison(fr *frame, inst mir.Instruction) (Result, error) {
+func execComparison(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	left := operandValue(fr, inst.Operands[0])
 	right := operandValue(fr, inst.Operands[1])
 	li, err := toInt(left)
@@ -216,7 +253,7 @@ func execComparison(fr *frame, inst mir.Instruction) (Result, error) {
 	return Result{Type: "bool", Value: res}, nil
 }
 
-func execLogical(fr *frame, inst mir.Instruction) (Result, error) {
+func execLogical(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	left := operandValue(fr, inst.Operands[0])
 	right := operandValue(fr, inst.Operands[1])
 	lb, err := toBool(left)
@@ -236,7 +273,7 @@ func execLogical(fr *frame, inst mir.Instruction) (Result, error) {
 	return Result{Type: "bool", Value: res}, nil
 }
 
-func execStringConcat(fr *frame, inst mir.Instruction) (Result, error) {
+func execStringConcat(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	left := operandValue(fr, inst.Operands[0])
 	right := operandValue(fr, inst.Operands[1])
 
@@ -250,11 +287,18 @@ func execStringConcat(fr *frame, inst mir.Instruction) (Result, error) {
 		return Result{}, fmt.Errorf("strcat: right operand: %w", err)
 	}
 
-	result := leftStr + rightStr
-	return Result{Type: "string", Value: result}, nil
+	// Use pooled strings.Builder for efficient concatenation
+	builder := GetStringBuilder()
+	defer PutStringBuilder(builder)
+
+	builder.Grow(len(leftStr) + len(rightStr)) // Pre-allocate capacity
+	builder.WriteString(leftStr)
+	builder.WriteString(rightStr)
+
+	return Result{Type: "string", Value: builder.String()}, nil
 }
 
-func execUnary(fr *frame, inst mir.Instruction) (Result, error) {
+func execUnary(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	operand := operandValue(fr, inst.Operands[0])
 
 	switch inst.Op {

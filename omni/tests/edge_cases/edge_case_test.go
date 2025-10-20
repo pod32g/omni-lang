@@ -12,14 +12,14 @@ import (
 
 func TestEdgeCases(t *testing.T) {
 	tests := []struct {
-		name     string
-		filename string
-		content  string
-		expectError bool
+		name          string
+		filename      string
+		content       string
+		expectError   bool
 		errorContains string
 	}{
 		{
-			name: "very_long_string",
+			name:     "very_long_string",
 			filename: "very_long_string.omni",
 			content: `func main(): int {
     let long_string: string = "` + string(make([]byte, 10000)) + `"
@@ -28,7 +28,7 @@ func TestEdgeCases(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "nested_function_calls",
+			name:     "nested_function_calls",
 			filename: "nested_calls.omni",
 			content: `import std.math as math
 func main(): int {
@@ -38,7 +38,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "complex_expression",
+			name:     "complex_expression",
 			filename: "complex_expr.omni",
 			content: `func main(): int {
     let a: int = 10
@@ -50,7 +50,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "deep_nesting",
+			name:     "deep_nesting",
 			filename: "deep_nesting.omni",
 			content: `func main(): int {
     let a: int = 1
@@ -64,7 +64,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "string_edge_cases",
+			name:     "string_edge_cases",
 			filename: "string_edges.omni",
 			content: `import std.string as str
 func main(): int {
@@ -78,7 +78,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "boolean_edge_cases",
+			name:     "boolean_edge_cases",
 			filename: "boolean_edges.omni",
 			content: `func main(): int {
     let true_val: bool = true
@@ -91,7 +91,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "numeric_edge_cases",
+			name:     "numeric_edge_cases",
 			filename: "numeric_edges.omni",
 			content: `import std.math as math
 func main(): int {
@@ -106,17 +106,17 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "circular_import_detection",
+			name:     "circular_import_detection",
 			filename: "circular_a.omni",
 			content: `import circular_b
 func main(): int {
     return circular_b.get_value()
 }`,
-			expectError: true,
+			expectError:   true,
 			errorContains: "not found",
 		},
 		{
-			name: "missing_return_statement",
+			name:     "missing_return_statement",
 			filename: "missing_return.omni",
 			content: `func main(): int {
     let x: int = 42
@@ -126,7 +126,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "type_inference_edge_cases",
+			name:     "type_inference_edge_cases",
 			filename: "type_inference.omni",
 			content: `func main(): int {
     let a = 42  // Should infer int
@@ -140,7 +140,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "operator_precedence",
+			name:     "operator_precedence",
 			filename: "operator_precedence.omni",
 			content: `func main(): int {
     let a: int = 2
@@ -154,7 +154,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "unicode_identifiers",
+			name:     "unicode_identifiers",
 			filename: "unicode_idents.omni",
 			content: `func main(): int {
     let 变量: int = 42
@@ -164,7 +164,7 @@ func main(): int {
 			expectError: false,
 		},
 		{
-			name: "very_deep_nesting",
+			name:     "very_deep_nesting",
 			filename: "very_deep.omni",
 			content: `func main(): int {
     let a: int = 1
@@ -243,7 +243,7 @@ func main(): int {
 
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || 
-		(len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		contains(s[1:], substr))))
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			contains(s[1:], substr))))
 }

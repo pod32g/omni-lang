@@ -25,6 +25,31 @@ func add(a:int, b:int):int {
 func square(x:int):int => x * x
 ```
 
+### Imports
+```omni
+import std.io as io           // Standard library with alias
+import std.math               // Standard library without alias
+import math_utils             // Local file import
+import string_utils as str    // Local file with alias
+```
+
+### String Operations
+```omni
+let greeting:string = "Hello " + "World"        // String concatenation
+let message:string = "Age: " + 30               // Mixed types
+let info:string = 42 + " items"                 // Integer + String
+```
+
+### Unary Expressions
+```omni
+let x:int = 42
+let negative:int = -x        // Negation
+let positive:int = -(-x)     // Double negation
+
+let flag:bool = true
+let not_flag:bool = !flag    // Logical NOT
+```
+
 ## Types
 
 ### Primitive Types

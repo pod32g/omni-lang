@@ -120,7 +120,6 @@ type Checker struct {
 	functions    map[string]FunctionSignature
 
 	scopes      []map[string]Symbol
-	diagMutex   struct{} // placeholder for future concurrency work
 	diagnostics []error
 
 	functionStack []functionContext
@@ -729,7 +728,7 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		return leftType
 	case "-", "*", "/", "%":
 		if !isNumeric(leftType) || !isNumeric(rightType) {
-			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op), 
+			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op),
 				fmt.Sprintf("use numeric expressions (int, float), got %s and %s", leftType, rightType))
 			return typeError
 		}
@@ -740,7 +739,7 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		return leftType
 	case "<", "<=", ">", ">=":
 		if !isNumeric(leftType) || !isNumeric(rightType) {
-			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op), 
+			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op),
 				fmt.Sprintf("use numeric expressions (int, float), got %s and %s", leftType, rightType))
 			return typeError
 		}
@@ -752,7 +751,7 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		return "bool"
 	case "&&", "||":
 		if !c.typesEqual(leftType, "bool") || !c.typesEqual(rightType, "bool") {
-			c.report(expr.Span(), fmt.Sprintf("operator %s requires boolean operands", expr.Op), 
+			c.report(expr.Span(), fmt.Sprintf("operator %s requires boolean operands", expr.Op),
 				fmt.Sprintf("use boolean expressions, got %s and %s", leftType, rightType))
 		}
 		return "bool"
@@ -1132,42 +1131,6 @@ func (c *Checker) processImport(imp *ast.ImportDecl) {
 			local = imp.Path[len(imp.Path)-1]
 		}
 		scope[local] = Symbol{Type: "module", Mutable: false}
-	}
-
-	return
-}
-
-// processImportedModule processes an imported module and makes its symbols available.
-func (c *Checker) processImportedModule(module *ast.Module, imp *ast.ImportDecl) {
-	// Determine the local name for the module
-	localName := imp.Alias
-	if localName == "" {
-		localName = imp.Path[len(imp.Path)-1] // Use last segment as default name
-	}
-
-	// Add the module to the current scope
-	if len(c.scopes) > 0 {
-		scope := c.scopes[len(c.scopes)-1]
-		scope[localName] = Symbol{Type: "module", Mutable: false}
-	}
-
-	// Process functions from the imported module
-	for _, decl := range module.Decls {
-		if fn, ok := decl.(*ast.FuncDecl); ok {
-			// Create qualified function name
-			qualifiedName := localName + "." + fn.Name
-
-			// Add to functions map
-			sig := FunctionSignature{Return: "void"}
-			if fn.Return != nil {
-				sig.Return = typeExprToString(fn.Return)
-			}
-			sig.Params = make([]string, len(fn.Params))
-			for i, param := range fn.Params {
-				sig.Params[i] = typeExprToString(param.Type)
-			}
-			c.functions[qualifiedName] = sig
-		}
 	}
 }
 
