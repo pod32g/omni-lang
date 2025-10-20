@@ -42,7 +42,7 @@ func Compile(cfg Config) error {
 
 	backend := cfg.Backend
 	if backend == "" {
-		backend = "vm"
+		backend = "c"
 	}
 	if backend != "vm" && backend != "clift" && backend != "c" {
 		return fmt.Errorf("unsupported backend: %s", backend)

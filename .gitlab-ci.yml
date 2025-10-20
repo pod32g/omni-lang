@@ -239,18 +239,18 @@ comprehensive-test:
     - echo 'func main():int { return 42 }' > test_comprehensive.omni
     - echo "Testing VM backend..."
     - ./bin/omnic -backend vm test_comprehensive.omni || true
-    - echo "Testing C backend..."
-    - ./bin/omnic -o test_c -backend c -emit exe test_comprehensive.omni
+    - echo "Testing C backend (default)..."
+    - ./bin/omnic -o test_c test_comprehensive.omni
     - echo "Checking what files were created..."
     - ls -la test_* || echo "No test files found"
     - if [ -f test_c ]; then ./test_c || true; elif [ -f test_comprehensive ]; then ./test_comprehensive || true; else echo "No C backend executable found, skipping execution"; fi
     - echo "Testing optimization levels..."
-    - ./bin/omnic -o test_opt1 -backend c -O O1 -emit exe test_comprehensive.omni
+    - ./bin/omnic -o test_opt1 -O O1 test_comprehensive.omni
     - if [ -f test_opt1 ]; then ./test_opt1 || true; else echo "test_opt1 not found, checking for alternative names..."; ls -la test_*opt* || echo "No optimization files found"; fi
-    - ./bin/omnic -o test_opt2 -backend c -O O2 -emit exe test_comprehensive.omni
+    - ./bin/omnic -o test_opt2 -O O2 test_comprehensive.omni
     - if [ -f test_opt2 ]; then ./test_opt2 || true; else echo "test_opt2 not found, checking for alternative names..."; ls -la test_*opt* || echo "No optimization files found"; fi
     - echo "Testing debug builds..."
-    - ./bin/omnic -o test_debug -backend c -debug -emit exe test_comprehensive.omni
+    - ./bin/omnic -o test_debug -debug test_comprehensive.omni
     - if [ -f test_debug ]; then ./test_debug || true; else echo "test_debug not found, checking for alternative names..."; ls -la test_*debug* || echo "No debug files found"; fi
     - echo "Comprehensive test completed"
     - echo "Cleaning up test files..."

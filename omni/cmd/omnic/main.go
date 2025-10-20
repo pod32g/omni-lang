@@ -36,9 +36,9 @@ func (f *stringFlag) Set(v string) error {
 
 func main() {
 	var (
-		backend  = flag.String("backend", "vm", "code generation backend (vm|clift|c)")
+		backend  = flag.String("backend", "c", "code generation backend (vm|clift|c)")
 		optLevel = flag.String("O", "O0", "optimization level (O0-O3)")
-		emitFlag = newStringFlag("obj")
+		emitFlag = newStringFlag("exe")
 		dump     = flag.String("dump", "", "dump intermediate representation (mir)")
 		output   = flag.String("o", "", "output binary path")
 		debug    = flag.Bool("debug", false, "generate debug symbols and debug information")
@@ -70,8 +70,15 @@ func main() {
 
 	input := flag.Arg(0)
 	emit := emitFlag.value
-	if !emitFlag.set && *backend == "vm" {
-		emit = "mir"
+	if !emitFlag.set {
+		// Set appropriate defaults based on backend
+		if *backend == "vm" {
+			emit = "mir"
+		} else if *backend == "c" {
+			emit = "exe"
+		} else if *backend == "clift" {
+			emit = "obj"
+		}
 	}
 
 	if err := run(input, *output, *backend, *optLevel, emit, *dump, *verbose, *debug); err != nil {
@@ -87,11 +94,11 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  omnic [options] <file.omni>\n\n")
 	fmt.Fprintf(os.Stderr, "OPTIONS:\n")
 	fmt.Fprintf(os.Stderr, "  -backend string\n")
-	fmt.Fprintf(os.Stderr, "        code generation backend (vm|clift) (default \"vm\")\n")
+	fmt.Fprintf(os.Stderr, "        code generation backend (vm|clift|c) (default \"c\")\n")
 	fmt.Fprintf(os.Stderr, "  -O string\n")
 	fmt.Fprintf(os.Stderr, "        optimization level (O0-O3) (default \"O0\")\n")
 	fmt.Fprintf(os.Stderr, "  -emit string\n")
-	fmt.Fprintf(os.Stderr, "        emission format (mir|obj|exe|binary|asm) (default \"obj\")\n")
+	fmt.Fprintf(os.Stderr, "        emission format (mir|obj|exe|binary|asm) (default \"exe\")\n")
 	fmt.Fprintf(os.Stderr, "  -dump string\n")
 	fmt.Fprintf(os.Stderr, "        dump intermediate representation (mir)\n")
 	fmt.Fprintf(os.Stderr, "  -o string\n")
@@ -103,7 +110,8 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  -help, -h\n")
 	fmt.Fprintf(os.Stderr, "        show help and exit\n\n")
 	fmt.Fprintf(os.Stderr, "EXAMPLES:\n")
-	fmt.Fprintf(os.Stderr, "  omnic hello.omni                    # Compile with VM backend\n")
+	fmt.Fprintf(os.Stderr, "  omnic hello.omni                    # Compile with C backend to executable\n")
+	fmt.Fprintf(os.Stderr, "  omnic -backend vm hello.omni        # Compile with VM backend to MIR\n")
 	fmt.Fprintf(os.Stderr, "  omnic -backend clift hello.omni     # Compile with Cranelift backend\n")
 	fmt.Fprintf(os.Stderr, "  omnic -emit mir hello.omni          # Emit MIR instead of binary\n")
 	fmt.Fprintf(os.Stderr, "  omnic -verbose hello.omni           # Show compilation steps\n")
