@@ -44,7 +44,7 @@ func Compile(cfg Config) error {
 	if backend == "" {
 		backend = "vm"
 	}
-	if backend != "vm" && backend != "clift" {
+	if backend != "vm" && backend != "clift" && backend != "c" {
 		return fmt.Errorf("unsupported backend: %s", backend)
 	}
 
@@ -52,6 +52,8 @@ func Compile(cfg Config) error {
 	if emit == "" {
 		if backend == "vm" {
 			emit = "mir"
+		} else if backend == "c" {
+			emit = "exe"
 		} else {
 			emit = "obj"
 		}
@@ -65,6 +67,10 @@ func Compile(cfg Config) error {
 	case "clift":
 		if emit != "obj" && emit != "exe" && emit != "binary" && emit != "asm" {
 			return fmt.Errorf("clift backend: emit option %q not supported", emit)
+		}
+	case "c":
+		if emit != "exe" && emit != "asm" {
+			return fmt.Errorf("c backend: emit option %q not supported", emit)
 		}
 	}
 
@@ -112,6 +118,8 @@ func Compile(cfg Config) error {
 		return compileVM(cfg, emit, mirMod)
 	case "clift":
 		return compileCraneliftBackend(cfg, emit, mirMod)
+	case "c":
+		return compileCBackend(cfg, emit, mirMod)
 	default:
 		return fmt.Errorf("unsupported backend: %s", backend)
 	}
@@ -185,6 +193,32 @@ func compileVM(cfg Config, emit string, mod *mir.Module) error {
 		return fmt.Errorf("write mir output: %w", err)
 	}
 	return nil
+}
+
+// compileCBackend compiles MIR using the C backend
+func compileCBackend(cfg Config, emit string, mod *mir.Module) error {
+	output := cfg.OutputPath
+	if output == "" {
+		output = defaultOutputPath(cfg.InputPath, emit)
+	}
+	if err := ensureDir(output); err != nil {
+		return err
+	}
+
+	switch emit {
+	case "exe":
+		if cfg.DebugInfo {
+			return compileToExecutableWithDebug(mod, output, cfg.OptLevel, cfg.InputPath)
+		} else if cfg.OptLevel != "O0" {
+			return compileToExecutableWithOpt(mod, output, cfg.OptLevel)
+		} else {
+			return compileToExecutable(mod, output)
+		}
+	case "asm":
+		return compileToAssembly(mod, output)
+	default:
+		return fmt.Errorf("c backend: emit option %q not supported", emit)
+	}
 }
 
 // compileCraneliftBackend compiles MIR to native code using Cranelift backend

@@ -87,12 +87,12 @@ test:
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - source $HOME/.cargo/env
     - rustup default stable
-  script:
-    - cd omni
-    - make build-rust
-    - make build-runtime
-    - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$LD_LIBRARY_PATH
-    - make test
+          script:
+            - cd omni
+            - make build-rust
+            - make build-runtime
+            - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
+            - make test
   coverage: '/coverage: \d+\.\d+%/'
   artifacts:
     paths:
@@ -122,22 +122,22 @@ integration-test:
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - source $HOME/.cargo/env
     - rustup default stable
-  script:
-    - cd omni
-    - make build-rust
-    - make build-runtime
-    - make build
-    - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$LD_LIBRARY_PATH
-    - echo 'func main():int { return 42 }' > test_basic.omni
-    - ./bin/omnic -emit exe test_basic.omni -o test_basic
-    - ./test_basic
-    - ./bin/omnic -emit asm test_basic.omni -o test_basic.s
-    - test -f test_basic.s
-    - ./bin/omnic -O O2 -emit exe test_basic.omni -o test_basic_opt
-    - ./test_basic_opt
-    - ./bin/omnic -debug -emit exe test_basic.omni -o test_basic_debug
-    - ./test_basic_debug
-    - rm -f test_basic* test_basic.s
+          script:
+            - cd omni
+            - make build-rust
+            - make build-runtime
+            - make build
+            - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
+            - echo 'func main():int { return 42 }' > test_basic.omni
+            - ./bin/omnic -emit exe test_basic.omni -o test_basic
+            - ./test_basic
+            - ./bin/omnic -emit asm test_basic.omni -o test_basic.s
+            - test -f test_basic.s
+            - ./bin/omnic -O O2 -emit exe test_basic.omni -o test_basic_opt
+            - ./test_basic_opt
+            - ./bin/omnic -debug -emit exe test_basic.omni -o test_basic_debug
+            - ./test_basic_debug
+            - rm -f test_basic* test_basic.s
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
@@ -151,13 +151,13 @@ benchmark:
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
     - source $HOME/.cargo/env
     - rustup default stable
-  script:
-    - cd omni
-    - make build-rust
-    - make build-runtime
-    - make build
-    - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$LD_LIBRARY_PATH
-    - if [ -d "tests/bench" ]; then make bench; fi
+          script:
+            - cd omni
+            - make build-rust
+            - make build-runtime
+            - make build
+            - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
+            - if [ -d "tests/bench" ]; then make bench; fi
   artifacts:
     paths:
       - omni/bench-results/

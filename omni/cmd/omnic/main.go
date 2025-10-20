@@ -36,7 +36,7 @@ func (f *stringFlag) Set(v string) error {
 
 func main() {
 	var (
-		backend  = flag.String("backend", "vm", "code generation backend (vm|clift)")
+		backend  = flag.String("backend", "vm", "code generation backend (vm|clift|c)")
 		optLevel = flag.String("O", "O0", "optimization level (O0-O3)")
 		emitFlag = newStringFlag("obj")
 		dump     = flag.String("dump", "", "dump intermediate representation (mir)")
