@@ -45,9 +45,7 @@ cache:
   key: 
     files:
       - omni/go.mod
-      - omni/go.sum
       - omni/native/clift/Cargo.toml
-      - omni/native/clift/Cargo.lock
   paths:
     - .go/pkg/mod/
     - target/
