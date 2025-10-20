@@ -208,7 +208,7 @@ func compileCBackend(cfg Config, emit string, mod *mir.Module) error {
 	switch emit {
 	case "exe":
 		if cfg.DebugInfo {
-			return compileToExecutableWithDebug(mod, output, cfg.OptLevel, cfg.InputPath)
+			return compileCToExecutableWithDebug(mod, output, cfg.OptLevel, cfg.InputPath)
 		} else if cfg.OptLevel != "O0" {
 			return compileCToExecutableWithOpt(mod, output, cfg.OptLevel)
 		} else {
@@ -263,6 +263,31 @@ func compileCToExecutableWithOpt(mod *mir.Module, outputPath string, optLevel st
 	// Compile C code to executable with optimization
 	if err := compileCWrapperWithOpt(cPath, outputPath, optLevel); err != nil {
 		return fmt.Errorf("failed to compile optimized C code: %w", err)
+	}
+
+	// Clean up temporary file
+	os.Remove(cPath)
+
+	return nil
+}
+
+// compileCToExecutableWithDebug compiles MIR to debug executable using C backend
+func compileCToExecutableWithDebug(mod *mir.Module, outputPath string, optLevel string, sourceFile string) error {
+	// Generate C code with debug information
+	cCode, err := cbackend.GenerateCWithDebug(mod, optLevel, true, sourceFile)
+	if err != nil {
+		return fmt.Errorf("failed to generate C code with debug: %w", err)
+	}
+
+	// Write C code to temporary file
+	cPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".c"
+	if err := os.WriteFile(cPath, []byte(cCode), 0o644); err != nil {
+		return fmt.Errorf("failed to write C code: %w", err)
+	}
+
+	// Compile C code to executable with debug symbols
+	if err := compileCWrapperWithDebug(cPath, outputPath, optLevel); err != nil {
+		return fmt.Errorf("failed to compile C code with debug: %w", err)
 	}
 
 	// Clean up temporary file
