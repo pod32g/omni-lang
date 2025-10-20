@@ -1,13 +1,13 @@
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int};
-use cranelift_codegen::ir::{Function, InstBuilder, types::*, AbiParam, Signature};
-use cranelift_codegen::settings::{self, Configurable};
+use cranelift_codegen::ir::{types::*, AbiParam, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::CallConv;
+use cranelift_codegen::settings::{self, Configurable};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_module::Module;
-use cranelift_object::{ObjectModule, ObjectBuilder};
-use target_lexicon::Triple;
+use cranelift_object::{ObjectBuilder, ObjectModule};
 use serde::{Deserialize, Serialize};
+use std::ffi::CStr;
+use std::os::raw::{c_char, c_int};
+use target_lexicon::Triple;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -141,8 +141,8 @@ pub unsafe extern "C" fn omni_clift_compile_to_object(
 
 fn compile_mir_to_object(mir_json: &str, output_path: &str) -> Result<(), CompileError> {
     // Parse MIR JSON
-    let mir_module: MirModule = serde_json::from_str(mir_json)
-        .map_err(|e| CompileError::InvalidJson(e.to_string()))?;
+    let mir_module: MirModule =
+        serde_json::from_str(mir_json).map_err(|e| CompileError::InvalidJson(e.to_string()))?;
 
     // Set up Cranelift
     let mut flag_builder = settings::builder();
@@ -165,10 +165,10 @@ fn compile_mir_to_object(mir_json: &str, output_path: &str) -> Result<(), Compil
 
     // Generate object file
     let object_product = object_module.finish();
-    let object_data = object_product.emit()
+    let object_data = object_product
+        .emit()
         .map_err(|e| CompileError::CraneliftError(e.to_string()))?;
-    std::fs::write(output_path, object_data)
-        .map_err(|e| CompileError::IoError(e))?;
+    std::fs::write(output_path, object_data).map_err(|e| CompileError::IoError(e))?;
 
     Ok(())
 }
@@ -179,13 +179,13 @@ fn compile_function(
 ) -> Result<(), CompileError> {
     // Create Cranelift function
     let mut sig = Signature::new(CallConv::SystemV);
-    
+
     // Add parameters
     for param in &mir_func.params {
         let param_type = omni_type_to_cranelift(&param.param_type)?;
         sig.params.push(AbiParam::new(param_type));
     }
-    
+
     // Add return type
     let return_type = omni_type_to_cranelift(&mir_func.return_type)?;
     sig.returns.push(AbiParam::new(return_type));
@@ -233,16 +233,19 @@ fn compile_function(
     builder.finalize();
 
     // Add function to module
-    let func_id = object_module.declare_function(
-        &mir_func.name,
-        cranelift_module::Linkage::Export,
-        &func.signature,
-    ).map_err(|e| CompileError::CraneliftError(e.to_string()))?;
+    let func_id = object_module
+        .declare_function(
+            &mir_func.name,
+            cranelift_module::Linkage::Export,
+            &func.signature,
+        )
+        .map_err(|e| CompileError::CraneliftError(e.to_string()))?;
 
     // Create a context for the function
     let mut ctx = cranelift_codegen::Context::new();
     ctx.func = func;
-    object_module.define_function(func_id, &mut ctx)
+    object_module
+        .define_function(func_id, &mut ctx)
         .map_err(|e| CompileError::CraneliftError(e.to_string()))?;
 
     Ok(())
@@ -252,9 +255,12 @@ fn omni_type_to_cranelift(omni_type: &str) -> Result<cranelift_codegen::ir::Type
     match omni_type {
         "int" => Ok(I32),
         "float" => Ok(F32),
-        "bool" => Ok(I8), // Use I8 for bool for now
+        "bool" => Ok(I8),  // Use I8 for bool for now
         "void" => Ok(I32), // Use I32 for void for now
-        _ => Err(CompileError::MirParse(format!("Unsupported type: {}", omni_type))),
+        _ => Err(CompileError::MirParse(format!(
+            "Unsupported type: {}",
+            omni_type
+        ))),
     }
 }
 
@@ -264,17 +270,22 @@ fn compile_instruction(
 ) -> Result<(), CompileError> {
     match mir_inst.op.as_str() {
         "const.int" => {
-            let value = mir_inst.operands[0].literal.as_ref()
+            let value = mir_inst.operands[0]
+                .literal
+                .as_ref()
                 .ok_or_else(|| CompileError::MirParse("Expected literal operand".to_string()))?
                 .parse::<i32>()
                 .map_err(|_| CompileError::MirParse("Invalid integer literal".to_string()))?;
-            
+
             let val = builder.ins().iconst(I32, value as i64);
             // Store the result for later use
             // TODO: Implement proper value mapping
         }
         _ => {
-            return Err(CompileError::MirParse(format!("Unsupported instruction: {}", mir_inst.op)));
+            return Err(CompileError::MirParse(format!(
+                "Unsupported instruction: {}",
+                mir_inst.op
+            )));
         }
     }
     Ok(())
@@ -295,7 +306,10 @@ fn compile_terminator(
             }
         }
         _ => {
-            return Err(CompileError::MirParse(format!("Unsupported terminator: {}", terminator.op)));
+            return Err(CompileError::MirParse(format!(
+                "Unsupported terminator: {}",
+                terminator.op
+            )));
         }
     }
     Ok(())

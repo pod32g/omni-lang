@@ -31,9 +31,6 @@ func main() {
 		}
 	}
 
-	// Create a custom checker to debug
-	c := &checker.Checker{}
-
 	err = checker.Check("debug.omni", source, mod)
 	if err != nil {
 		fmt.Printf("Type check error: %v\n", err)
