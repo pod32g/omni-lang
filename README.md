@@ -600,6 +600,8 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Roadmap
 
+> 📋 **For detailed development roadmap, see [ROADMAP.md](docs/ROADMAP.md)**
+
 ### Version 0.2.0 (Current)
 - ✅ Basic language features (variables, functions, control flow)
 - ✅ Complete compiler pipeline (lexer, parser, AST, type checker, MIR)
@@ -648,6 +650,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 🐛 [Issue Tracker](https://github.com/omni-lang/omni/issues)
 - 💬 [Discussions](https://github.com/omni-lang/omni/discussions)
 - 📧 [Email](mailto:contact@omni-lang.org)
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
