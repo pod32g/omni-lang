@@ -1,6 +1,6 @@
 # OmniLang
 
-A statically typed programming language with a Go frontend, SSA MIR, and Cranelift backend.
+A statically typed programming language with a Go frontend, SSA MIR, and multiple backends (C, Cranelift, VM).
 
 ## Overview
 
@@ -8,7 +8,8 @@ OmniLang is a modern programming language designed for performance, safety, and 
 
 - **Static typing** with type inference
 - **Memory safety** through ownership and borrowing
-- **High performance** via Cranelift code generation
+- **Multiple backends** for different use cases (C, Cranelift, VM)
+- **Native code generation** via C backend (default)
 - **Modern syntax** inspired by Rust and Go
 - **Comprehensive standard library**
 - **Cross-platform support** (Linux, macOS, Windows)
@@ -45,14 +46,21 @@ func main():int {
 Compile and run:
 
 ```bash
-# Run with VM
+# Compile to native executable (C backend, default)
+./bin/omnic hello.omni -o hello
+./hello
+
+# Run with VM (fastest compilation)
 ./bin/omnir hello.omni
 
-# Compile to MIR
+# Compile to MIR only
 ./bin/omnic hello.omni -backend vm -emit mir
 
-# Compile to native object (Linux only)
-./bin/omnic hello.omni -backend clift -emit obj -o hello.o
+# Compile with optimization
+./bin/omnic hello.omni -O O2 -o hello
+
+# Compile with debug symbols
+./bin/omnic hello.omni -debug -o hello
 ```
 
 ## Language Features
@@ -360,38 +368,80 @@ omnic [options] <file.omni>
 
 Options:
   -backend string
-        code generation backend (vm|clift) (default "vm")
+        code generation backend (c|clift|vm) (default "c")
   -O string
-        optimization level (O0-O3) (default "O0")
+        optimization level (O0-O3, Os) (default "O0")
   -emit string
-        emission format (mir|obj|asm) (default obj)
+        emission format (exe|mir|obj|asm) (default "exe")
   -dump string
         dump intermediate representation (mir)
   -o string
-        output binary path
+        output executable path
+  -debug
+        generate debug symbols
+  -verbose
+        enable verbose output
 
 # Runner (omnir)
 omnir <file.omni>
+
+# Packager (omnipkg)
+omnipkg [options]
+
+Options:
+  -version string
+        version string for the package
+  -platform string
+        target platform (linux|macos|windows)
+  -arch string
+        target architecture (amd64|arm64)
 ```
 
 ### Backends
 
-**VM Backend** (Default):
+**C Backend** (Default):
+- Generates C code and compiles with GCC/Clang
+- Excellent portability and compatibility
+- Supports all optimization levels and debug symbols
+- Best for production use
+
+**VM Backend**:
 - Interprets MIR directly
 - Fast compilation, slower execution
-- Good for development and testing
+- Good for development, testing, and quick iteration
 
-**Cranelift Backend**:
-- Compiles to native machine code
-- Slower compilation, faster execution
-- Production-ready performance
+**Cranelift Backend** (Experimental):
+- Compiles to native machine code via Cranelift
+- Fast execution, moderate compilation speed
+- Linux-only support currently
 
 ### Optimization Levels
 
-- `O0`: No optimization (fastest compilation)
-- `O1`: Basic optimization
-- `O2`: Standard optimization
-- `O3`: Aggressive optimization
+- `O0`: No optimization (fastest compilation, largest binaries)
+- `O1`: Basic optimization (remove redundant operations)
+- `O2`: Standard optimization (balanced performance/size)
+- `O3`: Aggressive optimization (maximum performance)
+- `Os`: Size optimization (smallest binaries)
+
+### Packaging and Distribution
+
+OmniLang includes a packaging system for creating distributable binaries:
+
+```bash
+# Build and package for current platform
+cd omni
+make package
+
+# Creates packages in omni/dist/:
+# - omni-<version>-<platform>-<arch>.tar.gz (Linux/macOS)
+# - omni-<version>-<platform>-<arch>.zip (Windows)
+#
+# Each package includes:
+# - Compiled binaries (omnic, omnir, omnipkg)
+# - Runtime library (libomni_rt.so)
+# - Standard library modules
+# - Examples and documentation
+```
 
 ## Project Structure
 
@@ -399,7 +449,8 @@ omnir <file.omni>
 omni/
 ├── cmd/
 │   ├── omnic/          # Compiler CLI
-│   └── omnir/          # Runner CLI
+│   ├── omnir/          # Runner CLI
+│   └── omnipkg/        # Packager CLI
 ├── internal/
 │   ├── lexer/          # Tokenization
 │   ├── parser/         # Syntax analysis
@@ -409,12 +460,22 @@ omni/
 │   ├── passes/         # Optimization passes
 │   ├── vm/             # Virtual machine
 │   ├── backend/        # Code generation backends
-│   └── runtime/        # Runtime library
+│   │   ├── c/          # C backend (default)
+│   │   └── cranelift/  # Cranelift backend
+│   ├── compiler/       # Compiler orchestration
+│   └── runner/         # Program execution
+├── runtime/
+│   ├── omni_rt.h       # Runtime library header
+│   ├── omni_rt.c       # Runtime library implementation
+│   └── posix/          # POSIX runtime (libomni_rt.so)
 ├── native/
 │   └── clift/          # Rust Cranelift bridge
 ├── std/                # Standard library
 ├── examples/           # Example programs
 ├── tests/              # Test suite
+│   ├── e2e/            # End-to-end tests
+│   ├── std/            # Standard library tests
+│   └── goldens/        # Golden test files
 └── docs/               # Documentation
 ```
 
@@ -423,15 +484,20 @@ omni/
 ### Building
 
 ```bash
-# Build everything
+# Build everything (Go compiler + Rust backend + Runtime)
 make build
 
 # Build specific components
-make build-go
-make build-rust
+make build-go         # Build Go compiler only
+make build-rust       # Build Rust Cranelift backend
+make build-runtime    # Build C runtime library
 
 # Clean build artifacts
 make clean
+
+# Format and lint code
+make fmt
+make lint
 ```
 
 ### Testing
@@ -602,21 +668,26 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 > 📋 **For detailed development roadmap, see [ROADMAP.md](docs/ROADMAP.md)**
 
-### Current Status (v0.2.0)
+### Current Status (v0.2.0+)
 - ✅ Complete frontend (lexer, parser, AST, type checker)
-- ✅ VM backend with 65.7% test coverage
+- ✅ Three backends: C (default), VM, Cranelift (experimental)
+- ✅ C backend with optimization levels (O0-O3, Os) and debug symbols
 - ✅ Import system (std library + local files with aliases)
 - ✅ String concatenation with mixed types
 - ✅ Unary expressions (-, !)
+- ✅ Array indexing and basic operations
+- ✅ Stdlib functions (std.io, std.math) with runtime support
 - ✅ Enhanced error messages with helpful hints
 - ✅ Comprehensive testing and documentation
+- ✅ Packaging system for distribution
 - ✅ Performance optimizations
+- ✅ CI/CD pipeline with multi-platform builds
 
 ### Upcoming Phases
-- 🔄 **Phase 1**: Type System Completion (generics, union types, memory management)
-- 📋 **Phase 2**: MIR Optimization (advanced features, optimization passes)
-- 📋 **Phase 3**: Native Code Generation (complete Cranelift integration)
-- 📋 **Phase 4**: Language Features (concurrency, error handling, tooling)
+- 🔄 **Phase 1**: Language Features (for loops, memory management, error handling)
+- 📋 **Phase 2**: Type System Completion (generics, union types)
+- 📋 **Phase 3**: MIR Optimization (advanced optimization passes)
+- 📋 **Phase 4**: Complete Stdlib (file I/O, networking, collections)
 - 📋 **Phase 5**: Production Readiness (performance, security, deployment)
 - 📋 **Phase 6**: Ecosystem (package registry, community building)
 
