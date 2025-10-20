@@ -210,15 +210,65 @@ func compileCBackend(cfg Config, emit string, mod *mir.Module) error {
 		if cfg.DebugInfo {
 			return compileToExecutableWithDebug(mod, output, cfg.OptLevel, cfg.InputPath)
 		} else if cfg.OptLevel != "O0" {
-			return compileToExecutableWithOpt(mod, output, cfg.OptLevel)
+			return compileCToExecutableWithOpt(mod, output, cfg.OptLevel)
 		} else {
-			return compileToExecutable(mod, output)
+			return compileCToExecutable(mod, output)
 		}
 	case "asm":
 		return compileToAssembly(mod, output)
 	default:
 		return fmt.Errorf("c backend: emit option %q not supported", emit)
 	}
+}
+
+// compileCToExecutable compiles MIR to executable using C backend
+func compileCToExecutable(mod *mir.Module, outputPath string) error {
+	// Generate C code
+	cCode, err := cbackend.GenerateC(mod)
+	if err != nil {
+		return fmt.Errorf("failed to generate C code: %w", err)
+	}
+
+	// Write C code to temporary file
+	cPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".c"
+	if err := os.WriteFile(cPath, []byte(cCode), 0o644); err != nil {
+		return fmt.Errorf("failed to write C code: %w", err)
+	}
+
+	// Compile C code to executable
+	if err := compileCWrapper(cPath, outputPath); err != nil {
+		return fmt.Errorf("failed to compile C code: %w", err)
+	}
+
+	// Clean up temporary file
+	os.Remove(cPath)
+
+	return nil
+}
+
+// compileCToExecutableWithOpt compiles MIR to optimized executable using C backend
+func compileCToExecutableWithOpt(mod *mir.Module, outputPath string, optLevel string) error {
+	// Generate optimized C code
+	cCode, err := cbackend.GenerateCOptimized(mod, optLevel)
+	if err != nil {
+		return fmt.Errorf("failed to generate optimized C code: %w", err)
+	}
+
+	// Write C code to temporary file
+	cPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".c"
+	if err := os.WriteFile(cPath, []byte(cCode), 0o644); err != nil {
+		return fmt.Errorf("failed to write C code: %w", err)
+	}
+
+	// Compile C code to executable with optimization
+	if err := compileCWrapperWithOpt(cPath, outputPath, optLevel); err != nil {
+		return fmt.Errorf("failed to compile optimized C code: %w", err)
+	}
+
+	// Clean up temporary file
+	os.Remove(cPath)
+
+	return nil
 }
 
 // compileCraneliftBackend compiles MIR to native code using Cranelift backend
