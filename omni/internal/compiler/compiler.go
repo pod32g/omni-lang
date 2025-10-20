@@ -543,15 +543,15 @@ func compileCWrapperWithOpt(cPath, outputPath string, optLevel string) error {
 
 	// Add optimization flags
 	switch optLevel {
-	case "0", "none":
+	case "0", "O0", "none":
 		args = append(args, "-O0")
-	case "1", "basic":
+	case "1", "O1", "basic":
 		args = append(args, "-O1")
-	case "2", "standard":
+	case "2", "O2", "standard":
 		args = append(args, "-O2")
-	case "3", "aggressive":
+	case "3", "O3", "aggressive":
 		args = append(args, "-O3")
-	case "s", "size":
+	case "s", "Os", "size":
 		args = append(args, "-Os")
 	default:
 		args = append(args, "-O2")
@@ -607,15 +607,15 @@ func compileCWrapperWithDebug(cPath, outputPath string, optLevel string) error {
 
 	// Add optimization flags
 	switch optLevel {
-	case "0", "none":
+	case "0", "O0", "none":
 		args = append(args, "-O0")
-	case "1", "basic":
+	case "1", "O1", "basic":
 		args = append(args, "-O1")
-	case "2", "standard":
+	case "2", "O2", "standard":
 		args = append(args, "-O2")
-	case "3", "aggressive":
+	case "3", "O3", "aggressive":
 		args = append(args, "-O3")
-	case "s", "size":
+	case "s", "Os", "size":
 		args = append(args, "-Os")
 	default:
 		args = append(args, "-O2")

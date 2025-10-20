@@ -25,15 +25,15 @@ func OptimizeC(code string, optLevel string) string {
 // optimize applies optimizations based on the optimization level
 func (o *COptimizer) optimize(code string) string {
 	switch o.optLevel {
-	case "0", "none":
+	case "0", "O0", "none":
 		return code // No optimization
-	case "1", "basic":
+	case "1", "O1", "basic":
 		return o.basicOptimizations(code)
-	case "2", "standard":
+	case "2", "O2", "standard":
 		return o.standardOptimizations(code)
-	case "3", "aggressive":
+	case "3", "O3", "aggressive":
 		return o.aggressiveOptimizations(code)
-	case "s", "size":
+	case "s", "Os", "size":
 		return o.sizeOptimizations(code)
 	default:
 		return o.standardOptimizations(code)
