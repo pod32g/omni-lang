@@ -1,0 +1,16 @@
+// Complex union type test
+func process_data(x: int | string | bool) {
+    // Process different types of data
+}
+
+func get_value(): int | string {
+    return 42
+}
+
+func main() {
+    let x: int | string | bool = 42
+    let y: int | string | bool = "hello"
+    let z: int | string | bool = true
+    
+    let result: int | string = get_value()
+}

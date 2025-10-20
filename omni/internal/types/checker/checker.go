@@ -30,6 +30,7 @@ func Check(filename, src string, mod *ast.Module) error {
 		functions:    make(map[string]FunctionSignature),
 		imports:      make(map[string]bool),
 		moduleLoader: *NewModuleLoader(),
+		typeParams:   make(map[string]bool),
 	}
 	c.initBuiltins()
 	c.collectTypeDecls(mod)
@@ -99,7 +100,7 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 	// For std.math, we want std/math/math.omni
 	// For std.io, we want std/io/print.omni
 	// For local modules, we want module.omni
-	
+
 	var fileName string
 	if len(importPath) > 1 && importPath[0] == "std" {
 		// For std modules, use the subdirectory structure
@@ -107,7 +108,7 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 		// std.math -> std/math/math.omni
 		// std.string -> std/string/string.omni
 		moduleName := importPath[1] // "io", "math", "string", etc.
-		
+
 		// Special case for std.io which uses print.omni instead of io.omni
 		if moduleName == "io" {
 			fileName = filepath.Join(moduleName, "print") + ".omni"
@@ -149,6 +150,28 @@ type Checker struct {
 	imports map[string]bool // available imported symbols
 	// Module loader for local imports
 	moduleLoader ModuleLoader
+
+	// Generic type context
+	typeParams map[string]bool // Currently active type parameters
+}
+
+// enterTypeParams enters a new type parameter scope
+func (c *Checker) enterTypeParams(typeParams []ast.TypeParam) {
+	for _, param := range typeParams {
+		c.typeParams[param.Name] = true
+	}
+}
+
+// leaveTypeParams leaves the current type parameter scope
+func (c *Checker) leaveTypeParams(typeParams []ast.TypeParam) {
+	for _, param := range typeParams {
+		delete(c.typeParams, param.Name)
+	}
+}
+
+// isTypeParam checks if a name is a currently active type parameter
+func (c *Checker) isTypeParam(name string) bool {
+	return c.typeParams[name]
 }
 
 // Symbol represents an entry in the scope stack.
@@ -159,8 +182,9 @@ type Symbol struct {
 
 // FunctionSignature captures parameter and return type information for a function.
 type FunctionSignature struct {
-	Params []string
-	Return string
+	Params     []string
+	Return     string
+	TypeParams []ast.TypeParam // Generic type parameters
 }
 
 type functionContext struct {
@@ -228,15 +252,28 @@ func (c *Checker) registerTopLevelSymbols(mod *ast.Module) {
 }
 
 func (c *Checker) buildFunctionSignature(decl *ast.FuncDecl) FunctionSignature {
+	// For generic functions, we can't resolve types yet, so store placeholder types
+	// and resolve them later when the function is checked
 	params := make([]string, len(decl.Params))
 	for i, param := range decl.Params {
-		params[i] = c.resolveTypeExpr(param.Type)
+		if len(decl.TypeParams) > 0 {
+			// For generic functions, store the full type expression as a string
+			params[i] = c.typeExprToString(param.Type)
+		} else {
+			params[i] = c.resolveTypeExpr(param.Type)
+		}
 	}
 	ret := typeVoid
 	if decl.Return != nil {
-		ret = c.resolveTypeExpr(decl.Return)
+		if len(decl.TypeParams) > 0 {
+			// For generic functions, store the full type expression as a string
+			ret = c.typeExprToString(decl.Return)
+		} else {
+			ret = c.resolveTypeExpr(decl.Return)
+		}
 	}
-	return FunctionSignature{Params: params, Return: ret}
+
+	return FunctionSignature{Params: params, Return: ret, TypeParams: decl.TypeParams}
 }
 
 func (c *Checker) checkModule(mod *ast.Module) {
@@ -257,13 +294,23 @@ func (c *Checker) checkModule(mod *ast.Module) {
 }
 
 func (c *Checker) checkStruct(decl *ast.StructDecl) {
+	// Enter type parameter scope for generic structs
+	c.enterTypeParams(decl.TypeParams)
+
 	for _, field := range decl.Fields {
 		c.checkTypeExpr(field.Type)
 	}
+
+	// Leave type parameter scope
+	c.leaveTypeParams(decl.TypeParams)
 }
 
 func (c *Checker) checkFunc(decl *ast.FuncDecl) {
 	sig := c.functions[decl.Name]
+
+	// Enter type parameter scope for generic functions FIRST
+	c.enterTypeParams(sig.TypeParams)
+
 	expectedReturn := sig.Return
 	if decl.Return != nil {
 		expectedReturn = c.checkTypeExpr(decl.Return)
@@ -292,6 +339,9 @@ func (c *Checker) checkFunc(decl *ast.FuncDecl) {
 
 	c.leaveScope()
 	c.popFunctionContext()
+
+	// Leave type parameter scope
+	c.leaveTypeParams(sig.TypeParams)
 }
 
 func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
@@ -514,8 +564,22 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			}
 			return "void"
 		}
-		c.report(e.Span(), fmt.Sprintf("undefined identifier %q", e.Name),
-			fmt.Sprintf("declare the variable with 'let %s: <type> = <value>' or 'var %s: <type> = <value>' before using it", e.Name, e.Name))
+		// Provide better suggestions based on common patterns
+		var hint string
+		if strings.Contains(e.Name, ".") {
+			// Qualified identifier - might be a module import issue
+			parts := strings.Split(e.Name, ".")
+			if len(parts) == 2 {
+				hint = fmt.Sprintf("check if module '%s' is imported with 'import %s' or 'import %s as <alias>'", parts[0], e.Name, parts[0])
+			} else {
+				hint = fmt.Sprintf("check if this qualified identifier is correct and the module is imported")
+			}
+		} else if isLikelyTypo(e.Name) {
+			hint = fmt.Sprintf("did you mean one of: %s? Or declare the variable with 'let %s: <type> = <value>'", suggestSimilarIdentifiers(e.Name), e.Name)
+		} else {
+			hint = fmt.Sprintf("declare the variable with 'let %s: <type> = <value>' or 'var %s: <type> = <value>' before using it", e.Name, e.Name)
+		}
+		c.report(e.Span(), fmt.Sprintf("undefined identifier %q", e.Name), hint)
 		return typeError
 	case *ast.LiteralExpr:
 		switch e.Kind {
@@ -718,6 +782,14 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			}
 		}
 		return targetType
+	case *ast.NewExpr:
+		// new Type returns a pointer to Type
+		typ := c.checkTypeExpr(e.Type)
+		return "*" + typ
+	case *ast.DeleteExpr:
+		// delete expression returns void
+		c.checkExpr(e.Target)
+		return "void"
 	default:
 		return typeInfer
 	}
@@ -863,13 +935,112 @@ func (c *Checker) resolveTypeExpr(t *ast.TypeExpr) string {
 	if t == nil {
 		return typeInfer
 	}
+
+	// Handle union types
+	if t.IsUnion {
+		members := make([]string, len(t.Members))
+		for i, member := range t.Members {
+			members[i] = c.resolveTypeExpr(member)
+		}
+		return buildUnion(members)
+	}
+
+	// Check if this is a type parameter
+	if c.isTypeParam(t.Name) {
+		return t.Name
+	}
+
 	return typeExprToString(t)
+}
+
+func (c *Checker) typeExprToString(t *ast.TypeExpr) string {
+	if t == nil {
+		return typeInfer
+	}
+
+	// Handle union types
+	if t.IsUnion {
+		members := make([]string, len(t.Members))
+		for i, member := range t.Members {
+			members[i] = c.typeExprToString(member)
+		}
+		return buildUnion(members)
+	}
+
+	// Handle pointer types
+	if strings.HasPrefix(t.Name, "*") {
+		baseType := t.Name[1:] // Remove the *
+		if len(t.Args) > 0 {
+			// This is a pointer to a complex type (union or generic)
+			args := make([]string, len(t.Args))
+			for i, arg := range t.Args {
+				args[i] = c.typeExprToString(arg)
+			}
+			// Check if the base type is empty and we have union args
+			if baseType == "" && len(args) > 1 {
+				// This is a pointer to a union type
+				return "*" + buildUnion(args)
+			}
+			return "*" + buildGeneric(baseType, args)
+		}
+		return "*" + baseType
+	}
+
+	// Handle generic types
+	if len(t.Args) > 0 {
+		args := make([]string, len(t.Args))
+		for i, arg := range t.Args {
+			args[i] = c.typeExprToString(arg)
+		}
+		return buildGeneric(t.Name, args)
+	}
+
+	return t.Name
 }
 
 func (c *Checker) checkTypeExpr(t *ast.TypeExpr) string {
 	if t == nil {
 		return typeInfer
 	}
+
+	// Handle union types
+	if t.IsUnion {
+		members := make([]string, len(t.Members))
+		for i, member := range t.Members {
+			members[i] = c.checkTypeExpr(member)
+		}
+		return buildUnion(members)
+	}
+
+	// Handle pointer types
+	if strings.HasPrefix(t.Name, "*") {
+		baseType := t.Name[1:] // Remove the *
+		if len(t.Args) > 0 {
+			// This is a pointer to a complex type (union or generic)
+			args := make([]string, len(t.Args))
+			for i, arg := range t.Args {
+				args[i] = c.checkTypeExpr(arg)
+			}
+			// Check if the base type is empty and we have union args
+			if baseType == "" && len(args) > 1 {
+				// This is a pointer to a union type
+				return "*" + buildUnion(args)
+			}
+			return "*" + buildGeneric(baseType, args)
+		}
+		// Check if the base type is known
+		if _, ok := c.knownTypes[baseType]; !ok {
+			c.report(t.Span(), fmt.Sprintf("unknown type %q", baseType), "import or declare the type before use")
+		}
+		return "*" + baseType
+	}
+
+	// Check if this is a type parameter
+	if c.isTypeParam(t.Name) {
+		return t.Name
+	}
+
+	// Check if it's a known type
 	if _, ok := c.knownTypes[t.Name]; !ok {
 		c.report(t.Span(), fmt.Sprintf("unknown type %q", t.Name), "import or declare the type before use")
 	}
@@ -908,6 +1079,17 @@ func buildGeneric(name string, args []string) string {
 		b.WriteString(arg)
 	}
 	b.WriteByte('>')
+	return b.String()
+}
+
+func buildUnion(members []string) string {
+	var b strings.Builder
+	for i, member := range members {
+		if i > 0 {
+			b.WriteString(" | ")
+		}
+		b.WriteString(member)
+	}
 	return b.String()
 }
 
@@ -971,7 +1153,40 @@ func (c *Checker) typesEqual(a, b string) bool {
 	if a == typeInfer || b == typeInfer {
 		return true
 	}
+
+	// Handle union types
+	if c.isUnionType(a) && c.isUnionType(b) {
+		return a == b // Exact union match
+	}
+	if c.isUnionType(a) {
+		return c.isTypeInUnion(b, a)
+	}
+	if c.isUnionType(b) {
+		return c.isTypeInUnion(a, b)
+	}
+
 	return a == b
+}
+
+// isUnionType checks if a type string represents a union type
+func (c *Checker) isUnionType(typeStr string) bool {
+	return strings.Contains(typeStr, " | ")
+}
+
+// isTypeInUnion checks if a type is a member of a union type
+func (c *Checker) isTypeInUnion(memberType, unionType string) bool {
+	if !c.isUnionType(unionType) {
+		return false
+	}
+
+	// Split the union type into its members
+	members := strings.Split(unionType, " | ")
+	for _, member := range members {
+		if strings.TrimSpace(member) == memberType {
+			return true
+		}
+	}
+	return false
 }
 
 // -----------------------------------------------------------------------------
@@ -1077,6 +1292,10 @@ func (c *Checker) updateCurrentFunctionReturn(newType string) {
 // -----------------------------------------------------------------------------
 
 func (c *Checker) report(span lexer.Span, message, hint string) {
+	c.reportWithSeverity(span, message, hint, lexer.Error, "")
+}
+
+func (c *Checker) reportWithSeverity(span lexer.Span, message, hint string, severity lexer.Severity, category string) {
 	if span.Start.Line < 1 || span.Start.Line > len(c.lines) {
 		span.Start.Line = 1
 		span.Start.Column = 1
@@ -1086,13 +1305,139 @@ func (c *Checker) report(span lexer.Span, message, hint string) {
 		lineText = c.lines[span.Start.Line-1]
 	}
 	diag := lexer.Diagnostic{
-		File:    c.filename,
-		Message: message,
-		Hint:    hint,
-		Span:    span,
-		Line:    lineText,
+		File:     c.filename,
+		Message:  message,
+		Hint:     hint,
+		Span:     span,
+		Line:     lineText,
+		Severity: severity,
+		Category: category,
 	}
 	c.diagnostics = append(c.diagnostics, diag)
+}
+
+func (c *Checker) reportWarning(span lexer.Span, message, hint string) {
+	c.reportWithSeverity(span, message, hint, lexer.Warning, "type-check")
+}
+
+func (c *Checker) reportInfo(span lexer.Span, message, hint string) {
+	c.reportWithSeverity(span, message, hint, lexer.Info, "suggestion")
+}
+
+// isLikelyTypo checks if an identifier might be a typo based on common patterns
+func isLikelyTypo(name string) bool {
+	// Check for common typos
+	commonTypos := map[string]string{
+		"prnt":     "print",
+		"prin":     "print",
+		"prinln":   "println",
+		"prntln":   "println",
+		"fucn":     "func",
+		"functon":  "function",
+		"retrun":   "return",
+		"retun":    "return",
+		"varibale": "variable",
+		"varable":  "variable",
+		"fals":     "false",
+		"tru":      "true",
+		"stirng":   "string",
+		"strng":    "string",
+		"intege":   "integer",
+		"intger":   "integer",
+	}
+
+	_, isTypo := commonTypos[name]
+	return isTypo
+}
+
+// suggestSimilarIdentifiers suggests similar identifiers based on common typos
+func suggestSimilarIdentifiers(name string) string {
+	commonTypos := map[string]string{
+		"prnt":     "print",
+		"prin":     "print",
+		"prinln":   "println",
+		"prntln":   "println",
+		"fucn":     "func",
+		"functon":  "function",
+		"retrun":   "return",
+		"retun":    "return",
+		"varibale": "variable",
+		"varable":  "variable",
+		"fals":     "false",
+		"tru":      "true",
+		"stirng":   "string",
+		"strng":    "string",
+		"intege":   "integer",
+		"intger":   "integer",
+	}
+
+	if suggestion, exists := commonTypos[name]; exists {
+		return suggestion
+	}
+
+	// Simple Levenshtein distance-based suggestions for very short identifiers
+	if len(name) <= 4 {
+		suggestions := []string{"print", "println", "func", "let", "var", "if", "else", "for", "while", "return"}
+		var similar []string
+		for _, suggestion := range suggestions {
+			if levenshteinDistance(name, suggestion) <= 2 {
+				similar = append(similar, suggestion)
+			}
+		}
+		if len(similar) > 0 {
+			return strings.Join(similar, ", ")
+		}
+	}
+
+	return "print, println, func, let, var"
+}
+
+// levenshteinDistance calculates the edit distance between two strings
+func levenshteinDistance(s1, s2 string) int {
+	if len(s1) == 0 {
+		return len(s2)
+	}
+	if len(s2) == 0 {
+		return len(s1)
+	}
+
+	matrix := make([][]int, len(s1)+1)
+	for i := range matrix {
+		matrix[i] = make([]int, len(s2)+1)
+	}
+
+	for i := 0; i <= len(s1); i++ {
+		matrix[i][0] = i
+	}
+	for j := 0; j <= len(s2); j++ {
+		matrix[0][j] = j
+	}
+
+	for i := 1; i <= len(s1); i++ {
+		for j := 1; j <= len(s2); j++ {
+			cost := 0
+			if s1[i-1] != s2[j-1] {
+				cost = 1
+			}
+			matrix[i][j] = min(
+				matrix[i-1][j]+1,      // deletion
+				matrix[i][j-1]+1,      // insertion
+				matrix[i-1][j-1]+cost, // substitution
+			)
+		}
+	}
+
+	return matrix[len(s1)][len(s2)]
+}
+
+func min(a, b, c int) int {
+	if a < b && a < c {
+		return a
+	}
+	if b < c {
+		return b
+	}
+	return c
 }
 
 // processImports handles import statements and makes symbols available.

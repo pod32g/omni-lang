@@ -1,0 +1,4 @@
+// Debug simple pointer type
+func main() {
+    let ptr: *int = new int
+}

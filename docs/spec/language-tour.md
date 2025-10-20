@@ -35,6 +35,16 @@ This simple program demonstrates:
 - Return statement
 - Entry point convention (`main` function)
 
+**Note:** The current parser has some limitations. For a working version, use:
+
+```omni
+import std.io as io
+
+func main() {
+    io.println("Hello, OmniLang!")
+}
+```
+
 ### Compiling and Running
 
 ```bash

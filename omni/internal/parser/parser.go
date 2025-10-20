@@ -193,6 +193,21 @@ func (p *Parser) parseLetDecl(mutable bool) (ast.Decl, error) {
 func (p *Parser) parseStructDecl() (ast.Decl, error) {
 	kw := p.advance()
 	nameTok := p.expect(lexer.TokenIdentifier)
+
+	// Parse generic type parameters
+	var typeParams []ast.TypeParam
+	if p.match(lexer.TokenLess) {
+		for {
+			paramName := p.expect(lexer.TokenIdentifier)
+			typeParams = append(typeParams, ast.TypeParam{Name: paramName.Lexeme, Span: paramName.Span})
+			if p.match(lexer.TokenComma) {
+				continue
+			}
+			p.expect(lexer.TokenGreater)
+			break
+		}
+	}
+
 	p.expect(lexer.TokenLBrace)
 	fields := []ast.StructField{}
 	for !p.match(lexer.TokenRBrace) {
@@ -208,7 +223,7 @@ func (p *Parser) parseStructDecl() (ast.Decl, error) {
 		}
 	}
 	span := lexer.Span{Start: kw.Span.Start, End: p.previous().Span.End}
-	return &ast.StructDecl{SpanInfo: span, Name: nameTok.Lexeme, Fields: fields}, nil
+	return &ast.StructDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Fields: fields}, nil
 }
 
 func (p *Parser) parseEnumDecl() (ast.Decl, error) {
@@ -230,6 +245,21 @@ func (p *Parser) parseEnumDecl() (ast.Decl, error) {
 func (p *Parser) parseFuncDecl() (ast.Decl, error) {
 	kw := p.advance()
 	nameTok := p.expect(lexer.TokenIdentifier)
+
+	// Parse generic type parameters
+	var typeParams []ast.TypeParam
+	if p.match(lexer.TokenLess) {
+		for {
+			paramName := p.expect(lexer.TokenIdentifier)
+			typeParams = append(typeParams, ast.TypeParam{Name: paramName.Lexeme, Span: paramName.Span})
+			if p.match(lexer.TokenComma) {
+				continue
+			}
+			p.expect(lexer.TokenGreater)
+			break
+		}
+	}
+
 	p.expect(lexer.TokenLParen)
 	params := []ast.Param{}
 	if !p.match(lexer.TokenRParen) {
@@ -262,14 +292,14 @@ func (p *Parser) parseFuncDecl() (ast.Decl, error) {
 			return nil, err
 		}
 		span := lexer.Span{Start: kw.Span.Start, End: expr.Span().End}
-		return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, Params: params, Return: retType, ExprBody: expr}, nil
+		return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Params: params, Return: retType, ExprBody: expr}, nil
 	}
 	body, err := p.parseBlock()
 	if err != nil {
 		return nil, err
 	}
 	span := lexer.Span{Start: kw.Span.Start, End: body.Span().End}
-	return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, Params: params, Return: retType, Body: body}, nil
+	return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Params: params, Return: retType, Body: body}, nil
 }
 
 func (p *Parser) parseBlock() (*ast.BlockStmt, error) {
@@ -750,6 +780,10 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 		return &ast.ArrayLiteralExpr{SpanInfo: lexer.Span{Start: tok.Span.Start, End: p.previous().Span.End}, Elements: elems}, nil
 	case lexer.TokenLBrace:
 		return p.parseMapLiteral(tok)
+	case lexer.TokenNew:
+		return p.parseNewExpr(tok)
+	case lexer.TokenDelete:
+		return p.parseDeleteExpr(tok)
 	default:
 		return nil, p.errorAt(tok, "unexpected token %s", tok.Kind)
 	}
@@ -855,6 +889,80 @@ func (p *Parser) synchronizeStmt() {
 }
 
 func (p *Parser) parseTypeExpr() (*ast.TypeExpr, error) {
+	// Parse the first type
+	firstType, err := p.parseSingleType()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if this is a union type (has | after it)
+	if p.match(lexer.TokenPipe) {
+		// This is a union type
+		unionType := &ast.TypeExpr{
+			SpanInfo: firstType.SpanInfo,
+			IsUnion:  true,
+			Members:  []*ast.TypeExpr{firstType},
+		}
+
+		// Parse additional union members
+		for {
+			member, err := p.parseSingleType()
+			if err != nil {
+				return nil, err
+			}
+			unionType.Members = append(unionType.Members, member)
+			unionType.SpanInfo.End = member.SpanInfo.End
+
+			if !p.match(lexer.TokenPipe) {
+				break
+			}
+		}
+		return unionType, nil
+	}
+
+	return firstType, nil
+}
+
+// parseSingleType parses a single type (not a union)
+func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
+	// Handle pointer types: *Type or *(Type)
+	if p.match(lexer.TokenStar) {
+		var baseType *ast.TypeExpr
+		var err error
+
+		if p.match(lexer.TokenLParen) {
+			// Parse *(Type) - parentheses around type
+			baseType, err = p.parseTypeExpr()
+			if err != nil {
+				return nil, err
+			}
+			p.expect(lexer.TokenRParen)
+		} else {
+			// Parse *Type - direct type
+			baseType, err = p.parseSingleType()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		span := lexer.Span{Start: p.previous().Span.Start, End: baseType.SpanInfo.End}
+		// For union types, store the base type in Args
+		if baseType.IsUnion {
+			return &ast.TypeExpr{SpanInfo: span, Name: "*", Args: baseType.Members}, nil
+		}
+		return &ast.TypeExpr{SpanInfo: span, Name: "*" + baseType.Name}, nil
+	}
+
+	// Handle parentheses around types: (Type)
+	if p.match(lexer.TokenLParen) {
+		typ, err := p.parseTypeExpr()
+		if err != nil {
+			return nil, err
+		}
+		p.expect(lexer.TokenRParen)
+		return typ, nil
+	}
+
 	nameTok := p.expect(lexer.TokenIdentifier)
 	typeExpr := &ast.TypeExpr{SpanInfo: nameTok.Span, Name: nameTok.Lexeme}
 	if p.match(lexer.TokenLess) {
@@ -884,6 +992,9 @@ func (p *Parser) parseTypeExpr() (*ast.TypeExpr, error) {
 // Helpers ------------------------------------------------------------------
 
 func (p *Parser) peekKind() lexer.Kind {
+	if p.pos >= len(p.tokens) {
+		return lexer.TokenEOF
+	}
 	return p.tokens[p.pos].Kind
 }
 
@@ -895,6 +1006,9 @@ func (p *Parser) peekKindN(n int) lexer.Kind {
 }
 
 func (p *Parser) current() lexer.Token {
+	if p.pos >= len(p.tokens) {
+		return lexer.Token{Kind: lexer.TokenEOF}
+	}
 	return p.tokens[p.pos]
 }
 
@@ -934,12 +1048,61 @@ func (p *Parser) errorAt(tok lexer.Token, format string, args ...interface{}) er
 	if tok.Span.Start.Line-1 >= 0 && tok.Span.Start.Line-1 < len(p.lines) {
 		lineText = p.lines[tok.Span.Start.Line-1]
 	}
+
+	// Provide better hints based on the error message
+	hint := p.generateHint(tok, message)
+
 	return lexer.Diagnostic{
-		File:    p.filename,
-		Message: message,
-		Hint:    "check syntax near this token",
-		Span:    tok.Span,
-		Line:    lineText,
+		File:     p.filename,
+		Message:  message,
+		Hint:     hint,
+		Span:     tok.Span,
+		Line:     lineText,
+		Severity: lexer.Error,
+		Category: "syntax",
+	}
+}
+
+// generateHint generates contextual hints based on the error message and token
+func (p *Parser) generateHint(tok lexer.Token, message string) string {
+	// Common syntax error patterns and their suggestions
+	switch {
+	case strings.Contains(message, "expected LBRACE"):
+		return "add opening brace '{' to start a block"
+	case strings.Contains(message, "expected RBRACE"):
+		return "add closing brace '}' to end a block"
+	case strings.Contains(message, "expected LPAREN"):
+		return "add opening parenthesis '(' to start a function call or expression"
+	case strings.Contains(message, "expected RPAREN"):
+		return "add closing parenthesis ')' to end a function call or expression"
+	case strings.Contains(message, "expected SEMICOLON"):
+		return "add semicolon ';' to end the statement"
+	case strings.Contains(message, "expected COLON"):
+		return "add colon ':' for type annotation or after 'if' condition"
+	case strings.Contains(message, "expected IDENTIFIER"):
+		return "provide a valid identifier name"
+	case strings.Contains(message, "unexpected token"):
+		return "check the syntax around this token - it might be in the wrong place"
+	case strings.Contains(message, "unexpected token at top level"):
+		return "this statement must be inside a function or block"
+	case strings.Contains(message, "expected LET"):
+		return "use 'let' to declare a variable"
+	case strings.Contains(message, "expected VAR"):
+		return "use 'var' to declare a mutable variable"
+	case strings.Contains(message, "expected FUNC"):
+		return "use 'func' to declare a function"
+	case strings.Contains(message, "expected IF"):
+		return "use 'if' for conditional statements"
+	case strings.Contains(message, "expected WHILE"):
+		return "use 'while' for loops"
+	case strings.Contains(message, "expected FOR"):
+		return "use 'for' for loops"
+	case strings.Contains(message, "expected RETURN"):
+		return "use 'return' to return a value from a function"
+	case strings.Contains(message, "expected IMPORT"):
+		return "use 'import' to import modules"
+	default:
+		return "check syntax near this token"
 	}
 }
 
@@ -960,6 +1123,40 @@ func (p *Parser) parseQualifiedIdentifier(tok lexer.Token) (ast.Expr, error) {
 	}
 
 	return &ast.IdentifierExpr{SpanInfo: span, Name: name}, nil
+}
+
+func (p *Parser) parseNewExpr(tok lexer.Token) (ast.Expr, error) {
+	// Parse: new Type or new (Type)
+	var typ *ast.TypeExpr
+	var err error
+
+	if p.match(lexer.TokenLParen) {
+		// Parse new (Type) - parentheses around type
+		typ, err = p.parseTypeExpr()
+		if err != nil {
+			return nil, err
+		}
+		p.expect(lexer.TokenRParen)
+	} else {
+		// Parse new Type - direct type
+		typ, err = p.parseTypeExpr()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	span := lexer.Span{Start: tok.Span.Start, End: typ.SpanInfo.End}
+	return &ast.NewExpr{SpanInfo: span, Type: typ}, nil
+}
+
+func (p *Parser) parseDeleteExpr(tok lexer.Token) (ast.Expr, error) {
+	// Parse: delete expression
+	expr, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	span := lexer.Span{Start: tok.Span.Start, End: expr.Span().End}
+	return &ast.DeleteExpr{SpanInfo: span, Target: expr}, nil
 }
 
 func splitLines(input string) []string {

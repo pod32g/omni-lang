@@ -31,6 +31,8 @@ const (
 	TokenIn
 	TokenTrue
 	TokenFalse
+	TokenNew
+	TokenDelete
 
 	// Delimiters
 	TokenLParen
@@ -60,6 +62,7 @@ const (
 	TokenGreaterEqual
 	TokenAndAnd
 	TokenOrOr
+	TokenPipe // |
 	TokenPlusPlus
 	TokenMinusMinus
 	TokenArrow    // ->
@@ -88,6 +91,8 @@ var kindNames = map[Kind]string{
 	TokenIn:            "IN",
 	TokenTrue:          "TRUE",
 	TokenFalse:         "FALSE",
+	TokenNew:           "NEW",
+	TokenDelete:        "DELETE",
 	TokenLParen:        "LPAREN",
 	TokenRParen:        "RPAREN",
 	TokenLBrace:        "LBRACE",
@@ -113,6 +118,7 @@ var kindNames = map[Kind]string{
 	TokenGreaterEqual:  "GREATER_EQUAL",
 	TokenAndAnd:        "AND_AND",
 	TokenOrOr:          "OR_OR",
+	TokenPipe:          "PIPE",
 	TokenPlusPlus:      "PLUS_PLUS",
 	TokenMinusMinus:    "MINUS_MINUS",
 	TokenArrow:         "ARROW",

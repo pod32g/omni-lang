@@ -1,0 +1,6 @@
+// Hello World - The traditional first program
+import std.io as io
+
+func main() {
+    io.println("Hello, World!")
+}

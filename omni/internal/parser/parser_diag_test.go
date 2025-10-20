@@ -21,7 +21,7 @@ func TestParserAccumulatesMultipleErrors(t *testing.T) {
 	}
 
 	// Ensure multiple diagnostics are surfaced.
-	count := strings.Count(err.Error(), "error:")
+	count := strings.Count(err.Error(), "error [syntax]:")
 	if count < 2 {
 		t.Fatalf("expected multiple diagnostics, got %d\n%s", count, err.Error())
 	}

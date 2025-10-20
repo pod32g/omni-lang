@@ -337,6 +337,16 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		}
 		sym := fb.env[ident.Name]
 		return mirValue{ID: sym.Value, Type: sym.Type}, nil
+	case *ast.NewExpr:
+		// For now, just return a placeholder value
+		// TODO: Implement actual memory allocation
+		id := fb.fn.NextValue()
+		typ := "*" + e.Type.Name
+		return mirValue{ID: id, Type: typ}, nil
+	case *ast.DeleteExpr:
+		// For now, just evaluate the target expression
+		// TODO: Implement actual memory deallocation
+		return fb.lowerExpr(e.Target)
 	default:
 		return mirValue{}, fmt.Errorf("mir builder: unsupported expression %T", e)
 	}

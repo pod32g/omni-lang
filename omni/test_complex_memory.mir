@@ -1,0 +1,8 @@
+func allocate_int():*int
+  block entry:
+    ret %0
+
+func main():void
+  block entry:
+    %1 = call.*int allocate_int
+    ret

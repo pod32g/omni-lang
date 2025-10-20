@@ -1,0 +1,14 @@
+// Union types with generics
+func process<T>(x: T | string) {
+    // Process generic or string
+}
+
+struct Container<T> {
+    value: T | int
+}
+
+func main() {
+    let x: int | string = 42
+    // Note: Generic instantiation not yet supported
+    // process<int>(x)
+}

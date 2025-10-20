@@ -24,6 +24,8 @@ var keywords = map[string]Kind{
 	"in":     TokenIn,
 	"true":   TokenTrue,
 	"false":  TokenFalse,
+	"new":    TokenNew,
+	"delete": TokenDelete,
 }
 
 // Lexer transforms a source buffer into a stream of tokens while tracking
@@ -183,6 +185,7 @@ func (l *Lexer) NextToken() (Token, error) {
 		if l.match('|') {
 			return l.emitToken(TokenOrOr, startPos, startOffset)
 		}
+		return l.emitToken(TokenPipe, startPos, startOffset)
 	}
 
 	// Unrecognised rune.

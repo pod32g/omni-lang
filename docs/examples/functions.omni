@@ -1,0 +1,40 @@
+// Functions - Demonstrates function declaration and calling
+import std.io as io
+import std.math as math
+
+// Function with explicit return type
+func add(a:int, b:int):int {
+    return a + b
+}
+
+// Function with type inference
+func multiply(a:int, b:int) {
+    let result:int = a * b
+}
+
+// Function with no parameters
+func get_answer():int {
+    return 42
+}
+
+// Function with no return value
+func print_hello() {
+    io.println("Hello from function!")
+}
+
+func main() {
+    io.println("=== Function Examples ===")
+    
+    let x:int = 10
+    let y:int = 20
+    
+    let sum:int = add(x, y)
+    let answer:int = get_answer()
+    
+    io.println("x = " + math.toString(x))
+    io.println("y = " + math.toString(y))
+    io.println("x + y = " + math.toString(sum))
+    io.println("Answer = " + math.toString(answer))
+    
+    print_hello()
+}

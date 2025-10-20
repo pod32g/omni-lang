@@ -1,0 +1,8 @@
+func identity(x:T):T
+  block entry:
+    ret %0
+
+func main():void
+  block entry:
+    %0 = const.int 42:int
+    ret

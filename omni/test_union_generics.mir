@@ -1,0 +1,8 @@
+func process(x:):void
+  block entry:
+    ret
+
+func main():void
+  block entry:
+    %0 = const.int 42:int
+    ret

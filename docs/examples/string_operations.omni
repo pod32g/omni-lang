@@ -1,0 +1,35 @@
+// String Operations - Demonstrates string manipulation and concatenation
+import std.io as io
+import std.string as str
+import std.math as math
+
+func main() {
+    io.println("=== String Examples ===")
+    
+    let greeting:string = "Hello"
+    let name:string = "World"
+    let age:int = 42
+    
+    // String concatenation
+    let message:string = greeting + ", " + name + "!"
+    io.println("Message: " + message)
+    
+    // Mixed type concatenation (automatic conversion)
+    let info:string = "Age: " + age + " years"
+    io.println("Info: " + info)
+    
+    // String functions
+    let text:string = "  OmniLang  "
+    io.println("Original: '" + text + "'")
+    io.println("Length: " + str.length(text))
+    io.println("Trimmed: '" + str.trim(text) + "'")
+    io.println("Uppercase: '" + str.to_upper(text) + "'")
+    io.println("Lowercase: '" + str.to_lower(text) + "'")
+    
+    // String searching
+    let search_text:string = "Hello, World!"
+    io.println("Text: " + search_text)
+    io.println("Contains 'World': " + str.contains(search_text, "World"))
+    io.println("Starts with 'Hello': " + str.starts_with(search_text, "Hello"))
+    io.println("Index of 'World': " + str.index_of(search_text, "World"))
+}

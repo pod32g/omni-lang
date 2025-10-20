@@ -38,11 +38,14 @@ type Decl interface {
 	decl()
 }
 
-// TypeExpr describes a type reference possibly containing generics.
+// TypeExpr describes a type reference possibly containing generics or unions.
 type TypeExpr struct {
 	SpanInfo lexer.Span
 	Name     string
 	Args     []*TypeExpr
+	// For union types: int | string | bool
+	IsUnion bool
+	Members []*TypeExpr // The types in the union
 }
 
 func (t *TypeExpr) Span() lexer.Span { return t.SpanInfo }
@@ -74,9 +77,10 @@ func (d *VarDecl) decl()            {}
 
 // StructDecl defines a struct type.
 type StructDecl struct {
-	SpanInfo lexer.Span
-	Name     string
-	Fields   []StructField
+	SpanInfo   lexer.Span
+	Name       string
+	TypeParams []TypeParam // Generic type parameters
+	Fields     []StructField
 }
 
 func (d *StructDecl) Span() lexer.Span { return d.SpanInfo }
@@ -109,12 +113,19 @@ type EnumVariant struct {
 
 // FuncDecl describes a function definition.
 type FuncDecl struct {
-	SpanInfo lexer.Span
-	Name     string
-	Params   []Param
-	Return   *TypeExpr
-	Body     *BlockStmt
-	ExprBody Expr // for fat arrow shorthand
+	SpanInfo   lexer.Span
+	Name       string
+	TypeParams []TypeParam // Generic type parameters
+	Params     []Param
+	Return     *TypeExpr
+	Body       *BlockStmt
+	ExprBody   Expr // for fat arrow shorthand
+}
+
+// TypeParam represents a generic type parameter.
+type TypeParam struct {
+	Name string
+	Span lexer.Span
 }
 
 func (d *FuncDecl) Span() lexer.Span { return d.SpanInfo }
@@ -354,3 +365,23 @@ type IncrementExpr struct {
 func (e *IncrementExpr) Span() lexer.Span { return e.SpanInfo }
 func (e *IncrementExpr) node()            {}
 func (e *IncrementExpr) expr()            {}
+
+// NewExpr models the new keyword for memory allocation.
+type NewExpr struct {
+	SpanInfo lexer.Span
+	Type     *TypeExpr
+}
+
+func (e *NewExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *NewExpr) node()            {}
+func (e *NewExpr) expr()            {}
+
+// DeleteExpr models the delete keyword for memory deallocation.
+type DeleteExpr struct {
+	SpanInfo lexer.Span
+	Target   Expr
+}
+
+func (e *DeleteExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *DeleteExpr) node()            {}
+func (e *DeleteExpr) expr()            {}

@@ -1,0 +1,9 @@
+func process_value(x:):void
+  block entry:
+    ret
+
+func main():void
+  block entry:
+    %0 = const.int 42:int
+    %1 = const.string "hello":string
+    ret
