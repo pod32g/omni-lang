@@ -129,8 +129,10 @@ integration-test:
     - make build
     - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
     - echo "Testing basic compilation"
-    - echo "Testing optimization compilation"
-    - echo "Testing debug compilation"
+    - echo 'func main():int { return 42 }' > test_basic.omni
+    - ./bin/omnic -backend c -emit exe test_basic.omni -o test_basic
+    - ./test_basic
+    - echo "Basic compilation test completed"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
