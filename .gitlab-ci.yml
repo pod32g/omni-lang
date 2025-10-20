@@ -241,17 +241,21 @@ comprehensive-test:
     - ./bin/omnic -backend vm test_comprehensive.omni || true
     - echo "Testing C backend..."
     - ./bin/omnic -backend c -emit exe test_comprehensive.omni -o test_c
-    - ./test_c || true
+    - echo "Checking if test_c was created..."
+    - ls -la test_c* || echo "No test_c files found"
+    - if [ -f test_c ]; then ./test_c || true; else echo "test_c not found, skipping execution"; fi
     - echo "Testing optimization levels..."
     - ./bin/omnic -backend c -O O1 -emit exe test_comprehensive.omni -o test_opt1
-    - ./test_opt1 || true
+    - if [ -f test_opt1 ]; then ./test_opt1 || true; else echo "test_opt1 not found, skipping execution"; fi
     - ./bin/omnic -backend c -O O2 -emit exe test_comprehensive.omni -o test_opt2
-    - ./test_opt2 || true
+    - if [ -f test_opt2 ]; then ./test_opt2 || true; else echo "test_opt2 not found, skipping execution"; fi
     - echo "Testing debug builds..."
     - ./bin/omnic -backend c -debug -emit exe test_comprehensive.omni -o test_debug
-    - ./test_debug || true
+    - if [ -f test_debug ]; then ./test_debug || true; else echo "test_debug not found, skipping execution"; fi
     - echo "Comprehensive test completed"
+    - echo "Cleaning up test files..."
     - rm -f test_* test_comprehensive.omni
+    - rm -rf test_*_fix.dSYM
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
