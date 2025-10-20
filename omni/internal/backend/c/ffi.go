@@ -4,9 +4,9 @@
 package cbackend
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../runtime/include
-#cgo linux  LDFLAGS: -L${SRCDIR}/../../runtime/posix -lomni_rt
-#cgo darwin LDFLAGS: -L${SRCDIR}/../../runtime/posix -lomni_rt
+#cgo CFLAGS: -I${SRCDIR}/../../../runtime
+#cgo linux  LDFLAGS: -L${SRCDIR}/../../../runtime/posix -lomni_rt
+#cgo darwin LDFLAGS: -L${SRCDIR}/../../../runtime/posix -lomni_rt
 #include <stdlib.h>
 #include "omni_rt.h"
 */
@@ -23,6 +23,6 @@ func Print(s string) error {
 	}
 	cs := C.CString(s)
 	defer C.free(unsafe.Pointer(cs))
-	C.omni_print(cs)
+	C.omni_print_string(cs)
 	return nil
 }
