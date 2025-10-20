@@ -76,7 +76,10 @@ func Compile(cfg Config) error {
 
 	if cfg.OutputPath != "" {
 		if ext := filepath.Ext(cfg.OutputPath); ext == "" {
-			return fmt.Errorf("output path must include file extension")
+			// Allow executables without extensions
+			if emit != "exe" && emit != "binary" {
+				return fmt.Errorf("output path must include file extension")
+			}
 		}
 	}
 
