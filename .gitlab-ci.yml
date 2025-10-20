@@ -54,13 +54,17 @@ rust-lint:
 test:
   stage: test
   image: golang:1.22
+  before_script:
+    - apt-get update && apt-get install -y gcc curl
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - source $HOME/.cargo/env
+    - rustup default stable
   script:
     - cd omni
+    - make build-rust
     - make test
   coverage: '/coverage: \d+\.\d+%/'
   artifacts:
-    reports:
-      junit: omni/test-results.xml
     paths:
       - omni/coverage/
     expire_in: 1 week
