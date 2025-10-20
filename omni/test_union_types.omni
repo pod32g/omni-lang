@@ -1,9 +1,0 @@
-// Test union types
-func process_value(x: int | string) {
-    // Process the value
-}
-
-func main() {
-    let x: int | string = 42
-    let y: int | string = "hello"
-}

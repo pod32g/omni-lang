@@ -1,6 +1,0 @@
-func main():void
-  block entry:
-    %0 = const.int 5:int
-    %1 = const.string "hello":string
-    %2 = strcat.string %0, %1
-    ret

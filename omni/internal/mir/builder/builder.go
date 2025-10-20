@@ -199,6 +199,10 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 		return err
 	case *ast.IfStmt:
 		return fb.lowerIfStmt(s)
+	case *ast.ForStmt:
+		return fb.lowerForStmt(s)
+	case *ast.IncrementStmt:
+		return fb.lowerIncrementStmt(s)
 	default:
 		return fmt.Errorf("mir builder: unsupported statement %T", s)
 	}
@@ -285,6 +289,160 @@ func (fb *functionBuilder) lowerElseBranch(stmt ast.Stmt) error {
 	}
 }
 
+func (fb *functionBuilder) lowerForStmt(stmt *ast.ForStmt) error {
+	if stmt.IsRange {
+		// Range form: for item in items { ... }
+		return fb.lowerRangeFor(stmt)
+	} else {
+		// Classic form: for init; cond; post { ... }
+		return fb.lowerClassicFor(stmt)
+	}
+}
+
+func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
+	// For now, just evaluate the iterable and return
+	// TODO: Implement proper range iteration
+	_, err := fb.lowerExpr(stmt.Iterable)
+	return err
+}
+
+func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
+	// Create loop header block
+	headerBlock := fb.newBlock("loop_header")
+
+	// Create loop body block
+	bodyBlock := fb.newBlock("loop_body")
+
+	// Create loop exit block
+	exitBlock := fb.newBlock("loop_exit")
+
+	// First, branch from current block to header
+	currentBlock := fb.block
+	if currentBlock != nil {
+		currentBlock.Terminator = mir.Terminator{
+			Op:       "br",
+			Operands: []mir.Operand{blockOperand(headerBlock)},
+		}
+	}
+
+	// Handle initialization
+	if stmt.Init != nil {
+		fb.block = headerBlock
+		if err := fb.lowerStmt(stmt.Init); err != nil {
+			return err
+		}
+	}
+
+	// Handle condition check
+	if stmt.Condition != nil {
+		fb.block = headerBlock
+		condValue, err := fb.lowerExpr(stmt.Condition)
+		if err != nil {
+			return err
+		}
+
+		// Branch to body if condition is true, exit if false
+		fb.block.Terminator = mir.Terminator{
+			Op: "cbr",
+			Operands: []mir.Operand{
+				valueOperand(condValue.ID, condValue.Type),
+				blockOperand(bodyBlock),
+				blockOperand(exitBlock),
+			},
+		}
+	} else {
+		// No condition - always enter body
+		fb.block = headerBlock
+		fb.block.Terminator = mir.Terminator{
+			Op:       "br",
+			Operands: []mir.Operand{blockOperand(bodyBlock)},
+		}
+	}
+
+	// Handle loop body
+	fb.block = bodyBlock
+	if err := fb.lowerBlock(stmt.Body); err != nil {
+		return err
+	}
+
+	// If body doesn't have a terminator, add post-increment and loop back
+	if !fb.block.HasTerminator() {
+		if stmt.Post != nil {
+			if err := fb.lowerStmt(stmt.Post); err != nil {
+				return err
+			}
+		}
+
+		// Branch back to header
+		fb.block.Terminator = mir.Terminator{
+			Op:       "br",
+			Operands: []mir.Operand{blockOperand(headerBlock)},
+		}
+	}
+
+	// Set current block to exit block
+	fb.block = exitBlock
+	return nil
+}
+
+func (fb *functionBuilder) lowerIncrementStmt(stmt *ast.IncrementStmt) error {
+	// Get the target variable
+	target, ok := stmt.Target.(*ast.IdentifierExpr)
+	if !ok {
+		return fmt.Errorf("mir builder: increment target must be an identifier")
+	}
+
+	sym, exists := fb.env[target.Name]
+	if !exists {
+		return fmt.Errorf("mir builder: increment of undefined variable %q", target.Name)
+	}
+
+	if !sym.Mutable {
+		return fmt.Errorf("mir builder: cannot increment immutable variable %q", target.Name)
+	}
+
+	// Create increment instruction
+	id := fb.fn.NextValue()
+	var op string
+	switch stmt.Op {
+	case "++":
+		op = "add"
+	case "--":
+		op = "sub"
+	default:
+		return fmt.Errorf("mir builder: unsupported increment operator %q", stmt.Op)
+	}
+
+	// Create constant 1
+	const1 := fb.fn.NextValue()
+	constInst := mir.Instruction{
+		ID:   const1,
+		Op:   "const",
+		Type: "int",
+		Operands: []mir.Operand{
+			{Kind: mir.OperandLiteral, Literal: "1", Type: "int"},
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, constInst)
+
+	// Create increment instruction
+	incInst := mir.Instruction{
+		ID:   id,
+		Op:   op,
+		Type: sym.Type,
+		Operands: []mir.Operand{
+			valueOperand(sym.Value, sym.Type),
+			valueOperand(const1, "int"),
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, incInst)
+
+	// Update the variable with the new value
+	fb.env[target.Name] = symbol{Value: id, Type: sym.Type, Mutable: sym.Mutable}
+
+	return nil
+}
+
 func (fb *functionBuilder) lowerOptionalExpr(expr ast.Expr) (mirValue, error) {
 	if expr == nil {
 		return mirValue{ID: mir.InvalidValue, Type: "void"}, nil
@@ -327,6 +485,8 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		return fb.emitMapLiteral(e)
 	case *ast.MemberExpr:
 		return fb.emitMemberAccess(e)
+	case *ast.IndexExpr:
+		return fb.emitIndexAccess(e)
 	case *ast.AssignmentExpr:
 		if err := fb.lowerStmt(&ast.AssignmentStmt{SpanInfo: e.SpanInfo, Left: e.Left, Right: e.Right}); err != nil {
 			return mirValue{}, err
@@ -624,6 +784,74 @@ func (fb *functionBuilder) emitMapLiteral(expr *ast.MapLiteralExpr) (mirValue, e
 	}
 	fb.block.Instructions = append(fb.block.Instructions, inst)
 	return mirValue{ID: id, Type: inst.Type}, nil
+}
+
+func (fb *functionBuilder) emitIndexAccess(expr *ast.IndexExpr) (mirValue, error) {
+	target, err := fb.lowerExpr(expr.Target)
+	if err != nil {
+		return mirValue{}, err
+	}
+	index, err := fb.lowerExpr(expr.Index)
+	if err != nil {
+		return mirValue{}, err
+	}
+
+	id := fb.fn.NextValue()
+
+	// Determine the element type based on the target type
+	var elementType string
+	if strings.HasPrefix(target.Type, "array<") && strings.HasSuffix(target.Type, ">") {
+		// Extract element type from array<T>
+		inner := target.Type[len("array<") : len(target.Type)-1]
+		elementType = strings.TrimSpace(inner)
+	} else if strings.HasPrefix(target.Type, "map<") && strings.HasSuffix(target.Type, ">") {
+		// Extract value type from map<K,V>
+		inner := target.Type[len("map<") : len(target.Type)-1]
+		parts := splitGenericArgs(inner)
+		if len(parts) == 2 {
+			elementType = strings.TrimSpace(parts[1])
+		} else {
+			elementType = inferTypePlaceholder
+		}
+	} else {
+		elementType = inferTypePlaceholder
+	}
+
+	inst := mir.Instruction{
+		ID:   id,
+		Op:   "index",
+		Type: elementType,
+		Operands: []mir.Operand{
+			valueOperand(target.ID, target.Type),
+			valueOperand(index.ID, index.Type),
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, inst)
+	return mirValue{ID: id, Type: elementType}, nil
+}
+
+func splitGenericArgs(body string) []string {
+	if body == "" {
+		return nil
+	}
+	depth := 0
+	start := 0
+	var parts []string
+	for i, r := range body {
+		switch r {
+		case '<':
+			depth++
+		case '>':
+			depth--
+		case ',':
+			if depth == 0 {
+				parts = append(parts, strings.TrimSpace(body[start:i]))
+				start = i + 1
+			}
+		}
+	}
+	parts = append(parts, strings.TrimSpace(body[start:]))
+	return parts
 }
 
 func mapBinaryOp(op string) string {

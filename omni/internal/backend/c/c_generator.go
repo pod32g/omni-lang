@@ -101,55 +101,8 @@ func (g *CGenerator) writeHeader() {
 
 // writeStdLibFunctions writes standard library function implementations
 func (g *CGenerator) writeStdLibFunctions() {
-	g.output.WriteString(`// Standard library implementations
-void std_io_print_int(int32_t value) {
-    printf("%d", value);
-}
-
-void std_io_print_string(const char* str) {
-    printf("%s", str);
-}
-
-void std_io_println_int(int32_t value) {
-    printf("%d\n", value);
-}
-
-void std_io_println_string(const char* str) {
-    printf("%s\n", str);
-}
-
-char* std_io_strcat(const char* str1, const char* str2) {
-    size_t len1 = strlen(str1);
-    size_t len2 = strlen(str2);
-    char* result = malloc(len1 + len2 + 1);
-    if (result) {
-        strcpy(result, str1);
-        strcat(result, str2);
-    }
-    return result;
-}
-
-int32_t std_io_strlen(const char* str) {
-    return (int32_t)strlen(str);
-}
-
-int32_t std_math_add(int32_t a, int32_t b) {
-    return a + b;
-}
-
-int32_t std_math_sub(int32_t a, int32_t b) {
-    return a - b;
-}
-
-int32_t std_math_mul(int32_t a, int32_t b) {
-    return a * b;
-}
-
-int32_t std_math_div(int32_t a, int32_t b) {
-    return b != 0 ? a / b : 0;
-}
-
-`)
+	// Note: Standard library functions are now provided by the runtime
+	// No need to generate them here since they're linked from libomni_rt.so
 }
 
 // generateFunction generates C code for a single function
@@ -224,16 +177,17 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		// Handle constants based on type
 		if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandLiteral {
 			varName := g.getVariableName(inst.ID)
+			literalValue := g.getOperandValue(inst.Operands[0])
 			switch inst.Type {
 			case "int":
 				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s;\n",
-					varName, inst.Operands[0].Literal))
+					varName, literalValue))
 			case "string":
 				g.output.WriteString(fmt.Sprintf("  const char* %s = %s;\n",
-					varName, inst.Operands[0].Literal))
+					varName, literalValue))
 			case "bool":
 				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s;\n",
-					varName, inst.Operands[0].Literal))
+					varName, literalValue))
 			default:
 				g.output.WriteString(fmt.Sprintf("  // TODO: Handle const type %s\n", inst.Type))
 			}
@@ -274,22 +228,86 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			g.output.WriteString(fmt.Sprintf("  int32_t %s = %s / %s;\n",
 				varName, left, right))
 		}
-	case "call":
+	case "call", "call.int", "call.void", "call.string", "call.bool":
 		// Handle function calls
 		if len(inst.Operands) > 0 {
 			funcName := g.getOperandValue(inst.Operands[0])
+			cFuncName := g.mapFunctionName(funcName)
+			
+			// Handle void function calls differently
+			if inst.Type == "void" {
+				g.output.WriteString(fmt.Sprintf("  %s(", cFuncName))
+				// Add arguments
+				for i, arg := range inst.Operands[1:] {
+					if i > 0 {
+						g.output.WriteString(", ")
+					}
+					g.output.WriteString(g.getOperandValue(arg))
+				}
+				g.output.WriteString(");\n")
+			} else {
+				varName := g.getVariableName(inst.ID)
+				g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
+					g.mapType(inst.Type), varName, cFuncName))
+				// Add arguments
+				for i, arg := range inst.Operands[1:] {
+					if i > 0 {
+						g.output.WriteString(", ")
+					}
+					g.output.WriteString(g.getOperandValue(arg))
+				}
+				g.output.WriteString(");\n")
+			}
+		}
+	case "index":
+		// Handle array/map indexing
+		if len(inst.Operands) >= 2 {
+			target := g.getOperandValue(inst.Operands[0])
+			index := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
-				g.mapType(inst.Type), varName, funcName))
-
-			// Add arguments
-			for i, arg := range inst.Operands[1:] {
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s[%s];\n",
+				g.mapType(inst.Type), varName, target, index))
+		}
+	case "array.init":
+		// Handle array literal initialization
+		if len(inst.Operands) > 0 {
+			varName := g.getVariableName(inst.ID)
+			elementType := g.mapType(inst.Type)
+			// For now, create a simple array with the elements
+			g.output.WriteString(fmt.Sprintf("  %s %s[] = {", elementType, varName))
+			for i, op := range inst.Operands {
 				if i > 0 {
 					g.output.WriteString(", ")
 				}
-				g.output.WriteString(g.getOperandValue(arg))
+				g.output.WriteString(g.getOperandValue(op))
 			}
-			g.output.WriteString(");\n")
+			g.output.WriteString("};\n")
+		}
+	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
+		// Handle comparison operations
+		if len(inst.Operands) >= 2 {
+			left := g.getOperandValue(inst.Operands[0])
+			right := g.getOperandValue(inst.Operands[1])
+			varName := g.getVariableName(inst.ID)
+
+			var op string
+			switch inst.Op {
+			case "cmp.eq":
+				op = "=="
+			case "cmp.neq":
+				op = "!="
+			case "cmp.lt":
+				op = "<"
+			case "cmp.lte":
+				op = "<="
+			case "cmp.gt":
+				op = ">"
+			case "cmp.gte":
+				op = ">="
+			}
+
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = (%s %s %s) ? 1 : 0;\n",
+				varName, left, op, right))
 		}
 	default:
 		// Handle unknown instructions
@@ -317,6 +335,12 @@ func (g *CGenerator) generateTerminator(term *mir.Terminator) error {
 			g.output.WriteString(fmt.Sprintf("  goto %s;\n", blockName))
 		}
 	case "br":
+		// Handle unconditional branch
+		if len(term.Operands) > 0 {
+			blockName := g.getOperandValue(term.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  goto %s;\n", blockName))
+		}
+	case "cbr":
 		// Handle conditional branch
 		if len(term.Operands) >= 3 {
 			condition := g.getOperandValue(term.Operands[0])
@@ -342,6 +366,12 @@ func (g *CGenerator) getOperandValue(op mir.Operand) string {
 	case mir.OperandValue:
 		return g.getVariableName(op.Value)
 	case mir.OperandLiteral:
+		// Convert boolean literals to C format
+		if op.Literal == "true" {
+			return "1"
+		} else if op.Literal == "false" {
+			return "0"
+		}
 		return op.Literal
 	default:
 		return "/* unknown operand */"
@@ -361,6 +391,42 @@ func (g *CGenerator) mapType(omniType string) string {
 		return "int32_t"
 	default:
 		return "int32_t" // Default fallback
+	}
+}
+
+// mapFunctionName maps OmniLang function names to C function names
+func (g *CGenerator) mapFunctionName(funcName string) string {
+	switch funcName {
+	// Math functions
+	case "std.math.abs":
+		return "omni_abs"
+	case "std.math.max":
+		return "omni_max"
+	case "std.math.min":
+		return "omni_min"
+	case "std.math.toString":
+		return "omni_int_to_string"
+	
+	// IO functions
+	case "std.io.print":
+		return "omni_print_string"
+	case "std.io.println":
+		return "omni_println_string"
+	case "std.io.print_int":
+		return "omni_print_int"
+	case "std.io.println_int":
+		return "omni_println_int"
+	case "std.io.print_float":
+		return "omni_print_float"
+	case "std.io.println_float":
+		return "omni_println_float"
+	case "std.io.print_bool":
+		return "omni_print_bool"
+	case "std.io.println_bool":
+		return "omni_println_bool"
+	
+	default:
+		return funcName
 	}
 }
 

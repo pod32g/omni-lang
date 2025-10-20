@@ -1,5 +1,0 @@
-func main():void
-  block entry:
-    %0 = const.int 42:int
-    %1 = const.int 42:int
-    ret
