@@ -168,7 +168,7 @@ fn compile_mir_to_object(mir_json: &str, output_path: &str) -> Result<(), Compil
     let object_data = object_product
         .emit()
         .map_err(|e| CompileError::CraneliftError(e.to_string()))?;
-    std::fs::write(output_path, object_data).map_err(|e| CompileError::IoError(e))?;
+    std::fs::write(output_path, object_data).map_err(CompileError::IoError)?;
 
     Ok(())
 }
@@ -277,7 +277,7 @@ fn compile_instruction(
                 .parse::<i32>()
                 .map_err(|_| CompileError::MirParse("Invalid integer literal".to_string()))?;
 
-            let val = builder.ins().iconst(I32, value as i64);
+            let _val = builder.ins().iconst(I32, value as i64);
             // Store the result for later use
             // TODO: Implement proper value mapping
         }
