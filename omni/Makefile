@@ -43,8 +43,8 @@ build:
 	$(GO) build $(LDFLAGS) -o bin/omnic ./cmd/omnic
 	$(GO) build $(LDFLAGS) -o bin/omnir ./cmd/omnir
 	$(GO) build $(LDFLAGS) -o bin/omnipkg ./cmd/omnipkg
-	@# Fix library path for omnic binary to work from anywhere
-	@if command -v install_name_tool >/dev/null 2>&1; then \
+	@# Fix library path for omnic binary to work from anywhere (macOS only)
+	@if [ "$$(uname)" = "Darwin" ] && command -v install_name_tool >/dev/null 2>&1; then \
 		install_name_tool -change runtime/posix/libomni_rt.so $(PWD)/runtime/posix/libomni_rt.so bin/omnic 2>/dev/null || true; \
 	fi
 
