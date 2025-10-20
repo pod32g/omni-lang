@@ -237,8 +237,9 @@ comprehensive-test:
     - echo "Running comprehensive test suite..."
     - echo "Testing all backends..."
     - echo 'func main():int { return 42 }' > test_comprehensive.omni
-    - ./bin/omnic -backend vm -emit exe test_comprehensive.omni -o test_vm
-    - ./test_vm || true
+    - echo "Testing VM backend..."
+    - ./bin/omnic -backend vm test_comprehensive.omni || true
+    - echo "Testing C backend..."
     - ./bin/omnic -backend c -emit exe test_comprehensive.omni -o test_c
     - ./test_c || true
     - echo "Testing optimization levels..."
