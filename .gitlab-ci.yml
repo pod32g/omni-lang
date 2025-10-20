@@ -14,6 +14,22 @@ stages:
       - stuck_or_timeout_failure
       - api_failure
 
+# Global artifact configuration templates
+.artifact_template: &artifact_template
+  artifacts:
+    expire_in: 1 week
+    when: always
+
+.short_artifact_template: &short_artifact_template
+  artifacts:
+    expire_in: 3 days
+    when: always
+
+.long_artifact_template: &long_artifact_template
+  artifacts:
+    expire_in: 1 month
+    when: always
+
 variables:
   GOFLAGS: "-count=1"
   CARGO_TARGET_DIR: "target"
@@ -146,7 +162,8 @@ test:
   artifacts:
     paths:
       - omni/coverage/
-    expire_in: 1 week
+    expire_in: 2 weeks
+    when: always
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
@@ -260,7 +277,8 @@ benchmark:
   artifacts:
     paths:
       - omni/bench-results/
-    expire_in: 1 week
+    expire_in: 1 month
+    when: always
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
 
@@ -286,7 +304,8 @@ build-linux:
     paths:
       - omni/bin/
       - omni/target/release/
-    expire_in: 1 hour
+    expire_in: 3 days
+    when: always
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
@@ -310,7 +329,8 @@ build-macos:
   artifacts:
     paths:
       - omni/bin/
-    expire_in: 1 hour
+    expire_in: 3 days
+    when: always
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
@@ -333,7 +353,8 @@ build-windows:
   artifacts:
     paths:
       - omni/bin/
-    expire_in: 1 hour
+    expire_in: 3 days
+    when: always
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
@@ -358,7 +379,8 @@ package:
   artifacts:
     paths:
       - omni/dist/
-    expire_in: 1 week
+    expire_in: 2 weeks
+    when: always
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
 
@@ -376,4 +398,5 @@ release:
   artifacts:
     paths:
       - omni/releases/
-    expire_in: 1 month
+    expire_in: 6 months
+    when: always
