@@ -71,7 +71,10 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("module %s not found in search paths: %v", strings.Join(importPath, "."), ml.searchPaths)
+	// Create a more helpful error message
+	searchPathsStr := strings.Join(ml.searchPaths, ", ")
+	return "", fmt.Errorf("module %s not found in search paths: [%s]\n  Hint: Make sure the file %s exists in one of these directories",
+		strings.Join(importPath, "."), searchPathsStr, fileName)
 }
 
 // AddSearchPath adds a directory to the module search paths.

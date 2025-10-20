@@ -288,7 +288,8 @@ func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
 	if finalType == typeInfer {
 		finalType = valueType
 	} else if valueType != typeInfer && valueType != typeError && !c.typesEqual(finalType, valueType) {
-		c.report(decl.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, finalType), "adjust the expression or type annotation")
+		c.report(decl.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, finalType),
+			fmt.Sprintf("convert the expression to %s or change the variable type to %s", finalType, valueType))
 	}
 
 	if finalType != typeInfer && finalType != typeError {
@@ -343,7 +344,8 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 		if declaredType == typeInfer {
 			finalType = valueType
 		} else if valueType != typeInfer && valueType != typeError && !c.typesEqual(declaredType, valueType) {
-			c.report(s.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, declaredType), "adjust the expression or annotation")
+			c.report(s.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, declaredType),
+				fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
 		}
 		c.declare(s.Name, finalType, true, s.Span())
 	case *ast.AssignmentStmt:
@@ -351,7 +353,8 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 	case *ast.IncrementStmt:
 		targetType := c.checkExpr(s.Target)
 		if !isNumeric(targetType) {
-			c.report(s.Target.Span(), "increment operator requires numeric operand", "use a numeric variable")
+			c.report(s.Target.Span(), "increment operator requires numeric operand",
+				fmt.Sprintf("use a numeric variable (int or float), got %s", c.checkExpr(s.Target)))
 		}
 		if ident, ok := s.Target.(*ast.IdentifierExpr); ok {
 			if sym, found := c.lookupSymbol(ident.Name); found && !sym.Mutable {
@@ -374,7 +377,8 @@ func (c *Checker) checkBindingStmt(stmt *ast.BindingStmt) {
 	if declaredType == typeInfer {
 		finalType = valueType
 	} else if valueType != typeInfer && valueType != typeError && !c.typesEqual(declaredType, valueType) {
-		c.report(stmt.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, declaredType), "adjust the expression or type annotation")
+		c.report(stmt.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, declaredType),
+			fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
 	}
 	c.declare(stmt.Name, finalType, stmt.Mutable, stmt.Span())
 }
@@ -490,7 +494,8 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			}
 			return "void"
 		}
-		c.report(e.Span(), fmt.Sprintf("undefined identifier %q", e.Name), "declare the name before using it")
+		c.report(e.Span(), fmt.Sprintf("undefined identifier %q", e.Name),
+			fmt.Sprintf("declare the variable with 'let %s: <type> = <value>' or 'var %s: <type> = <value>' before using it", e.Name, e.Name))
 		return typeError
 	case *ast.LiteralExpr:
 		switch e.Kind {
@@ -713,7 +718,8 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		}
 		// Handle numeric addition
 		if !isNumeric(leftType) || !isNumeric(rightType) {
-			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric or string operands", expr.Op), "use numeric expressions or strings")
+			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric or string operands", expr.Op),
+				fmt.Sprintf("use numeric expressions (int, float) or strings, got %s and %s", leftType, rightType))
 			return typeError
 		}
 		if !c.typesEqual(leftType, rightType) {
@@ -723,7 +729,8 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		return leftType
 	case "-", "*", "/", "%":
 		if !isNumeric(leftType) || !isNumeric(rightType) {
-			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op), "use numeric expressions")
+			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op), 
+				fmt.Sprintf("use numeric expressions (int, float), got %s and %s", leftType, rightType))
 			return typeError
 		}
 		if !c.typesEqual(leftType, rightType) {
@@ -733,7 +740,8 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		return leftType
 	case "<", "<=", ">", ">=":
 		if !isNumeric(leftType) || !isNumeric(rightType) {
-			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op), "use numeric expressions")
+			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op), 
+				fmt.Sprintf("use numeric expressions (int, float), got %s and %s", leftType, rightType))
 			return typeError
 		}
 		return "bool"
@@ -744,7 +752,8 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		return "bool"
 	case "&&", "||":
 		if !c.typesEqual(leftType, "bool") || !c.typesEqual(rightType, "bool") {
-			c.report(expr.Span(), fmt.Sprintf("operator %s requires boolean operands", expr.Op), "use boolean expressions")
+			c.report(expr.Span(), fmt.Sprintf("operator %s requires boolean operands", expr.Op), 
+				fmt.Sprintf("use boolean expressions, got %s and %s", leftType, rightType))
 		}
 		return "bool"
 	default:
@@ -772,14 +781,16 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 	if qualifiedName != "" {
 		if sig, exists := c.functions[qualifiedName]; exists {
 			if len(expr.Args) != len(sig.Params) {
-				c.report(expr.Span(), fmt.Sprintf("function %s expects %d arguments, got %d", qualifiedName, len(sig.Params), len(expr.Args)), "adjust the call arguments")
+				c.report(expr.Span(), fmt.Sprintf("function %s expects %d arguments, got %d", qualifiedName, len(sig.Params), len(expr.Args)),
+					fmt.Sprintf("provide %d argument(s) matching the function signature: %s(%s)", len(sig.Params), qualifiedName, strings.Join(sig.Params, ", ")))
 			}
 			for i, arg := range expr.Args {
 				argType := c.checkExpr(arg)
 				if i < len(sig.Params) {
 					expected := sig.Params[i]
 					if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
-						c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, expected, argType), "convert the argument to the correct type")
+						c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, expected, argType),
+							fmt.Sprintf("convert the argument to %s or use a %s expression", expected, expected))
 					}
 				}
 			}
@@ -803,7 +814,8 @@ func (c *Checker) checkAssignmentExpr(expr *ast.AssignmentExpr) string {
 
 	sym, exists := c.lookupSymbol(ident.Name)
 	if !exists {
-		c.report(expr.Left.Span(), fmt.Sprintf("undefined identifier %q", ident.Name), "declare the variable before assignment")
+		c.report(expr.Left.Span(), fmt.Sprintf("undefined identifier %q", ident.Name),
+			fmt.Sprintf("declare the variable with 'let %s: <type> = <value>' or 'var %s: <type> = <value>' before assignment", ident.Name, ident.Name))
 		c.checkExpr(expr.Right)
 		return typeError
 	}
@@ -817,7 +829,8 @@ func (c *Checker) checkAssignmentExpr(expr *ast.AssignmentExpr) string {
 		sym.Type = rhsType
 	}
 	if rhsType != typeError && sym.Type != typeInfer && !c.typesEqual(sym.Type, rhsType) {
-		c.report(expr.Right.Span(), fmt.Sprintf("cannot assign %s to %s", rhsType, sym.Type), "convert the expression to the correct type")
+		c.report(expr.Right.Span(), fmt.Sprintf("cannot assign %s to %s", rhsType, sym.Type),
+			fmt.Sprintf("convert the expression to %s or change the variable type to %s", sym.Type, rhsType))
 	}
 	return sym.Type
 }
