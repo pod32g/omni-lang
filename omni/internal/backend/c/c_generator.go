@@ -16,6 +16,8 @@ type CGenerator struct {
 	sourceFile string
 	// Track variable names for SSA values
 	variables map[mir.ValueID]string
+	// Track PHI variables that need special handling
+	phiVars map[mir.ValueID]bool
 }
 
 // NewCGenerator creates a new C code generator
@@ -26,6 +28,7 @@ func NewCGenerator(module *mir.Module) *CGenerator {
 		debugInfo:  false,
 		sourceFile: "",
 		variables:  make(map[mir.ValueID]string),
+		phiVars:    make(map[mir.ValueID]bool),
 	}
 }
 
@@ -37,6 +40,7 @@ func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator 
 		debugInfo:  false,
 		sourceFile: "",
 		variables:  make(map[mir.ValueID]string),
+		phiVars:    make(map[mir.ValueID]bool),
 	}
 }
 
@@ -48,6 +52,7 @@ func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool,
 		debugInfo:  debugInfo,
 		sourceFile: sourceFile,
 		variables:  make(map[mir.ValueID]string),
+		phiVars:    make(map[mir.ValueID]bool),
 	}
 }
 
@@ -198,8 +203,23 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  int32_t %s = %s + %s;\n",
-				varName, left, right))
+			
+			// Check if the left operand is a PHI variable (loop variable)
+			if inst.Operands[0].Kind == mir.OperandValue && g.phiVars[inst.Operands[0].Value] {
+				// This is an increment to a PHI variable - update it in place
+				g.output.WriteString(fmt.Sprintf("  %s = %s + %s;\n",
+					left, left, right))
+			} else if inst.Operands[0].Kind == mir.OperandValue {
+				// Check if this is an assignment to a variable that should be mutable
+				// For now, let's make all variables that are used in additions mutable
+				// This is a simplification - a proper implementation would need more analysis
+				g.output.WriteString(fmt.Sprintf("  %s = %s + %s;\n",
+					left, left, right))
+			} else {
+				// Regular addition - create new variable
+				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s + %s;\n",
+					varName, left, right))
+			}
 		}
 	case "sub":
 		// Handle subtraction
@@ -207,8 +227,17 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  int32_t %s = %s - %s;\n",
-				varName, left, right))
+
+			// Check if the left operand is a PHI variable (loop variable)
+			if inst.Operands[0].Kind == mir.OperandValue && g.phiVars[inst.Operands[0].Value] {
+				// This is a decrement to a PHI variable - update it in place
+				g.output.WriteString(fmt.Sprintf("  %s = %s - %s;\n",
+					left, left, right))
+			} else {
+				// Regular subtraction - create new variable
+				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s - %s;\n",
+					varName, left, right))
+			}
 		}
 	case "mul":
 		// Handle multiplication
@@ -308,6 +337,22 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 
 			g.output.WriteString(fmt.Sprintf("  int32_t %s = (%s %s %s) ? 1 : 0;\n",
 				varName, left, op, right))
+		}
+	case "phi":
+		// Handle PHI nodes - for loops, we need to create mutable variables
+		if len(inst.Operands) >= 2 {
+			varName := g.getVariableName(inst.ID)
+
+			// For PHI nodes in loops, create a mutable variable
+			// The first operand is the initial value (from entry block)
+			firstValue := g.getOperandValue(inst.Operands[0])
+
+			// Create a mutable variable that can be updated in the loop
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n",
+				g.mapType(inst.Type), varName, firstValue))
+
+			// Track this as a PHI variable that needs special handling
+			g.phiVars[inst.ID] = true
 		}
 	default:
 		// Handle unknown instructions

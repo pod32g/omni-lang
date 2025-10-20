@@ -313,6 +313,17 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 		originalEnv[k] = v
 	}
 
+	// Track variables that need PHI nodes (variables modified in the loop)
+	var phiVars []string
+	if stmt.Post != nil {
+		// Find variables modified in post-increment
+		if inc, ok := stmt.Post.(*ast.IncrementStmt); ok {
+			if target, ok := inc.Target.(*ast.IdentifierExpr); ok {
+				phiVars = append(phiVars, target.Name)
+			}
+		}
+	}
+
 	// Handle initialization in current block (before loop)
 	if stmt.Init != nil {
 		if err := fb.lowerStmt(stmt.Init); err != nil {
@@ -338,8 +349,42 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 		}
 	}
 
-	// Handle condition check in header block
+	// Set up PHI nodes in header block for loop variables
 	fb.block = headerBlock
+	headerEnv := make(map[string]symbol)
+	phiNodeMap := make(map[string]*mir.Instruction) // Track PHI nodes by variable name
+	for _, varName := range phiVars {
+		// Get the initial value from the current environment
+		if sym, exists := fb.env[varName]; exists {
+			// Create PHI node for this variable
+			phiID := fb.fn.NextValue()
+			phiInst := mir.Instruction{
+				ID:   phiID,
+				Op:   "phi",
+				Type: sym.Type,
+				Operands: []mir.Operand{
+					// Initial value from entry block
+					valueOperand(sym.Value, sym.Type),
+					blockOperand(currentBlock), // From entry block
+					// Updated value from loop body (will be set later)
+					{Kind: mir.OperandValue, Value: mir.InvalidValue, Type: sym.Type},
+					blockOperand(bodyBlock), // From loop body
+				},
+			}
+			fb.block.Instructions = append(fb.block.Instructions, phiInst)
+			headerEnv[varName] = symbol{Value: phiID, Type: sym.Type, Mutable: sym.Mutable}
+			phiNodeMap[varName] = &fb.block.Instructions[len(fb.block.Instructions)-1]
+		}
+	}
+	// Copy other variables to header environment
+	for k, v := range fb.env {
+		if _, isPhiVar := headerEnv[k]; !isPhiVar {
+			headerEnv[k] = v
+		}
+	}
+	fb.env = headerEnv
+
+	// Handle condition check in header block
 	if stmt.Condition != nil {
 		condValue, err := fb.lowerExpr(stmt.Condition)
 		if err != nil {
@@ -383,6 +428,17 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 			}
 		}
 
+		// Update PHI nodes with the new values from loop body
+		for _, varName := range phiVars {
+			if sym, exists := fb.env[varName]; exists {
+				// Update the PHI node using the map
+				if phiInst, exists := phiNodeMap[varName]; exists {
+					// Update the third operand (index 2) with the new value from loop body
+					phiInst.Operands[2] = valueOperand(sym.Value, sym.Type)
+				}
+			}
+		}
+
 		// Branch back to header
 		fb.block.Terminator = mir.Terminator{
 			Op:       "br",
@@ -412,18 +468,6 @@ func (fb *functionBuilder) lowerIncrementStmt(stmt *ast.IncrementStmt) error {
 		return fmt.Errorf("mir builder: cannot increment immutable variable %q", target.Name)
 	}
 
-	// Create increment instruction
-	id := fb.fn.NextValue()
-	var op string
-	switch stmt.Op {
-	case "++":
-		op = "add"
-	case "--":
-		op = "sub"
-	default:
-		return fmt.Errorf("mir builder: unsupported increment operator %q", stmt.Op)
-	}
-
 	// Create constant 1
 	const1 := fb.fn.NextValue()
 	constInst := mir.Instruction{
@@ -436,7 +480,18 @@ func (fb *functionBuilder) lowerIncrementStmt(stmt *ast.IncrementStmt) error {
 	}
 	fb.block.Instructions = append(fb.block.Instructions, constInst)
 
-	// Create increment instruction
+	// Create increment instruction that updates the variable in place
+	id := fb.fn.NextValue()
+	var op string
+	switch stmt.Op {
+	case "++":
+		op = "add"
+	case "--":
+		op = "sub"
+	default:
+		return fmt.Errorf("mir builder: unsupported increment operator %q", stmt.Op)
+	}
+
 	incInst := mir.Instruction{
 		ID:   id,
 		Op:   op,

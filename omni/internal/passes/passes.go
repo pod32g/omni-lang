@@ -65,6 +65,13 @@ func verifyFunction(fn *mir.Function) error {
 		blockNames[block.Name] = struct{}{}
 	}
 	for _, block := range fn.Blocks {
+		// Verify instructions
+		for i, inst := range block.Instructions {
+			if err := verifyInstruction(inst); err != nil {
+				return fmt.Errorf("mir verifier: block %s in function %s, instruction %d: %w", block.Name, fn.Name, i, err)
+			}
+		}
+
 		if block.Terminator.Op == "" {
 			return fmt.Errorf("mir verifier: block %s in function %s missing terminator", block.Name, fn.Name)
 		}
@@ -73,6 +80,31 @@ func verifyFunction(fn *mir.Function) error {
 		}
 	}
 	return nil
+}
+
+func verifyInstruction(inst mir.Instruction) error {
+	switch inst.Op {
+	case "const", "add", "sub", "mul", "div", "mod", "strcat", "index", "array.init", "call", "call.int", "call.void", "call.string", "call.bool":
+		// These instructions are already validated by the builder
+		return nil
+	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte", "and", "or":
+		// Comparison and logical operations
+		if len(inst.Operands) < 2 {
+			return fmt.Errorf("comparison/logical operation expects at least 2 operands, got %d", len(inst.Operands))
+		}
+		return nil
+	case "phi":
+		// PHI nodes: should have even number of operands (value, block pairs)
+		if len(inst.Operands)%2 != 0 {
+			return fmt.Errorf("phi instruction expects even number of operands (value, block pairs), got %d", len(inst.Operands))
+		}
+		if len(inst.Operands) < 2 {
+			return fmt.Errorf("phi instruction expects at least 2 operands, got %d", len(inst.Operands))
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported instruction %q", inst.Op)
+	}
 }
 
 func verifyTerminator(term mir.Terminator, blocks map[string]struct{}) error {
