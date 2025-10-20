@@ -5,8 +5,8 @@ package cbackend
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../../runtime
-#cgo linux  LDFLAGS: -L${SRCDIR}/../../../runtime/posix -lomni_rt
-#cgo darwin LDFLAGS: -L${SRCDIR}/../../../runtime/posix -lomni_rt
+#cgo linux  LDFLAGS: -L${SRCDIR}/../../../runtime/posix -lomni_rt -Wl,-rpath,${SRCDIR}/../../../runtime/posix
+#cgo darwin LDFLAGS: -L${SRCDIR}/../../../runtime/posix -lomni_rt -Wl,-rpath,${SRCDIR}/../../../runtime/posix
 #include <stdlib.h>
 #include "omni_rt.h"
 */

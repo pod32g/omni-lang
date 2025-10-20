@@ -775,8 +775,22 @@ func getTargetPlatform() (string, string) {
 }
 
 func findRuntimeDir() string {
-	// Try to find the runtime directory
+	// Get the directory where the binary is located
+	execPath, err := os.Executable()
+	if err != nil {
+		// Fallback to current working directory
+		execPath = "."
+	}
+	execDir := filepath.Dir(execPath)
+
+	// Try to find the runtime directory relative to the binary location
 	possiblePaths := []string{
+		filepath.Join(execDir, "runtime"),
+		filepath.Join(execDir, "../runtime"),
+		filepath.Join(execDir, "../../runtime"),
+		filepath.Join(execDir, "../../../runtime"),
+		filepath.Join(execDir, "../../../../runtime"),
+		// Also try relative to current working directory as fallback
 		"./runtime",
 		"../runtime",
 		"../../runtime",
