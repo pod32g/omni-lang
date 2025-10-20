@@ -241,21 +241,21 @@ comprehensive-test:
     - ./bin/omnic -backend vm test_comprehensive.omni || true
     - echo "Testing C backend..."
     - ./bin/omnic -backend c -emit exe test_comprehensive.omni -o test_c
-    - echo "Checking if test_c was created..."
-    - ls -la test_c* || echo "No test_c files found"
-    - if [ -f test_c ]; then ./test_c || true; else echo "test_c not found, skipping execution"; fi
+    - echo "Checking what files were created..."
+    - ls -la test_* || echo "No test files found"
+    - if [ -f test_c ]; then ./test_c || true; elif [ -f test_comprehensive ]; then ./test_comprehensive || true; else echo "No C backend executable found, skipping execution"; fi
     - echo "Testing optimization levels..."
     - ./bin/omnic -backend c -O O1 -emit exe test_comprehensive.omni -o test_opt1
-    - if [ -f test_opt1 ]; then ./test_opt1 || true; else echo "test_opt1 not found, skipping execution"; fi
+    - if [ -f test_opt1 ]; then ./test_opt1 || true; else echo "test_opt1 not found, checking for alternative names..."; ls -la test_*opt* || echo "No optimization files found"; fi
     - ./bin/omnic -backend c -O O2 -emit exe test_comprehensive.omni -o test_opt2
-    - if [ -f test_opt2 ]; then ./test_opt2 || true; else echo "test_opt2 not found, skipping execution"; fi
+    - if [ -f test_opt2 ]; then ./test_opt2 || true; else echo "test_opt2 not found, checking for alternative names..."; ls -la test_*opt* || echo "No optimization files found"; fi
     - echo "Testing debug builds..."
     - ./bin/omnic -backend c -debug -emit exe test_comprehensive.omni -o test_debug
-    - if [ -f test_debug ]; then ./test_debug || true; else echo "test_debug not found, skipping execution"; fi
+    - if [ -f test_debug ]; then ./test_debug || true; else echo "test_debug not found, checking for alternative names..."; ls -la test_*debug* || echo "No debug files found"; fi
     - echo "Comprehensive test completed"
     - echo "Cleaning up test files..."
-    - rm -f test_* test_comprehensive.omni
-    - rm -rf test_*_fix.dSYM
+    - rm -f test_*.omni test_*.mir test_comprehensive test_c test_opt1 test_opt2 test_debug
+    - rm -rf test_*_fix.dSYM test_*.dSYM
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
