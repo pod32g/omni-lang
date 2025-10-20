@@ -1,0 +1,4 @@
+// Test binary generation
+func main():int {
+    return 42
+}

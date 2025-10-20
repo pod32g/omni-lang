@@ -1,0 +1,200 @@
+package cbackend
+
+import (
+	"strings"
+)
+
+// COptimizer handles optimization of generated C code
+type COptimizer struct {
+	optLevel string
+}
+
+// NewCOptimizer creates a new C code optimizer
+func NewCOptimizer(optLevel string) *COptimizer {
+	return &COptimizer{
+		optLevel: optLevel,
+	}
+}
+
+// OptimizeC optimizes C code based on the optimization level
+func OptimizeC(code string, optLevel string) string {
+	optimizer := NewCOptimizer(optLevel)
+	return optimizer.optimize(code)
+}
+
+// optimize applies optimizations based on the optimization level
+func (o *COptimizer) optimize(code string) string {
+	switch o.optLevel {
+	case "0", "none":
+		return code // No optimization
+	case "1", "basic":
+		return o.basicOptimizations(code)
+	case "2", "standard":
+		return o.standardOptimizations(code)
+	case "3", "aggressive":
+		return o.aggressiveOptimizations(code)
+	case "s", "size":
+		return o.sizeOptimizations(code)
+	default:
+		return o.standardOptimizations(code)
+	}
+}
+
+// basicOptimizations applies basic optimizations
+func (o *COptimizer) basicOptimizations(code string) string {
+	// Remove unnecessary variable declarations
+	optimized := o.removeUnusedVariables(code)
+
+	// Simplify constant expressions
+	optimized = o.simplifyConstants(optimized)
+
+	return optimized
+}
+
+// standardOptimizations applies standard optimizations
+func (o *COptimizer) standardOptimizations(code string) string {
+	// Apply basic optimizations first
+	optimized := o.basicOptimizations(code)
+
+	// Inline simple functions
+	optimized = o.inlineSimpleFunctions(optimized)
+
+	// Optimize arithmetic operations
+	optimized = o.optimizeArithmetic(optimized)
+
+	return optimized
+}
+
+// aggressiveOptimizations applies aggressive optimizations
+func (o *COptimizer) aggressiveOptimizations(code string) string {
+	// Apply standard optimizations first
+	optimized := o.standardOptimizations(code)
+
+	// More aggressive inlining
+	optimized = o.aggressiveInlining(optimized)
+
+	// Loop optimizations
+	optimized = o.optimizeLoops(optimized)
+
+	return optimized
+}
+
+// sizeOptimizations applies size-focused optimizations
+func (o *COptimizer) sizeOptimizations(code string) string {
+	// Apply basic optimizations
+	optimized := o.basicOptimizations(code)
+
+	// Minimize variable names
+	optimized = o.minimizeVariableNames(optimized)
+
+	// Remove debug information
+	optimized = o.removeDebugInfo(optimized)
+
+	return optimized
+}
+
+// removeUnusedVariables removes unused variable declarations
+func (o *COptimizer) removeUnusedVariables(code string) string {
+	lines := strings.Split(code, "\n")
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
+			result = append(result, line)
+			continue
+		}
+
+		// Check if this is a variable declaration
+		if strings.Contains(trimmed, "int32_t v") && strings.Contains(trimmed, "=") {
+			// Extract variable name
+			parts := strings.Split(trimmed, "=")
+			if len(parts) >= 2 {
+				varName := strings.TrimSpace(strings.Split(parts[0], " ")[len(strings.Split(parts[0], " "))-1])
+
+				// Check if variable is used elsewhere
+				used := false
+				for _, otherLine := range lines {
+					if otherLine != line && strings.Contains(otherLine, varName) {
+						used = true
+						break
+					}
+				}
+
+				if !used {
+					continue // Skip this unused variable
+				}
+			}
+		}
+
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// simplifyConstants simplifies constant expressions
+func (o *COptimizer) simplifyConstants(code string) string {
+	// This is a placeholder for constant folding
+	// In a real implementation, you would parse the C code and evaluate constant expressions
+	return code
+}
+
+// inlineSimpleFunctions inlines simple functions
+func (o *COptimizer) inlineSimpleFunctions(code string) string {
+	// This is a placeholder for function inlining
+	// In a real implementation, you would identify simple functions and inline them
+	return code
+}
+
+// optimizeArithmetic optimizes arithmetic operations
+func (o *COptimizer) optimizeArithmetic(code string) string {
+	// This is a placeholder for arithmetic optimizations
+	// In a real implementation, you would optimize operations like x*1, x+0, etc.
+	return code
+}
+
+// aggressiveInlining performs more aggressive function inlining
+func (o *COptimizer) aggressiveInlining(code string) string {
+	// This is a placeholder for aggressive inlining
+	return code
+}
+
+// optimizeLoops optimizes loop structures
+func (o *COptimizer) optimizeLoops(code string) string {
+	// This is a placeholder for loop optimizations
+	return code
+}
+
+// minimizeVariableNames shortens variable names to reduce size
+func (o *COptimizer) minimizeVariableNames(code string) string {
+	// This is a placeholder for variable name minimization
+	return code
+}
+
+// removeDebugInfo removes debug information and comments
+func (o *COptimizer) removeDebugInfo(code string) string {
+	lines := strings.Split(code, "\n")
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip comment lines
+		if strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+
+		// Remove inline comments
+		if commentPos := strings.Index(line, "//"); commentPos != -1 {
+			line = line[:commentPos]
+			line = strings.TrimRight(line, " \t")
+		}
+
+		result = append(result, line)
+	}
+
+	return strings.Join(result, "\n")
+}

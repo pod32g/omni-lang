@@ -41,12 +41,13 @@ func main() {
 		emitFlag = newStringFlag("obj")
 		dump     = flag.String("dump", "", "dump intermediate representation (mir)")
 		output   = flag.String("o", "", "output binary path")
+		debug    = flag.Bool("debug", false, "generate debug symbols and debug information")
 		version  = flag.Bool("version", false, "print version and exit")
 		verbose  = flag.Bool("verbose", false, "enable verbose output")
 		help     = flag.Bool("help", false, "show help and exit")
 		showHelp = flag.Bool("h", false, "show help and exit")
 	)
-	flag.Var(emitFlag, "emit", "emission format (mir|obj|asm)")
+	flag.Var(emitFlag, "emit", "emission format (mir|obj|exe|binary|asm)")
 
 	flag.Parse()
 
@@ -73,7 +74,7 @@ func main() {
 		emit = "mir"
 	}
 
-	if err := run(input, *output, *backend, *optLevel, emit, *dump, *verbose); err != nil {
+	if err := run(input, *output, *backend, *optLevel, emit, *dump, *verbose, *debug); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -90,7 +91,7 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  -O string\n")
 	fmt.Fprintf(os.Stderr, "        optimization level (O0-O3) (default \"O0\")\n")
 	fmt.Fprintf(os.Stderr, "  -emit string\n")
-	fmt.Fprintf(os.Stderr, "        emission format (mir|obj|asm) (default \"obj\")\n")
+	fmt.Fprintf(os.Stderr, "        emission format (mir|obj|exe|binary|asm) (default \"obj\")\n")
 	fmt.Fprintf(os.Stderr, "  -dump string\n")
 	fmt.Fprintf(os.Stderr, "        dump intermediate representation (mir)\n")
 	fmt.Fprintf(os.Stderr, "  -o string\n")
@@ -109,7 +110,7 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  omnic -dump mir hello.omni          # Dump MIR to file\n")
 }
 
-func run(input, output, backend, optLevel, emit, dump string, verbose bool) error {
+func run(input, output, backend, optLevel, emit, dump string, verbose, debug bool) error {
 	if filepath.Ext(input) != ".omni" {
 		return fmt.Errorf("%s: unsupported input (expected .omni)", input)
 	}
@@ -135,6 +136,7 @@ func run(input, output, backend, optLevel, emit, dump string, verbose bool) erro
 		OptLevel:   optLevel,
 		Emit:       emit,
 		Dump:       dump,
+		DebugInfo:  debug,
 	}
 
 	if verbose {

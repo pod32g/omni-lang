@@ -4,10 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/omni-lang/omni/internal/ast"
+	cbackend "github.com/omni-lang/omni/internal/backend/c"
 	"github.com/omni-lang/omni/internal/mir"
 	"github.com/omni-lang/omni/internal/mir/builder"
 	"github.com/omni-lang/omni/internal/mir/printer"
@@ -24,6 +27,7 @@ type Config struct {
 	OptLevel   string
 	Emit       string
 	Dump       string
+	DebugInfo  bool
 }
 
 // ErrNotImplemented indicates that a requested stage has not yet been implemented.
@@ -59,7 +63,7 @@ func Compile(cfg Config) error {
 			return fmt.Errorf("vm backend: emit option %q not supported", emit)
 		}
 	case "clift":
-		if emit != "obj" && emit != "asm" {
+		if emit != "obj" && emit != "exe" && emit != "binary" && emit != "asm" {
 			return fmt.Errorf("clift backend: emit option %q not supported", emit)
 		}
 	}
@@ -107,7 +111,7 @@ func Compile(cfg Config) error {
 	case "vm":
 		return compileVM(cfg, emit, mirMod)
 	case "clift":
-		return compileCranelift(cfg, emit, mirMod)
+		return compileCraneliftBackend(cfg, emit, mirMod)
 	default:
 		return fmt.Errorf("unsupported backend: %s", backend)
 	}
@@ -183,6 +187,503 @@ func compileVM(cfg Config, emit string, mod *mir.Module) error {
 	return nil
 }
 
+// compileCraneliftBackend compiles MIR to native code using Cranelift backend
+func compileCraneliftBackend(cfg Config, emit string, mod *mir.Module) error {
+	output := cfg.OutputPath
+	if output == "" {
+		output = defaultOutputPath(cfg.InputPath, emit)
+	}
+	if err := ensureDir(output); err != nil {
+		return err
+	}
+
+	switch emit {
+	case "obj":
+		return compileToObject(mod, output)
+	case "exe", "binary":
+		if cfg.DebugInfo {
+			return compileToExecutableWithDebug(mod, output, cfg.OptLevel, cfg.InputPath)
+		}
+		if cfg.OptLevel != "" {
+			return compileToExecutableWithOpt(mod, output, cfg.OptLevel)
+		}
+		return compileToExecutable(mod, output)
+	case "asm":
+		return compileToAssembly(mod, output)
+	default:
+		return fmt.Errorf("unsupported emit format: %s", emit)
+	}
+}
+
+func compileToObject(mod *mir.Module, outputPath string) error {
+	// Convert MIR module to JSON
+	jsonData, err := mod.ToJSON()
+	if err != nil {
+		return fmt.Errorf("failed to convert MIR to JSON: %w", err)
+	}
+
+	// For now, create a placeholder object file with the JSON content
+	// TODO: Implement actual Cranelift compilation when the Rust library is available
+	content := fmt.Sprintf("# OmniLang Object File Placeholder\n# MIR JSON:\n%s\n", string(jsonData))
+
+	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write object output: %w", err)
+	}
+
+	return nil
+}
+
+func compileToExecutable(mod *mir.Module, outputPath string) error {
+	// First compile to object file
+	objPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".o"
+	if err := compileToObject(mod, objPath); err != nil {
+		return fmt.Errorf("failed to compile to object: %w", err)
+	}
+
+	// Create a C wrapper that links with the runtime
+	cPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".c"
+	if err := generateCWrapper(mod, cPath); err != nil {
+		return fmt.Errorf("failed to generate C wrapper: %w", err)
+	}
+
+	// Compile the C wrapper with the runtime
+	if err := compileCWrapper(cPath, outputPath); err != nil {
+		return fmt.Errorf("failed to compile C wrapper: %w", err)
+	}
+
+	// Clean up temporary files
+	os.Remove(objPath)
+	os.Remove(cPath)
+
+	return nil
+}
+
+func compileToExecutableWithOpt(mod *mir.Module, outputPath string, optLevel string) error {
+	// First compile to object file
+	objPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".o"
+	if err := compileToObject(mod, objPath); err != nil {
+		return fmt.Errorf("failed to compile to object: %w", err)
+	}
+
+	// Create an optimized C wrapper that links with the runtime
+	cPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".c"
+	if err := generateCOptimizedWrapper(mod, cPath, optLevel); err != nil {
+		return fmt.Errorf("failed to generate optimized C wrapper: %w", err)
+	}
+
+	// Compile the C wrapper with the runtime
+	if err := compileCWrapperWithOpt(cPath, outputPath, optLevel); err != nil {
+		return fmt.Errorf("failed to compile C wrapper: %w", err)
+	}
+
+	// Clean up temporary files
+	os.Remove(objPath)
+	os.Remove(cPath)
+
+	return nil
+}
+
+func compileToExecutableWithDebug(mod *mir.Module, outputPath string, optLevel string, sourceFile string) error {
+	// First compile to object file
+	objPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".o"
+	if err := compileToObject(mod, objPath); err != nil {
+		return fmt.Errorf("failed to compile to object: %w", err)
+	}
+
+	// Create a C wrapper with debug information that links with the runtime
+	cPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".c"
+	if err := generateCWrapperWithDebug(mod, cPath, optLevel, true, sourceFile); err != nil {
+		return fmt.Errorf("failed to generate C wrapper with debug: %w", err)
+	}
+
+	// Compile the C wrapper with the runtime and debug symbols
+	if err := compileCWrapperWithDebug(cPath, outputPath, optLevel); err != nil {
+		return fmt.Errorf("failed to compile C wrapper: %w", err)
+	}
+
+	// Clean up temporary files
+	os.Remove(objPath)
+	os.Remove(cPath)
+
+	return nil
+}
+
+func compileToAssembly(mod *mir.Module, outputPath string) error {
+	// First generate C code
+	cPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".c"
+	if err := generateCWrapper(mod, cPath); err != nil {
+		return fmt.Errorf("failed to generate C code: %w", err)
+	}
+
+	// Compile C to assembly
+	if err := compileCToAssembly(cPath, outputPath); err != nil {
+		return fmt.Errorf("failed to compile C to assembly: %w", err)
+	}
+
+	// Clean up temporary C file
+	os.Remove(cPath)
+
+	return nil
+}
+
+func compileCToAssembly(cPath, asmPath string) error {
+	// Find the runtime directory
+	runtimeDir := findRuntimeDir()
+	if runtimeDir == "" {
+		return fmt.Errorf("runtime directory not found")
+	}
+
+	// Determine target platform
+	targetOS, targetArch := getTargetPlatform()
+
+	// First compile the runtime to assembly
+	runtimeAsmPath := strings.TrimSuffix(asmPath, filepath.Ext(asmPath)) + "_rt.s"
+	runtimeArgs := []string{
+		"-S", // Generate assembly
+		"-o", runtimeAsmPath,
+		filepath.Join(runtimeDir, "omni_rt.c"),
+		"-I", runtimeDir,
+		"-std=c99",
+		"-Wall",
+		"-Wextra",
+	}
+
+	// Add platform-specific flags
+	if targetOS == "windows" {
+		runtimeArgs = append(runtimeArgs, "-DWINDOWS")
+	} else if targetOS == "darwin" {
+		runtimeArgs = append(runtimeArgs, "-DDARWIN")
+	} else if targetOS == "linux" {
+		runtimeArgs = append(runtimeArgs, "-DLINUX")
+	}
+
+	// Add architecture-specific flags
+	if targetArch == "amd64" || targetArch == "x86_64" {
+		runtimeArgs = append(runtimeArgs, "-DARCH_X86_64")
+	} else if targetArch == "arm64" || targetArch == "aarch64" {
+		runtimeArgs = append(runtimeArgs, "-DARCH_ARM64")
+	}
+
+	cmd := exec.Command("gcc", runtimeArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("runtime assembly compilation failed: %w", err)
+	}
+
+	// Then compile the main C file to assembly
+	mainArgs := []string{
+		"-S", // Generate assembly
+		"-o", asmPath,
+		cPath,
+		"-I", runtimeDir,
+		"-std=c99",
+		"-Wall",
+		"-Wextra",
+	}
+
+	// Add platform-specific flags
+	if targetOS == "windows" {
+		mainArgs = append(mainArgs, "-DWINDOWS")
+	} else if targetOS == "darwin" {
+		mainArgs = append(mainArgs, "-DDARWIN")
+	} else if targetOS == "linux" {
+		mainArgs = append(mainArgs, "-DLINUX")
+	}
+
+	// Add architecture-specific flags
+	if targetArch == "amd64" || targetArch == "x86_64" {
+		mainArgs = append(mainArgs, "-DARCH_X86_64")
+	} else if targetArch == "arm64" || targetArch == "aarch64" {
+		mainArgs = append(mainArgs, "-DARCH_ARM64")
+	}
+
+	cmd = exec.Command("gcc", mainArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("main assembly compilation failed: %w", err)
+	}
+
+	// Clean up runtime assembly file
+	os.Remove(runtimeAsmPath)
+
+	return nil
+}
+
+func compileCWrapperWithOpt(cPath, outputPath string, optLevel string) error {
+	// Find the runtime directory
+	runtimeDir := findRuntimeDir()
+	if runtimeDir == "" {
+		return fmt.Errorf("runtime directory not found")
+	}
+
+	// Determine target platform
+	targetOS, targetArch := getTargetPlatform()
+
+	// Compile with platform-specific flags and optimization
+	args := []string{
+		"-o", outputPath,
+		cPath,
+		filepath.Join(runtimeDir, "omni_rt.c"),
+		"-I", runtimeDir,
+		"-std=c99",
+		"-Wall",
+		"-Wextra",
+	}
+
+	// Add optimization flags
+	switch optLevel {
+	case "0", "none":
+		args = append(args, "-O0")
+	case "1", "basic":
+		args = append(args, "-O1")
+	case "2", "standard":
+		args = append(args, "-O2")
+	case "3", "aggressive":
+		args = append(args, "-O3")
+	case "s", "size":
+		args = append(args, "-Os")
+	default:
+		args = append(args, "-O2")
+	}
+
+	// Add platform-specific flags
+	if targetOS == "windows" {
+		args = append(args, "-DWINDOWS")
+	} else if targetOS == "darwin" {
+		args = append(args, "-DDARWIN")
+	} else if targetOS == "linux" {
+		args = append(args, "-DLINUX")
+	}
+
+	// Add architecture-specific flags
+	if targetArch == "amd64" || targetArch == "x86_64" {
+		args = append(args, "-DARCH_X86_64")
+	} else if targetArch == "arm64" || targetArch == "aarch64" {
+		args = append(args, "-DARCH_ARM64")
+	}
+
+	cmd := exec.Command("gcc", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("c compilation failed: %w", err)
+	}
+
+	return nil
+}
+
+func compileCWrapperWithDebug(cPath, outputPath string, optLevel string) error {
+	// Find the runtime directory
+	runtimeDir := findRuntimeDir()
+	if runtimeDir == "" {
+		return fmt.Errorf("runtime directory not found")
+	}
+
+	// Determine target platform
+	targetOS, targetArch := getTargetPlatform()
+
+	// Compile with platform-specific flags, optimization, and debug symbols
+	args := []string{
+		"-o", outputPath,
+		cPath,
+		filepath.Join(runtimeDir, "omni_rt.c"),
+		"-I", runtimeDir,
+		"-std=c99",
+		"-Wall",
+		"-Wextra",
+		"-g", // Generate debug symbols
+	}
+
+	// Add optimization flags
+	switch optLevel {
+	case "0", "none":
+		args = append(args, "-O0")
+	case "1", "basic":
+		args = append(args, "-O1")
+	case "2", "standard":
+		args = append(args, "-O2")
+	case "3", "aggressive":
+		args = append(args, "-O3")
+	case "s", "size":
+		args = append(args, "-Os")
+	default:
+		args = append(args, "-O2")
+	}
+
+	// Add platform-specific flags
+	if targetOS == "windows" {
+		args = append(args, "-DWINDOWS")
+	} else if targetOS == "darwin" {
+		args = append(args, "-DDARWIN")
+	} else if targetOS == "linux" {
+		args = append(args, "-DLINUX")
+	}
+
+	// Add architecture-specific flags
+	if targetArch == "amd64" || targetArch == "x86_64" {
+		args = append(args, "-DARCH_X86_64")
+	} else if targetArch == "arm64" || targetArch == "aarch64" {
+		args = append(args, "-DARCH_ARM64")
+	}
+
+	cmd := exec.Command("gcc", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("c compilation with debug failed: %w", err)
+	}
+
+	return nil
+}
+
+func generateCWrapper(mod *mir.Module, cPath string) error {
+	// Generate C code from MIR module
+	cCode, err := cbackend.GenerateC(mod)
+	if err != nil {
+		return fmt.Errorf("generate C code: %w", err)
+	}
+
+	if err := os.WriteFile(cPath, []byte(cCode), 0o644); err != nil {
+		return fmt.Errorf("write C wrapper: %w", err)
+	}
+
+	return nil
+}
+
+func generateCOptimizedWrapper(mod *mir.Module, cPath string, optLevel string) error {
+	// Generate optimized C code from MIR module
+	cCode, err := cbackend.GenerateCOptimized(mod, optLevel)
+	if err != nil {
+		return fmt.Errorf("generate optimized C code: %w", err)
+	}
+
+	if err := os.WriteFile(cPath, []byte(cCode), 0o644); err != nil {
+		return fmt.Errorf("write C wrapper: %w", err)
+	}
+
+	return nil
+}
+
+func generateCWrapperWithDebug(mod *mir.Module, cPath string, optLevel string, debugInfo bool, sourceFile string) error {
+	// Generate C code with debug information from MIR module
+	cCode, err := cbackend.GenerateCWithDebug(mod, optLevel, debugInfo, sourceFile)
+	if err != nil {
+		return fmt.Errorf("generate C code with debug: %w", err)
+	}
+
+	if err := os.WriteFile(cPath, []byte(cCode), 0o644); err != nil {
+		return fmt.Errorf("write C wrapper: %w", err)
+	}
+
+	return nil
+}
+
+func compileCWrapper(cPath, outputPath string) error {
+	// Find the runtime directory
+	runtimeDir := findRuntimeDir()
+	if runtimeDir == "" {
+		return fmt.Errorf("runtime directory not found")
+	}
+
+	// Determine target platform
+	targetOS, targetArch := getTargetPlatform()
+
+	// Compile with platform-specific flags
+	args := []string{
+		"-o", outputPath,
+		cPath,
+		filepath.Join(runtimeDir, "omni_rt.c"),
+		"-I", runtimeDir,
+		"-std=c99",
+		"-Wall",
+		"-Wextra",
+	}
+
+	// Add platform-specific flags
+	if targetOS == "windows" {
+		args = append(args, "-DWINDOWS")
+	} else if targetOS == "darwin" {
+		args = append(args, "-DDARWIN")
+	} else if targetOS == "linux" {
+		args = append(args, "-DLINUX")
+	}
+
+	// Add architecture-specific flags
+	if targetArch == "amd64" || targetArch == "x86_64" {
+		args = append(args, "-DARCH_X86_64")
+	} else if targetArch == "arm64" || targetArch == "aarch64" {
+		args = append(args, "-DARCH_ARM64")
+	}
+
+	cmd := exec.Command("gcc", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("c compilation failed: %w", err)
+	}
+
+	return nil
+}
+
+func getTargetPlatform() (string, string) {
+	// Get current platform information
+	os := runtime.GOOS
+	arch := runtime.GOARCH
+
+	// Map Go platform names to standard names
+	osMap := map[string]string{
+		"windows": "windows",
+		"darwin":  "darwin",
+		"linux":   "linux",
+		"freebsd": "freebsd",
+		"openbsd": "openbsd",
+		"netbsd":  "netbsd",
+	}
+
+	archMap := map[string]string{
+		"amd64":   "x86_64",
+		"arm64":   "aarch64",
+		"386":     "x86",
+		"arm":     "arm",
+		"ppc64":   "ppc64",
+		"ppc64le": "ppc64le",
+		"s390x":   "s390x",
+	}
+
+	targetOS := osMap[os]
+	if targetOS == "" {
+		targetOS = os
+	}
+
+	targetArch := archMap[arch]
+	if targetArch == "" {
+		targetArch = arch
+	}
+
+	return targetOS, targetArch
+}
+
+func findRuntimeDir() string {
+	// Try to find the runtime directory
+	possiblePaths := []string{
+		"./runtime",
+		"../runtime",
+		"../../runtime",
+		"../../../runtime",
+		"../../../../runtime",
+	}
+
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(filepath.Join(path, "omni_rt.h")); err == nil {
+			return path
+		}
+	}
+
+	return ""
+}
+
 func ensureDir(path string) error {
 	dir := filepath.Dir(path)
 	if dir == "." || dir == "" {
@@ -203,6 +704,8 @@ func defaultOutputPath(input, emit string) string {
 		return base + ".s"
 	case "obj":
 		return base + ".o"
+	case "exe", "binary":
+		return base
 	default:
 		return base + ".out"
 	}

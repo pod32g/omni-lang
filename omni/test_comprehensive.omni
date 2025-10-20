@@ -1,0 +1,14 @@
+// Comprehensive test for binary generation
+func add(a: int, b: int): int {
+    return a + b
+}
+
+func multiply(x: int, y: int): int {
+    return x * y
+}
+
+func main(): int {
+    let result1 = add(10, 20)
+    let result2 = multiply(5, 6)
+    return result1 + result2
+}

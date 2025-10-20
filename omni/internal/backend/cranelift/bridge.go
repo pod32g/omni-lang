@@ -13,6 +13,8 @@ import "C"
 import (
 	"fmt"
 	"unsafe"
+
+	"github.com/omni-lang/omni/internal/mir"
 )
 
 // CompileMIRJSON delegates MIR emission to the native Cranelift bridge.
@@ -46,4 +48,16 @@ func CompileToObject(json string, outputPath string) error {
 		return fmt.Errorf("cranelift object compilation failed: %d", int(rc))
 	}
 	return nil
+}
+
+// CompileModuleToObject compiles a MIR module to a native object file.
+func CompileModuleToObject(module *mir.Module, outputPath string) error {
+	// Convert MIR module to JSON
+	jsonData, err := module.ToJSON()
+	if err != nil {
+		return fmt.Errorf("failed to convert MIR to JSON: %w", err)
+	}
+
+	// Compile to object file
+	return CompileToObject(string(jsonData), outputPath)
 }

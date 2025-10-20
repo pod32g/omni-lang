@@ -38,6 +38,7 @@ build:
 	@mkdir -p bin
 	$(GO) build $(LDFLAGS) -o bin/omnic ./cmd/omnic
 	$(GO) build $(LDFLAGS) -o bin/omnir ./cmd/omnir
+	$(GO) build $(LDFLAGS) -o bin/omnipkg ./cmd/omnipkg
 
 build-rust:
 	@if command -v cargo >/dev/null 2>&1; then \
@@ -59,6 +60,14 @@ clean:
 
 gen:
 	@echo "no codegen yet"
+
+# Package creation using new packaging system
+package-new: build-all
+	@echo "Creating distribution packages using new packaging system..."
+	@mkdir -p dist
+	@./bin/omnipkg -version $(VERSION) -o dist/omni-$(VERSION)-$(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m).tar.gz
+	@./bin/omnipkg -version $(VERSION) -type zip -o dist/omni-$(VERSION)-$(shell uname -s | tr '[:upper:]' '[:lower:]')-$(shell uname -m).zip
+	@echo "Distribution packages created in dist/"
 
 # Package creation
 package: build-all
