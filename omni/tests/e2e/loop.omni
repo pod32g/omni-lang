@@ -1,0 +1,6 @@
+func main():int {
+    let x:int = 5
+    let y:int = 3
+    let z:int = x * y
+    return z
+}

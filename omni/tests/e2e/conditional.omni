@@ -1,0 +1,8 @@
+func main():int {
+    let x:int = 10
+    if x > 5 {
+        return 1
+    } else {
+        return 0
+    }
+}

@@ -1,0 +1,21 @@
+func main():int {
+    return gcd(18, 24)
+}
+
+func gcd(a:int, b:int):int {
+    let x:int = abs(a)
+    let y:int = abs(b)
+    while y != 0 {
+        let temp:int = y
+        y = x % y
+        x = temp
+    }
+    return x
+}
+
+func abs(x:int):int {
+    if x < 0 {
+        return 0 - x
+    }
+    return x
+}

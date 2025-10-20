@@ -1,0 +1,96 @@
+// std - Standard library for OmniLang
+// This module re-exports all standard library functions for easy access
+
+// Re-export io functions
+import std.io
+
+// Re-export math functions
+import std.math
+
+// Re-export string functions
+import std.string
+
+// Re-export array functions
+import std.array
+
+// Re-export os functions
+import std.os
+
+// Re-export collections functions
+import std.collections
+
+// Common utility functions
+func assert(condition:bool, message:string) {
+    if !condition {
+        std.io.println("Assertion failed: " + message)
+        std.os.exit(1)
+    }
+}
+
+func assert_eq<T>(actual:T, expected:T, message:string) {
+    if actual != expected {
+        std.io.println("Assertion failed: " + message)
+        std.io.println("Expected: " + expected)
+        std.io.println("Actual: " + actual)
+        std.os.exit(1)
+    }
+}
+
+func panic(message:string) {
+    std.io.println("Panic: " + message)
+    std.os.exit(1)
+}
+
+// Type conversion functions
+func int_to_string(i:int):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+func float_to_string(f:float):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+func bool_to_string(b:bool):string {
+    if b {
+        return "true"
+    }
+    return "false"
+}
+
+func string_to_int(s:string):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+func string_to_float(s:string):float {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0.0
+}
+
+func string_to_bool(s:string):bool {
+    return s == "true"
+}
+
+// Memory management (for future use)
+func malloc(size:int):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+func free(ptr:int) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+func realloc(ptr:int, size:int):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}

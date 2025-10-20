@@ -1,0 +1,3 @@
+tests/goldens/types/undefined_ident_25.omni:1:20: error: undefined identifier "missing25"
+  let result25:int = missing25
+                     ^~~ hint: declare the name before using it

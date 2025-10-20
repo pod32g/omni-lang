@@ -1,0 +1,41 @@
+// Example: Simple math functions without imports
+func main():int {
+    let x:int = 42
+    let y:int = 17
+    
+    // Basic arithmetic
+    let sum:int = x + y
+    let diff:int = x - y
+    let prod:int = x * y
+    let quot:int = x / y
+    let rem:int = x % y
+    
+    // Math functions (implemented in Go)
+    let max_val:int = max(x, y)
+    let min_val:int = min(x, y)
+    let abs_x:int = abs(-x)
+    
+    return sum + diff + prod + quot + rem + max_val + min_val + abs_x
+}
+
+// Helper functions
+func max(a:int, b:int):int {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+func min(a:int, b:int):int {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+func abs(x:int):int {
+    if x < 0 {
+        return -x
+    }
+    return x
+}

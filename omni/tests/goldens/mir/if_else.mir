@@ -1,0 +1,8 @@
+func max(a:int,b:int):int
+  block entry:
+    %2 = cmp.gt.bool %0, %1
+    cbr %2, then_0, else_1
+  block then_0:
+    ret %0
+  block else_1:
+    ret %1

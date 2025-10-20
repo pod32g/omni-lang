@@ -1,0 +1,14 @@
+/Users/pod32g/Documents/code/omni-lang/omni/native/clift/target/release/deps/serde-3a0e48a22956d16a.d: /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/pod32g/Documents/code/omni-lang/omni/native/clift/target/release/build/serde-4135d59f04efbdca/out/private.rs
+
+/Users/pod32g/Documents/code/omni-lang/omni/native/clift/target/release/deps/libserde-3a0e48a22956d16a.rlib: /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/pod32g/Documents/code/omni-lang/omni/native/clift/target/release/build/serde-4135d59f04efbdca/out/private.rs
+
+/Users/pod32g/Documents/code/omni-lang/omni/native/clift/target/release/deps/libserde-3a0e48a22956d16a.rmeta: /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/pod32g/Documents/code/omni-lang/omni/native/clift/target/release/build/serde-4135d59f04efbdca/out/private.rs
+
+/Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/pod32g/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/pod32g/Documents/code/omni-lang/omni/native/clift/target/release/build/serde-4135d59f04efbdca/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/pod32g/Documents/code/omni-lang/omni/native/clift/target/release/build/serde-4135d59f04efbdca/out

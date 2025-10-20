@@ -1,0 +1,4 @@
+func add(a:int,b:int):int
+  block entry:
+    %2 = add.int %0, %1
+    ret %2

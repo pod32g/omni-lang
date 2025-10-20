@@ -1,0 +1,4 @@
+func inc(x:int):int => x + 1
+func main():int { let value:int = inc(41)
+  return value
+}

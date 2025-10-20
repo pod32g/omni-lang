@@ -1,0 +1,11 @@
+func inc(x:int):int
+  block entry:
+    %1 = const.int 1:int
+    %2 = add.int %0, %1
+    ret %2
+
+func main():int
+  block entry:
+    %1 = const.int 41:int
+    %0 = call.int inc, %1
+    ret %0

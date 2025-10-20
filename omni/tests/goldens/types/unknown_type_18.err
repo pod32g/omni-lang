@@ -1,0 +1,6 @@
+tests/goldens/types/unknown_type_18.omni:1:13: error: unknown type "Mystery18"
+  let value18:Mystery18 = 1
+              ^~~ hint: import or declare the type before use
+tests/goldens/types/unknown_type_18.omni:1:1: error: cannot assign int to Mystery18
+  let value18:Mystery18 = 1
+  ^~~ hint: adjust the expression or type annotation

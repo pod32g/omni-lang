@@ -1,0 +1,79 @@
+// std.collections - Collection data structures for OmniLang
+
+// Map operations
+// size returns the number of key-value pairs in a map
+func size<K,V>(m:map<K,V>):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// get returns the value associated with a key
+func get<K,V>(m:map<K,V>, key:K):V {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+    return m[key]
+}
+
+// set associates a value with a key
+func set<K,V>(m:map<K,V>, key:K, value:V) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+}
+
+// has checks if a key exists in the map
+func has<K,V>(m:map<K,V>, key:K):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+    return false
+}
+
+// remove removes a key-value pair from the map
+func remove<K,V>(m:map<K,V>, key:K):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+    return false
+}
+
+// clear removes all key-value pairs from the map
+func clear<K,V>(m:map<K,V>) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+}
+
+// keys returns an array of all keys in the map
+func keys<K,V>(m:map<K,V>):array<K> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+    return []
+}
+
+// values returns an array of all values in the map
+func values<K,V>(m:map<K,V>):array<V> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+    return []
+}
+
+// copy creates a copy of the map
+func copy<K,V>(m:map<K,V>):map<K,V> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+    return m
+}
+
+// merge merges two maps, with the second map taking precedence
+func merge<K,V>(a:map<K,V>, b:map<K,V>):map<K,V> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    // Note: This will need to be implemented as a generic function
+    return a
+}

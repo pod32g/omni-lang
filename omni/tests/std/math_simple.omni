@@ -1,0 +1,23 @@
+func main():int {
+    let a:int = 10
+    let b:int = 15
+    
+    let max_val:int = max(a, b)
+    let min_val:int = min(a, b)
+    
+    return max_val + min_val
+}
+
+func max(a:int, b:int):int {
+    if a > b {
+        return a
+    }
+    return b
+}
+
+func min(a:int, b:int):int {
+    if a < b {
+        return a
+    }
+    return b
+}

@@ -1,0 +1,17 @@
+func main():int {
+    return sqrt(49)
+}
+
+func sqrt(x:int):int {
+    if x < 0 {
+        return 0
+    }
+    if x == 0 {
+        return 0
+    }
+    let result:int = 1
+    while result * result <= x {
+        result = result + 1
+    }
+    return result - 1
+}

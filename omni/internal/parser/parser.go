@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -19,23 +20,34 @@ func Parse(filename, input string) (*ast.Module, error) {
 		tokens:   tokens,
 		lines:    splitLines(input),
 	}
-	return p.parseModule()
+	mod, err := p.parseModule()
+	if err != nil {
+		return mod, err
+	}
+	if len(p.diagnostics) > 0 {
+		return mod, errors.Join(p.diagnostics...)
+	}
+	return mod, nil
 }
 
 // Parser implements a recursive descent parser for OmniLang.
 type Parser struct {
-	filename string
-	tokens   []lexer.Token
-	pos      int
-	lines    []string
+	filename    string
+	tokens      []lexer.Token
+	pos         int
+	lines       []string
+	diagnostics []error
 }
 
-func (p *Parser) parseModule() (mod *ast.Module, err error) {
+type parsePanic struct {
+	diag error
+}
+
+func (p *Parser) parseModule() (*ast.Module, error) {
 	defer func() {
 		if r := recover(); r != nil {
-			if diag, ok := r.(error); ok {
-				mod = nil
-				err = diag
+			if pp, ok := r.(parsePanic); ok {
+				p.addError(pp.diag)
 			} else {
 				panic(r)
 			}
@@ -46,17 +58,15 @@ func (p *Parser) parseModule() (mod *ast.Module, err error) {
 	module := &ast.Module{SpanInfo: lexer.Span{Start: start, End: start}}
 
 	for p.peekKind() == lexer.TokenImport {
-		imp, err := p.parseImport()
-		if err != nil {
-			return nil, err
+		if imp, ok := p.parseImportSafe(); ok {
+			module.Imports = append(module.Imports, imp)
 		}
-		module.Imports = append(module.Imports, imp)
 	}
 
 	for p.peekKind() != lexer.TokenEOF {
-		decl, err := p.parseDecl()
-		if err != nil {
-			return nil, err
+		decl, ok := p.parseDeclSafe()
+		if !ok {
+			continue
 		}
 		module.Decls = append(module.Decls, decl)
 	}
@@ -69,7 +79,50 @@ func (p *Parser) parseModule() (mod *ast.Module, err error) {
 
 	eof := p.expect(lexer.TokenEOF)
 	module.SpanInfo.End = eof.Span.End
+	if len(p.diagnostics) > 0 {
+		return module, errors.Join(p.diagnostics...)
+	}
 	return module, nil
+}
+
+func (p *Parser) parseImportSafe() (*ast.ImportDecl, bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			if pp, ok := r.(parsePanic); ok {
+				p.addError(pp.diag)
+				p.synchronizeDecl()
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	imp, err := p.parseImport()
+	if err != nil {
+		p.addError(err)
+		p.synchronizeDecl()
+		return nil, false
+	}
+	return imp, true
+}
+
+func (p *Parser) parseDeclSafe() (ast.Decl, bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			if pp, ok := r.(parsePanic); ok {
+				p.addError(pp.diag)
+				p.synchronizeDecl()
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	decl, err := p.parseDecl()
+	if err != nil {
+		p.addError(err)
+		p.synchronizeDecl()
+		return nil, false
+	}
+	return decl, true
 }
 
 func (p *Parser) parseImport() (*ast.ImportDecl, error) {
@@ -213,14 +266,34 @@ func (p *Parser) parseBlock() (*ast.BlockStmt, error) {
 	lbrace := p.expect(lexer.TokenLBrace)
 	stmts := []ast.Stmt{}
 	for p.peekKind() != lexer.TokenRBrace && p.peekKind() != lexer.TokenEOF {
-		stmt, err := p.parseStmt()
-		if err != nil {
-			return nil, err
+		stmt, ok := p.parseStmtSafe()
+		if !ok {
+			continue
 		}
 		stmts = append(stmts, stmt)
 	}
 	rbrace := p.expect(lexer.TokenRBrace)
 	return &ast.BlockStmt{SpanInfo: lexer.Span{Start: lbrace.Span.Start, End: rbrace.Span.End}, Statements: stmts}, nil
+}
+
+func (p *Parser) parseStmtSafe() (ast.Stmt, bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			if pp, ok := r.(parsePanic); ok {
+				p.addError(pp.diag)
+				p.synchronizeStmt()
+			} else {
+				panic(r)
+			}
+		}
+	}()
+	stmt, err := p.parseStmt()
+	if err != nil {
+		p.addError(err)
+		p.synchronizeStmt()
+		return nil, false
+	}
+	return stmt, true
 }
 
 func (p *Parser) parseStmt() (ast.Stmt, error) {
@@ -734,6 +807,39 @@ func (p *Parser) isStructLiteralContext(base ast.Expr) bool {
 	return k2 == lexer.TokenColon
 }
 
+func (p *Parser) addError(err error) {
+	if err == nil {
+		return
+	}
+	p.diagnostics = append(p.diagnostics, err)
+}
+
+func (p *Parser) synchronizeDecl() {
+	if p.peekKind() != lexer.TokenEOF {
+		p.advance()
+	}
+	for {
+		switch p.peekKind() {
+		case lexer.TokenEOF, lexer.TokenFunc, lexer.TokenLet, lexer.TokenVar, lexer.TokenStruct, lexer.TokenEnum, lexer.TokenImport:
+			return
+		}
+		p.advance()
+	}
+}
+
+func (p *Parser) synchronizeStmt() {
+	if p.peekKind() != lexer.TokenEOF {
+		p.advance()
+	}
+	for {
+		switch p.peekKind() {
+		case lexer.TokenEOF, lexer.TokenRBrace, lexer.TokenReturn, lexer.TokenIf, lexer.TokenFor, lexer.TokenLet, lexer.TokenVar:
+			return
+		}
+		p.advance()
+	}
+}
+
 func (p *Parser) parseTypeExpr() (*ast.TypeExpr, error) {
 	nameTok := p.expect(lexer.TokenIdentifier)
 	typeExpr := &ast.TypeExpr{SpanInfo: nameTok.Span, Name: nameTok.Lexeme}
@@ -799,7 +905,7 @@ func (p *Parser) match(kind lexer.Kind) bool {
 
 func (p *Parser) expect(kind lexer.Kind) lexer.Token {
 	if p.peekKind() != kind {
-		panic(p.errorAtCurrent("expected %s, found %s", kind, p.peekKind()))
+		panic(parsePanic{diag: p.errorAtCurrent("expected %s, found %s", kind, p.peekKind())})
 	}
 	return p.advance()
 }

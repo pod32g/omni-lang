@@ -1,0 +1,3 @@
+tests/goldens/types/undefined_ident_05.omni:1:19: error: undefined identifier "missing5"
+  let result5:int = missing5
+                    ^~~ hint: declare the name before using it

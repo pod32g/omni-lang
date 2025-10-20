@@ -1,0 +1,5 @@
+func sumTo(n:int):int
+  block entry:
+    %1 = const.int 1:int
+    %2 = add.int %0, %1
+    ret %2

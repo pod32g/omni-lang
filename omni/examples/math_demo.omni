@@ -1,0 +1,41 @@
+// Example: Mathematical functions demonstration
+import std
+
+func main():int {
+    std.io.println("=== Math Functions Demo ===")
+    
+    let a:int = 15
+    let b:int = 25
+    
+    std.io.print("abs(-10) = ")
+    std.io.println_int(std.math.abs(-10))
+    
+    std.io.print("max(15, 25) = ")
+    std.io.println_int(std.math.max(a, b))
+    
+    std.io.print("min(15, 25) = ")
+    std.io.println_int(std.math.min(a, b))
+    
+    std.io.print("gcd(15, 25) = ")
+    std.io.println_int(std.math.gcd(a, b))
+    
+    std.io.print("lcm(15, 25) = ")
+    std.io.println_int(std.math.lcm(a, b))
+    
+    std.io.print("2^8 = ")
+    std.io.println_int(std.math.pow(2, 8))
+    
+    std.io.print("sqrt(64) = ")
+    std.io.println_int(std.math.sqrt(64))
+    
+    std.io.print("is_prime(17) = ")
+    std.io.println_bool(std.math.is_prime(17))
+    
+    std.io.print("is_prime(18) = ")
+    std.io.println_bool(std.math.is_prime(18))
+    
+    std.io.print("factorial(5) = ")
+    std.io.println_int(std.math.factorial(5))
+    
+    return 0
+}
