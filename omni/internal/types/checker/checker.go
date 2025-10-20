@@ -96,8 +96,29 @@ func (ml *ModuleLoader) LoadModule(importPath []string) (*ast.Module, error) {
 // findModuleFile searches for a module file in the search paths.
 func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 	// Convert import path to file path
-	moduleName := importPath[len(importPath)-1] // Last segment is the module name
-	fileName := moduleName + ".omni"
+	// For std.math, we want std/math/math.omni
+	// For std.io, we want std/io/print.omni
+	// For local modules, we want module.omni
+	
+	var fileName string
+	if len(importPath) > 1 && importPath[0] == "std" {
+		// For std modules, use the subdirectory structure
+		// std.io -> std/io/print.omni
+		// std.math -> std/math/math.omni
+		// std.string -> std/string/string.omni
+		moduleName := importPath[1] // "io", "math", "string", etc.
+		
+		// Special case for std.io which uses print.omni instead of io.omni
+		if moduleName == "io" {
+			fileName = filepath.Join(moduleName, "print") + ".omni"
+		} else {
+			fileName = filepath.Join(moduleName, moduleName) + ".omni"
+		}
+	} else {
+		// For local modules, use the module name directly
+		moduleName := importPath[len(importPath)-1]
+		fileName = moduleName + ".omni"
+	}
 
 	// Search in each search path
 	for _, searchPath := range ml.searchPaths {
@@ -1097,6 +1118,16 @@ func (c *Checker) processImport(imp *ast.ImportDecl) {
 
 	// Handle std imports
 	if imp.Path[0] == "std" {
+		// Load the std module to get its function signatures
+		module, err := c.moduleLoader.LoadModule(imp.Path)
+		if err != nil {
+			c.report(imp.Span(), fmt.Sprintf("failed to load std module: %v", err), "make sure the std module exists")
+			return
+		}
+
+		// Register the module's function signatures
+		c.registerModuleFunctionSignatures(module, imp.Path)
+
 		// Add std symbols to imports
 		c.imports["io"] = true
 		c.imports["math"] = true
@@ -1215,6 +1246,32 @@ func (c *Checker) registerMergedFunctionSignatures(mod *ast.Module) {
 				}
 				c.functions[fn.Name] = sig
 			}
+		}
+	}
+}
+
+// registerModuleFunctionSignatures registers function signatures from an imported module
+func (c *Checker) registerModuleFunctionSignatures(mod *ast.Module, importPath []string) {
+	// Create the module prefix (e.g., "std.math" for importPath ["std", "math"])
+	modulePrefix := strings.Join(importPath, ".")
+
+	for _, decl := range mod.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			// Create the fully qualified function name
+			qualifiedName := modulePrefix + "." + fn.Name
+
+			// Build the function signature
+			sig := FunctionSignature{Return: "void"}
+			if fn.Return != nil {
+				sig.Return = typeExprToString(fn.Return)
+			}
+			sig.Params = make([]string, len(fn.Params))
+			for i, param := range fn.Params {
+				sig.Params[i] = typeExprToString(param.Type)
+			}
+
+			// Register the function signature
+			c.functions[qualifiedName] = sig
 		}
 	}
 }

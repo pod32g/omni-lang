@@ -516,6 +516,91 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				return Result{Type: "int", Value: result}, true
 			}
 		}
+	case "std.math.sqrt":
+		if len(operands) == 1 {
+			x := operandValue(fr, operands[0])
+			if x.Type == "int" {
+				xVal := x.Value.(int)
+				if xVal < 0 {
+					return Result{Type: "int", Value: 0}, true
+				}
+				if xVal == 0 {
+					return Result{Type: "int", Value: 0}, true
+				}
+				result := 1
+				for result*result <= xVal {
+					result++
+				}
+				return Result{Type: "int", Value: result - 1}, true
+			}
+		}
+	case "std.math.is_prime":
+		if len(operands) == 1 {
+			n := operandValue(fr, operands[0])
+			if n.Type == "int" {
+				nVal := n.Value.(int)
+				if nVal < 2 {
+					return Result{Type: "bool", Value: false}, true
+				}
+				if nVal == 2 {
+					return Result{Type: "bool", Value: true}, true
+				}
+				if nVal%2 == 0 {
+					return Result{Type: "bool", Value: false}, true
+				}
+				for i := 3; i*i <= nVal; i += 2 {
+					if nVal%i == 0 {
+						return Result{Type: "bool", Value: false}, true
+					}
+				}
+				return Result{Type: "bool", Value: true}, true
+			}
+		}
+	case "std.math.max_float":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			if a.Type == "float" && b.Type == "float" {
+				aVal := a.Value.(float64)
+				bVal := b.Value.(float64)
+				if aVal > bVal {
+					return Result{Type: "float", Value: aVal}, true
+				}
+				return Result{Type: "float", Value: bVal}, true
+			}
+		}
+	case "std.math.min_float":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			if a.Type == "float" && b.Type == "float" {
+				aVal := a.Value.(float64)
+				bVal := b.Value.(float64)
+				if aVal < bVal {
+					return Result{Type: "float", Value: aVal}, true
+				}
+				return Result{Type: "float", Value: bVal}, true
+			}
+		}
+	case "std.math.abs_float":
+		if len(operands) == 1 {
+			x := operandValue(fr, operands[0])
+			if x.Type == "float" {
+				xVal := x.Value.(float64)
+				if xVal < 0 {
+					return Result{Type: "float", Value: -xVal}, true
+				}
+				return Result{Type: "float", Value: xVal}, true
+			}
+		}
+	case "std.math.toString":
+		if len(operands) == 1 {
+			n := operandValue(fr, operands[0])
+			if n.Type == "int" {
+				nVal := n.Value.(int)
+				return Result{Type: "string", Value: fmt.Sprintf("%d", nVal)}, true
+			}
+		}
 	case "std.string.length":
 		if len(operands) == 1 {
 			arg := operandValue(fr, operands[0])
@@ -532,6 +617,136 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				leftStr := left.Value.(string)
 				rightStr := right.Value.(string)
 				return Result{Type: "string", Value: leftStr + rightStr}, true
+			}
+		}
+	case "std.string.substring":
+		if len(operands) == 3 {
+			s := operandValue(fr, operands[0])
+			start := operandValue(fr, operands[1])
+			end := operandValue(fr, operands[2])
+			if s.Type == "string" && start.Type == "int" && end.Type == "int" {
+				str := s.Value.(string)
+				startIdx := start.Value.(int)
+				endIdx := end.Value.(int)
+				if startIdx < 0 || endIdx > len(str) || startIdx > endIdx {
+					return Result{Type: "string", Value: ""}, true
+				}
+				return Result{Type: "string", Value: str[startIdx:endIdx]}, true
+			}
+		}
+	case "std.string.char_at":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			idx := operandValue(fr, operands[1])
+			if s.Type == "string" && idx.Type == "int" {
+				str := s.Value.(string)
+				index := idx.Value.(int)
+				if index < 0 || index >= len(str) {
+					return Result{Type: "char", Value: ' '}, true
+				}
+				return Result{Type: "char", Value: rune(str[index])}, true
+			}
+		}
+	case "std.string.starts_with":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			prefix := operandValue(fr, operands[1])
+			if s.Type == "string" && prefix.Type == "string" {
+				str := s.Value.(string)
+				pre := prefix.Value.(string)
+				if len(pre) > len(str) {
+					return Result{Type: "bool", Value: false}, true
+				}
+				return Result{Type: "bool", Value: str[:len(pre)] == pre}, true
+			}
+		}
+	case "std.string.ends_with":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			suffix := operandValue(fr, operands[1])
+			if s.Type == "string" && suffix.Type == "string" {
+				str := s.Value.(string)
+				suf := suffix.Value.(string)
+				if len(suf) > len(str) {
+					return Result{Type: "bool", Value: false}, true
+				}
+				return Result{Type: "bool", Value: str[len(str)-len(suf):] == suf}, true
+			}
+		}
+	case "std.string.contains":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			substr := operandValue(fr, operands[1])
+			if s.Type == "string" && substr.Type == "string" {
+				str := s.Value.(string)
+				sub := substr.Value.(string)
+				return Result{Type: "bool", Value: strings.Contains(str, sub)}, true
+			}
+		}
+	case "std.string.index_of":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			substr := operandValue(fr, operands[1])
+			if s.Type == "string" && substr.Type == "string" {
+				str := s.Value.(string)
+				sub := substr.Value.(string)
+				idx := strings.Index(str, sub)
+				return Result{Type: "int", Value: idx}, true
+			}
+		}
+	case "std.string.last_index_of":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			substr := operandValue(fr, operands[1])
+			if s.Type == "string" && substr.Type == "string" {
+				str := s.Value.(string)
+				sub := substr.Value.(string)
+				idx := strings.LastIndex(str, sub)
+				return Result{Type: "int", Value: idx}, true
+			}
+		}
+	case "std.string.trim":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if s.Type == "string" {
+				str := s.Value.(string)
+				return Result{Type: "string", Value: strings.TrimSpace(str)}, true
+			}
+		}
+	case "std.string.to_upper":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if s.Type == "string" {
+				str := s.Value.(string)
+				return Result{Type: "string", Value: strings.ToUpper(str)}, true
+			}
+		}
+	case "std.string.to_lower":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if s.Type == "string" {
+				str := s.Value.(string)
+				return Result{Type: "string", Value: strings.ToLower(str)}, true
+			}
+		}
+	case "std.string.equals":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			if a.Type == "string" && b.Type == "string" {
+				aStr := a.Value.(string)
+				bStr := b.Value.(string)
+				return Result{Type: "bool", Value: aStr == bStr}, true
+			}
+		}
+	case "std.string.compare":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			if a.Type == "string" && b.Type == "string" {
+				aStr := a.Value.(string)
+				bStr := b.Value.(string)
+				return Result{Type: "int", Value: strings.Compare(aStr, bStr)}, true
 			}
 		}
 	}

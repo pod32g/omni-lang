@@ -15,7 +15,10 @@ var (
 
 func main() {
 	var (
-		version = flag.Bool("version", false, "print version and exit")
+		version  = flag.Bool("version", false, "print version and exit")
+		verbose  = flag.Bool("verbose", false, "enable verbose output")
+		help     = flag.Bool("help", false, "show help and exit")
+		showHelp = flag.Bool("h", false, "show help and exit")
 	)
 	flag.Parse()
 
@@ -24,15 +27,38 @@ func main() {
 		os.Exit(0)
 	}
 
+	if *help || *showHelp {
+		showUsage()
+		os.Exit(0)
+	}
+
 	if flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: omnir [options] <file.omni>")
-		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr, "error: no input file specified")
+		fmt.Fprintln(os.Stderr, "")
+		showUsage()
 		os.Exit(2)
 	}
 
 	program := flag.Arg(0)
-	if err := runner.Run(program); err != nil {
+	if err := runner.Run(program, *verbose); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func showUsage() {
+	fmt.Fprintf(os.Stderr, "OmniLang Runner (omnir) %s\n", Version)
+	fmt.Fprintf(os.Stderr, "Built: %s\n\n", BuildTime)
+	fmt.Fprintf(os.Stderr, "USAGE:\n")
+	fmt.Fprintf(os.Stderr, "  omnir [options] <file.omni>\n\n")
+	fmt.Fprintf(os.Stderr, "OPTIONS:\n")
+	fmt.Fprintf(os.Stderr, "  -verbose\n")
+	fmt.Fprintf(os.Stderr, "        enable verbose output\n")
+	fmt.Fprintf(os.Stderr, "  -version\n")
+	fmt.Fprintf(os.Stderr, "        print version and exit\n")
+	fmt.Fprintf(os.Stderr, "  -help, -h\n")
+	fmt.Fprintf(os.Stderr, "        show help and exit\n\n")
+	fmt.Fprintf(os.Stderr, "EXAMPLES:\n")
+	fmt.Fprintf(os.Stderr, "  omnir hello.omni           # Run the program\n")
+	fmt.Fprintf(os.Stderr, "  omnir -verbose hello.omni  # Run with verbose output\n")
 }

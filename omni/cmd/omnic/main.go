@@ -42,6 +42,9 @@ func main() {
 		dump     = flag.String("dump", "", "dump intermediate representation (mir)")
 		output   = flag.String("o", "", "output binary path")
 		version  = flag.Bool("version", false, "print version and exit")
+		verbose  = flag.Bool("verbose", false, "enable verbose output")
+		help     = flag.Bool("help", false, "show help and exit")
+		showHelp = flag.Bool("h", false, "show help and exit")
 	)
 	flag.Var(emitFlag, "emit", "emission format (mir|obj|asm)")
 
@@ -52,9 +55,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	if *help || *showHelp {
+		showUsage()
+		os.Exit(0)
+	}
+
 	if flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: omnic [options] <file.omni>")
-		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr, "error: no input file specified")
+		fmt.Fprintln(os.Stderr, "")
+		showUsage()
 		os.Exit(2)
 	}
 
@@ -64,15 +73,59 @@ func main() {
 		emit = "mir"
 	}
 
-	if err := run(input, *output, *backend, *optLevel, emit, *dump); err != nil {
+	if err := run(input, *output, *backend, *optLevel, emit, *dump, *verbose); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(input, output, backend, optLevel, emit, dump string) error {
+func showUsage() {
+	fmt.Fprintf(os.Stderr, "OmniLang Compiler (omnic) %s\n", Version)
+	fmt.Fprintf(os.Stderr, "Built: %s\n\n", BuildTime)
+	fmt.Fprintf(os.Stderr, "USAGE:\n")
+	fmt.Fprintf(os.Stderr, "  omnic [options] <file.omni>\n\n")
+	fmt.Fprintf(os.Stderr, "OPTIONS:\n")
+	fmt.Fprintf(os.Stderr, "  -backend string\n")
+	fmt.Fprintf(os.Stderr, "        code generation backend (vm|clift) (default \"vm\")\n")
+	fmt.Fprintf(os.Stderr, "  -O string\n")
+	fmt.Fprintf(os.Stderr, "        optimization level (O0-O3) (default \"O0\")\n")
+	fmt.Fprintf(os.Stderr, "  -emit string\n")
+	fmt.Fprintf(os.Stderr, "        emission format (mir|obj|asm) (default \"obj\")\n")
+	fmt.Fprintf(os.Stderr, "  -dump string\n")
+	fmt.Fprintf(os.Stderr, "        dump intermediate representation (mir)\n")
+	fmt.Fprintf(os.Stderr, "  -o string\n")
+	fmt.Fprintf(os.Stderr, "        output binary path\n")
+	fmt.Fprintf(os.Stderr, "  -verbose\n")
+	fmt.Fprintf(os.Stderr, "        enable verbose output\n")
+	fmt.Fprintf(os.Stderr, "  -version\n")
+	fmt.Fprintf(os.Stderr, "        print version and exit\n")
+	fmt.Fprintf(os.Stderr, "  -help, -h\n")
+	fmt.Fprintf(os.Stderr, "        show help and exit\n\n")
+	fmt.Fprintf(os.Stderr, "EXAMPLES:\n")
+	fmt.Fprintf(os.Stderr, "  omnic hello.omni                    # Compile with VM backend\n")
+	fmt.Fprintf(os.Stderr, "  omnic -backend clift hello.omni     # Compile with Cranelift backend\n")
+	fmt.Fprintf(os.Stderr, "  omnic -emit mir hello.omni          # Emit MIR instead of binary\n")
+	fmt.Fprintf(os.Stderr, "  omnic -verbose hello.omni           # Show compilation steps\n")
+	fmt.Fprintf(os.Stderr, "  omnic -dump mir hello.omni          # Dump MIR to file\n")
+}
+
+func run(input, output, backend, optLevel, emit, dump string, verbose bool) error {
 	if filepath.Ext(input) != ".omni" {
 		return fmt.Errorf("%s: unsupported input (expected .omni)", input)
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Compiling %s...\n", input)
+		fmt.Fprintf(os.Stderr, "  Backend: %s\n", backend)
+		fmt.Fprintf(os.Stderr, "  Optimization: %s\n", optLevel)
+		fmt.Fprintf(os.Stderr, "  Emit: %s\n", emit)
+		if dump != "" {
+			fmt.Fprintf(os.Stderr, "  Dump: %s\n", dump)
+		}
+		if output != "" {
+			fmt.Fprintf(os.Stderr, "  Output: %s\n", output)
+		}
+		fmt.Fprintf(os.Stderr, "\n")
 	}
 
 	cfg := compiler.Config{
@@ -84,11 +137,19 @@ func run(input, output, backend, optLevel, emit, dump string) error {
 		Dump:       dump,
 	}
 
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Starting compilation...\n")
+	}
+
 	if err := compiler.Compile(cfg); err != nil {
 		if errors.Is(err, compiler.ErrNotImplemented) {
 			return fmt.Errorf("omnic: feature not implemented: %w", err)
 		}
 		return err
+	}
+
+	if verbose {
+		fmt.Fprintf(os.Stderr, "Compilation completed successfully!\n")
 	}
 
 	return nil

@@ -29,9 +29,11 @@ func NewModuleLoader() *ModuleLoader {
 // LoadModule loads a module by its import path.
 func (ml *ModuleLoader) LoadModule(importPath []string) (*ast.Module, error) {
 	pathKey := strings.Join(importPath, ".")
+	fmt.Printf("DEBUG: LoadModule called with path: %v, key: %s\n", importPath, pathKey)
 
 	// Check cache first
 	if module, exists := ml.cache[pathKey]; exists {
+		fmt.Printf("DEBUG: Found in cache: %s\n", pathKey)
 		return module, nil
 	}
 
@@ -60,8 +62,29 @@ func (ml *ModuleLoader) LoadModule(importPath []string) (*ast.Module, error) {
 // findModuleFile searches for a module file in the search paths.
 func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 	// Convert import path to file path
-	moduleName := importPath[len(importPath)-1] // Last segment is the module name
-	fileName := moduleName + ".omni"
+	// For std.math, we want std/math/math.omni
+	// For std.io, we want std/io/print.omni
+	// For local modules, we want module.omni
+
+	var fileName string
+	if len(importPath) > 1 && importPath[0] == "std" {
+		// For std modules, use the subdirectory structure
+		// std.io -> std/io/print.omni
+		// std.math -> std/math/math.omni
+		// std.string -> std/string/string.omni
+		moduleName := importPath[1] // "io", "math", "string", etc.
+
+		// Special case for std.io which uses print.omni instead of io.omni
+		if moduleName == "io" {
+			fileName = filepath.Join(moduleName, "print") + ".omni"
+		} else {
+			fileName = filepath.Join(moduleName, moduleName) + ".omni"
+		}
+	} else {
+		// For local modules, use the module name directly
+		moduleName := importPath[len(importPath)-1]
+		fileName = moduleName + ".omni"
+	}
 
 	// Search in each search path
 	for _, searchPath := range ml.searchPaths {
@@ -69,6 +92,8 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 		if _, err := os.Stat(fullPath); err == nil {
 			return fullPath, nil
 		}
+		// Debug: print what we're looking for
+		fmt.Printf("DEBUG: Looking for %s (not found)\n", fullPath)
 	}
 
 	// Create a more helpful error message
