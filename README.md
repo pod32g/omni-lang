@@ -602,36 +602,23 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 > 📋 **For detailed development roadmap, see [ROADMAP.md](docs/ROADMAP.md)**
 
-### Version 0.2.0 (Current)
-- ✅ Basic language features (variables, functions, control flow)
-- ✅ Complete compiler pipeline (lexer, parser, AST, type checker, MIR)
-- ✅ VM backend with comprehensive intrinsics
+### Current Status (v0.2.0)
+- ✅ Complete frontend (lexer, parser, AST, type checker)
+- ✅ VM backend with 65.7% test coverage
 - ✅ Import system (std library + local files with aliases)
 - ✅ String concatenation with mixed types
 - ✅ Unary expressions (-, !)
-- ✅ Comprehensive error messages with helpful hints
-- ✅ Extensive test coverage (65.7% VM, 83.2% lexer, 72.1% parser)
-- ✅ Edge case testing and integration tests
-- ✅ Cranelift backend (stub for Linux)
+- ✅ Enhanced error messages with helpful hints
+- ✅ Comprehensive testing and documentation
+- ✅ Performance optimizations
 
-### Version 1.1 (Planned)
-- 🔄 Full Cranelift integration (macOS, Windows)
-- 🔄 Enhanced standard library functions
-- 🔄 Generic types
-- 🔄 Pattern matching
-- 🔄 Memory management primitives
-
-### Version 1.2 (Planned)
-- 📋 Ownership system
-- 📋 Concurrency primitives
-- 📋 Advanced optimizations
-- 📋 Package manager
-
-### Version 2.0 (Future)
-- 📋 Garbage collection
-- 📋 IDE support
-- 📋 Advanced language features
-- 📋 Performance optimizations
+### Upcoming Phases
+- 🔄 **Phase 1**: Type System Completion (generics, union types, memory management)
+- 📋 **Phase 2**: MIR Optimization (advanced features, optimization passes)
+- 📋 **Phase 3**: Native Code Generation (complete Cranelift integration)
+- 📋 **Phase 4**: Language Features (concurrency, error handling, tooling)
+- 📋 **Phase 5**: Production Readiness (performance, security, deployment)
+- 📋 **Phase 6**: Ecosystem (package registry, community building)
 
 ## License
 
