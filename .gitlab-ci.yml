@@ -123,9 +123,13 @@ integration-test:
     - source $HOME/.cargo/env
     - rustup default stable
   script:
+    - echo "Starting integration-test job"
     - cd omni
+    - echo "Building runtime library first"
     - make build-runtime
+    - echo "Building Rust components"
     - make build-rust
+    - echo "Building Go binaries"
     - make build
     - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
     - echo "Testing basic compilation"
