@@ -90,10 +90,13 @@ build-linux:
   image: golang:1.22
   before_script:
     - cd omni
-    - apt-get update && apt-get install -y gcc
+    - apt-get update && apt-get install -y gcc curl
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - source $HOME/.cargo/env
+    - rustup default stable
   script:
-    - make build
     - make build-rust
+    - make build
     - make test
   artifacts:
     paths:
@@ -110,11 +113,14 @@ build-macos:
   image: golang:1.22
   before_script:
     - cd omni
-    - apt-get update && apt-get install -y gcc
+    - apt-get update && apt-get install -y gcc curl
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - source $HOME/.cargo/env
+    - rustup default stable
   script:
+    - make build-rust
     - GOOS=darwin GOARCH=amd64 make build
     - GOOS=darwin GOARCH=arm64 make build
-    - make test
   artifacts:
     paths:
       - omni/bin/
@@ -129,10 +135,13 @@ build-windows:
   image: golang:1.22
   before_script:
     - cd omni
-    - apt-get update && apt-get install -y gcc
+    - apt-get update && apt-get install -y gcc curl
+    - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    - source $HOME/.cargo/env
+    - rustup default stable
   script:
+    - make build-rust
     - GOOS=windows GOARCH=amd64 make build
-    - make test
   artifacts:
     paths:
       - omni/bin/
