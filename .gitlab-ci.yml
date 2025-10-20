@@ -90,8 +90,9 @@ test:
   script:
     - cd omni
     - make build-rust
+    - make build-runtime
     - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$LD_LIBRARY_PATH
-    - CGO_ENABLED=0 make test
+    - make test
   coverage: '/coverage: \d+\.\d+%/'
   artifacts:
     paths:
@@ -124,6 +125,7 @@ integration-test:
   script:
     - cd omni
     - make build-rust
+    - make build-runtime
     - make build
     - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$LD_LIBRARY_PATH
     - echo 'func main():int { return 42 }' > test_basic.omni
@@ -152,6 +154,7 @@ benchmark:
   script:
     - cd omni
     - make build-rust
+    - make build-runtime
     - make build
     - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$LD_LIBRARY_PATH
     - if [ -d "tests/bench" ]; then make bench; fi

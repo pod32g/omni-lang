@@ -48,6 +48,15 @@ build-rust:
 		echo "Cargo not found, skipping Rust build"; \
 	fi
 
+build-runtime:
+	@mkdir -p runtime/posix
+	@if command -v gcc >/dev/null 2>&1; then \
+		gcc -shared -fPIC -o runtime/posix/libomni_rt.so runtime/omni_rt.c; \
+		echo "Runtime library built successfully"; \
+	else \
+		echo "GCC not found, skipping runtime build"; \
+	fi
+
 build-all: build build-rust
 
 clean:
