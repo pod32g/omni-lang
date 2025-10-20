@@ -6,9 +6,13 @@ VERSION := $(shell git describe --tags --always --dirty)
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
 
-.PHONY: all fmt lint test build bench clean gen build-rust package release
+.PHONY: all fmt lint test build bench clean gen build-rust package release run-omnic
 
 all: build
+
+# Run omnic with proper library path setup
+run-omnic:
+	@export DYLD_LIBRARY_PATH="$(PWD)/runtime/posix:$$DYLD_LIBRARY_PATH" && ./bin/omnic $(ARGS)
 
 fmt:
 	$(GO) fmt ./...
