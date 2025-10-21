@@ -182,12 +182,126 @@
 
 ---
 
+## Phase 6: Self-Hosting & Native Testing (6-8 weeks) 🎯
+
+### 6.1 Self-Hosting Preparation (3 weeks)
+- [ ] **File I/O System**: Complete file reading/writing capabilities
+- [ ] **String Processing**: Advanced string manipulation for source code parsing
+- [ ] **Error Handling**: Robust error reporting and recovery
+- [ ] **Module System**: Advanced import/export for large codebases
+- [ ] **Generic Types**: Full generic type system for compiler internals
+- [ ] **Memory Management**: Dynamic allocation for AST and symbol tables
+
+### 6.2 OmniLang Testing Framework (2 weeks)
+- [ ] **Test Framework**: Built-in testing framework (`test` keyword, assertions)
+- [ ] **Test Runner**: Native test execution and reporting
+- [ ] **Mocking**: Mock objects and test doubles
+- [ ] **Benchmarking**: Built-in performance testing
+- [ ] **Coverage**: Code coverage analysis
+
+### 6.3 Compiler Self-Hosting (3 weeks)
+- [ ] **Lexer in OmniLang**: Rewrite tokenizer in OmniLang
+- [ ] **Parser in OmniLang**: Rewrite parser in OmniLang  
+- [ ] **Type Checker in OmniLang**: Rewrite type system in OmniLang
+- [ ] **MIR Builder in OmniLang**: Rewrite MIR generation in OmniLang
+- [ ] **Bootstrap Process**: Self-compiling compiler chain
+
+**Success Criteria**: OmniLang compiler written in OmniLang, all tests written in OmniLang
+
+### 📊 **Self-Hosting Analysis**
+
+**Current State (v0.4.3):**
+- ✅ **Basic Language Features**: Variables, functions, control flow, data structures
+- ✅ **Import System**: Module loading and namespace resolution
+- ✅ **Standard Library**: I/O, math, string operations
+- ✅ **Multiple Backends**: C, VM, Cranelift for compilation targets
+
+**Missing for Self-Hosting:**
+- ❌ **File I/O**: No file reading/writing capabilities
+- ❌ **Generic Types**: Needed for compiler data structures (AST nodes, symbol tables)
+- ❌ **Error Handling**: Robust error reporting system
+- ❌ **Advanced Memory Management**: Dynamic allocation for large data structures
+- ❌ **String Processing**: Advanced string manipulation for source code
+- ❌ **Testing Framework**: No built-in testing capabilities
+
+**Estimated Timeline:**
+- **File I/O System**: 1 week
+- **Generic Types**: 2 weeks  
+- **Error Handling**: 1 week
+- **Testing Framework**: 2 weeks
+- **Compiler Rewrite**: 3 weeks
+- **Total**: ~9 weeks
+
+**Complexity Assessment:**
+- **High Complexity**: Generic types, memory management, error handling
+- **Medium Complexity**: File I/O, string processing, testing framework
+- **Low Complexity**: Basic compiler components (lexer, parser)
+
+**Current Compiler Architecture (Go-based):**
+```
+omni/internal/
+├── lexer/          # Tokenization (Go)
+├── parser/         # Syntax analysis (Go)
+├── ast/            # Abstract syntax tree (Go)
+├── types/          # Type system (Go)
+├── mir/            # SSA intermediate representation (Go)
+├── passes/         # Optimization passes (Go)
+├── vm/             # Virtual machine (Go)
+├── backend/        # Code generation backends (Go)
+│   ├── c/          # C backend (Go)
+│   └── cranelift/  # Cranelift backend (Go)
+└── compiler/       # Compiler orchestration (Go)
+```
+
+**Target Self-Hosted Architecture (OmniLang-based):**
+```
+omni/src/
+├── lexer.omni      # Tokenization (OmniLang)
+├── parser.omni     # Syntax analysis (OmniLang)
+├── ast.omni        # Abstract syntax tree (OmniLang)
+├── types.omni      # Type system (OmniLang)
+├── mir.omni        # SSA intermediate representation (OmniLang)
+├── passes.omni     # Optimization passes (OmniLang)
+├── vm.omni         # Virtual machine (OmniLang)
+├── backend.omni    # Code generation backends (OmniLang)
+└── compiler.omni   # Compiler orchestration (OmniLang)
+```
+
+**Testing Framework Requirements:**
+```omni
+// Example of what we want to achieve
+import std
+
+test "lexer tokenizes correctly" {
+    let tokens = lexer.tokenize("func main():int { return 42 }")
+    assert_eq(tokens.len(), 8)
+    assert_eq(tokens[0].type, TokenType.FUNC)
+    assert_eq(tokens[1].type, TokenType.IDENTIFIER)
+}
+
+test "parser creates correct AST" {
+    let ast = parser.parse("func add(a:int, b:int):int { return a + b }")
+    assert_eq(ast.functions.len(), 1)
+    assert_eq(ast.functions[0].name, "add")
+    assert_eq(ast.functions[0].params.len(), 2)
+}
+
+test "type checker validates types" {
+    let result = typechecker.check("let x:int = \"hello\"")
+    assert_eq(result.has_errors, true)
+    assert_eq(result.errors[0].message, "cannot assign string to int")
+}
+```
+
+---
+
 ## Next Steps
 
 1. **Begin Phase 1.1**: Start with dynamic memory allocation (`new`/`delete`)
 2. **Complete Cranelift Backend**: Finish macOS and Windows support
 3. **Add Static Linking**: Remove runtime library dependency
-4. **Regular Reviews**: Weekly progress reviews and adjustments
+4. **Plan Self-Hosting**: Begin Phase 6 preparation (File I/O, Generic Types, Testing Framework)
+5. **Regular Reviews**: Weekly progress reviews and adjustments
 
 ---
 
