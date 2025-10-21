@@ -1,8 +1,7 @@
 // Variables and Types - Demonstrates variable declaration and type inference
-import std.io as io
-import std.math as math
+import std
 
-func main() {
+func main():int {
     // Explicit type declaration
     let name:string = "Alice"
     let age:int = 30
@@ -15,13 +14,15 @@ func main() {
     let pi = 3.14159            // inferred as float
     let active = true            // inferred as bool
     
-    io.println("=== Variable Examples ===")
-    io.println("Name: " + name)
-    io.println("Age: " + math.toString(age))
-    io.println("Height: " + math.toString(height))
-    io.println("Is student: " + math.toString(is_student))
-    io.println("City: " + city)
-    io.println("Count: " + math.toString(count))
-    io.println("Pi: " + math.toString(pi))
-    io.println("Active: " + math.toString(active))
+    std.io.println("=== Variable Examples ===")
+    std.io.println("Name: " + name)
+    std.io.println("Age: " + age)
+    std.io.println("Height: " + height)
+    std.io.println("Is student: " + is_student)
+    std.io.println("City: " + city)
+    std.io.println("Count: " + count)
+    std.io.println("Pi: " + pi)
+    std.io.println("Active: " + active)
+    
+    return 0
 }

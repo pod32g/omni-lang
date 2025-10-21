@@ -27,6 +27,7 @@ func square(x:int):int => x * x
 
 ### Imports
 ```omni
+import std                    // Import entire standard library (recommended)
 import std.io as io           // Standard library with alias
 import std.math               // Standard library without alias
 import math_utils             // Local file import

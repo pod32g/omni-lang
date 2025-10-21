@@ -390,14 +390,18 @@ let first:int = numbers[0]
 ### Standard Library Imports
 
 ```omni
+// Recommended: Import entire standard library
+import std
+
+// Or import specific modules
 import std.io as io
 import std.math as math
 import std.string as str
 
 func main():int {
-    io.println("Hello from std.io!")
-    let result:int = math.max(10, 20)
-    let combined:string = str.concat("Hello", "World")
+    std.io.println("Hello from std.io!")
+    let result:int = std.math.max(10, 20)
+    let combined:string = std.string.concat("Hello", "World")
     return 0
 }
 ```

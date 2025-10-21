@@ -1,6 +1,7 @@
 // Hello World - The traditional first program
-import std.io as io
+import std
 
-func main() {
-    io.println("Hello, World!")
+func main():int {
+    std.io.println("Hello, World!")
+    return 0
 }

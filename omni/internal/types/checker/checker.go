@@ -32,6 +32,25 @@ func Check(filename, src string, mod *ast.Module) error {
 		moduleLoader: *NewModuleLoader(),
 		typeParams:   make(map[string]bool),
 	}
+
+	// Add the omni std directory to search paths
+	// Find the omni root directory by looking for the std directory
+	if abs, err := filepath.Abs(filepath.Dir(filename)); err == nil {
+		// Walk up the directory tree to find the omni root
+		current := abs
+		for {
+			stdPath := filepath.Join(current, "std")
+			if _, err := os.Stat(stdPath); err == nil {
+				c.moduleLoader.AddSearchPath(current)
+				break
+			}
+			parent := filepath.Dir(current)
+			if parent == current {
+				break // Reached root
+			}
+			current = parent
+		}
+	}
 	c.initBuiltins()
 	c.collectTypeDecls(mod)
 	c.enterScope()
@@ -102,18 +121,23 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 	// For local modules, we want module.omni
 
 	var fileName string
-	if len(importPath) > 1 && importPath[0] == "std" {
-		// For std modules, use the subdirectory structure
-		// std.io -> std/io/print.omni
-		// std.math -> std/math/math.omni
-		// std.string -> std/string/string.omni
-		moduleName := importPath[1] // "io", "math", "string", etc.
-
-		// Special case for std.io which uses print.omni instead of io.omni
-		if moduleName == "io" {
-			fileName = filepath.Join(moduleName, "print") + ".omni"
+	if len(importPath) > 0 && importPath[0] == "std" {
+		if len(importPath) == 1 {
+			// For "import std", look for std/std.omni
+			fileName = filepath.Join("std", "std") + ".omni"
 		} else {
-			fileName = filepath.Join(moduleName, moduleName) + ".omni"
+			// For std modules, use the subdirectory structure
+			// std.io -> std/io/print.omni
+			// std.math -> std/math/math.omni
+			// std.string -> std/string/string.omni
+			moduleName := importPath[1] // "io", "math", "string", etc.
+
+			// Special case for std.io which uses print.omni instead of io.omni
+			if moduleName == "io" {
+				fileName = filepath.Join("std", moduleName, "print") + ".omni"
+			} else {
+				fileName = filepath.Join("std", moduleName, moduleName) + ".omni"
+			}
 		}
 	} else {
 		// For local modules, use the module name directly
@@ -130,6 +154,11 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 	}
 
 	return "", fmt.Errorf("module %s not found in search paths: %v", strings.Join(importPath, "."), ml.searchPaths)
+}
+
+// AddSearchPath adds a directory to the module search paths.
+func (ml *ModuleLoader) AddSearchPath(path string) {
+	ml.searchPaths = append(ml.searchPaths, path)
 }
 
 // Checker encapsulates the mutable state required to validate an OmniLang AST.
@@ -1652,14 +1681,22 @@ func (c *Checker) registerMergedFunctionSignatures(mod *ast.Module) {
 		if fn, ok := decl.(*ast.FuncDecl); ok {
 			// Check if this is a namespaced function (contains a dot)
 			if strings.Contains(fn.Name, ".") {
+				// Enter type parameter scope for this function
+				c.enterTypeParams(fn.TypeParams)
+
 				sig := FunctionSignature{Return: "void"}
 				if fn.Return != nil {
-					sig.Return = typeExprToString(fn.Return)
+					sig.Return = c.resolveTypeExpr(fn.Return)
 				}
 				sig.Params = make([]string, len(fn.Params))
 				for i, param := range fn.Params {
-					sig.Params[i] = typeExprToString(param.Type)
+					sig.Params[i] = c.resolveTypeExpr(param.Type)
 				}
+				sig.TypeParams = fn.TypeParams
+
+				// Leave type parameter scope
+				c.leaveTypeParams(fn.TypeParams)
+
 				c.functions[fn.Name] = sig
 			}
 		}
@@ -1676,15 +1713,22 @@ func (c *Checker) registerModuleFunctionSignatures(mod *ast.Module, importPath [
 			// Create the fully qualified function name
 			qualifiedName := modulePrefix + "." + fn.Name
 
+			// Enter type parameter scope for this function
+			c.enterTypeParams(fn.TypeParams)
+
 			// Build the function signature
 			sig := FunctionSignature{Return: "void"}
 			if fn.Return != nil {
-				sig.Return = typeExprToString(fn.Return)
+				sig.Return = c.resolveTypeExpr(fn.Return)
 			}
 			sig.Params = make([]string, len(fn.Params))
 			for i, param := range fn.Params {
-				sig.Params[i] = typeExprToString(param.Type)
+				sig.Params[i] = c.resolveTypeExpr(param.Type)
 			}
+			sig.TypeParams = fn.TypeParams
+
+			// Leave type parameter scope
+			c.leaveTypeParams(fn.TypeParams)
 
 			// Register the function signature
 			c.functions[qualifiedName] = sig

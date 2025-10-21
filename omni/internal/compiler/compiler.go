@@ -148,6 +148,25 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 		}
 	}
 
+	// Add the omni std directory to search paths
+	// Find the omni root directory by looking for the std directory
+	if abs, err := filepath.Abs(baseDir); err == nil {
+		// Walk up the directory tree to find the omni root
+		current := abs
+		for {
+			stdPath := filepath.Join(current, "std")
+			if _, err := os.Stat(stdPath); err == nil {
+				loader.AddSearchPath(current)
+				break
+			}
+			parent := filepath.Dir(current)
+			if parent == current {
+				break // Reached root
+			}
+			current = parent
+		}
+	}
+
 	// Collect imports from both Module.Imports and top-level decls
 	imports := make([]*ast.ImportDecl, 0, len(mod.Imports))
 	imports = append(imports, mod.Imports...)
@@ -161,10 +180,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 		if len(imp.Path) == 0 {
 			continue
 		}
-		// Skip std imports (handled elsewhere)
-		if imp.Path[0] == "std" {
-			continue
-		}
+		// Load all imports, including std imports
 		imported, err := loader.LoadModule(imp.Path)
 		if err != nil {
 			return fmt.Errorf("load import %s: %w", strings.Join(imp.Path, "."), err)

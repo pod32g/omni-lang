@@ -38,6 +38,9 @@ int32_t omni_max(int32_t a, int32_t b);
 int32_t omni_min(int32_t a, int32_t b);
 char* omni_int_to_string(int32_t value);
 
+// System operations
+void omni_exit(int32_t code);
+
 // Entry point
 int32_t omni_main();
 

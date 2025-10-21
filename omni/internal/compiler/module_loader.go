@@ -29,11 +29,9 @@ func NewModuleLoader() *ModuleLoader {
 // LoadModule loads a module by its import path.
 func (ml *ModuleLoader) LoadModule(importPath []string) (*ast.Module, error) {
 	pathKey := strings.Join(importPath, ".")
-	fmt.Printf("DEBUG: LoadModule called with path: %v, key: %s\n", importPath, pathKey)
 
 	// Check cache first
 	if module, exists := ml.cache[pathKey]; exists {
-		fmt.Printf("DEBUG: Found in cache: %s\n", pathKey)
 		return module, nil
 	}
 
@@ -67,18 +65,23 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 	// For local modules, we want module.omni
 
 	var fileName string
-	if len(importPath) > 1 && importPath[0] == "std" {
-		// For std modules, use the subdirectory structure
-		// std.io -> std/io/print.omni
-		// std.math -> std/math/math.omni
-		// std.string -> std/string/string.omni
-		moduleName := importPath[1] // "io", "math", "string", etc.
-
-		// Special case for std.io which uses print.omni instead of io.omni
-		if moduleName == "io" {
-			fileName = filepath.Join(moduleName, "print") + ".omni"
+	if len(importPath) > 0 && importPath[0] == "std" {
+		if len(importPath) == 1 {
+			// For "import std", look for std/std.omni
+			fileName = filepath.Join("std", "std") + ".omni"
 		} else {
-			fileName = filepath.Join(moduleName, moduleName) + ".omni"
+			// For std modules, use the subdirectory structure
+			// std.io -> std/io/print.omni
+			// std.math -> std/math/math.omni
+			// std.string -> std/string/string.omni
+			moduleName := importPath[1] // "io", "math", "string", etc.
+
+			// Special case for std.io which uses print.omni instead of io.omni
+			if moduleName == "io" {
+				fileName = filepath.Join("std", moduleName, "print") + ".omni"
+			} else {
+				fileName = filepath.Join("std", moduleName, moduleName) + ".omni"
+			}
 		}
 	} else {
 		// For local modules, use the module name directly
@@ -92,8 +95,6 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 		if _, err := os.Stat(fullPath); err == nil {
 			return fullPath, nil
 		}
-		// Debug: print what we're looking for
-		fmt.Printf("DEBUG: Looking for %s (not found)\n", fullPath)
 	}
 
 	// Create a more helpful error message

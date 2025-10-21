@@ -198,6 +198,11 @@ func (g *CGenerator) writeStdLibFunctions() {
 
 // generateFunction generates C code for a single function
 func (g *CGenerator) generateFunction(fn *mir.Function) error {
+	// Skip functions that are provided by the runtime
+	if g.isRuntimeProvidedFunction(fn.Name) {
+		return nil
+	}
+
 	// Add debug information if enabled
 	if g.debugInfo {
 		g.output.WriteString(fmt.Sprintf("// Debug: Function %s (Return: %s, Params: %d)\n",
@@ -211,8 +216,8 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 
 	// Generate function signature
 	returnType := g.mapType(fn.ReturnType)
-	funcName := fn.Name
-	if funcName == "main" {
+	funcName := g.mapFunctionName(fn.Name)
+	if fn.Name == "main" {
 		funcName = "omni_main"
 	}
 	g.output.WriteString(fmt.Sprintf("%s %s(", returnType, funcName))
@@ -714,9 +719,72 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 	case "std.io.println_bool":
 		return "omni_println_bool"
 
+	// OS functions
+	case "std.os.exit":
+		return "omni_exit"
+
+	// Utility functions
+	case "std.assert":
+		return "omni_assert"
+	case "std.panic":
+		return "omni_panic"
+	case "std.int_to_string":
+		return "omni_int_to_string"
+	case "std.float_to_string":
+		return "omni_float_to_string"
+	case "std.bool_to_string":
+		return "omni_bool_to_string"
+	case "std.string_to_int":
+		return "omni_string_to_int"
+	case "std.string_to_float":
+		return "omni_string_to_float"
+	case "std.string_to_bool":
+		return "omni_string_to_bool"
+	case "std.malloc":
+		return "omni_malloc"
+	case "std.free":
+		return "omni_free"
+	case "std.realloc":
+		return "omni_realloc"
+
 	default:
-		return funcName
+		// For any other function names with dots, replace dots with underscores
+		return strings.ReplaceAll(funcName, ".", "_")
 	}
+}
+
+// isRuntimeProvidedFunction checks if a function is provided by the runtime
+func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
+	// List of functions that are provided by the runtime
+	runtimeFunctions := map[string]bool{
+		"std.io.print":         true,
+		"std.io.println":       true,
+		"std.io.print_int":     true,
+		"std.io.println_int":   true,
+		"std.io.print_float":   true,
+		"std.io.println_float": true,
+		"std.io.print_bool":    true,
+		"std.io.println_bool":  true,
+		"std.math.abs":         true,
+		"std.math.max":         true,
+		"std.math.min":         true,
+		"std.os.exit":          true,
+		"std.int_to_string":    true,
+		"std.free":             true,
+		// Skip std module utility functions that are not implemented in runtime
+		"std.assert":          true,
+		"std.assert_eq":       true,
+		"std.panic":           true,
+		"std.float_to_string": true,
+		"std.bool_to_string":  true,
+		"std.string_to_int":   true,
+		"std.string_to_float": true,
+		"std.string_to_bool":  true,
+		"std.malloc":          true,
+		"std.realloc":         true,
+	}
+
+	return runtimeFunctions[funcName]
 }
 
 // getVariableName returns a C variable name for an SSA value
