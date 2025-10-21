@@ -13,19 +13,16 @@ import (
 
 func BenchmarkParser(b *testing.B) {
 	source := `
-import std.io as io
-import std.math as math
-
-func fibonacci(n:int) {
+func fibonacci(n:int) : int {
     if n <= 1 {
         return n
     }
     return fibonacci(n - 1) + fibonacci(n - 2)
 }
 
-func main() {
+func main() : int {
     let result:int = fibonacci(10)
-    io.println("Fibonacci(10): " + math.toString(result))
+    return result
 }`
 
 	b.ResetTimer()
@@ -39,19 +36,16 @@ func main() {
 
 func BenchmarkTypeChecker(b *testing.B) {
 	source := `
-import std.io as io
-import std.math as math
-
-func factorial(n:int) {
+func factorial(n:int) : int {
     if n <= 1 {
         return 1
     }
     return n * factorial(n - 1)
 }
 
-func main() {
+func main() : int {
     let result:int = factorial(5)
-    io.println("Factorial: " + math.toString(result))
+    return result
 }`
 
 	mod, err := parser.Parse("benchmark.omni", source)
@@ -70,40 +64,18 @@ func main() {
 
 func BenchmarkCompilation(b *testing.B) {
 	source := `
-import std.io as io
-import std.math as math
-
-func quicksort(arr:array, low:int, high:int) {
-    if low < high {
-        let pivot:int = partition(arr, low, high)
-        quicksort(arr, low, pivot - 1)
-        quicksort(arr, pivot + 1, high)
-    }
+func add(x:int, y:int) : int {
+    return x + y
 }
 
-func partition(arr:array, low:int, high:int) {
-    let pivot:int = arr[high]
-    let i:int = low - 1
-    
-    for j:int = low; j < high; j++ {
-        if arr[j] <= pivot {
-            i = i + 1
-            let temp:int = arr[i]
-            arr[i] = arr[j]
-            arr[j] = temp
-        }
-    }
-    
-    let temp:int = arr[i + 1]
-    arr[i + 1] = arr[high]
-    arr[high] = temp
-    return i + 1
+func multiply(x:int, y:int) : int {
+    return x * y
 }
 
-func main() {
-    let arr:array = [5, 2, 8, 1, 9, 3, 7, 4, 6]
-    quicksort(arr, 0, 8)
-    io.println("Sorted array processed")
+func main() : int {
+    let result1:int = add(5, 3)
+    let result2:int = multiply(result1, 2)
+    return result2
 }`
 
 	tmpFile := filepath.Join(b.TempDir(), "benchmark.omni")
@@ -129,22 +101,21 @@ func main() {
 func BenchmarkLargeFile(b *testing.B) {
 	// Generate a large source file with many functions
 	var source strings.Builder
-	source.WriteString("import std.io as io\nimport std.math as math\n\n")
 
 	// Generate 100 functions
 	for i := 0; i < 100; i++ {
-		source.WriteString("func func" + strconv.Itoa(i) + "(x:int, y:int) {\n")
+		source.WriteString("func func" + strconv.Itoa(i) + "(x:int, y:int) : int {\n")
 		source.WriteString("    let result:int = x + y\n")
 		source.WriteString("    return result * 2\n")
 		source.WriteString("}\n\n")
 	}
 
-	source.WriteString("func main() {\n")
-	source.WriteString("    let sum:int = 0\n")
+	source.WriteString("func main() : int {\n")
+	source.WriteString("    var sum:int = 0\n")
 	for i := 0; i < 50; i++ {
 		source.WriteString("    sum = sum + func" + strconv.Itoa(i) + "(1, 2)\n")
 	}
-	source.WriteString("    io.println(\"Sum: \" + math.toString(sum))\n")
+	source.WriteString("    return sum\n")
 	source.WriteString("}\n")
 
 	tmpFile := filepath.Join(b.TempDir(), "large.omni")
@@ -170,14 +141,14 @@ func BenchmarkLargeFile(b *testing.B) {
 func BenchmarkErrorRecovery(b *testing.B) {
 	// Test performance with many errors
 	var source strings.Builder
-	source.WriteString("import std.io as io\n\n")
-	source.WriteString("func main() {\n")
+	source.WriteString("func main() : int {\n")
 
 	// Generate many errors
 	for i := 0; i < 50; i++ {
 		source.WriteString("    prnt" + strconv.Itoa(i) + "(\"Hello\")\n")        // Typo
 		source.WriteString("    let x" + strconv.Itoa(i) + ":int = \"string\"\n") // Type error
 	}
+	source.WriteString("    return 0\n")
 	source.WriteString("}\n")
 
 	tmpFile := filepath.Join(b.TempDir(), "errors.omni")

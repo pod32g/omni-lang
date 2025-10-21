@@ -1,36 +1,36 @@
 {
-  "timestamp": "2025-10-20T20:20:52.014944-06:00",
+  "timestamp": "2025-10-20T20:40:19.457957-06:00",
   "platform": "darwin",
   "architecture": "arm64",
   "go_version": "go1.25.1",
   "tests": {
     "typechecker_complexity_10": {
       "name": "typechecker_complexity_10",
-      "duration": 1201763000,
-      "memory_usage": 1423648,
-      "iterations": 164870,
-      "throughput": 137190.11152781374
+      "duration": 1166560334,
+      "memory_usage": 481352,
+      "iterations": 153464,
+      "throughput": 131552.5614297117
     },
     "typechecker_complexity_100": {
       "name": "typechecker_complexity_100",
-      "duration": 1193093083,
-      "memory_usage": 18446744073709405184,
-      "iterations": 17377,
-      "throughput": 14564.664105088941
+      "duration": 1317334791,
+      "memory_usage": 831240,
+      "iterations": 16899,
+      "throughput": 12828.174064371158
     },
     "typechecker_complexity_200": {
       "name": "typechecker_complexity_200",
-      "duration": 1184135833,
-      "memory_usage": 18446744073708651984,
-      "iterations": 8424,
-      "throughput": 7114.048714038028
+      "duration": 1158057959,
+      "memory_usage": 18446744073708274736,
+      "iterations": 7981,
+      "throughput": 6891.710331054337
     },
     "typechecker_complexity_50": {
       "name": "typechecker_complexity_50",
-      "duration": 1200187500,
-      "memory_usage": 3295712,
-      "iterations": 34801,
-      "throughput": 28996.302661042548
+      "duration": 1192979208,
+      "memory_usage": 1951040,
+      "iterations": 33645,
+      "throughput": 28202.503257709748
     }
   }
 }

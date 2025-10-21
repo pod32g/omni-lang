@@ -1,36 +1,36 @@
 {
-  "timestamp": "2025-10-20T20:20:42.426466-06:00",
+  "timestamp": "2025-10-20T20:40:08.67183-06:00",
   "platform": "darwin",
   "architecture": "arm64",
   "go_version": "go1.25.1",
   "tests": {
     "parser_size_100": {
       "name": "parser_size_100",
-      "duration": 1213589208,
-      "memory_usage": 3156272,
-      "iterations": 59936,
-      "throughput": 49387.3871033962
+      "duration": 1184733792,
+      "memory_usage": 2373552,
+      "iterations": 58521,
+      "throughput": 49395.906823260426
     },
     "parser_size_1000": {
       "name": "parser_size_1000",
-      "duration": 1243522667,
-      "memory_usage": 1253120,
-      "iterations": 6121,
-      "throughput": 4922.306735885178
+      "duration": 1195151500,
+      "memory_usage": 964016,
+      "iterations": 5859,
+      "throughput": 4902.3073643801645
     },
     "parser_size_2000": {
       "name": "parser_size_2000",
-      "duration": 1172691292,
-      "memory_usage": 3269584,
-      "iterations": 2934,
-      "throughput": 2501.937227653601
+      "duration": 1165732167,
+      "memory_usage": 3290496,
+      "iterations": 2894,
+      "throughput": 2482.559958388795
     },
     "parser_size_500": {
       "name": "parser_size_500",
-      "duration": 1201019917,
-      "memory_usage": 3027520,
-      "iterations": 12369,
-      "throughput": 10298.746777569051
+      "duration": 1199130000,
+      "memory_usage": 1864560,
+      "iterations": 12307,
+      "throughput": 10263.274207133505
     }
   }
 }

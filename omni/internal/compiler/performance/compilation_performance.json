@@ -1,7 +1,36 @@
 {
-  "timestamp": "2025-10-20T20:19:11.500564-06:00",
+  "timestamp": "2025-10-20T20:40:49.680999-06:00",
   "platform": "darwin",
   "architecture": "arm64",
   "go_version": "go1.25.1",
-  "tests": {}
+  "tests": {
+    "compilation_vm_O0": {
+      "name": "compilation_vm_O0",
+      "duration": 1194539209,
+      "memory_usage": 2861568,
+      "iterations": 17000,
+      "throughput": 14231.429049726572
+    },
+    "compilation_vm_O1": {
+      "name": "compilation_vm_O1",
+      "duration": 1188240541,
+      "memory_usage": 1707312,
+      "iterations": 17008,
+      "throughput": 14313.600161871602
+    },
+    "compilation_vm_O2": {
+      "name": "compilation_vm_O2",
+      "duration": 1200344958,
+      "memory_usage": 3472616,
+      "iterations": 17184,
+      "throughput": 14315.884684209253
+    },
+    "compilation_vm_O3": {
+      "name": "compilation_vm_O3",
+      "duration": 1189820542,
+      "memory_usage": 3220696,
+      "iterations": 16975,
+      "throughput": 14266.857396382049
+    }
+  }
 }
