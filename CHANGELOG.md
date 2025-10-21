@@ -15,6 +15,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
+## [0.4.0] - 2025-01-21
+
+### Added
+- **Array Support**: Complete array implementation with literals, indexing, and length function
+- **Array Method Syntax**: Support for `x.len()` method-style calls instead of `len(x)`
+- **Map/Dictionary Support**: Basic map implementation with key-value operations
+- **Struct Support**: Struct declarations, literals, and field access
+- **PHI Node Support**: Proper SSA form with PHI nodes for control flow
+- **Enhanced Comparisons**: String, boolean, and float comparisons in VM backend
+- **Complete C Backend**: Support for all core MIR instructions (mod, neg, not, and, or, strcat)
+- **Comprehensive Testing**: Extensive e2e tests for all new language features
+
+### Fixed
+- **Infinite Loop Bug**: Fixed critical bug in constant folding optimization that caused infinite loops
+- **MIR Verifier**: Enhanced with support for new instruction types
+- **Type Checking**: Improved validation for arrays and builtin functions
+- **Control Flow**: Better handling of complex loop and conditional scenarios
+
+### Changed
+- **Backend Parity**: VM and C backends now support the same core instruction set
+- **Code Generation**: Improved quality and reliability of generated code
+- **Documentation**: Updated with new features, examples, and implementation guides
+
 ## [0.3.2] - 2025-01-21
 
 ### Fixed
