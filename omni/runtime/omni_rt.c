@@ -103,7 +103,14 @@ int32_t omni_len(void* array, size_t element_size) {
     // This is a placeholder - in practice, we need to track array sizes
     // For now, we'll return 0 as a safe default
     // TODO: Implement proper array size tracking
+    (void)array;        // Suppress unused parameter warning
+    (void)element_size; // Suppress unused parameter warning
     return 0;
+}
+
+// System operations
+void omni_exit(int32_t code) {
+    exit(code);
 }
 
 // Entry point - this will be implemented by the generated code
