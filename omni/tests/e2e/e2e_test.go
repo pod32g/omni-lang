@@ -192,17 +192,8 @@ func runCBackend(testFile string) (string, error) {
 	runCmd.Env = append(runCmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 
 	output, err := runCmd.Output()
-	if err != nil {
-		// Check if it's an exit error with a non-zero code
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			// For OmniLang programs, the exit code is the return value
-			// So we should treat this as success and extract the exit code
-			return fmt.Sprintf("%d", exitErr.ExitCode()), nil
-		}
-		return "", fmt.Errorf("execution failed: %v", err)
-	}
-
-	// Parse the output to extract the result
+	
+	// Always try to parse stdout first, regardless of exit code
 	result := string(output)
 	// Look for "OmniLang program result: X" pattern
 	lines := strings.Split(result, "\n")
@@ -211,6 +202,17 @@ func runCBackend(testFile string) (string, error) {
 			return strings.TrimSpace(line[len("OmniLang program result: "):]), nil
 		}
 	}
+	
+	// If no stdout result found, check if it's an exit error with a non-zero code
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// For OmniLang programs, the exit code is the return value
+			// So we should treat this as success and extract the exit code
+			return fmt.Sprintf("%d", exitErr.ExitCode()), nil
+		}
+		return "", fmt.Errorf("execution failed: %v", err)
+	}
+	
 	return "", fmt.Errorf("could not find program result in output: %s", result)
 }
 
