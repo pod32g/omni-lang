@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
-## [0.3.0] - 2025-01-XX
+## [0.3.0] - 2025-01-20
 
 ### Added
 - **Enhanced Debug Support**: Comprehensive debug symbol generation with source mapping
