@@ -150,8 +150,8 @@ func runVM(testFile string) (string, error) {
 	cmd := exec.Command("../../bin/omnir", testFile)
 	cmd.Dir = testDir
 	// Set library path for VM execution (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)
-	cmd.Env = append(cmd.Env, "DYLD_LIBRARY_PATH=../../runtime/posix")
-	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
+	cmd.Env = append(cmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
+	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -173,8 +173,8 @@ func runCBackend(testFile string) (string, error) {
 	compileCmd := exec.Command("../../bin/omnic", "-backend", "c", "-emit", "exe", testFile)
 	compileCmd.Dir = testDir
 	// Set environment variables for compilation
-	compileCmd.Env = append(compileCmd.Env, "DYLD_LIBRARY_PATH=../../runtime/posix")
-	compileCmd.Env = append(compileCmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
+	compileCmd.Env = append(compileCmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
+	compileCmd.Env = append(compileCmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	compileCmd.Env = append(compileCmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 	compileOutput, err := compileCmd.CombinedOutput()
 	if err != nil {
@@ -187,8 +187,8 @@ func runCBackend(testFile string) (string, error) {
 	runCmd.Dir = testDir
 
 	// Set environment variables to find the runtime library
-	runCmd.Env = append(runCmd.Env, "DYLD_LIBRARY_PATH=../../runtime/posix")
-	runCmd.Env = append(runCmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
+	runCmd.Env = append(runCmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
+	runCmd.Env = append(runCmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	runCmd.Env = append(runCmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 
 	output, err := runCmd.Output()
