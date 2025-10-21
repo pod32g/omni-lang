@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
+## [0.4.1] - 2025-01-21
+
+### Fixed
+- **Test Runner**: Fixed test runner to prioritize stdout parsing over exit code interpretation
+- **CI/CD Tests**: Resolved issue where large positive return values (≥256) were being interpreted as exit codes instead of actual program results
+- **Map Tests**: Fixed CI/CD test failure in TestMapComprehensive
+
 ## [0.4.0] - 2025-01-21
 
 ### Added
