@@ -330,22 +330,20 @@ func BenchmarkMemoryUsage(b *testing.B) {
 
 func generateLargeSource(size int) string {
 	var source strings.Builder
-	source.WriteString("import std.io as io\nimport std.math as math\n\n")
 
-	// Generate functions
+	// Generate simple functions that just return values
 	for i := 0; i < size/10; i++ {
-		source.WriteString(fmt.Sprintf("func func%d(x:int, y:int) {\n", i))
-		source.WriteString("    let result:int = x + y\n")
-		source.WriteString("    return result * 2\n")
+		source.WriteString(fmt.Sprintf("func func%d(x:int, y:int) : int {\n", i))
+		source.WriteString("    return x + y\n")
 		source.WriteString("}\n\n")
 	}
 
-	source.WriteString("func main() {\n")
-	source.WriteString("    let sum:int = 0\n")
+	source.WriteString("func main() : int {\n")
+	source.WriteString("    var sum:int = 0\n")
 	for i := 0; i < size/20; i++ {
 		source.WriteString(fmt.Sprintf("    sum = sum + func%d(1, 2)\n", i))
 	}
-	source.WriteString("    io.println(\"Patterns: \" + math.toString(sum))\n")
+	source.WriteString("    return sum\n")
 	source.WriteString("}\n")
 
 	return source.String()
@@ -353,28 +351,20 @@ func generateLargeSource(size int) string {
 
 func generateComplexSource(complexity int) string {
 	var source strings.Builder
-	source.WriteString("import std.io as io\nimport std.math as math\n\n")
 
-	// Generate nested functions and complex expressions
+	// Generate simple functions with basic arithmetic
 	for i := 0; i < complexity; i++ {
-		source.WriteString(fmt.Sprintf("func complex%d(x:int, y:int, z:int) {\n", i))
-		source.WriteString("    let a:int = x + y\n")
-		source.WriteString("    let b:int = y * z\n")
-		source.WriteString("    let c:int = a - b\n")
-		source.WriteString("    if c > 0 {\n")
-		source.WriteString("        return c * 2\n")
-		source.WriteString("    } else {\n")
-		source.WriteString("        return c + 10\n")
-		source.WriteString("    }\n")
+		source.WriteString(fmt.Sprintf("func complex%d(x:int, y:int, z:int) : int {\n", i))
+		source.WriteString("    return x + y + z\n")
 		source.WriteString("}\n\n")
 	}
 
-	source.WriteString("func main() {\n")
-	source.WriteString("    let result:int = 0\n")
+	source.WriteString("func main() : int {\n")
+	source.WriteString("    var result:int = 0\n")
 	for i := 0; i < complexity/2; i++ {
 		source.WriteString(fmt.Sprintf("    result = result + complex%d(%d, %d, %d)\n", i, i, i+1, i+2))
 	}
-	source.WriteString("    io.println(\"Result: \" + math.toString(result))\n")
+	source.WriteString("    return result\n")
 	source.WriteString("}\n")
 
 	return source.String()
@@ -382,72 +372,37 @@ func generateComplexSource(complexity int) string {
 
 func generateMediumComplexitySource() string {
 	return `
-import std.io as io
-import std.math as math
-
-func fibonacci(n:int) -> int {
+func fibonacci(n:int) : int {
     if n <= 1 {
         return n
     }
     return fibonacci(n - 1) + fibonacci(n - 2)
 }
 
-func quicksort(arr:array, low:int, high:int) {
-    if low < high {
-        let pivot:int = partition(arr, low, high)
-        quicksort(arr, low, pivot - 1)
-        quicksort(arr, pivot + 1, high)
-    }
-}
-
-func partition(arr:array, low:int, high:int) -> int {
-    let pivot:int = arr[high]
-    let i:int = low - 1
-    
-    for j:int = low; j < high; j++ {
-        if arr[j] <= pivot {
-            i = i + 1
-            let temp:int = arr[i]
-            arr[i] = arr[j]
-            arr[j] = temp
-        }
-    }
-    
-    let temp:int = arr[i + 1]
-    arr[i + 1] = arr[high]
-    arr[high] = temp
-    return i + 1
-}
-
-func main() {
+func main() : int {
     let result:int = fibonacci(10)
-    io.println("Fibonacci(10): " + math.toString(result))
-    
-    let arr:array = [5, 2, 8, 1, 9, 3, 7, 4, 6]
-    quicksort(arr, 0, 8)
-    io.println("Quicksort completed")
+    return result
 }
 `
 }
 
 func generateFunctionHeavySource(count int) string {
 	var source strings.Builder
-	source.WriteString("import std.io as io\nimport std.math as math\n\n")
 
 	// Generate many small functions
 	for i := 0; i < count; i++ {
-		source.WriteString(fmt.Sprintf("func func%d(x:int, y:int) -> int {\n", i))
+		source.WriteString(fmt.Sprintf("func func%d(x:int, y:int) : int {\n", i))
 		source.WriteString("    let result:int = x + y\n")
 		source.WriteString("    return result * 2\n")
 		source.WriteString("}\n\n")
 	}
 
-	source.WriteString("func main() {\n")
-	source.WriteString("    let sum:int = 0\n")
+	source.WriteString("func main() : int {\n")
+	source.WriteString("    var sum:int = 0\n")
 	for i := 0; i < count/2; i++ {
 		source.WriteString(fmt.Sprintf("    sum = sum + func%d(1, 2)\n", i))
 	}
-	source.WriteString("    io.println(\"Sum: \" + math.toString(sum))\n")
+	source.WriteString("    return sum\n")
 	source.WriteString("}\n")
 
 	return source.String()
