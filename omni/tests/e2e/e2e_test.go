@@ -498,10 +498,9 @@ func TestModulo(t *testing.T) {
 
 func TestNegation(t *testing.T) {
 	testFile := "negation_test.omni"
-	expected := "251" // -5 as exit code = 251 (256 - 5)
+	expected := "-5" // -5 = -5
 
 	// Test C backend (VM backend has issues with neg/not instructions)
-	// Note: Negative return values are converted to exit codes, so -5 becomes 251
 	result, err := runCBackend(testFile)
 	if err != nil {
 		t.Fatalf("C backend execution failed: %v", err)
