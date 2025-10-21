@@ -1,124 +1,109 @@
 # OmniLang Compiler Roadmap
 
-## Current Status (v0.2.0) ✅
+## Current Status (v0.4.3) ✅
 
 ### ✅ **Completed Features**
 - **Frontend**: Complete lexer, parser, AST, type checker
-- **MIR**: SSA-based intermediate representation with builder
-- **VM Backend**: Working interpreter with 65.7% test coverage
+- **MIR**: SSA-based intermediate representation with builder and PHI nodes
+- **Multiple Backends**: C (default), VM, and Cranelift (experimental)
+- **Data Structures**: Complete array, map, and struct support
 - **Import System**: Both std and local file imports with aliases
-- **Basic Stdlib**: I/O, math, and string intrinsics
-- **CLI Tools**: `omnic` compiler and `omnir` runner
-- **Testing**: Comprehensive test suite with edge cases
-- **Performance**: Optimized string operations, jump table dispatch
-- **Documentation**: Complete language tour and quick reference
+- **Standard Library**: I/O, math, and string intrinsics with runtime support
+- **CLI Tools**: `omnic` compiler, `omnir` runner, and `omnipkg` packager
+- **Testing**: Comprehensive test suite with 100% passing tests
+- **Performance**: Optimized compilation and execution
+- **Documentation**: Complete language tour, quick reference, and API docs
+- **CI/CD**: Multi-platform builds with automated testing
+- **Packaging**: Distribution packages for Linux, macOS, and Windows
 
 ### 📊 **Current Metrics**
-- **VM Coverage**: 65.7% (up from 23.5%)
-- **Lexer Coverage**: 83.2%
-- **Parser Coverage**: 72.1%
-- **Type Checker Coverage**: 38.6%
-- **All Tests**: 100% passing
-- **Performance**: ~290ns/op string concat, ~23ns/op instruction dispatch
+- **VM Coverage**: 32.3% (focused on core functionality)
+- **Lexer Coverage**: 78.2%
+- **Parser Coverage**: 71.3%
+- **Passes Coverage**: 34.6%
+- **All Tests**: 100% passing (including e2e tests)
+- **Performance**: Sub-second compilation for most programs
+- **Backend Support**: C backend fully functional, VM backend for development
 
 ---
 
-## Phase 1: Type System Completion (2-3 weeks) 🔄
+## Phase 1: Advanced Language Features (3-4 weeks) 🔄
 
-### 1.1 Advanced Type Inference (1 week)
+### 1.1 Memory Management (1.5 weeks)
+- [ ] Dynamic memory allocation (`new`/`delete`)
+- [ ] Ownership system
+- [ ] Memory safety checks
+- [ ] RAII (Resource Acquisition Is Initialization)
+
+### 1.2 Advanced Type System (1.5 weeks)
 - [ ] Generic type support (`func max<T>(a:T, b:T):T`)
 - [ ] Union types (`int | string | bool`)
 - [ ] Optional types (`T?`)
 - [ ] Type aliases (`type UserID = int`)
 
-### 1.2 Control Flow Analysis (1 week)
-- [ ] Reachability analysis
-- [ ] Variable mutability tracking
+### 1.3 Control Flow & Error Handling (1 week)
+- [ ] Exception handling (`try`/`catch`/`finally`)
+- [ ] Error handling (`Result<T, E>`, `?` operator)
 - [ ] Pattern matching (`match` expressions)
 
-### 1.3 Memory Management (1 week)
-- [ ] Ownership system
-- [ ] Memory safety checks
-- [ ] RAII (Resource Acquisition Is Initialization)
-
-**Success Criteria**: Type checker coverage >80%, no type-related runtime errors
+**Success Criteria**: Memory management working, advanced types implemented, error handling functional
 
 ---
 
-## Phase 2: MIR Optimization & Advanced Features (3-4 weeks) 📋
+## Phase 2: Backend Completion & Optimization (3-4 weeks) 📋
 
-### 2.1 Advanced MIR Features (1.5 weeks)
-- [ ] Control flow graph with phi nodes
-- [ ] Exception handling (try/catch/finally)
-- [ ] Function calls with proper calling conventions
-- [ ] Memory operations (load/store, array indexing)
-
-### 2.2 Optimization Passes (1.5 weeks)
-- [ ] Constant folding and propagation
-- [ ] Dead code elimination
-- [ ] SSA optimizations (SCCP, mem2reg)
-- [ ] Function inlining and loop unrolling
-
-### 2.3 MIR Verification & Testing (1 week)
-- [ ] MIR verifier for SSA form validation
-- [ ] MIR golden tests for regression testing
-- [ ] Performance regression testing
-
-**Success Criteria**: MIR coverage >90%, optimization improves performance by >20%
-
----
-
-## Phase 3: Native Code Generation (4-5 weeks) 📋
-
-### 3.1 Cranelift Integration (2 weeks)
+### 2.1 Cranelift Backend Completion (2 weeks)
 - [ ] Complete MIR to Cranelift IR translation
 - [ ] Cross-platform support (macOS, Windows)
 - [ ] Object file generation (ELF, Mach-O, PE)
 - [ ] Debug information (DWARF)
 
-### 3.2 Runtime Integration (1.5 weeks)
-- [ ] Runtime library (memory allocation, GC)
-- [ ] FFI (Foreign Function Interface)
-- [ ] Complete standard library implementation
+### 2.2 Advanced Optimization Passes (1 week)
+- [ ] Dead code elimination
+- [ ] SSA optimizations (SCCP, mem2reg)
+- [ ] Function inlining and loop unrolling
+- [ ] Profile-guided optimization
 
-### 3.3 Linking & Distribution (1.5 weeks)
+### 2.3 Binary Generation & Linking (1 week)
 - [ ] Static and dynamic linking
-- [ ] Package management
+- [ ] Shared library generation (.so/.dll)
 - [ ] Cross-compilation support
+- [ ] Binary analysis tools
 
-**Success Criteria**: Native code generation on all platforms, performance within 10% of C
+**Success Criteria**: All backends functional, optimization improves performance by >20%
 
 ---
 
-## Phase 4: Language Features & Ergonomics (3-4 weeks) 📋
+## Phase 3: Language Features & Ergonomics (3-4 weeks) 📋
 
-### 4.1 Advanced Language Features (2 weeks)
+### 3.1 Advanced Language Features (2 weeks)
 - [ ] Concurrency (goroutines, channels)
-- [ ] Error handling (`Result<T, E>`, `?` operator)
 - [ ] Metaprogramming (macros, reflection)
+- [ ] Advanced control flow (labeled breaks, continues)
 
-### 4.2 Developer Experience (1.5 weeks)
+### 3.2 Developer Experience (1.5 weeks)
 - [ ] Language Server Protocol (LSP)
 - [ ] Debugging support
 - [ ] Tooling (`omnifmt`, `omnilint`, `omnidoc`)
 
-### 4.3 Documentation & Examples (0.5 weeks)
-- [ ] Complete language specification
-- [ ] Example programs (web server, CLI tool, game)
+### 3.3 Standard Library Expansion (0.5 weeks)
+- [ ] File I/O operations
+- [ ] Networking support
+- [ ] Collections and algorithms
 
 **Success Criteria**: All language features documented and tested, LSP working
 
 ---
 
-## Phase 5: Performance & Production Readiness (2-3 weeks) 📋
+## Phase 4: Performance & Production Readiness (2-3 weeks) 📋
 
-### 5.1 Performance Optimization (1.5 weeks)
+### 4.1 Performance Optimization (1.5 weeks)
 - [ ] Parallel compilation
 - [ ] JIT compilation
 - [ ] Profile-guided optimization
 - [ ] Comprehensive benchmarking
 
-### 5.2 Production Features (1 week)
+### 4.2 Production Features (1 week)
 - [ ] Security (secure coding, vulnerability scanning)
 - [ ] Reliability (error handling, monitoring)
 - [ ] Deployment (Docker, CI/CD, distribution)
@@ -127,17 +112,20 @@
 
 ---
 
-## Phase 6: Ecosystem & Community (Ongoing) 📋
+## Phase 5: Ecosystem & Community (Ongoing) 📋
 
-### 6.1 Package Ecosystem
+### 5.1 Package Ecosystem
 - [ ] Package registry
 - [ ] Third-party libraries
 - [ ] Community packages
 
-### 6.2 Community & Governance
+### 5.2 Community & Governance
 - [ ] Community building
 - [ ] RFC process
 - [ ] Language evolution
+
+---
+
 
 ---
 
@@ -162,32 +150,43 @@
 
 | Phase | Duration | Key Deliverables |
 |-------|----------|------------------|
-| Phase 1 | 2-3 weeks | Complete type system |
-| Phase 2 | 3-4 weeks | Advanced MIR & optimizations |
-| Phase 3 | 4-5 weeks | Native code generation |
-| Phase 4 | 3-4 weeks | Language features & tooling |
-| Phase 5 | 2-3 weeks | Performance & production |
-| Phase 6 | Ongoing | Ecosystem & community |
+| Phase 1 | 3-4 weeks | Advanced language features (memory, types, error handling) |
+| Phase 2 | 3-4 weeks | Backend completion & optimization |
+| Phase 3 | 3-4 weeks | Language features & ergonomics |
+| Phase 4 | 2-3 weeks | Performance & production readiness |
+| Phase 5 | Ongoing | Ecosystem & community |
 
-**Total Estimated Time**: 14-19 weeks for core features
+**Total Estimated Time**: 11-15 weeks for core features
+
+## Recent Achievements (v0.4.0 - v0.4.3)
+
+### ✅ **Major Features Completed**
+- **Data Structures**: Arrays, maps, and structs with full support
+- **PHI Nodes**: Proper SSA form for control flow
+- **Method Syntax**: `x.len()` instead of `len(x)`
+- **Enhanced Comparisons**: String, boolean, and float comparisons
+- **Complete C Backend**: All MIR instructions supported
+- **CI/CD Pipeline**: Multi-platform builds and testing
+- **Documentation**: Comprehensive docs and examples
+- **Packaging**: Distribution packages for all platforms
 
 ---
 
 ## Success Metrics
 
-- **Test Coverage**: >90% for all components
-- **Performance**: Compile time <1s for 10k-line projects
-- **Reliability**: <0.1% crash rate in production
-- **Adoption**: 100+ GitHub stars, 10+ contributors
-- **Documentation**: Complete API docs and tutorials
+- **Test Coverage**: >90% for all components (currently 32-78% depending on component)
+- **Performance**: Compile time <1s for 10k-line projects (currently sub-second for most programs)
+- **Reliability**: <0.1% crash rate in production (currently 100% test pass rate)
+- **Adoption**: 100+ GitHub stars, 10+ contributors (growing community)
+- **Documentation**: Complete API docs and tutorials (comprehensive docs available)
 
 ---
 
 ## Next Steps
 
-1. **Review Roadmap**: Review and approve ADR-002
-2. **Set Up Project Management**: Create GitHub Projects and milestones
-3. **Begin Phase 1.1**: Start with advanced type inference
+1. **Begin Phase 1.1**: Start with dynamic memory allocation (`new`/`delete`)
+2. **Complete Cranelift Backend**: Finish macOS and Windows support
+3. **Add Static Linking**: Remove runtime library dependency
 4. **Regular Reviews**: Weekly progress reviews and adjustments
 
 ---
