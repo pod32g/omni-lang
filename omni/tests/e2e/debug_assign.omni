@@ -1,0 +1,6 @@
+func main():int {
+    var x: int = 0
+    x = 1
+    x = 2
+    return x
+}

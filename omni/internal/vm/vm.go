@@ -36,7 +36,11 @@ func init() {
 		"call":        execCall,
 		"struct.init": execStructInit,
 		"array.init":  execArrayInit,
+		"index":       execIndex,
+		"assign":      execAssign,
 		"map.init":    execMapInit,
+		"member":      execMember,
+		"phi":         execPhi,
 	}
 }
 
@@ -178,22 +182,354 @@ func execConst(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) 
 
 // execStructInit handles struct initialization
 func execStructInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
-	return Result{Type: inst.Type, Value: nil}, nil
+	// Create a struct value from the operands
+	// Operands format: [typeName, field1Name, field1Value, field2Name, field2Value, ...]
+	if len(inst.Operands) < 3 || len(inst.Operands)%2 != 1 {
+		return Result{}, fmt.Errorf("struct.init: invalid operand count, expected odd number >= 3")
+	}
+
+	structValue := make(map[string]interface{})
+
+	// Process operands in pairs (field name, field value)
+	for i := 1; i < len(inst.Operands); i += 2 {
+		if i+1 >= len(inst.Operands) {
+			return Result{}, fmt.Errorf("struct.init: odd number of field operands")
+		}
+
+		fieldNameOp := inst.Operands[i]
+		fieldValueOp := inst.Operands[i+1]
+
+		if fieldNameOp.Kind != mir.OperandLiteral {
+			return Result{}, fmt.Errorf("struct.init: field name must be literal")
+		}
+
+		fieldValue := operandValue(fr, fieldValueOp)
+		structValue[fieldNameOp.Literal] = fieldValue.Value
+	}
+
+	return Result{Type: inst.Type, Value: structValue}, nil
+}
+
+// execMember handles struct field access
+func execMember(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 2 {
+		return Result{}, fmt.Errorf("member: expected 2 operands, got %d", len(inst.Operands))
+	}
+
+	target := operandValue(fr, inst.Operands[0])
+	fieldNameOp := inst.Operands[1]
+
+	if fieldNameOp.Kind != mir.OperandLiteral {
+		return Result{}, fmt.Errorf("member: field name must be literal")
+	}
+
+	fieldName := fieldNameOp.Literal
+
+	// Handle struct field access
+	if structValue, ok := target.Value.(map[string]interface{}); ok {
+		if fieldValue, exists := structValue[fieldName]; exists {
+			// Determine the field type based on the value
+			var fieldType string
+			switch fieldValue.(type) {
+			case int:
+				fieldType = "int"
+			case string:
+				fieldType = "string"
+			case float64:
+				fieldType = "float"
+			case bool:
+				fieldType = "bool"
+			default:
+				fieldType = "int" // Default fallback
+			}
+			return Result{Type: fieldType, Value: fieldValue}, nil
+		}
+		return Result{}, fmt.Errorf("member: field %q not found in struct", fieldName)
+	}
+
+	return Result{}, fmt.Errorf("member: target is not a struct")
+}
+
+// execPhi handles PHI nodes - values that can come from different control flow paths
+func execPhi(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	// PHI nodes have operands in pairs: (value, block_name)
+	// For now, we'll use a simple approach: return the first value
+	// In a more sophisticated implementation, we'd track which block we came from
+
+	if len(inst.Operands) < 2 {
+		return Result{}, fmt.Errorf("phi: expected at least 2 operands, got %d", len(inst.Operands))
+	}
+
+	if len(inst.Operands)%2 != 0 {
+		return Result{}, fmt.Errorf("phi: expected even number of operands (value, block pairs), got %d", len(inst.Operands))
+	}
+
+	// For now, we'll return the first value
+	// In a real implementation, we'd need to track the incoming control flow
+	// and select the appropriate value based on which block we came from
+	firstValue := operandValue(fr, inst.Operands[0])
+	return firstValue, nil
 }
 
 // execArrayInit handles array initialization
 func execArrayInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
-	return Result{Type: inst.Type, Value: nil}, nil
+	// Extract element type from array type (e.g., "[]<int>" -> "int")
+	elementType := inst.Type
+	if strings.HasPrefix(elementType, "[]<") && strings.HasSuffix(elementType, ">") {
+		elementType = elementType[3 : len(elementType)-1]
+	} else if strings.HasPrefix(elementType, "array<") && strings.HasSuffix(elementType, ">") {
+		elementType = elementType[6 : len(elementType)-1]
+	}
+
+	// Create array from operands
+	var arrayValue interface{}
+	switch elementType {
+	case "int":
+		elements := make([]int, len(inst.Operands))
+		for i, op := range inst.Operands {
+			val := operandValue(fr, op)
+			if val.Type != "int" {
+				return Result{}, fmt.Errorf("array.init: expected int element, got %s", val.Type)
+			}
+			elements[i] = val.Value.(int)
+		}
+		arrayValue = elements
+	case "string":
+		elements := make([]string, len(inst.Operands))
+		for i, op := range inst.Operands {
+			val := operandValue(fr, op)
+			if val.Type != "string" {
+				return Result{}, fmt.Errorf("array.init: expected string element, got %s", val.Type)
+			}
+			elements[i] = val.Value.(string)
+		}
+		arrayValue = elements
+	case "float", "double":
+		elements := make([]float64, len(inst.Operands))
+		for i, op := range inst.Operands {
+			val := operandValue(fr, op)
+			if val.Type != "float" && val.Type != "double" {
+				return Result{}, fmt.Errorf("array.init: expected float element, got %s", val.Type)
+			}
+			elements[i] = val.Value.(float64)
+		}
+		arrayValue = elements
+	case "bool":
+		elements := make([]bool, len(inst.Operands))
+		for i, op := range inst.Operands {
+			val := operandValue(fr, op)
+			if val.Type != "bool" {
+				return Result{}, fmt.Errorf("array.init: expected bool element, got %s", val.Type)
+			}
+			elements[i] = val.Value.(bool)
+		}
+		arrayValue = elements
+	default:
+		return Result{}, fmt.Errorf("array.init: unsupported element type %s", elementType)
+	}
+
+	return Result{Type: inst.Type, Value: arrayValue}, nil
+}
+
+// execAssign handles variable assignment
+func execAssign(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 2 {
+		return Result{}, fmt.Errorf("assign: expected 2 operands, got %d", len(inst.Operands))
+	}
+
+	// Get the target variable ID (operand 0) and the source value (operand 1)
+	targetOp := inst.Operands[0]
+	if targetOp.Kind != mir.OperandValue {
+		return Result{}, fmt.Errorf("assign: target must be a value, got %v", targetOp.Kind)
+	}
+
+	value := operandValue(fr, inst.Operands[1])
+
+	// Update the target variable
+	fr.values[targetOp.Value] = value
+
+	// Also store in inst.ID for the result
+	if inst.ID != mir.InvalidValue {
+		fr.values[inst.ID] = value
+	}
+
+	return value, nil
+}
+
+// execIndex handles array/map indexing
+func execIndex(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 2 {
+		return Result{}, fmt.Errorf("index: expected 2 operands, got %d", len(inst.Operands))
+	}
+
+	target := operandValue(fr, inst.Operands[0])
+	index := operandValue(fr, inst.Operands[1])
+
+	// Handle map indexing first (no need to convert index to int)
+	if strings.HasPrefix(target.Type, "map<") {
+		mapValue, ok := target.Value.(map[interface{}]interface{})
+		if !ok {
+			return Result{}, fmt.Errorf("index: target is not a map")
+		}
+
+		// Get the value type from the map type
+		_, valueType, err := parseMapTypes(target.Type)
+		if err != nil {
+			return Result{}, fmt.Errorf("index: invalid map type %s: %v", target.Type, err)
+		}
+
+		// Look up the key in the map
+		keyValue := index.Value
+		if foundValue, exists := mapValue[keyValue]; exists {
+			return Result{Type: valueType, Value: foundValue}, nil
+		}
+
+		// Key not found - return zero value for the value type
+		switch valueType {
+		case "int":
+			return Result{Type: "int", Value: 0}, nil
+		case "string":
+			return Result{Type: "string", Value: ""}, nil
+		case "float", "double":
+			return Result{Type: "float", Value: 0.0}, nil
+		case "bool":
+			return Result{Type: "bool", Value: false}, nil
+		default:
+			return Result{}, fmt.Errorf("index: unknown value type %s for map", valueType)
+		}
+	}
+
+	// For arrays, convert index to int
+	indexVal, err := toInt(index)
+	if err != nil {
+		return Result{}, fmt.Errorf("index: index must be int, got %s", index.Type)
+	}
+
+	// Handle array indexing
+	if strings.HasPrefix(target.Type, "[]<") || strings.HasPrefix(target.Type, "array<") {
+		switch arr := target.Value.(type) {
+		case []int:
+			if indexVal < 0 || indexVal >= len(arr) {
+				return Result{}, fmt.Errorf("index: array index %d out of bounds [0, %d)", indexVal, len(arr))
+			}
+			return Result{Type: "int", Value: arr[indexVal]}, nil
+		case []string:
+			if indexVal < 0 || indexVal >= len(arr) {
+				return Result{}, fmt.Errorf("index: array index %d out of bounds [0, %d)", indexVal, len(arr))
+			}
+			return Result{Type: "string", Value: arr[indexVal]}, nil
+		case []float64:
+			if indexVal < 0 || indexVal >= len(arr) {
+				return Result{}, fmt.Errorf("index: array index %d out of bounds [0, %d)", indexVal, len(arr))
+			}
+			return Result{Type: "float", Value: arr[indexVal]}, nil
+		case []bool:
+			if indexVal < 0 || indexVal >= len(arr) {
+				return Result{}, fmt.Errorf("index: array index %d out of bounds [0, %d)", indexVal, len(arr))
+			}
+			return Result{Type: "bool", Value: arr[indexVal]}, nil
+		default:
+			return Result{}, fmt.Errorf("index: unsupported array type %T", target.Value)
+		}
+	}
+
+	return Result{}, fmt.Errorf("index: target type %s does not support indexing", target.Type)
 }
 
 // execMapInit handles map initialization
 func execMapInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
-	return Result{Type: inst.Type, Value: nil}, nil
+	// Extract key and value types from map type (e.g., "map<string,int>" -> "string", "int")
+	keyType, valueType, err := parseMapTypes(inst.Type)
+	if err != nil {
+		return Result{}, fmt.Errorf("map.init: invalid map type %s: %v", inst.Type, err)
+	}
+
+	// Create a map from the operands (key-value pairs)
+	mapValue := make(map[interface{}]interface{})
+
+	// Process operands in pairs (key, value, key, value, ...)
+	for i := 0; i < len(inst.Operands); i += 2 {
+		if i+1 >= len(inst.Operands) {
+			return Result{}, fmt.Errorf("map.init: odd number of operands, expected key-value pairs")
+		}
+
+		key := operandValue(fr, inst.Operands[i])
+		value := operandValue(fr, inst.Operands[i+1])
+
+		// Validate key and value types
+		if key.Type != keyType {
+			return Result{}, fmt.Errorf("map.init: key type mismatch, expected %s, got %s", keyType, key.Type)
+		}
+		if value.Type != valueType {
+			return Result{}, fmt.Errorf("map.init: value type mismatch, expected %s, got %s", valueType, value.Type)
+		}
+
+		// Store in map
+		mapValue[key.Value] = value.Value
+	}
+
+	return Result{Type: inst.Type, Value: mapValue}, nil
+}
+
+// parseMapTypes extracts key and value types from a map type string
+func parseMapTypes(mapType string) (string, string, error) {
+	if !strings.HasPrefix(mapType, "map<") || !strings.HasSuffix(mapType, ">") {
+		return "", "", fmt.Errorf("invalid map type format")
+	}
+
+	inner := mapType[4 : len(mapType)-1] // Remove "map<" and ">"
+	parts := strings.Split(inner, ",")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("map type must have exactly 2 type parameters")
+	}
+
+	keyType := strings.TrimSpace(parts[0])
+	valueType := strings.TrimSpace(parts[1])
+
+	return keyType, valueType, nil
 }
 
 func execArithmetic(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	left := operandValue(fr, inst.Operands[0])
 	right := operandValue(fr, inst.Operands[1])
+
+	// Handle float arithmetic
+	if left.Type == "float" || right.Type == "float" || left.Type == "double" || right.Type == "double" {
+		lf, err := toFloat(left)
+		if err != nil {
+			return Result{}, err
+		}
+		rf, err := toFloat(right)
+		if err != nil {
+			return Result{}, err
+		}
+
+		var res float64
+		switch inst.Op {
+		case "add":
+			res = lf + rf
+		case "sub":
+			res = lf - rf
+		case "mul":
+			res = lf * rf
+		case "div":
+			if rf == 0 {
+				return Result{}, fmt.Errorf("division by zero")
+			}
+			res = lf / rf
+		case "mod":
+			// For floats, use math.Mod
+			if rf == 0 {
+				return Result{}, fmt.Errorf("modulo by zero")
+			}
+			res = float64(int(lf) % int(rf)) // Simple modulo for floats
+		default:
+			return Result{}, fmt.Errorf("vm: unsupported float arithmetic operator %s", inst.Op)
+		}
+		return Result{Type: "float", Value: res}, nil
+	}
+
+	// Handle integer arithmetic (existing logic)
 	li, err := toInt(left)
 	if err != nil {
 		return Result{}, err
@@ -227,6 +563,87 @@ func execArithmetic(funcs map[string]*mir.Function, fr *frame, inst mir.Instruct
 func execComparison(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	left := operandValue(fr, inst.Operands[0])
 	right := operandValue(fr, inst.Operands[1])
+
+	// Handle different types of comparisons
+	var res bool
+
+	// String comparisons
+	if left.Type == "string" && right.Type == "string" {
+		leftStr, ok1 := left.Value.(string)
+		rightStr, ok2 := right.Value.(string)
+		if !ok1 || !ok2 {
+			return Result{}, fmt.Errorf("vm: string comparison failed - invalid string values")
+		}
+
+		switch inst.Op {
+		case "cmp.eq":
+			res = leftStr == rightStr
+		case "cmp.neq":
+			res = leftStr != rightStr
+		case "cmp.lt":
+			res = leftStr < rightStr
+		case "cmp.lte":
+			res = leftStr <= rightStr
+		case "cmp.gt":
+			res = leftStr > rightStr
+		case "cmp.gte":
+			res = leftStr >= rightStr
+		default:
+			return Result{}, fmt.Errorf("vm: unsupported string comparison operator %s", inst.Op)
+		}
+		return Result{Type: "bool", Value: res}, nil
+	}
+
+	// Float comparisons
+	if left.Type == "float" || right.Type == "float" || left.Type == "double" || right.Type == "double" {
+		leftFloat, err := toFloat(left)
+		if err != nil {
+			return Result{}, err
+		}
+		rightFloat, err := toFloat(right)
+		if err != nil {
+			return Result{}, err
+		}
+
+		switch inst.Op {
+		case "cmp.eq":
+			res = leftFloat == rightFloat
+		case "cmp.neq":
+			res = leftFloat != rightFloat
+		case "cmp.lt":
+			res = leftFloat < rightFloat
+		case "cmp.lte":
+			res = leftFloat <= rightFloat
+		case "cmp.gt":
+			res = leftFloat > rightFloat
+		case "cmp.gte":
+			res = leftFloat >= rightFloat
+		default:
+			return Result{}, fmt.Errorf("vm: unsupported float comparison operator %s", inst.Op)
+		}
+		return Result{Type: "bool", Value: res}, nil
+	}
+
+	// Boolean comparisons
+	if left.Type == "bool" && right.Type == "bool" {
+		leftBool, ok1 := left.Value.(bool)
+		rightBool, ok2 := right.Value.(bool)
+		if !ok1 || !ok2 {
+			return Result{}, fmt.Errorf("vm: boolean comparison failed - invalid boolean values")
+		}
+
+		switch inst.Op {
+		case "cmp.eq":
+			res = leftBool == rightBool
+		case "cmp.neq":
+			res = leftBool != rightBool
+		default:
+			return Result{}, fmt.Errorf("vm: unsupported boolean comparison operator %s", inst.Op)
+		}
+		return Result{Type: "bool", Value: res}, nil
+	}
+
+	// Integer comparisons (existing logic)
 	li, err := toInt(left)
 	if err != nil {
 		return Result{}, err
@@ -235,7 +652,7 @@ func execComparison(funcs map[string]*mir.Function, fr *frame, inst mir.Instruct
 	if err != nil {
 		return Result{}, err
 	}
-	var res bool
+
 	switch inst.Op {
 	case "cmp.eq":
 		res = li == ri
@@ -355,6 +772,27 @@ func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (
 // Returns (result, handled) where handled indicates if the function was an intrinsic.
 func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bool) {
 	switch callee {
+	case "len":
+		// Builtin len function for arrays
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			// Check if it's an array type
+			if strings.HasPrefix(arg.Type, "[]<") || strings.HasPrefix(arg.Type, "array<") {
+				switch arr := arg.Value.(type) {
+				case []int:
+					return Result{Type: "int", Value: len(arr)}, true
+				case []string:
+					return Result{Type: "int", Value: len(arr)}, true
+				case []float64:
+					return Result{Type: "int", Value: len(arr)}, true
+				case []bool:
+					return Result{Type: "int", Value: len(arr)}, true
+				default:
+					return Result{}, false
+				}
+			}
+		}
+		return Result{}, false
 	case "std.io.print":
 		if len(operands) == 1 {
 			arg := operandValue(fr, operands[0])
@@ -833,6 +1271,24 @@ func toBool(value Result) (bool, error) {
 		return v != 0, nil
 	default:
 		return false, fmt.Errorf("vm: expected bool value, got %T", v)
+	}
+}
+
+func toFloat(value Result) (float64, error) {
+	switch v := value.Value.(type) {
+	case float64:
+		return v, nil
+	case int:
+		return float64(v), nil
+	case bool:
+		if v {
+			return 1.0, nil
+		}
+		return 0.0, nil
+	case nil:
+		return 0, fmt.Errorf("vm: expected float, got nil")
+	default:
+		return 0, fmt.Errorf("vm: expected float value, got %T", v)
 	}
 }
 

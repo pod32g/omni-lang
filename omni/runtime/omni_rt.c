@@ -98,5 +98,13 @@ char* omni_int_to_string(int32_t value) {
     return str;
 }
 
+// Array operations
+int32_t omni_len(void* array, size_t element_size) {
+    // This is a placeholder - in practice, we need to track array sizes
+    // For now, we'll return 0 as a safe default
+    // TODO: Implement proper array size tracking
+    return 0;
+}
+
 // Entry point - this will be implemented by the generated code
 // The generated code will provide the omni_main function

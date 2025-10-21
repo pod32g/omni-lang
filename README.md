@@ -683,9 +683,10 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - ✅ Three backends: C (default), VM, Cranelift (experimental)
 - ✅ C backend with optimization levels (O0-O3, Os) and debug symbols
 - ✅ Import system (std library + local files with aliases)
+- ✅ **Arrays with type-safe indexing** (`[]int`, `[]string`)
 - ✅ String concatenation with mixed types
 - ✅ Unary expressions (-, !)
-- ✅ Array indexing and basic operations
+- ✅ For-in loop iteration over arrays
 - ✅ Stdlib functions (std.io, std.math) with runtime support
 - ✅ Enhanced error messages with helpful hints
 - ✅ Comprehensive testing and documentation

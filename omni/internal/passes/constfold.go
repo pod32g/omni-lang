@@ -18,6 +18,23 @@ func ConstFold(mod *mir.Module) {
 
 func foldFunction(fn *mir.Function) {
 	constValues := make(map[mir.ValueID]mir.Instruction)
+	// Track which variables are modified by assign instructions
+	modifiedVars := make(map[mir.ValueID]bool)
+
+	// First pass: identify all variables that are modified by assign instructions
+	for _, block := range fn.Blocks {
+		for _, inst := range block.Instructions {
+			if inst.Op == "assign" && len(inst.Operands) > 0 {
+				// The first operand is the target variable being assigned to
+				if inst.Operands[0].Kind == mir.OperandValue {
+					modifiedVars[inst.Operands[0].Value] = true
+				}
+			}
+		}
+	}
+
+	// Second pass: perform constant folding, but avoid folding expressions
+	// that involve variables that are modified by assign instructions
 	for _, block := range fn.Blocks {
 		for i := range block.Instructions {
 			inst := &block.Instructions[i]
@@ -27,9 +44,20 @@ func foldFunction(fn *mir.Function) {
 			}
 			switch inst.Op {
 			case "add", "sub", "mul", "div", "mod", "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte", "and", "or":
-				if folded, ok := foldBinary(inst, constValues); ok {
-					block.Instructions[i] = folded
-					constValues[folded.ID] = folded
+				// Check if any operands are modified variables
+				hasModifiedVar := false
+				for _, op := range inst.Operands {
+					if op.Kind == mir.OperandValue && modifiedVars[op.Value] {
+						hasModifiedVar = true
+						break
+					}
+				}
+				// Only fold if no modified variables are involved
+				if !hasModifiedVar {
+					if folded, ok := foldBinary(inst, constValues); ok {
+						block.Instructions[i] = folded
+						constValues[folded.ID] = folded
+					}
 				}
 			}
 		}

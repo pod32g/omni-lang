@@ -1,0 +1,16 @@
+func main():int {
+    let scores: map<string, int> = {"alice": 95, "bob": 87, "charlie": 92}
+    
+    // Test different key lookups
+    let alice_score: int = scores["alice"]
+    let bob_score: int = scores["bob"]
+    let charlie_score: int = scores["charlie"]
+    
+    // Test non-existent key (should return 0)
+    let dave_score: int = scores["dave"]
+    
+    // Calculate total
+    let total: int = alice_score + bob_score + charlie_score + dave_score
+    
+    return total
+}

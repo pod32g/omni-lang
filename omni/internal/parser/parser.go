@@ -925,6 +925,18 @@ func (p *Parser) parseTypeExpr() (*ast.TypeExpr, error) {
 
 // parseSingleType parses a single type (not a union)
 func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
+	// Handle array types: []Type
+	if p.match(lexer.TokenLBracket) {
+		start := p.previous().Span.Start
+		p.expect(lexer.TokenRBracket)
+		elementType, err := p.parseSingleType()
+		if err != nil {
+			return nil, err
+		}
+		span := lexer.Span{Start: start, End: elementType.SpanInfo.End}
+		return &ast.TypeExpr{SpanInfo: span, Name: "[]", Args: []*ast.TypeExpr{elementType}}, nil
+	}
+
 	// Handle pointer types: *Type or *(Type)
 	if p.match(lexer.TokenStar) {
 		var baseType *ast.TypeExpr
@@ -963,6 +975,7 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 		return typ, nil
 	}
 
+	// Handle simple identifier types
 	nameTok := p.expect(lexer.TokenIdentifier)
 	typeExpr := &ast.TypeExpr{SpanInfo: nameTok.Span, Name: nameTok.Lexeme}
 	if p.match(lexer.TokenLess) {

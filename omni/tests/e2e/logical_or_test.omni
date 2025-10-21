@@ -1,0 +1,10 @@
+func main():int {
+    let a: bool = true
+    let b: bool = false
+    let result: bool = a || b
+    if result {
+        return 1
+    } else {
+        return 0
+    }
+}

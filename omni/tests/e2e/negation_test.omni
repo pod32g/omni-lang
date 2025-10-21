@@ -1,0 +1,5 @@
+func main():int {
+    let a: int = 5
+    let result: int = -a
+    return result
+}

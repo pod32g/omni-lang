@@ -1,0 +1,5 @@
+func main():int {
+    let scores: map<string, int> = {"alice": 95, "bob": 87, "charlie": 92}
+    let alice_score: int = scores["alice"]
+    return alice_score
+}

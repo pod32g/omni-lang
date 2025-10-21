@@ -84,7 +84,7 @@ func verifyFunction(fn *mir.Function) error {
 
 func verifyInstruction(inst mir.Instruction) error {
 	switch inst.Op {
-	case "const", "add", "sub", "mul", "div", "mod", "strcat", "index", "array.init", "call", "call.int", "call.void", "call.string", "call.bool", "assign":
+	case "const", "add", "sub", "mul", "div", "mod", "strcat", "neg", "not", "index", "array.init", "map.init", "struct.init", "member", "call", "call.int", "call.void", "call.string", "call.bool", "assign":
 		// These instructions are already validated by the builder
 		return nil
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte", "and", "or":

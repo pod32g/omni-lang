@@ -1,0 +1,7 @@
+func main():int {
+    let numbers: []int = [10, 20, 30]
+    let first: int = numbers[0]
+    let second: int = numbers[1]
+    let third: int = numbers[2]
+    return second
+}

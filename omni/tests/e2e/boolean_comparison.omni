@@ -1,0 +1,12 @@
+func main():int {
+    let a: bool = true
+    let b: bool = false
+    let c: bool = true
+    
+    if a == c {
+        if b != a {
+            return 42
+        }
+    }
+    return 0
+}

@@ -1,0 +1,9 @@
+func main():int {
+    var x: int = 0
+    if true {
+        x = 10
+    } else {
+        x = 20
+    }
+    return x
+}

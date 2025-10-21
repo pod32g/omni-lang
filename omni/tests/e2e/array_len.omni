@@ -1,0 +1,5 @@
+func main():int {
+    let numbers: []int = [1, 2, 3, 4, 5]
+    let length: int = len(numbers)
+    return length
+}

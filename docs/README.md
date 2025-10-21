@@ -30,6 +30,7 @@ If you're new to OmniLang, start here:
   - Functions with type inference
   - Control flow (`if`, `for`, `while`)
   - Basic types (`int`, `float`, `string`, `bool`)
+  - **Arrays** (`[]int`, `[]string`) with indexing and iteration
   - String concatenation with automatic type conversion
   - Unary operators (`-`, `!`)
 
@@ -65,15 +66,15 @@ If you're new to OmniLang, start here:
 ### 🚧 Current Limitations
 
 - **Parser:**
-  - No return type annotations in function declarations
   - No semicolons required (but not supported)
   - Limited control flow constructs
 
 - **Type System:**
   - No generics
   - No structs or enums
-  - No arrays or maps
+  - No maps
   - No function overloading
+  - Arrays work with C backend only (VM support pending)
 
 - **Standard Library:**
   - Limited function set

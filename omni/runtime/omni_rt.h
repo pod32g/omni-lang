@@ -25,6 +25,9 @@ void omni_free(void* ptr);
 char* omni_strcat(const char* str1, const char* str2);
 int32_t omni_strlen(const char* str);
 
+// Array operations
+int32_t omni_len(void* array, size_t element_size);
+
 // Math operations
 int32_t omni_add(int32_t a, int32_t b);
 int32_t omni_sub(int32_t a, int32_t b);

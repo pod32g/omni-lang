@@ -1,5 +1,5 @@
 func main():int {
-    let items:array<int> = [1, 2, 3, 4, 5]
+    let items:[]int = [1, 2, 3, 4, 5]
     var sum:int = 0
     for item in items {
         sum = sum + item

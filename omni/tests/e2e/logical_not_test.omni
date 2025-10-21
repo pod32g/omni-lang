@@ -1,0 +1,9 @@
+func main():int {
+    let a: bool = true
+    let result: bool = !a
+    if result {
+        return 1
+    } else {
+        return 0
+    }
+}

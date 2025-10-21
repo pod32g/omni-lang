@@ -1,0 +1,7 @@
+func main():int
+  block entry:
+    %1 = const.int 10:int
+    %2 = const.int 20:int
+    %0 = struct.init.Point Point, x, %1, y, %2
+    %3 = member.int %0, x
+    ret %3

@@ -851,6 +851,35 @@ func (fb *functionBuilder) emitUnary(expr *ast.UnaryExpr) (mirValue, error) {
 }
 
 func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
+	// Handle array method calls like x.len() where x is an array
+	if member, ok := expr.Callee.(*ast.MemberExpr); ok {
+		// Try to lower the target expression to get its type
+		target, err := fb.lowerExpr(member.Target)
+		if err == nil {
+			// Check if this is an array method call
+			if strings.HasPrefix(target.Type, "[]<") || strings.HasPrefix(target.Type, "array<") {
+				if member.Member == "len" && len(expr.Args) == 0 {
+					// Convert x.len() to len(x) by calling the builtin len function
+					id := fb.fn.NextValue()
+					operands := []mir.Operand{
+						{Kind: mir.OperandLiteral, Literal: "len"},
+						valueOperand(target.ID, target.Type),
+					}
+
+					inst := mir.Instruction{
+						ID:       id,
+						Op:       "call",
+						Type:     "int",
+						Operands: operands,
+					}
+					fb.block.Instructions = append(fb.block.Instructions, inst)
+					return mirValue{ID: id, Type: "int"}, nil
+				}
+				return mirValue{}, fmt.Errorf("mir builder: unsupported array method %q", member.Member)
+			}
+		}
+	}
+
 	id := fb.fn.NextValue()
 	operands := []mir.Operand{}
 	calleeName := "<unknown>"
@@ -860,8 +889,6 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 		// Handle module member access (e.g., math_utils.add)
 		if ident, ok := member.Target.(*ast.IdentifierExpr); ok {
 			calleeName = ident.Name + "." + member.Member
-		} else {
-			return mirValue{}, fmt.Errorf("mir builder: unsupported member access target in call")
 		}
 	}
 	// Normalize alias-only module calls like io.println -> std.io.println
@@ -934,8 +961,24 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 }
 
 func (fb *functionBuilder) emitMemberAccess(expr *ast.MemberExpr) (mirValue, error) {
-	// Handle module member access (e.g., math_utils.add)
-	if _, ok := expr.Target.(*ast.IdentifierExpr); ok {
+	// Handle struct field access (e.g., p.x)
+	if ident, ok := expr.Target.(*ast.IdentifierExpr); ok {
+		// Check if this is a struct field access
+		if sym, exists := fb.env[ident.Name]; exists {
+			// This is a struct field access
+			id := fb.fn.NextValue()
+			inst := mir.Instruction{
+				ID:   id,
+				Op:   "member",
+				Type: "int", // TODO: Get actual field type from struct definition
+				Operands: []mir.Operand{
+					valueOperand(sym.Value, sym.Type),
+					{Kind: mir.OperandLiteral, Literal: expr.Member},
+				},
+			}
+			fb.block.Instructions = append(fb.block.Instructions, inst)
+			return mirValue{ID: id, Type: "int"}, nil
+		}
 		// Check if it's a function call context (this will be handled by the caller)
 		// For now, just return a placeholder that indicates this is a qualified function
 		return mirValue{ID: mir.InvalidValue, Type: "func"}, nil

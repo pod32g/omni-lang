@@ -209,6 +209,12 @@ func (c *Checker) initBuiltins() {
 	}
 	c.knownTypes["array"] = struct{}{}
 	c.knownTypes["map"] = struct{}{}
+
+	// Add builtin functions
+	c.functions["len"] = FunctionSignature{
+		Params: []string{"array"}, // Special marker for array types
+		Return: "int",
+	}
 }
 
 func (c *Checker) collectTypeDecls(mod *ast.Module) {
@@ -553,6 +559,11 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		if sym, ok := c.lookupSymbol(e.Name); ok {
 			return sym.Type
 		}
+		// Check if it's a builtin function
+		if sig, exists := c.functions[e.Name]; exists {
+			// Return a function type (for now, just return the return type)
+			return sig.Return
+		}
 		// Check if it's a qualified std symbol
 		if c.isStdSymbol(e.Name) {
 			// For now, assume all std functions return void or int
@@ -637,6 +648,17 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		return typeError
 	case *ast.MemberExpr:
 		targetType := c.checkExpr(e.Target)
+
+		// Handle array method access (e.g., x.len)
+		if strings.HasPrefix(targetType, "[]<") || strings.HasPrefix(targetType, "array<") {
+			if e.Member == "len" {
+				// Return a function type that takes no arguments and returns int
+				return "func():int"
+			}
+			c.report(e.Span(), fmt.Sprintf("array type %s has no method %q", targetType, e.Member),
+				"available methods: len")
+			return typeError
+		}
 
 		// Handle struct field access
 		if fields, ok := c.structFields[targetType]; ok {
@@ -723,7 +745,7 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		if elementType == typeInfer {
 			elementType = typeError
 		}
-		return buildGeneric("array", []string{elementType})
+		return buildGeneric("[]", []string{elementType})
 	case *ast.MapLiteralExpr:
 		keyType := typeInfer
 		valueType := typeInfer
@@ -860,6 +882,20 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 		calleeType = c.checkExpr(expr.Callee)
 	}
 
+	// Handle function type calls (e.g., x.len() where x.len is func():int)
+	if strings.HasPrefix(calleeType, "func(") {
+		// Extract return type from function type
+		if strings.Contains(calleeType, "):") {
+			parts := strings.Split(calleeType, "):")
+			if len(parts) == 2 {
+				returnType := strings.TrimSpace(parts[1])
+				// For now, just return the return type
+				// TODO: Validate argument count and types
+				return returnType
+			}
+		}
+	}
+
 	// Handle function calls with qualified names (e.g., math_utils.add, std.math.max)
 	var qualifiedName string
 	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok {
@@ -867,6 +903,19 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 	} else if member, ok := expr.Callee.(*ast.MemberExpr); ok {
 		if memberIdent, ok := member.Target.(*ast.IdentifierExpr); ok {
 			qualifiedName = memberIdent.Name + "." + member.Member
+		} else {
+			// Handle array method calls like x.len() where x is an array
+			targetType := c.checkExpr(member.Target)
+			if strings.HasPrefix(targetType, "[]<") || strings.HasPrefix(targetType, "array<") {
+				// This is an array method call
+				if member.Member == "len" && len(expr.Args) == 0 {
+					// x.len() - array length method
+					return "int"
+				}
+				c.report(expr.Span(), fmt.Sprintf("array type %s has no method %q", targetType, member.Member),
+					"available methods: len()")
+				return typeError
+			}
 		}
 	}
 
@@ -880,7 +929,13 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 				argType := c.checkExpr(arg)
 				if i < len(sig.Params) {
 					expected := sig.Params[i]
-					if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
+					// Special handling for len() function - accept any array type
+					if qualifiedName == "len" && expected == "array" {
+						if !strings.HasPrefix(argType, "[]<") && !strings.HasPrefix(argType, "array<") {
+							c.report(arg.Span(), fmt.Sprintf("len() expects an array, got %s", argType),
+								"pass an array to the len() function")
+						}
+					} else if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
 						c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, expected, argType),
 							fmt.Sprintf("convert the argument to %s or use a %s expression", expected, expected))
 					}
@@ -1035,6 +1090,16 @@ func (c *Checker) checkTypeExpr(t *ast.TypeExpr) string {
 		return "*" + baseType
 	}
 
+	// Check if this is an array type
+	if t.Name == "[]" {
+		if len(t.Args) != 1 {
+			c.report(t.Span(), "array type must have exactly one element type", "use syntax like []int or []string")
+			return typeError
+		}
+		elementType := c.checkTypeExpr(t.Args[0])
+		return buildGeneric("[]", []string{elementType})
+	}
+
 	// Check if this is a type parameter
 	if c.isTypeParam(t.Name) {
 		return t.Name
@@ -1118,11 +1183,17 @@ func splitGenericArgs(body string) []string {
 }
 
 func arrayElementType(typ string) (string, bool) {
-	if !strings.HasPrefix(typ, "array<") || !strings.HasSuffix(typ, ">") {
-		return "", false
+	// Check for new array syntax: []<int>
+	if strings.HasPrefix(typ, "[]<") && strings.HasSuffix(typ, ">") {
+		inner := typ[len("[]<") : len(typ)-1]
+		return strings.TrimSpace(inner), true
 	}
-	inner := typ[len("array<") : len(typ)-1]
-	return strings.TrimSpace(inner), true
+	// Check for old array syntax: array<int> (for backward compatibility)
+	if strings.HasPrefix(typ, "array<") && strings.HasSuffix(typ, ">") {
+		inner := typ[len("array<") : len(typ)-1]
+		return strings.TrimSpace(inner), true
+	}
+	return "", false
 }
 
 func mapTypes(typ string) (string, string, bool) {

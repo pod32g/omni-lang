@@ -1,0 +1,10 @@
+// Test array of strings
+func main() : int {
+    let words: []string = ["hello", "world", "omni"]
+    if words[0] == "hello" {
+        if words[2] == "omni" {
+            return 42
+        }
+    }
+    return 0
+}

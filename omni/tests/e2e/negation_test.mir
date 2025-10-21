@@ -1,0 +1,5 @@
+func main():int
+  block entry:
+    %0 = const.int 5:int
+    %1 = neg.int %0
+    ret %1
