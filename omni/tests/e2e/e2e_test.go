@@ -1,8 +1,10 @@
 package e2e
 
 import (
+	"fmt"
 	"os/exec"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -74,9 +76,77 @@ func TestLoop(t *testing.T) {
 	}
 }
 
+func TestForClassic(t *testing.T) {
+	testFile := "for_classic.omni"
+	expected := "10" // 0 + 1 + 2 + 3 + 4 = 10
+
+	// Test C backend execution
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+
+	// Test MIR generation
+	if err := runCompiler(testFile, "vm", "mir", ""); err != nil {
+		t.Errorf("MIR generation failed: %v", err)
+	}
+}
+
+func TestForRange(t *testing.T) {
+	testFile := "for_range.omni"
+	expected := "15" // 1 + 2 + 3 + 4 + 5 = 15
+
+	// Test C backend execution
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+
+	// Test MIR generation
+	if err := runCompiler(testFile, "vm", "mir", ""); err != nil {
+		t.Errorf("MIR generation failed: %v", err)
+	}
+}
+
+func TestForNested(t *testing.T) {
+	testFile := "for_nested.omni"
+	expected := "9" // (0+0) + (0+1) + (1+0) + (1+1) + (2+0) + (2+1) = 0+1+1+2+2+3 = 9
+
+	// Test C backend execution
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestForEmpty(t *testing.T) {
+	testFile := "for_empty.omni"
+	expected := "0" // Empty loop should return 0
+
+	// Test C backend execution
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
 func runVM(testFile string) (string, error) {
-	cmd := exec.Command("go", "run", "../../cmd/omnir", testFile)
+	cmd := exec.Command("../../bin/omnir", testFile)
 	cmd.Dir = "."
+	// Set LD_LIBRARY_PATH for VM execution
+	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -87,6 +157,41 @@ func runVM(testFile string) (string, error) {
 		result = result[:len(result)-1]
 	}
 	return result, nil
+}
+
+func runCBackend(testFile string) (string, error) {
+	// Compile with C backend using the built binary
+	compileCmd := exec.Command("../../bin/omnic", "-backend", "c", "-emit", "exe", testFile)
+	compileCmd.Dir = "."
+	// Set LD_LIBRARY_PATH for compilation
+	compileCmd.Env = append(compileCmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
+	if err := compileCmd.Run(); err != nil {
+		return "", fmt.Errorf("compilation failed: %v", err)
+	}
+
+	// Run the compiled executable (it's created in the same directory as the source file)
+	executableName := testFile[:len(testFile)-6] // Remove .omni extension
+	runCmd := exec.Command("./" + executableName)
+	runCmd.Dir = "."
+
+	// Set LD_LIBRARY_PATH to find the runtime library
+	runCmd.Env = append(runCmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
+
+	output, err := runCmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("execution failed: %v", err)
+	}
+
+	// Parse the output to extract the result
+	result := string(output)
+	// Look for "OmniLang program result: X" pattern
+	lines := strings.Split(result, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "OmniLang program result: ") {
+			return strings.TrimSpace(line[len("OmniLang program result: "):]), nil
+		}
+	}
+	return "", fmt.Errorf("could not find program result in output: %s", result)
 }
 
 func runCompiler(testFile, backend, emit, output string) error {

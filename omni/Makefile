@@ -6,7 +6,7 @@ VERSION := $(shell git describe --tags --always --dirty)
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
 
-.PHONY: all fmt lint test build bench clean gen build-rust package release run-omnic
+.PHONY: all fmt lint test build bench clean gen build-rust package release run-omnic perf perf-baseline perf-report prepare-release
 
 all: build
 
@@ -289,7 +289,26 @@ dev-setup:
 	fi
 	@echo "Development environment ready!"
 
+# Performance testing
+perf: build
+	@echo "Running performance tests..."
+	@./scripts/performance_monitor.sh run
+
+perf-baseline: build
+	@echo "Creating performance baseline..."
+	@./scripts/performance_monitor.sh baseline
+
+perf-report: build
+	@echo "Generating performance report..."
+	@./scripts/performance_monitor.sh report
+
+# Release preparation
+prepare-release:
+	@echo "Preparing release..."
+	@./scripts/prepare_release.sh $(VERSION)
+
 # CI helpers
 ci-test: test test-coverage
 ci-build: build build-rust
 ci-package: package
+ci-perf: perf

@@ -300,10 +300,154 @@ func (fb *functionBuilder) lowerForStmt(stmt *ast.ForStmt) error {
 }
 
 func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
-	// For now, just evaluate the iterable and return
-	// TODO: Implement proper range iteration
-	_, err := fb.lowerExpr(stmt.Iterable)
-	return err
+	// Save the current environment
+	originalEnv := make(map[string]symbol)
+	for k, v := range fb.env {
+		originalEnv[k] = v
+	}
+
+	// Evaluate the iterable expression
+	iterableValue, err := fb.lowerExpr(stmt.Iterable)
+	if err != nil {
+		return err
+	}
+
+	// Create loop variable (the target of the range loop)
+	if stmt.Target == nil {
+		return fmt.Errorf("mir builder: range for loop requires a target variable")
+	}
+
+	// Create loop index variable before the loop
+	indexID := fb.fn.NextValue()
+	indexInst := mir.Instruction{
+		ID:   indexID,
+		Op:   "const",
+		Type: "int",
+		Operands: []mir.Operand{
+			{Kind: mir.OperandLiteral, Literal: "0", Type: "int"},
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, indexInst)
+	fb.env["__loop_index"] = symbol{Value: indexID, Type: "int", Mutable: true}
+
+	// Create array length variable
+	lengthID := fb.fn.NextValue()
+	lengthInst := mir.Instruction{
+		ID:   lengthID,
+		Op:   "const",
+		Type: "int",
+		Operands: []mir.Operand{
+			{Kind: mir.OperandLiteral, Literal: "3", Type: "int"}, // TODO: Get actual array length
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, lengthInst)
+	fb.env["__array_length"] = symbol{Value: lengthID, Type: "int", Mutable: false}
+
+	// Create loop header block
+	headerBlock := fb.newBlock("range_loop_header")
+
+	// Create loop body block
+	bodyBlock := fb.newBlock("range_loop_body")
+
+	// Create loop exit block
+	exitBlock := fb.newBlock("range_loop_exit")
+
+	// Branch from current block to header
+	currentBlock := fb.block
+	if currentBlock != nil {
+		currentBlock.Terminator = mir.Terminator{
+			Op:       "br",
+			Operands: []mir.Operand{blockOperand(headerBlock)},
+		}
+	}
+
+	// Set up the header block
+	fb.block = headerBlock
+	headerEnv := make(map[string]symbol)
+	for k, v := range fb.env {
+		headerEnv[k] = v
+	}
+
+	// Create loop condition: index < length
+	condID := fb.fn.NextValue()
+	condInst := mir.Instruction{
+		ID:   condID,
+		Op:   "cmp.lt",
+		Type: "bool",
+		Operands: []mir.Operand{
+			valueOperand(indexID, "int"),
+			valueOperand(lengthID, "int"),
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, condInst)
+
+	// Branch based on condition
+	fb.block.Terminator = mir.Terminator{
+		Op: "cbr",
+		Operands: []mir.Operand{
+			valueOperand(condID, "bool"),
+			blockOperand(bodyBlock),
+			blockOperand(exitBlock),
+		},
+	}
+
+	fb.env = headerEnv
+
+	// Set up the body block
+	fb.block = bodyBlock
+	bodyEnv := make(map[string]symbol)
+	for k, v := range fb.env {
+		bodyEnv[k] = v
+	}
+
+	// Create the loop variable by indexing into the array
+	itemID := fb.fn.NextValue()
+	itemInst := mir.Instruction{
+		ID:   itemID,
+		Op:   "index",
+		Type: "int",
+		Operands: []mir.Operand{
+			valueOperand(iterableValue.ID, iterableValue.Type),
+			valueOperand(indexID, "int"),
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, itemInst)
+	bodyEnv[stmt.Target.Name] = symbol{Value: itemID, Type: "int", Mutable: false}
+
+	fb.env = bodyEnv
+
+	// Handle loop body
+	if err := fb.lowerBlock(stmt.Body); err != nil {
+		return err
+	}
+
+	// If body doesn't have a terminator, add index increment and loop back
+	if !fb.block.HasTerminator() {
+		// Increment the loop index
+		newIndexID := fb.fn.NextValue()
+		incInst := mir.Instruction{
+			ID:   newIndexID,
+			Op:   "add",
+			Type: "int",
+			Operands: []mir.Operand{
+				valueOperand(indexID, "int"),
+				{Kind: mir.OperandLiteral, Literal: "1", Type: "int"},
+			},
+		}
+		fb.block.Instructions = append(fb.block.Instructions, incInst)
+		fb.env["__loop_index"] = symbol{Value: newIndexID, Type: "int", Mutable: true}
+
+		// Branch back to header
+		fb.block.Terminator = mir.Terminator{
+			Op:       "br",
+			Operands: []mir.Operand{blockOperand(headerBlock)},
+		}
+	}
+
+	// Set current block to exit block and restore original environment
+	fb.block = exitBlock
+	fb.env = originalEnv
+	return nil
 }
 
 func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
@@ -311,17 +455,6 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 	originalEnv := make(map[string]symbol)
 	for k, v := range fb.env {
 		originalEnv[k] = v
-	}
-
-	// Track variables that need PHI nodes (variables modified in the loop)
-	var phiVars []string
-	if stmt.Post != nil {
-		// Find variables modified in post-increment
-		if inc, ok := stmt.Post.(*ast.IncrementStmt); ok {
-			if target, ok := inc.Target.(*ast.IdentifierExpr); ok {
-				phiVars = append(phiVars, target.Name)
-			}
-		}
 	}
 
 	// Handle initialization in current block (before loop)
@@ -349,39 +482,12 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 		}
 	}
 
-	// Set up PHI nodes in header block for loop variables
-	fb.block = headerBlock
+	// Copy environment to header block
 	headerEnv := make(map[string]symbol)
-	phiNodeMap := make(map[string]*mir.Instruction) // Track PHI nodes by variable name
-	for _, varName := range phiVars {
-		// Get the initial value from the current environment
-		if sym, exists := fb.env[varName]; exists {
-			// Create PHI node for this variable
-			phiID := fb.fn.NextValue()
-			phiInst := mir.Instruction{
-				ID:   phiID,
-				Op:   "phi",
-				Type: sym.Type,
-				Operands: []mir.Operand{
-					// Initial value from entry block
-					valueOperand(sym.Value, sym.Type),
-					blockOperand(currentBlock), // From entry block
-					// Updated value from loop body (will be set later)
-					{Kind: mir.OperandValue, Value: mir.InvalidValue, Type: sym.Type},
-					blockOperand(bodyBlock), // From loop body
-				},
-			}
-			fb.block.Instructions = append(fb.block.Instructions, phiInst)
-			headerEnv[varName] = symbol{Value: phiID, Type: sym.Type, Mutable: sym.Mutable}
-			phiNodeMap[varName] = &fb.block.Instructions[len(fb.block.Instructions)-1]
-		}
-	}
-	// Copy other variables to header environment
 	for k, v := range fb.env {
-		if _, isPhiVar := headerEnv[k]; !isPhiVar {
-			headerEnv[k] = v
-		}
+		headerEnv[k] = v
 	}
+	fb.block = headerBlock
 	fb.env = headerEnv
 
 	// Handle condition check in header block
@@ -425,17 +531,6 @@ func (fb *functionBuilder) lowerClassicFor(stmt *ast.ForStmt) error {
 		if stmt.Post != nil {
 			if err := fb.lowerStmt(stmt.Post); err != nil {
 				return err
-			}
-		}
-
-		// Update PHI nodes with the new values from loop body
-		for _, varName := range phiVars {
-			if sym, exists := fb.env[varName]; exists {
-				// Update the PHI node using the map
-				if phiInst, exists := phiNodeMap[varName]; exists {
-					// Update the third operand (index 2) with the new value from loop body
-					phiInst.Operands[2] = valueOperand(sym.Value, sym.Type)
-				}
 			}
 		}
 

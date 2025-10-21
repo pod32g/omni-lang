@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -282,7 +283,8 @@ func compileCToExecutableWithOpt(mod *mir.Module, outputPath string, optLevel st
 // compileCToExecutableWithDebug compiles MIR to debug executable using C backend
 func compileCToExecutableWithDebug(mod *mir.Module, outputPath string, optLevel string, sourceFile string) error {
 	// Generate C code with debug information
-	cCode, err := cbackend.GenerateCWithDebug(mod, optLevel, true, sourceFile)
+	gen := cbackend.NewCGeneratorWithDebug(mod, optLevel, true, sourceFile)
+	cCode, err := gen.Generate()
 	if err != nil {
 		return fmt.Errorf("failed to generate C code with debug: %w", err)
 	}
@@ -291,6 +293,19 @@ func compileCToExecutableWithDebug(mod *mir.Module, outputPath string, optLevel 
 	cPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".c"
 	if err := os.WriteFile(cPath, []byte(cCode), 0o644); err != nil {
 		return fmt.Errorf("failed to write C code: %w", err)
+	}
+
+	// Generate source map if debug info is enabled
+	sourceMap := gen.GenerateSourceMap()
+	if sourceMap != nil {
+		sourceMapPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".map"
+		sourceMapJSON, err := json.MarshalIndent(sourceMap, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal source map: %w", err)
+		}
+		if err := os.WriteFile(sourceMapPath, sourceMapJSON, 0o644); err != nil {
+			return fmt.Errorf("failed to write source map: %w", err)
+		}
 	}
 
 	// Compile C code to executable with debug symbols

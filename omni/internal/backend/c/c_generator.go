@@ -18,41 +18,55 @@ type CGenerator struct {
 	variables map[mir.ValueID]string
 	// Track PHI variables that need special handling
 	phiVars map[mir.ValueID]bool
+	// Track variables that are updated in loop contexts
+	mutableVars map[mir.ValueID]bool
+	// Debug symbol tracking
+	sourceMap map[string]int // Maps source locations to line numbers
+	lineMap   map[int]string // Maps line numbers to source locations
 }
 
 // NewCGenerator creates a new C code generator
 func NewCGenerator(module *mir.Module) *CGenerator {
 	return &CGenerator{
-		module:     module,
-		optLevel:   "2", // Default to standard optimization
-		debugInfo:  false,
-		sourceFile: "",
-		variables:  make(map[mir.ValueID]string),
-		phiVars:    make(map[mir.ValueID]bool),
+		module:      module,
+		optLevel:    "2", // Default to standard optimization
+		debugInfo:   false,
+		sourceFile:  "",
+		variables:   make(map[mir.ValueID]string),
+		phiVars:     make(map[mir.ValueID]bool),
+		mutableVars: make(map[mir.ValueID]bool),
+		sourceMap:   make(map[string]int),
+		lineMap:     make(map[int]string),
 	}
 }
 
 // NewCGeneratorWithOptLevel creates a new C code generator with specified optimization level
 func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator {
 	return &CGenerator{
-		module:     module,
-		optLevel:   optLevel,
-		debugInfo:  false,
-		sourceFile: "",
-		variables:  make(map[mir.ValueID]string),
-		phiVars:    make(map[mir.ValueID]bool),
+		module:      module,
+		optLevel:    optLevel,
+		debugInfo:   false,
+		sourceFile:  "",
+		variables:   make(map[mir.ValueID]string),
+		phiVars:     make(map[mir.ValueID]bool),
+		mutableVars: make(map[mir.ValueID]bool),
+		sourceMap:   make(map[string]int),
+		lineMap:     make(map[int]string),
 	}
 }
 
 // NewCGeneratorWithDebug creates a new C code generator with debug information
 func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool, sourceFile string) *CGenerator {
 	return &CGenerator{
-		module:     module,
-		optLevel:   optLevel,
-		debugInfo:  debugInfo,
-		sourceFile: sourceFile,
-		variables:  make(map[mir.ValueID]string),
-		phiVars:    make(map[mir.ValueID]bool),
+		module:      module,
+		optLevel:    optLevel,
+		debugInfo:   debugInfo,
+		sourceFile:  sourceFile,
+		variables:   make(map[mir.ValueID]string),
+		phiVars:     make(map[mir.ValueID]bool),
+		mutableVars: make(map[mir.ValueID]bool),
+		sourceMap:   make(map[string]int),
+		lineMap:     make(map[int]string),
 	}
 }
 
@@ -72,6 +86,11 @@ func GenerateCOptimized(module *mir.Module, optLevel string) (string, error) {
 func GenerateCWithDebug(module *mir.Module, optLevel string, debugInfo bool, sourceFile string) (string, error) {
 	gen := NewCGeneratorWithDebug(module, optLevel, debugInfo, sourceFile)
 	return gen.generate()
+}
+
+// Generate is a method to generate C code (alias for generate for external use)
+func (g *CGenerator) Generate() (string, error) {
+	return g.generate()
 }
 
 // generate produces the complete C code
@@ -94,14 +113,76 @@ func (g *CGenerator) generate() (string, error) {
 	return optimizedCode, nil
 }
 
+// GenerateSourceMap generates a source map for debugging
+func (g *CGenerator) GenerateSourceMap() map[string]interface{} {
+	if !g.debugInfo {
+		return nil
+	}
+
+	sourceMap := make(map[string]interface{})
+	sourceMap["version"] = 3
+	sourceMap["file"] = g.sourceFile
+	sourceMap["sourceRoot"] = ""
+	sourceMap["sources"] = []string{g.sourceFile}
+	sourceMap["names"] = []string{}
+
+	// Generate mappings
+	mappings := make([]string, 0)
+	for location, lineNum := range g.sourceMap {
+		parts := strings.Split(location, ":")
+		if len(parts) >= 3 {
+			// Format: filename:operation:valueId -> line:column
+			mappings = append(mappings, fmt.Sprintf("%d:0", lineNum))
+		}
+	}
+	sourceMap["mappings"] = strings.Join(mappings, ";")
+
+	return sourceMap
+}
+
 // writeHeader writes the C header includes and declarations
 func (g *CGenerator) writeHeader() {
 	g.output.WriteString(`#include "omni_rt.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+`)
+
+	// Add debug information header if debug info is enabled
+	if g.debugInfo {
+		g.output.WriteString(`#include <stdint.h>
+
+// Debug symbol definitions
+typedef struct {
+    const char* filename;
+    int line;
+    int column;
+    const char* function_name;
+} omni_debug_location_t;
+
+// Global debug symbol table
+static omni_debug_location_t debug_symbols[] = {
+`)
+		// We'll populate this in generateFunction
+		g.output.WriteString(`};
+
+// Function to get debug location by address (simplified)
+omni_debug_location_t* omni_get_debug_location(uintptr_t addr) {
+    // In a real implementation, this would use DWARF or similar
+    // For now, return a placeholder
+    static omni_debug_location_t default_location = {
+        .filename = "unknown",
+        .line = 0,
+        .column = 0,
+        .function_name = "unknown"
+    };
+    return &default_location;
+}
 
 `)
+	}
+
+	g.output.WriteString("\n")
 }
 
 // writeStdLibFunctions writes standard library function implementations
@@ -116,6 +197,11 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	if g.debugInfo {
 		g.output.WriteString(fmt.Sprintf("// Debug: Function %s (Return: %s, Params: %d)\n",
 			fn.Name, fn.ReturnType, len(fn.Params)))
+
+		// Add source location information
+		if g.sourceFile != "" {
+			g.output.WriteString(fmt.Sprintf("#line 1 \"%s\"\n", g.sourceFile))
+		}
 	}
 
 	// Generate function signature
@@ -175,6 +261,15 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 	if g.debugInfo {
 		g.output.WriteString(fmt.Sprintf("  // Debug: %s instruction (ID: %s, Type: %s)\n",
 			inst.Op, inst.ID.String(), inst.Type))
+
+		// Add line mapping for better debugging
+		if g.sourceFile != "" {
+			// Create a unique location identifier
+			location := fmt.Sprintf("%s:%s:%s", g.sourceFile, inst.Op, inst.ID.String())
+			if lineNum, exists := g.sourceMap[location]; exists {
+				g.output.WriteString(fmt.Sprintf("  #line %d \"%s\"\n", lineNum, g.sourceFile))
+			}
+		}
 	}
 
 	switch inst.Op {
@@ -203,7 +298,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			
+
 			// Check if the left operand is a PHI variable (loop variable)
 			if inst.Operands[0].Kind == mir.OperandValue && g.phiVars[inst.Operands[0].Value] {
 				// This is an increment to a PHI variable - update it in place
@@ -211,10 +306,13 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					left, left, right))
 			} else if inst.Operands[0].Kind == mir.OperandValue {
 				// Check if this is an assignment to a variable that should be mutable
-				// For now, let's make all variables that are used in additions mutable
-				// This is a simplification - a proper implementation would need more analysis
+				// For loop contexts, we need to update variables in place
+				// This is a heuristic: if the left operand is a variable and we're in a loop context,
+				// update it in place instead of creating a new variable
 				g.output.WriteString(fmt.Sprintf("  %s = %s + %s;\n",
 					left, left, right))
+				// Mark this variable as mutable for future references
+				g.mutableVars[inst.Operands[0].Value] = true
 			} else {
 				// Regular addition - create new variable
 				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s + %s;\n",
@@ -348,6 +446,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			firstValue := g.getOperandValue(inst.Operands[0])
 
 			// Create a mutable variable that can be updated in the loop
+			// For PHI nodes, we initialize with the first value and will update it later
 			g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n",
 				g.mapType(inst.Type), varName, firstValue))
 

@@ -1,6 +1,7 @@
 package cbackend
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -137,9 +138,51 @@ func (o *COptimizer) removeUnusedVariables(code string) string {
 
 // simplifyConstants simplifies constant expressions
 func (o *COptimizer) simplifyConstants(code string) string {
-	// This is a placeholder for constant folding
-	// In a real implementation, you would parse the C code and evaluate constant expressions
-	return code
+	lines := strings.Split(code, "\n")
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
+			result = append(result, line)
+			continue
+		}
+
+		// Simplify arithmetic with constants
+		optimized := o.simplifyArithmeticExpression(trimmed)
+		result = append(result, optimized)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// simplifyArithmeticExpression simplifies arithmetic expressions
+func (o *COptimizer) simplifyArithmeticExpression(line string) string {
+	// Simplify x + 0 = x
+	line = strings.ReplaceAll(line, " + 0;", ";")
+	line = strings.ReplaceAll(line, " + 0", "")
+
+	// Simplify x - 0 = x
+	line = strings.ReplaceAll(line, " - 0;", ";")
+	line = strings.ReplaceAll(line, " - 0", "")
+
+	// Simplify x * 1 = x
+	line = strings.ReplaceAll(line, " * 1;", ";")
+	line = strings.ReplaceAll(line, " * 1", "")
+
+	// Simplify x / 1 = x
+	line = strings.ReplaceAll(line, " / 1;", ";")
+	line = strings.ReplaceAll(line, " / 1", "")
+
+	// Simplify x * 0 = 0
+	if strings.Contains(line, " * 0") || strings.Contains(line, " *0") {
+		// This is more complex - would need proper parsing
+		// For now, leave as is
+	}
+
+	return line
 }
 
 // inlineSimpleFunctions inlines simple functions
@@ -151,9 +194,57 @@ func (o *COptimizer) inlineSimpleFunctions(code string) string {
 
 // optimizeArithmetic optimizes arithmetic operations
 func (o *COptimizer) optimizeArithmetic(code string) string {
-	// This is a placeholder for arithmetic optimizations
-	// In a real implementation, you would optimize operations like x*1, x+0, etc.
-	return code
+	lines := strings.Split(code, "\n")
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
+			result = append(result, line)
+			continue
+		}
+
+		// Apply arithmetic optimizations
+		optimized := o.optimizeArithmeticLine(trimmed)
+		result = append(result, optimized)
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// optimizeArithmeticLine optimizes a single line of arithmetic
+func (o *COptimizer) optimizeArithmeticLine(line string) string {
+	// Optimize multiplication by powers of 2 to bit shifts
+	// This is a simplified version - would need proper parsing for full implementation
+
+	// Replace x * 2 with x << 1
+	line = strings.ReplaceAll(line, " * 2", " << 1")
+	line = strings.ReplaceAll(line, "*2", "<<1")
+
+	// Replace x * 4 with x << 2
+	line = strings.ReplaceAll(line, " * 4", " << 2")
+	line = strings.ReplaceAll(line, "*4", "<<2")
+
+	// Replace x * 8 with x << 3
+	line = strings.ReplaceAll(line, " * 8", " << 3")
+	line = strings.ReplaceAll(line, "*8", "<<3")
+
+	// Optimize division by powers of 2 to bit shifts
+	// Replace x / 2 with x >> 1
+	line = strings.ReplaceAll(line, " / 2", " >> 1")
+	line = strings.ReplaceAll(line, "/2", ">>1")
+
+	// Replace x / 4 with x >> 2
+	line = strings.ReplaceAll(line, " / 4", " >> 2")
+	line = strings.ReplaceAll(line, "/4", ">>2")
+
+	// Replace x / 8 with x >> 3
+	line = strings.ReplaceAll(line, " / 8", " >> 3")
+	line = strings.ReplaceAll(line, "/8", ">>3")
+
+	return line
 }
 
 // aggressiveInlining performs more aggressive function inlining
@@ -170,8 +261,54 @@ func (o *COptimizer) optimizeLoops(code string) string {
 
 // minimizeVariableNames shortens variable names to reduce size
 func (o *COptimizer) minimizeVariableNames(code string) string {
-	// This is a placeholder for variable name minimization
-	return code
+	// Create a mapping of variable names to shorter names
+	varMap := make(map[string]string)
+	nextShortName := 1
+
+	lines := strings.Split(code, "\n")
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if trimmed == "" || strings.HasPrefix(trimmed, "//") {
+			result = append(result, line)
+			continue
+		}
+
+		// Find variable declarations and create short names
+		if strings.Contains(trimmed, "int32_t v") {
+			// Extract variable name (e.g., "v5" from "int32_t v5 = ...")
+			parts := strings.Fields(trimmed)
+			for i, part := range parts {
+				if strings.HasPrefix(part, "v") && i > 0 {
+					varName := part
+					if _, exists := varMap[varName]; !exists {
+						// Create a short name
+						shortName := fmt.Sprintf("v%d", nextShortName)
+						varMap[varName] = shortName
+						nextShortName++
+					}
+					break
+				}
+			}
+		}
+
+		result = append(result, line)
+	}
+
+	// Replace all variable references with short names
+	var finalResult []string
+	for _, line := range result {
+		optimized := line
+		for oldName, newName := range varMap {
+			optimized = strings.ReplaceAll(optimized, oldName, newName)
+		}
+		finalResult = append(finalResult, optimized)
+	}
+
+	return strings.Join(finalResult, "\n")
 }
 
 // removeDebugInfo removes debug information and comments

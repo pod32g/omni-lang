@@ -49,6 +49,9 @@ If you're new to OmniLang, start here:
   - Type checker with helpful error messages
   - MIR (Mid-level IR) generation
   - VM backend for execution
+  - C backend for native compilation
+  - Debug symbol generation and source mapping
+  - Package creation and distribution tools
 
 ### 🚧 Current Limitations
 

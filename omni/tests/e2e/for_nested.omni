@@ -1,0 +1,9 @@
+func main():int {
+    var sum:int = 0
+    for i:int = 0; i < 3; i++ {
+        for j:int = 0; j < 2; j++ {
+            sum = sum + i + j
+        }
+    }
+    return sum
+}

@@ -13,6 +13,8 @@ This directory contains comprehensive API documentation for the OmniLang program
   - [std.os](stdlib/os.md) - Operating system interface
 - [Compiler API](compiler-api.md) - Compiler internals and extension points
 - [VM API](vm-api.md) - Virtual Machine internals
+- [C Backend](c-backend.md) - Native code generation with C backend
+- [Packaging](packaging.md) - Package creation and distribution
 - [Examples](examples/) - Code examples and tutorials
 
 ## Quick Start
