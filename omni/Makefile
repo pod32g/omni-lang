@@ -31,6 +31,8 @@ test:
 	@find ./tests/e2e -name "*.c" -o -name "*.o" -o -name "*.mir" | xargs rm -f
 	@echo "Building runtime library for e2e tests..."
 	@make build-runtime
+	@echo "Building binaries for e2e tests..."
+	@make build
 	@echo "Running tests with CGO disabled for compatibility..."
 	CGO_ENABLED=0 $(GO) test ./internal/ast ./internal/lexer ./internal/mir ./internal/packaging ./internal/passes ./internal/parser ./internal/types ./internal/vm ./internal/backend/c -count=1 -v -coverprofile=coverage.out
 	@echo "Running e2e tests with CGO enabled..."
