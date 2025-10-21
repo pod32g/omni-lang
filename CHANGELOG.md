@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
+## [0.4.3] - 2025-01-21
+
+### Fixed
+- **Library Path**: Fixed Makefile to use absolute paths with install_name_tool
+- **macOS Compatibility**: Resolved dyld library loading error when running binaries from different directories
+- **Binary Usability**: Binaries now work correctly when called from any directory in PATH
+- **Build Process**: Changed from $(PWD) to $$(pwd) for proper shell variable expansion
+
 ## [0.4.2] - 2025-01-21
 
 ### Fixed
