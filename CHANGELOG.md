@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
+## [0.3.2] - 2025-01-21
+
+### Fixed
+- **CI/CD Pipeline Issues**: Resolved shared library loading errors in CI environment
+- **Library Path Configuration**: Fixed `LD_LIBRARY_PATH` in e2e tests to include Cranelift library path
+- **Test Framework**: Updated `runVM` and `runCBackend` functions to properly locate `libomni_clift.so`
+- **Cross-Platform Compatibility**: Ensured both `DYLD_LIBRARY_PATH` (macOS) and `LD_LIBRARY_PATH` (Linux) are correctly set
+
+### Technical Improvements
+- **Build System**: Enhanced Makefile to include Cranelift library path in test environment
+- **Test Infrastructure**: Improved e2e test reliability across different environments
+- **CI/CD Reliability**: Fixed pipeline failures that were preventing automated testing
+
 ## [0.3.1] - 2025-01-21
 
 ### Fixed

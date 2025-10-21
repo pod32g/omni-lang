@@ -20,7 +20,7 @@ If you're new to OmniLang, start here:
 
 ## Current Status
 
-**Version:** v0.3.1  
+**Version:** v0.3.2  
 **Status:** Active Development - Major Bug Fixes Released
 
 ### ✅ Implemented Features
