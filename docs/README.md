@@ -20,8 +20,8 @@ If you're new to OmniLang, start here:
 
 ## Current Status
 
-**Version:** v0.2.0  
-**Status:** Active Development
+**Version:** v0.3.1  
+**Status:** Active Development - Major Bug Fixes Released
 
 ### ✅ Implemented Features
 
@@ -47,11 +47,20 @@ If you're new to OmniLang, start here:
   - Lexer with detailed error reporting
   - Parser with error recovery
   - Type checker with helpful error messages
-  - MIR (Mid-level IR) generation
+  - MIR (Mid-level IR) generation with assignment instructions
   - VM backend for execution
   - C backend for native compilation
   - Debug symbol generation and source mapping
   - Package creation and distribution tools
+
+### 🐛 Recent Bug Fixes (v0.3.1)
+
+- **Critical Infinite Loop Fixes**: Resolved infinite loops in nested for loops and range loops
+- **Assignment Instruction Generation**: Fixed MIR builder to generate proper assignment instructions
+- **Variable Mutability**: Corrected variable assignment handling for mutable variables
+- **Loop Variable Updates**: Fixed increment statements (i++, j++) to generate proper assignments
+- **Test Framework**: Resolved e2e test framework timeout issues and environment setup
+- **Performance Tests**: Fixed performance benchmark code generation
 
 ### 🚧 Current Limitations
 

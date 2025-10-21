@@ -15,6 +15,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
+## [0.3.1] - 2025-01-21
+
+### Fixed
+- **Critical Infinite Loop Bugs**: Fixed infinite loops in nested for loops and range loops
+- **Assignment Instruction Generation**: Added proper assignment instruction generation in MIR builder
+- **Variable Mutability**: Fixed variable assignment handling for mutable variables
+- **Loop Variable Updates**: Fixed increment statements (i++, j++) to generate proper assignments
+- **Range Loop Index**: Fixed range loop index increment assignments
+- **Test Framework**: Fixed e2e test framework timeout issues and environment setup
+- **Performance Tests**: Fixed performance benchmark code generation to match current capabilities
+
+### Enhanced
+- **MIR Builder**: Enhanced MIR builder to generate explicit assignment instructions
+- **C Backend**: Improved C backend to handle assignment instructions correctly
+- **Test Framework**: Enhanced test framework with better error handling and environment setup
+- **Safe Testing**: Added safe_run.sh script for testing with timeout protection
+- **Performance Validation**: All performance benchmarks now pass consistently
+
+### Technical Improvements
+- **Assignment Instructions**: Added new "assign" MIR instruction for explicit variable assignments
+- **MIR Verifier**: Updated MIR verifier to recognize assignment instructions
+- **Runtime Environment**: Improved runtime library loading in test environments
+- **CGO Handling**: Better CGO handling in test environments with stub implementations
+- **Error Recovery**: Enhanced error recovery and debugging in test framework
+
+### Infrastructure
+- **Safe Runner**: Added safe_run.sh script for preventing infinite loops during testing
+- **Test Environment**: Improved test environment setup with proper PATH and LD_LIBRARY_PATH
+- **Performance Monitoring**: Fixed performance test suite to provide accurate benchmarks
+- **Build System**: Enhanced build system with better test isolation
+
 ## [0.3.0] - 2025-01-20
 
 ### Added
