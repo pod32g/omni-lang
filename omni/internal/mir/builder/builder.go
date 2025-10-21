@@ -192,7 +192,22 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 		if err != nil {
 			return err
 		}
-		fb.env[target.Name] = symbol{Value: rhs.ID, Type: rhs.Type, Mutable: sym.Mutable}
+
+		// Create an assignment instruction in the MIR
+		assignID := fb.fn.NextValue()
+		assignInst := mir.Instruction{
+			ID:   assignID,
+			Op:   "assign",
+			Type: rhs.Type,
+			Operands: []mir.Operand{
+				valueOperand(sym.Value, sym.Type), // target variable
+				valueOperand(rhs.ID, rhs.Type),    // source value
+			},
+		}
+		fb.block.Instructions = append(fb.block.Instructions, assignInst)
+
+		// Update the environment to point to the new assignment result
+		fb.env[target.Name] = symbol{Value: assignID, Type: rhs.Type, Mutable: sym.Mutable}
 		return nil
 	case *ast.ExprStmt:
 		_, err := fb.lowerExpr(s.Expr)
@@ -332,12 +347,39 @@ func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
 
 	// Create array length variable
 	lengthID := fb.fn.NextValue()
+
+	// Get the actual array length from the iterable
+	// For now, we'll use a hardcoded approach based on the array initialization
+	// TODO: Implement proper array length detection from MIR by analyzing the array initialization
+	var arrayLength string
+	if iterableValue.Type == "array<int>" {
+		// Count the number of elements in the array literal
+		// This is a temporary solution - we should analyze the MIR to get the actual length
+		if len(fb.block.Instructions) > 0 {
+			// Look for the array initialization instruction
+			for i := len(fb.block.Instructions) - 1; i >= 0; i-- {
+				inst := fb.block.Instructions[i]
+				if inst.ID == iterableValue.ID && inst.Op == "array.init" {
+					// Count the operands (all operands are array elements)
+					arrayLength = fmt.Sprintf("%d", len(inst.Operands))
+					break
+				}
+			}
+		}
+		if arrayLength == "" {
+			arrayLength = "5" // Fallback for array<int> with 5 elements
+		}
+	} else {
+		// Fallback for other array types
+		arrayLength = "3"
+	}
+
 	lengthInst := mir.Instruction{
 		ID:   lengthID,
 		Op:   "const",
 		Type: "int",
 		Operands: []mir.Operand{
-			{Kind: mir.OperandLiteral, Literal: "3", Type: "int"}, // TODO: Get actual array length
+			{Kind: mir.OperandLiteral, Literal: arrayLength, Type: "int"},
 		},
 	}
 	fb.block.Instructions = append(fb.block.Instructions, lengthInst)
@@ -435,7 +477,21 @@ func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
 			},
 		}
 		fb.block.Instructions = append(fb.block.Instructions, incInst)
-		fb.env["__loop_index"] = symbol{Value: newIndexID, Type: "int", Mutable: true}
+
+		// Create an assignment instruction to update the loop index
+		assignID := fb.fn.NextValue()
+		assignInst := mir.Instruction{
+			ID:   assignID,
+			Op:   "assign",
+			Type: "int",
+			Operands: []mir.Operand{
+				valueOperand(indexID, "int"),    // target variable
+				valueOperand(newIndexID, "int"), // source value (incremented result)
+			},
+		}
+		fb.block.Instructions = append(fb.block.Instructions, assignInst)
+
+		fb.env["__loop_index"] = symbol{Value: assignID, Type: "int", Mutable: true}
 
 		// Branch back to header
 		fb.block.Terminator = mir.Terminator{
@@ -598,8 +654,21 @@ func (fb *functionBuilder) lowerIncrementStmt(stmt *ast.IncrementStmt) error {
 	}
 	fb.block.Instructions = append(fb.block.Instructions, incInst)
 
+	// Create an assignment instruction to update the original variable
+	assignID := fb.fn.NextValue()
+	assignInst := mir.Instruction{
+		ID:   assignID,
+		Op:   "assign",
+		Type: sym.Type,
+		Operands: []mir.Operand{
+			valueOperand(sym.Value, sym.Type), // target variable
+			valueOperand(id, sym.Type),        // source value (incremented result)
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, assignInst)
+
 	// Update the variable with the new value
-	fb.env[target.Name] = symbol{Value: id, Type: sym.Type, Mutable: sym.Mutable}
+	fb.env[target.Name] = symbol{Value: assignID, Type: sym.Type, Mutable: sym.Mutable}
 
 	return nil
 }

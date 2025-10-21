@@ -282,6 +282,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			case "int":
 				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s;\n",
 					varName, literalValue))
+				// Mark variables that are initialized to 0 as potentially mutable (like sum variables)
+				if literalValue == "0" {
+					g.mutableVars[inst.ID] = true
+				}
 			case "string":
 				g.output.WriteString(fmt.Sprintf("  const char* %s = %s;\n",
 					varName, literalValue))
@@ -304,17 +308,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				// This is an increment to a PHI variable - update it in place
 				g.output.WriteString(fmt.Sprintf("  %s = %s + %s;\n",
 					left, left, right))
-			} else if inst.Operands[0].Kind == mir.OperandValue {
-				// Check if this is an assignment to a variable that should be mutable
-				// For loop contexts, we need to update variables in place
-				// This is a heuristic: if the left operand is a variable and we're in a loop context,
-				// update it in place instead of creating a new variable
-				g.output.WriteString(fmt.Sprintf("  %s = %s + %s;\n",
-					left, left, right))
-				// Mark this variable as mutable for future references
-				g.mutableVars[inst.Operands[0].Value] = true
 			} else {
-				// Regular addition - create new variable
+				// Always create new variable for intermediate results
 				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s + %s;\n",
 					varName, left, right))
 			}
@@ -435,6 +430,18 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 
 			g.output.WriteString(fmt.Sprintf("  int32_t %s = (%s %s %s) ? 1 : 0;\n",
 				varName, left, op, right))
+		}
+	case "assign":
+		// Handle assignment instructions
+		if len(inst.Operands) >= 2 {
+			target := g.getOperandValue(inst.Operands[0])
+			source := g.getOperandValue(inst.Operands[1])
+
+			// Assign the source value to the target variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s;\n", target, source))
+
+			// Update the variable mapping to point to the target
+			g.variables[inst.ID] = target
 		}
 	case "phi":
 		// Handle PHI nodes - for loops, we need to create mutable variables

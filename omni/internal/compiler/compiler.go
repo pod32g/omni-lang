@@ -250,7 +250,7 @@ func compileCToExecutable(mod *mir.Module, outputPath string) error {
 	}
 
 	// Clean up temporary file
-	os.Remove(cPath)
+	// os.Remove(cPath) // Temporarily commented out for debugging
 
 	return nil
 }
@@ -275,7 +275,7 @@ func compileCToExecutableWithOpt(mod *mir.Module, outputPath string, optLevel st
 	}
 
 	// Clean up temporary file
-	os.Remove(cPath)
+	// os.Remove(cPath) // Temporarily commented out for debugging
 
 	return nil
 }
@@ -806,14 +806,12 @@ func findRuntimeDir() string {
 	}
 	execDir := filepath.Dir(execPath)
 
-	// Try to find the runtime directory relative to the binary location
+	// Check if we're running in a test environment (temporary directory)
+	isTestEnv := strings.Contains(execDir, "/tmp/") || strings.Contains(execDir, "go-build")
+
+	// Try to find the runtime directory
 	possiblePaths := []string{
-		filepath.Join(execDir, "runtime"),
-		filepath.Join(execDir, "../runtime"),
-		filepath.Join(execDir, "../../runtime"),
-		filepath.Join(execDir, "../../../runtime"),
-		filepath.Join(execDir, "../../../../runtime"),
-		// Also try relative to current working directory as fallback
+		// First try relative to current working directory (works for tests)
 		"./runtime",
 		"../runtime",
 		"../../runtime",
@@ -821,9 +819,41 @@ func findRuntimeDir() string {
 		"../../../../runtime",
 	}
 
+	// If not in test environment, also try relative to binary location
+	if !isTestEnv {
+		possiblePaths = append(possiblePaths,
+			filepath.Join(execDir, "runtime"),
+			filepath.Join(execDir, "../runtime"),
+			filepath.Join(execDir, "../../runtime"),
+			filepath.Join(execDir, "../../../runtime"),
+			filepath.Join(execDir, "../../../../runtime"),
+		)
+	}
+
+	// Try to find the runtime directory
 	for _, path := range possiblePaths {
 		if _, err := os.Stat(filepath.Join(path, "omni_rt.h")); err == nil {
 			return path
+		}
+	}
+
+	// If still not found, try to find it by looking for the omni directory
+	// This helps when running from different locations
+	cwd, err := os.Getwd()
+	if err == nil {
+		// Walk up the directory tree looking for the omni directory
+		current := cwd
+		for i := 0; i < 10; i++ { // Limit to 10 levels up
+			omniDir := filepath.Join(current, "omni")
+			runtimePath := filepath.Join(omniDir, "runtime")
+			if _, err := os.Stat(filepath.Join(runtimePath, "omni_rt.h")); err == nil {
+				return runtimePath
+			}
+			parent := filepath.Dir(current)
+			if parent == current {
+				break // Reached root
+			}
+			current = parent
 		}
 	}
 

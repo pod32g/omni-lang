@@ -143,8 +143,12 @@ func TestForEmpty(t *testing.T) {
 }
 
 func runVM(testFile string) (string, error) {
+	// Get the directory where the test files are located
+	// Use the directory containing the test file
+	testDir := "."
+
 	cmd := exec.Command("../../bin/omnir", testFile)
-	cmd.Dir = "."
+	cmd.Dir = testDir
 	// Set LD_LIBRARY_PATH for VM execution
 	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
 	output, err := cmd.Output()
@@ -160,25 +164,38 @@ func runVM(testFile string) (string, error) {
 }
 
 func runCBackend(testFile string) (string, error) {
+	// Get the directory where the test files are located
+	// Use the directory containing the test file
+	testDir := "."
+
 	// Compile with C backend using the built binary
 	compileCmd := exec.Command("../../bin/omnic", "-backend", "c", "-emit", "exe", testFile)
-	compileCmd.Dir = "."
-	// Set LD_LIBRARY_PATH for compilation
+	compileCmd.Dir = testDir
+	// Set environment variables for compilation
 	compileCmd.Env = append(compileCmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
-	if err := compileCmd.Run(); err != nil {
-		return "", fmt.Errorf("compilation failed: %v", err)
+	compileCmd.Env = append(compileCmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
+	compileOutput, err := compileCmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("compilation failed: %v\nOutput: %s", err, string(compileOutput))
 	}
 
 	// Run the compiled executable (it's created in the same directory as the source file)
-	executableName := testFile[:len(testFile)-6] // Remove .omni extension
+	executableName := testFile[:len(testFile)-5] // Remove .omni extension
 	runCmd := exec.Command("./" + executableName)
-	runCmd.Dir = "."
+	runCmd.Dir = testDir
 
-	// Set LD_LIBRARY_PATH to find the runtime library
+	// Set environment variables to find the runtime library
 	runCmd.Env = append(runCmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
+	runCmd.Env = append(runCmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 
 	output, err := runCmd.Output()
 	if err != nil {
+		// Check if it's an exit error with a non-zero code
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			// For OmniLang programs, the exit code is the return value
+			// So we should treat this as success and extract the exit code
+			return fmt.Sprintf("%d", exitErr.ExitCode()), nil
+		}
 		return "", fmt.Errorf("execution failed: %v", err)
 	}
 

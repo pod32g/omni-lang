@@ -27,12 +27,12 @@ lint:
 	fi
 
 test:
-	$(GO) test ./... -count=1 -v -coverprofile=coverage.out
+	CGO_ENABLED=0 $(GO) test ./... -count=1 -v -coverprofile=coverage.out
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
 test-coverage:
-	$(GO) test ./... -count=1 -coverprofile=coverage.out -covermode=count
+	CGO_ENABLED=0 $(GO) test ./... -count=1 -coverprofile=coverage.out -covermode=count
 	$(GO) tool cover -func=coverage.out | tail -1
 
 bench:
