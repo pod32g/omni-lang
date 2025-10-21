@@ -678,21 +678,24 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 > 📋 **For detailed development roadmap, see [ROADMAP.md](docs/ROADMAP.md)**
 
-### Current Status (v0.2.0+)
+### Current Status (v0.4.3+)
 - ✅ Complete frontend (lexer, parser, AST, type checker)
 - ✅ Three backends: C (default), VM, Cranelift (experimental)
 - ✅ C backend with optimization levels (O0-O3, Os) and debug symbols
 - ✅ Import system (std library + local files with aliases)
-- ✅ **Arrays with type-safe indexing** (`[]int`, `[]string`)
-- ✅ String concatenation with mixed types
-- ✅ Unary expressions (-, !)
-- ✅ For-in loop iteration over arrays
-- ✅ Stdlib functions (std.io, std.math) with runtime support
+- ✅ **Complete array support** with literals, indexing, and `len()` function
+- ✅ **Map/dictionary support** with key-value operations
+- ✅ **Struct support** with field access and method syntax
+- ✅ **PHI node support** for proper SSA form and control flow
+- ✅ String, boolean, and float comparisons in VM backend
+- ✅ Complete C backend instruction set (mod, neg, not, and, or, strcat)
+- ✅ Method-style syntax (`x.len()` instead of `len(x)`)
 - ✅ Enhanced error messages with helpful hints
 - ✅ Comprehensive testing and documentation
 - ✅ Packaging system for distribution
-- ✅ Performance optimizations
+- ✅ Performance optimizations and regression testing
 - ✅ CI/CD pipeline with multi-platform builds
+- ✅ Fixed library path issues for macOS binaries
 
 ### Upcoming Phases
 - 🔄 **Phase 1**: Language Features (for loops, memory management, error handling)

@@ -10,11 +10,12 @@
 ## ✨ OmniLang's Solution
 
 **OmniLang combines the best of all worlds:**
-- 🚀 **Fast compilation** (50ms vs Rust's 8s)
+- 🚀 **Lightning-fast compilation** (sub-second vs Rust's 8s)
 - 🧠 **Simple syntax** (easy to learn and read)
-- ⚡ **High performance** (near-C performance)
+- ⚡ **High performance** (near-C performance with multiple backends)
 - 🛡️ **Memory safety** (planned, without complexity)
 - 🔧 **Modern tooling** (debugging, packages, hot reload)
+- 📦 **Multiple backends** (C, VM, Cranelift) for different use cases
 
 ## 🏆 Key Differentiators
 
