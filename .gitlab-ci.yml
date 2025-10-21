@@ -203,29 +203,36 @@ integration-test:
     - ./test_basic || true
     - echo "Basic compilation test completed"
     - echo "Testing std import functionality"
-    - echo 'import std
-    func main():int {
-        std.io.println("Hello from std!")
-        return 42
-    }' > test_std.omni
+    - |
+      cat > test_std.omni << 'EOF'
+      import std
+      func main():int {
+          std.io.println("Hello from std!")
+          return 42
+      }
+      EOF
     - echo "Compiling std test and checking for warnings..."
     - if ./bin/omnic -backend c -emit exe test_std.omni -o test_std 2>&1 | grep -i "warning"; then echo "WARNING: Compilation warnings detected!"; exit 1; else echo "No warnings detected - good!"; fi
     - ./test_std || true
     - echo "Std import test completed"
     - echo "Testing std import from subdirectory (examples)"
     - mkdir -p test_examples
-    - echo 'import std
-    func main():int {
-        std.io.println("Hello from examples subdirectory!")
-        return 42
-    }' > test_examples/hello_std.omni
+    - |
+      cat > test_examples/hello_std.omni << 'EOF'
+      import std
+      func main():int {
+          std.io.println("Hello from examples subdirectory!")
+          return 42
+      }
+      EOF
     - cd test_examples
     - if ../bin/omnic -backend c -emit exe hello_std.omni -o hello_std 2>&1 | grep -i "warning"; then echo "WARNING: Compilation warnings detected in subdirectory!"; exit 1; else echo "No warnings detected in subdirectory - good!"; fi
     - ./hello_std || true
     - cd ..
     - echo "Subdirectory std import test completed"
     - echo "Testing existing examples directory"
-    - if [ -f "examples/hello_std.omni" ]; then
+    - |
+      if [ -f "examples/hello_std.omni" ]; then
         cd examples
         if ../bin/omnic -backend c -emit exe hello_std.omni -o hello_std 2>&1 | grep -i "warning"; then echo "WARNING: Compilation warnings detected in examples!"; exit 1; else echo "No warnings detected in examples - good!"; fi
         ./hello_std || true
