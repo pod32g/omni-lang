@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
+## [0.4.2] - 2025-01-21
+
+### Fixed
+- **Negation Test**: Fixed TestNegation to expect -5 instead of 251
+- **Test Expectations**: Corrected test expectation to match improved test runner behavior
+- **CI/CD Tests**: Resolved remaining CI/CD test failure in TestNegation
+
 ## [0.4.1] - 2025-01-21
 
 ### Fixed
