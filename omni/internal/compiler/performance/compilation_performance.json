@@ -1,0 +1,7 @@
+{
+  "timestamp": "2025-10-20T20:19:11.500564-06:00",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "go_version": "go1.25.1",
+  "tests": {}
+}

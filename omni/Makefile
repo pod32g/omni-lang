@@ -27,16 +27,27 @@ lint:
 	fi
 
 test:
-	CGO_ENABLED=0 $(GO) test ./... -count=1 -v -coverprofile=coverage.out
+	@echo "Cleaning up generated test files..."
+	@find ./tests/e2e -name "*.c" -o -name "*.o" -o -name "*.mir" | xargs rm -f
+	@echo "Building runtime library for e2e tests..."
+	@make build-runtime
+	@echo "Running tests with CGO disabled for compatibility..."
+	CGO_ENABLED=0 $(GO) test ./internal/... -count=1 -v -coverprofile=coverage.out
+	@echo "Running e2e tests with CGO enabled..."
+	export LD_LIBRARY_PATH=$$PWD/runtime/posix:$$LD_LIBRARY_PATH && $(GO) test ./tests/e2e -count=1 -v
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
 test-coverage:
-	CGO_ENABLED=0 $(GO) test ./... -count=1 -coverprofile=coverage.out -covermode=count
+	$(GO) test ./... -count=1 -coverprofile=coverage.out -covermode=count
 	$(GO) tool cover -func=coverage.out | tail -1
 
 bench:
-	$(GO) test ./tests/bench -bench=. -benchmem -count=3
+	@echo "Running performance benchmarks..."
+	@mkdir -p bench-results
+	@echo "Building runtime library for benchmarks..."
+	@make build-runtime
+	export LD_LIBRARY_PATH=$$PWD/runtime/posix:$$LD_LIBRARY_PATH && $(GO) test ./internal/compiler -bench=. -benchmem -count=3
 
 build:
 	@mkdir -p bin

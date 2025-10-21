@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-10-20T20:21:00.428797-06:00",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "go_version": "go1.25.1",
+  "tests": {
+    "mir_generation_functions_10": {
+      "name": "mir_generation_functions_10",
+      "duration": 1220713541,
+      "memory_usage": 3179656,
+      "iterations": 173252,
+      "throughput": 141926.82736858408
+    },
+    "mir_generation_functions_100": {
+      "name": "mir_generation_functions_100",
+      "duration": 1195863042,
+      "memory_usage": 1196264,
+      "iterations": 16418,
+      "throughput": 13728.99690297478
+    },
+    "mir_generation_functions_200": {
+      "name": "mir_generation_functions_200",
+      "duration": 1136124667,
+      "memory_usage": 18446744073708055704,
+      "iterations": 7214,
+      "throughput": 6349.655288313531
+    },
+    "mir_generation_functions_50": {
+      "name": "mir_generation_functions_50",
+      "duration": 1187259125,
+      "memory_usage": 1787656,
+      "iterations": 34290,
+      "throughput": 28881.64788794527
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-10-20T20:21:08.798039-06:00",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "go_version": "go1.25.1",
+  "tests": {
+    "memory_usage_size_1000": {
+      "name": "memory_usage_size_1000",
+      "duration": 0,
+      "memory_usage": 6344,
+      "iterations": 3676,
+      "throughput": 0
+    },
+    "memory_usage_size_10000": {
+      "name": "memory_usage_size_10000",
+      "duration": 0,
+      "memory_usage": 18446744073709478360,
+      "iterations": 288,
+      "throughput": 0
+    },
+    "memory_usage_size_20000": {
+      "name": "memory_usage_size_20000",
+      "duration": 0,
+      "memory_usage": 18446744073709387592,
+      "iterations": 136,
+      "throughput": 0
+    },
+    "memory_usage_size_5000": {
+      "name": "memory_usage_size_5000",
+      "duration": 0,
+      "memory_usage": 18446744073709510248,
+      "iterations": 630,
+      "throughput": 0
+    }
+  }
+}
