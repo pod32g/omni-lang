@@ -36,7 +36,7 @@ test:
 	@echo "Running tests with CGO disabled for compatibility..."
 	CGO_ENABLED=0 $(GO) test ./internal/ast ./internal/lexer ./internal/mir ./internal/packaging ./internal/passes ./internal/parser ./internal/types ./internal/vm ./internal/backend/c -count=1 -v -coverprofile=coverage.out
 	@echo "Running e2e tests with CGO enabled..."
-	export LD_LIBRARY_PATH=$$PWD/runtime/posix:$$LD_LIBRARY_PATH && $(GO) test ./tests/e2e -count=1 -v
+	export LD_LIBRARY_PATH=$$PWD/native/clift/target/release:$$PWD/runtime/posix:$$LD_LIBRARY_PATH && $(GO) test ./tests/e2e -count=1 -v
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
