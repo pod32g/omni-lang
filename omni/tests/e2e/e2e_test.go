@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -147,9 +148,9 @@ func runVM(testFile string) (string, error) {
 	// Use the directory containing the test file
 
 	cmd := exec.Command("../../bin/omnir", testFile)
-	cmd.Dir = "."
+	// Don't set cmd.Dir - let it run from wherever the test is running
 	// Set library path for VM execution (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)
-	cmd.Env = append(cmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
+	cmd.Env = append(os.Environ(), "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -169,9 +170,9 @@ func runCBackend(testFile string) (string, error) {
 
 	// Compile with C backend using the built binary
 	compileCmd := exec.Command("../../bin/omnic", "-backend", "c", "-emit", "exe", testFile)
-	compileCmd.Dir = "."
+	// Don't set compileCmd.Dir - let it run from wherever the test is running
 	// Set environment variables for compilation
-	compileCmd.Env = append(compileCmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
+	compileCmd.Env = append(os.Environ(), "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	compileCmd.Env = append(compileCmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	compileCmd.Env = append(compileCmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 	compileOutput, err := compileCmd.CombinedOutput()
@@ -182,10 +183,10 @@ func runCBackend(testFile string) (string, error) {
 	// Run the compiled executable (it's created in the same directory as the source file)
 	executableName := testFile[:len(testFile)-5] // Remove .omni extension
 	runCmd := exec.Command("./" + executableName)
-	runCmd.Dir = "."
+	// Don't set runCmd.Dir - let it run from wherever the test is running
 
 	// Set environment variables to find the runtime library
-	runCmd.Env = append(runCmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
+	runCmd.Env = append(os.Environ(), "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	runCmd.Env = append(runCmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	runCmd.Env = append(runCmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 
