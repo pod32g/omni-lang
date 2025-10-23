@@ -380,7 +380,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			varName := g.getVariableName(inst.ID)
 
 			// For now, use a simple approach - in a real implementation we'd need proper string concatenation
-			g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper string concatenation\n"))
+			g.output.WriteString("  // TODO: Implement proper string concatenation\n")
 			g.output.WriteString(fmt.Sprintf("  const char* %s = \"%s%s\"; // Placeholder concatenation\n",
 				varName, left, right))
 		}
@@ -582,6 +582,153 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			// Track this as a PHI variable that needs special handling
 			g.phiVars[inst.ID] = true
 		}
+	case "malloc":
+		// Handle dynamic memory allocation
+		if len(inst.Operands) >= 1 {
+			size := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  void* %s = malloc(%s);\n",
+				varName, size))
+		}
+	case "free":
+		// Handle dynamic memory deallocation
+		if len(inst.Operands) >= 1 {
+			ptr := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  free(%s);\n", ptr))
+		}
+	case "realloc":
+		// Handle dynamic memory reallocation
+		if len(inst.Operands) >= 2 {
+			ptr := g.getOperandValue(inst.Operands[0])
+			newSize := g.getOperandValue(inst.Operands[1])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  void* %s = realloc(%s, %s);\n",
+				varName, ptr, newSize))
+		}
+	case "file.open":
+		// Handle file opening
+		if len(inst.Operands) >= 2 {
+			filename := g.getOperandValue(inst.Operands[0])
+			mode := g.getOperandValue(inst.Operands[1])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_open(%s, %s);\n",
+				varName, filename, mode))
+		}
+	case "file.close":
+		// Handle file closing
+		if len(inst.Operands) >= 1 {
+			fileHandle := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_close(%s);\n",
+				varName, fileHandle))
+		}
+	case "file.read":
+		// Handle file reading
+		if len(inst.Operands) >= 3 {
+			fileHandle := g.getOperandValue(inst.Operands[0])
+			buffer := g.getOperandValue(inst.Operands[1])
+			size := g.getOperandValue(inst.Operands[2])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_read(%s, %s, %s);\n",
+				varName, fileHandle, buffer, size))
+		}
+	case "file.write":
+		// Handle file writing
+		if len(inst.Operands) >= 3 {
+			fileHandle := g.getOperandValue(inst.Operands[0])
+			buffer := g.getOperandValue(inst.Operands[1])
+			size := g.getOperandValue(inst.Operands[2])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_write(%s, %s, %s);\n",
+				varName, fileHandle, buffer, size))
+		}
+	case "file.seek":
+		// Handle file seeking
+		if len(inst.Operands) >= 3 {
+			fileHandle := g.getOperandValue(inst.Operands[0])
+			offset := g.getOperandValue(inst.Operands[1])
+			whence := g.getOperandValue(inst.Operands[2])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_seek(%s, %s, %s);\n",
+				varName, fileHandle, offset, whence))
+		}
+	case "file.tell":
+		// Handle file position querying
+		if len(inst.Operands) >= 1 {
+			fileHandle := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_tell(%s);\n",
+				varName, fileHandle))
+		}
+	case "file.exists":
+		// Handle file existence checking
+		if len(inst.Operands) >= 1 {
+			filename := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_exists(%s);\n",
+				varName, filename))
+		}
+	case "file.size":
+		// Handle file size querying
+		if len(inst.Operands) >= 1 {
+			filename := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_size(%s);\n",
+				varName, filename))
+		}
+	case "test.start":
+		// Handle test start
+		if len(inst.Operands) >= 1 {
+			testName := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_test_start(%s);\n", testName))
+		}
+	case "test.end":
+		// Handle test end
+		if len(inst.Operands) >= 2 {
+			testName := g.getOperandValue(inst.Operands[0])
+			passed := g.getOperandValue(inst.Operands[1])
+			g.output.WriteString(fmt.Sprintf("  omni_test_end(%s, %s);\n", testName, passed))
+		}
+	case "assert":
+		// Handle basic assertion
+		if len(inst.Operands) >= 2 {
+			condition := g.getOperandValue(inst.Operands[0])
+			message := g.getOperandValue(inst.Operands[1])
+			g.output.WriteString(fmt.Sprintf("  omni_assert(%s, %s);\n", condition, message))
+		}
+	case "assert.eq":
+		// Handle equality assertion
+		if len(inst.Operands) >= 3 {
+			expected := g.getOperandValue(inst.Operands[0])
+			actual := g.getOperandValue(inst.Operands[1])
+			message := g.getOperandValue(inst.Operands[2])
+			// Use appropriate assertion function based on instruction type
+			switch inst.Type {
+			case "int":
+				g.output.WriteString(fmt.Sprintf("  omni_assert_eq_int(%s, %s, %s);\n", expected, actual, message))
+			case "string":
+				g.output.WriteString(fmt.Sprintf("  omni_assert_eq_string(%s, %s, %s);\n", expected, actual, message))
+			case "float", "double":
+				g.output.WriteString(fmt.Sprintf("  omni_assert_eq_float(%s, %s, %s);\n", expected, actual, message))
+			default:
+				// Default to int comparison
+				g.output.WriteString(fmt.Sprintf("  omni_assert_eq_int(%s, %s, %s);\n", expected, actual, message))
+			}
+		}
+	case "assert.true":
+		// Handle true assertion
+		if len(inst.Operands) >= 2 {
+			condition := g.getOperandValue(inst.Operands[0])
+			message := g.getOperandValue(inst.Operands[1])
+			g.output.WriteString(fmt.Sprintf("  omni_assert_true(%s, %s);\n", condition, message))
+		}
+	case "assert.false":
+		// Handle false assertion
+		if len(inst.Operands) >= 2 {
+			condition := g.getOperandValue(inst.Operands[0])
+			message := g.getOperandValue(inst.Operands[1])
+			g.output.WriteString(fmt.Sprintf("  omni_assert_false(%s, %s);\n", condition, message))
+		}
 	default:
 		// Handle unknown instructions
 		g.output.WriteString(fmt.Sprintf("  // TODO: Implement instruction %s\n", inst.Op))
@@ -680,6 +827,8 @@ func (g *CGenerator) mapType(omniType string) string {
 		return "void"
 	case "bool":
 		return "int32_t"
+	case "ptr":
+		return "void*"
 	default:
 		return "int32_t" // Default fallback
 	}
@@ -740,12 +889,58 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_string_to_float"
 	case "std.string_to_bool":
 		return "omni_string_to_bool"
+	case "std.test.start":
+		return "omni_test_start"
+	case "std.test.end":
+		return "omni_test_end"
+	case "std.assert.eq":
+		return "omni_assert_eq"
+	case "std.assert.true":
+		return "omni_assert_true"
+	case "std.assert.false":
+		return "omni_assert_false"
+	case "std.test.summary":
+		return "omni_test_summary"
 	case "std.malloc":
 		return "omni_malloc"
 	case "std.free":
 		return "omni_free"
 	case "std.realloc":
 		return "omni_realloc"
+	case "malloc":
+		return "malloc"
+	case "free":
+		return "free"
+	case "realloc":
+		return "realloc"
+	case "file.open":
+		return "omni_file_open"
+	case "file.close":
+		return "omni_file_close"
+	case "file.read":
+		return "omni_file_read"
+	case "file.write":
+		return "omni_file_write"
+	case "file.seek":
+		return "omni_file_seek"
+	case "file.tell":
+		return "omni_file_tell"
+	case "file.exists":
+		return "omni_file_exists"
+	case "file.size":
+		return "omni_file_size"
+	case "test.start":
+		return "omni_test_start"
+	case "test.end":
+		return "omni_test_end"
+	case "assert":
+		return "omni_assert"
+	case "assert.eq":
+		return "omni_assert_eq"
+	case "assert.true":
+		return "omni_assert_true"
+	case "assert.false":
+		return "omni_assert_false"
 
 	default:
 		// For any other function names with dots, replace dots with underscores
