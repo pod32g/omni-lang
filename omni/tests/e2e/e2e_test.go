@@ -149,7 +149,7 @@ func runVM(testFile string) (string, error) {
 
 	cmd := exec.Command("../../bin/omnir", testFile)
 	// Set the working directory to tests/e2e so relative paths work correctly
-	cmd.Dir = "."
+	cmd.Dir = "tests/e2e"
 	// Set library path for VM execution (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)
 	cmd.Env = append(os.Environ(), "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
@@ -172,7 +172,7 @@ func runCBackend(testFile string) (string, error) {
 	// Compile with C backend using the built binary
 	compileCmd := exec.Command("../../bin/omnic", "-backend", "c", "-emit", "exe", testFile)
 	// Set the working directory to tests/e2e so relative paths work correctly
-	compileCmd.Dir = "."
+	compileCmd.Dir = "tests/e2e"
 	// Set environment variables for compilation
 	compileCmd.Env = append(os.Environ(), "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	compileCmd.Env = append(compileCmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
@@ -186,7 +186,7 @@ func runCBackend(testFile string) (string, error) {
 	executableName := testFile[:len(testFile)-5] // Remove .omni extension
 	runCmd := exec.Command("./" + executableName)
 	// Set the working directory to tests/e2e so relative paths work correctly
-	runCmd.Dir = "."
+	runCmd.Dir = "tests/e2e"
 
 	// Set environment variables to find the runtime library
 	runCmd.Env = append(os.Environ(), "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
