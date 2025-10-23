@@ -241,7 +241,7 @@ func (c *Checker) initBuiltins() {
 
 	// Add builtin functions
 	c.functions["len"] = FunctionSignature{
-		Params: []string{"array"}, // Special marker for array types
+		Params: []string{typeInfer}, // Accept any array type
 		Return: "int",
 	}
 }
@@ -1071,21 +1071,22 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok {
 		qualifiedName = ident.Name
 	} else if member, ok := expr.Callee.(*ast.MemberExpr); ok {
+		// Handle array method calls like x.len() where x is an array
+		targetType := c.checkExpr(member.Target)
+		if strings.HasPrefix(targetType, "[]<") || strings.HasPrefix(targetType, "array<") {
+			// This is an array method call
+			if member.Member == "len" && len(expr.Args) == 0 {
+				// x.len() - array length method
+				return "int"
+			}
+			c.report(expr.Span(), fmt.Sprintf("array type %s has no method %q", targetType, member.Member),
+				"available methods: len()")
+			return typeError
+		}
+
+		// Handle qualified function calls like module.function
 		if memberIdent, ok := member.Target.(*ast.IdentifierExpr); ok {
 			qualifiedName = memberIdent.Name + "." + member.Member
-		} else {
-			// Handle array method calls like x.len() where x is an array
-			targetType := c.checkExpr(member.Target)
-			if strings.HasPrefix(targetType, "[]<") || strings.HasPrefix(targetType, "array<") {
-				// This is an array method call
-				if member.Member == "len" && len(expr.Args) == 0 {
-					// x.len() - array length method
-					return "int"
-				}
-				c.report(expr.Span(), fmt.Sprintf("array type %s has no method %q", targetType, member.Member),
-					"available methods: len()")
-				return typeError
-			}
 		}
 	}
 
@@ -1100,7 +1101,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 				if i < len(sig.Params) {
 					expected := sig.Params[i]
 					// Special handling for len() function - accept any array type
-					if qualifiedName == "len" && expected == "array" {
+					if qualifiedName == "len" && expected == typeInfer {
 						if !strings.HasPrefix(argType, "[]<") && !strings.HasPrefix(argType, "array<") {
 							c.report(arg.Span(), fmt.Sprintf("len() expects an array, got %s", argType),
 								"pass an array to the len() function")

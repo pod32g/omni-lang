@@ -22,9 +22,16 @@ func init() {
 		"mul":             execArithmetic,
 		"div":             execArithmetic,
 		"mod":             execArithmetic,
+		"bitand":          execBitwise,
+		"bitor":           execBitwise,
+		"bitxor":          execBitwise,
+		"lshift":          execBitwise,
+		"rshift":          execBitwise,
 		"strcat":          execStringConcat,
 		"neg":             execUnary,
 		"not":             execUnary,
+		"bitnot":          execUnary,
+		"cast":            execCast,
 		"cmp.eq":          execComparison,
 		"cmp.neq":         execComparison,
 		"cmp.lt":          execComparison,
@@ -34,6 +41,10 @@ func init() {
 		"and":             execLogical,
 		"or":              execLogical,
 		"call":            execCall,
+		"call.int":        execCall,
+		"call.void":       execCall,
+		"call.string":     execCall,
+		"call.bool":       execCall,
 		"struct.init":     execStructInit,
 		"array.init":      execArrayInit,
 		"index":           execIndex,
@@ -147,7 +158,7 @@ func execFunction(funcs map[string]*mir.Function, fn *mir.Function, args []Resul
 				return literalResult(op)
 			}
 			return fr.values[op.Value], nil
-		case "br":
+		case "br", "jmp":
 			target, err := blockByOperand(blockMap, term.Operands[0])
 			if err != nil {
 				return Result{}, fmt.Errorf("vm: %s: %w", fn.Name, err)
@@ -217,12 +228,23 @@ func execStructInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruct
 
 	// Check if first operand is a field name (literal) or field value
 	if len(inst.Operands) >= 2 && inst.Operands[0].Kind == mir.OperandLiteral {
-		// Named field format: [field1Name, field1Value, field2Name, field2Value, ...]
-		if len(inst.Operands)%2 != 0 {
+		// Named field format: [structType, field1Name, field1Value, field2Name, field2Value, ...]
+		// or [field1Name, field1Value, field2Name, field2Value, ...]
+
+		// Check if first operand is struct type (skip it) or if it's a field name
+		startIndex := 0
+		if len(inst.Operands) >= 3 && inst.Operands[1].Kind == mir.OperandLiteral {
+			// First operand is struct type, second is first field name
+			startIndex = 1
+		}
+
+		// Check if remaining operands form field-value pairs
+		remainingOperands := len(inst.Operands) - startIndex
+		if remainingOperands%2 != 0 {
 			return Result{}, fmt.Errorf("struct.init: named field format requires even number of operands")
 		}
 
-		for i := 0; i < len(inst.Operands); i += 2 {
+		for i := startIndex; i < len(inst.Operands); i += 2 {
 			if i+1 >= len(inst.Operands) {
 				return Result{}, fmt.Errorf("struct.init: incomplete field pair")
 			}
@@ -784,14 +806,23 @@ func execUnary(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) 
 		if operand.Type == "int" {
 			val := operand.Value.(int)
 			return Result{Type: "int", Value: -val}, nil
+		} else if operand.Type == "float" || operand.Type == "double" {
+			val := operand.Value.(float64)
+			return Result{Type: "float", Value: -val}, nil
 		}
-		return Result{}, fmt.Errorf("neg: operand must be int, got %s", operand.Type)
+		return Result{}, fmt.Errorf("neg: operand must be int or float, got %s", operand.Type)
 	case "not":
 		if operand.Type == "bool" {
 			val := operand.Value.(bool)
 			return Result{Type: "bool", Value: !val}, nil
 		}
 		return Result{}, fmt.Errorf("not: operand must be bool, got %s", operand.Type)
+	case "bitnot":
+		if operand.Type == "int" {
+			val := operand.Value.(int)
+			return Result{Type: "int", Value: ^val}, nil
+		}
+		return Result{}, fmt.Errorf("bitnot: operand must be int, got %s", operand.Type)
 	default:
 		return Result{}, fmt.Errorf("unsupported unary operation %q", inst.Op)
 	}
@@ -2020,4 +2051,146 @@ func execClosureBind(funcs map[string]*mir.Function, fr *frame, inst mir.Instruc
 	// Return the closure as a function reference
 	// The closure contains both the function name and captured variables
 	return Result{Type: inst.Type, Value: closureValue.Value}, nil
+}
+
+// execBitwise handles bitwise operations
+func execBitwise(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 2 {
+		return Result{}, fmt.Errorf("bitwise operation: expected at least 2 operands")
+	}
+
+	left := operandValue(fr, inst.Operands[0])
+	right := operandValue(fr, inst.Operands[1])
+
+	// Convert operands to integers
+	li, err := toInt(left)
+	if err != nil {
+		return Result{}, fmt.Errorf("bitwise operation: left operand must be int, got %s", left.Type)
+	}
+	ri, err := toInt(right)
+	if err != nil {
+		return Result{}, fmt.Errorf("bitwise operation: right operand must be int, got %s", right.Type)
+	}
+
+	var res int
+	switch inst.Op {
+	case "bitand":
+		res = li & ri
+	case "bitor":
+		res = li | ri
+	case "bitxor":
+		res = li ^ ri
+	case "lshift":
+		res = li << ri
+	case "rshift":
+		res = li >> ri
+	default:
+		return Result{}, fmt.Errorf("unsupported bitwise operation %q", inst.Op)
+	}
+
+	return Result{Type: "int", Value: res}, nil
+}
+
+// execCast handles type casting
+func execCast(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 1 {
+		return Result{}, fmt.Errorf("cast: expected at least 1 operand")
+	}
+
+	operand := operandValue(fr, inst.Operands[0])
+	targetType := inst.Type
+
+	// Handle type conversions
+	switch targetType {
+	case "int":
+		if operand.Type == "float" || operand.Type == "double" {
+			f, err := toFloat(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			return Result{Type: "int", Value: int(f)}, nil
+		} else if operand.Type == "bool" {
+			b, err := toBool(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			if b {
+				return Result{Type: "int", Value: 1}, nil
+			}
+			return Result{Type: "int", Value: 0}, nil
+		} else if operand.Type == "string" {
+			// String to int conversion
+			s, err := toString(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			if val, err := strconv.Atoi(s); err == nil {
+				return Result{Type: "int", Value: val}, nil
+			}
+			return Result{}, fmt.Errorf("cast: cannot convert string %q to int", s)
+		}
+		return Result{Type: "int", Value: operand.Value}, nil
+
+	case "float", "double":
+		if operand.Type == "int" {
+			i, err := toInt(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			return Result{Type: "float", Value: float64(i)}, nil
+		} else if operand.Type == "bool" {
+			b, err := toBool(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			if b {
+				return Result{Type: "float", Value: 1.0}, nil
+			}
+			return Result{Type: "float", Value: 0.0}, nil
+		} else if operand.Type == "string" {
+			// String to float conversion
+			s, err := toString(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			if val, err := strconv.ParseFloat(s, 64); err == nil {
+				return Result{Type: "float", Value: val}, nil
+			}
+			return Result{}, fmt.Errorf("cast: cannot convert string %q to float", s)
+		}
+		return Result{Type: "float", Value: operand.Value}, nil
+
+	case "bool":
+		if operand.Type == "int" {
+			i, err := toInt(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			return Result{Type: "bool", Value: i != 0}, nil
+		} else if operand.Type == "float" || operand.Type == "double" {
+			f, err := toFloat(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			return Result{Type: "bool", Value: f != 0.0}, nil
+		} else if operand.Type == "string" {
+			s, err := toString(operand)
+			if err != nil {
+				return Result{}, err
+			}
+			return Result{Type: "bool", Value: s != ""}, nil
+		}
+		return Result{Type: "bool", Value: operand.Value}, nil
+
+	case "string":
+		s, err := toString(operand)
+		if err != nil {
+			return Result{}, err
+		}
+		return Result{Type: "string", Value: s}, nil
+
+	default:
+		// For other types, just return the operand with the new type
+		return Result{Type: targetType, Value: operand.Value}, nil
+	}
 }

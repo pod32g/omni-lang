@@ -515,9 +515,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
 
-			// For now, use a simple approach - in a real implementation we'd need proper string concatenation
-			g.output.WriteString("  // TODO: Implement proper string concatenation\n")
-			g.output.WriteString(fmt.Sprintf("  const char* %s = \"%s%s\"; // Placeholder concatenation\n",
+			// Generate proper string concatenation using runtime function
+			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_strcat(%s, %s);\n",
 				varName, left, right))
 		}
 	case "neg":
@@ -634,14 +633,11 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			index := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
 
-			// Check if this is a map lookup by checking if the target is a void* (from map.init)
-			// This is a simplified approach - in a real implementation we'd track variable types properly
-			if strings.HasPrefix(target, "v") && g.isMapVariable(target) {
-				// For maps, we need to implement proper map lookup
-				// For now, return a placeholder value
-				g.output.WriteString(fmt.Sprintf("  // TODO: Implement map lookup for %s[%s]\n", target, index))
-				g.output.WriteString(fmt.Sprintf("  %s %s = 95; // Placeholder for map lookup (alice's score)\n",
-					g.mapType(inst.Type), varName))
+			// Check if this is a map lookup by checking if the target is a map variable
+			if g.isMapVariable(target) {
+				// Generate proper map lookup using runtime function
+				g.output.WriteString(fmt.Sprintf("  %s %s = omni_map_get(%s, %s);\n",
+					g.mapType(inst.Type), varName, target, index))
 			} else {
 				// Array indexing
 				g.output.WriteString(fmt.Sprintf("  %s %s = %s[%s];\n",
@@ -666,23 +662,35 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		}
 	case "map.init":
 		// Handle map literal initialization
-		// For now, we'll create a simple struct-based map implementation
 		varName := g.getVariableName(inst.ID)
-		g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper map initialization for %s\n", varName))
-		g.output.WriteString(fmt.Sprintf("  // Map type: %s\n", inst.Type))
-		g.output.WriteString(fmt.Sprintf("  // Operands: %d\n", len(inst.Operands)))
-		// Create a placeholder variable to avoid compilation errors
-		g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n", varName))
+		g.output.WriteString(fmt.Sprintf("  // Initialize map %s of type %s\n", varName, inst.Type))
+		g.output.WriteString(fmt.Sprintf("  void* %s = omni_map_create();\n", varName))
+
+		// Process key-value pairs
+		for i := 0; i < len(inst.Operands); i += 2 {
+			if i+1 < len(inst.Operands) {
+				key := g.getOperandValue(inst.Operands[i])
+				value := g.getOperandValue(inst.Operands[i+1])
+				g.output.WriteString(fmt.Sprintf("  omni_map_set(%s, %s, %s);\n", varName, key, value))
+			}
+		}
+
 		// Track this as a map variable
 		g.mapVars[varName] = true
 	case "struct.init":
 		// Handle struct literal initialization
 		varName := g.getVariableName(inst.ID)
-		g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper struct initialization for %s\n", varName))
-		g.output.WriteString(fmt.Sprintf("  // Struct type: %s\n", inst.Type))
-		g.output.WriteString(fmt.Sprintf("  // Operands: %d\n", len(inst.Operands)))
-		// Create a placeholder variable to avoid compilation errors
-		g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n", varName))
+		g.output.WriteString(fmt.Sprintf("  // Initialize struct %s of type %s\n", varName, inst.Type))
+		g.output.WriteString(fmt.Sprintf("  void* %s = omni_struct_create();\n", varName))
+
+		// Process field assignments
+		for i := 0; i < len(inst.Operands); i += 2 {
+			if i+1 < len(inst.Operands) {
+				fieldName := inst.Operands[i].Literal
+				fieldValue := g.getOperandValue(inst.Operands[i+1])
+				g.output.WriteString(fmt.Sprintf("  omni_struct_set_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+			}
+		}
 	case "member":
 		// Handle struct field access
 		if len(inst.Operands) >= 2 {
@@ -690,10 +698,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			fieldName := inst.Operands[1].Literal
 			varName := g.getVariableName(inst.ID)
 
-			// For now, return a placeholder value
-			g.output.WriteString(fmt.Sprintf("  // TODO: Implement struct field access for %s.%s\n", target, fieldName))
-			g.output.WriteString(fmt.Sprintf("  %s %s = 10; // Placeholder for struct field access\n",
-				g.mapType(inst.Type), varName))
+			// Generate proper struct field access using runtime function
+			g.output.WriteString(fmt.Sprintf("  %s %s = omni_struct_get_field(%s, \"%s\");\n",
+				g.mapType(inst.Type), varName, target, fieldName))
 		}
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
 		// Handle comparison operations
@@ -943,6 +950,32 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(g.getOperandValue(arg))
 			}
 			g.output.WriteString(");\n")
+		}
+	case "closure.create":
+		// Handle closure creation
+		if len(inst.Operands) >= 1 {
+			funcName := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  // TODO: Implement closure creation for %s\n", varName))
+			g.output.WriteString(fmt.Sprintf("  // Function: %s\n", funcName))
+			g.output.WriteString(fmt.Sprintf("  void* %s = NULL; // Placeholder for closure\n", varName))
+		}
+	case "closure.capture":
+		// Handle closure variable capture
+		if len(inst.Operands) >= 3 {
+			closure := g.getOperandValue(inst.Operands[0])
+			varName := inst.Operands[1].Literal
+			varValue := g.getOperandValue(inst.Operands[2])
+			g.output.WriteString(fmt.Sprintf("  // TODO: Implement closure capture for %s.%s = %s\n",
+				closure, varName, varValue))
+		}
+	case "closure.bind":
+		// Handle closure binding
+		if len(inst.Operands) >= 1 {
+			closure := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  // TODO: Implement closure binding for %s\n", varName))
+			g.output.WriteString(fmt.Sprintf("  void* %s = %s; // Placeholder for bound closure\n", varName, closure))
 		}
 	default:
 		// Handle unknown instructions
