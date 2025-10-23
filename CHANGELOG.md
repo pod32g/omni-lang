@@ -15,6 +15,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
+## [0.5.0] - 2025-01-23
+
+### Added
+- **Comprehensive Standard Library Testing**: Complete test suite for all std modules (math, io, string, array, collections, os, file)
+- **Integration Testing**: Added integration tests for std library usage patterns
+- **Enhanced CI/CD Pipeline**: Improved error handling, debugging, and robustness
+- **Standard Library Documentation**: Comprehensive documentation for all std modules
+
+### Fixed
+- **std.math Return Types**: Fixed missing return type annotations for max, min, abs functions
+- **CI Pipeline Issues**: Resolved path resolution and test execution problems
+- **VM e2e Tests**: Fixed path resolution issues in VM test execution
+- **Type Checker**: Fixed type checker and VM runtime issues
+- **C Generator**: Fixed placeholder function generation issues
+
+### Improved
+- **Test Coverage**: Comprehensive test coverage for all standard library modules
+- **Error Reporting**: Enhanced debugging capabilities and error reporting
+- **Development Workflow**: Improved CI/CD pipeline with better error handling
+- **Code Quality**: Enhanced code organization and testing framework
+
 ## [0.4.3] - 2025-01-21
 
 ### Fixed

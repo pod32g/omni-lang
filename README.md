@@ -26,6 +26,8 @@ OmniLang is a modern programming language designed for **performance, safety, an
 
 ## Quick Start
 
+**Latest Release: v0.5.0** - Comprehensive Standard Library Testing & Enhanced CI/CD Pipeline
+
 ### Installation
 
 ```bash
