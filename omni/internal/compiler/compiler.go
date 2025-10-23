@@ -156,8 +156,12 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 		for {
 			stdPath := filepath.Join(current, "std")
 			if _, err := os.Stat(stdPath); err == nil {
-				loader.AddSearchPath(current)
-				break
+				// Check if this is the main std directory (contains std.omni)
+				mainStdPath := filepath.Join(stdPath, "std.omni")
+				if _, err := os.Stat(mainStdPath); err == nil {
+					loader.AddSearchPath(current)
+					break
+				}
 			}
 			parent := filepath.Dir(current)
 			if parent == current {
@@ -185,6 +189,14 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 		if err != nil {
 			return fmt.Errorf("load import %s: %w", strings.Join(imp.Path, "."), err)
 		}
+
+		// Process nested imports recursively for std modules
+		if len(imp.Path) > 0 && imp.Path[0] == "std" {
+			if err := mergeNestedImports(imported, loader, mod); err != nil {
+				return fmt.Errorf("merge nested imports for %s: %w", strings.Join(imp.Path, "."), err)
+			}
+		}
+
 		local := imp.Alias
 		if local == "" {
 			local = imp.Path[len(imp.Path)-1]
@@ -195,6 +207,51 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 				cloned := *fn
 				cloned.Name = local + "." + fn.Name
 				mod.Decls = append(mod.Decls, &cloned)
+			}
+		}
+	}
+	return nil
+}
+
+// mergeNestedImports recursively processes nested imports in std modules
+func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast.Module) error {
+	// Collect imports from both Module.Imports and top-level decls
+	imports := make([]*ast.ImportDecl, 0, len(module.Imports))
+	imports = append(imports, module.Imports...)
+	for _, d := range module.Decls {
+		if imp, ok := d.(*ast.ImportDecl); ok {
+			imports = append(imports, imp)
+		}
+	}
+
+	for _, imp := range imports {
+		if len(imp.Path) == 0 {
+			continue
+		}
+		// Only process std imports
+		if len(imp.Path) > 0 && imp.Path[0] == "std" {
+			// Load the nested std module
+			imported, err := loader.LoadModule(imp.Path)
+			if err != nil {
+				return fmt.Errorf("load nested import %s: %w", strings.Join(imp.Path, "."), err)
+			}
+
+			// Recursively process its nested imports
+			if err := mergeNestedImports(imported, loader, targetMod); err != nil {
+				return fmt.Errorf("merge nested imports for %s: %w", strings.Join(imp.Path, "."), err)
+			}
+
+			// Merge the functions with the target module
+			local := imp.Alias
+			if local == "" {
+				local = imp.Path[len(imp.Path)-1]
+			}
+			for _, d := range imported.Decls {
+				if fn, ok := d.(*ast.FuncDecl); ok {
+					cloned := *fn
+					cloned.Name = local + "." + fn.Name
+					targetMod.Decls = append(targetMod.Decls, &cloned)
+				}
 			}
 		}
 	}
