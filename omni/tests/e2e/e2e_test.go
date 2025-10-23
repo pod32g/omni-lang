@@ -152,9 +152,9 @@ func runVM(testFile string) (string, error) {
 	// Set library path for VM execution (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)
 	cmd.Env = append(cmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
-	output, err := cmd.Output()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w\nOutput: %s", err, string(output))
 	}
 	// Remove trailing newline
 	result := string(output)
