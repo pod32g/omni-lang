@@ -233,8 +233,10 @@ func execStructInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruct
 
 		// Check if first operand is struct type (skip it) or if it's a field name
 		startIndex := 0
-		if len(inst.Operands) >= 3 && inst.Operands[1].Kind == mir.OperandLiteral {
-			// First operand is struct type, second is first field name
+		// If we have an odd number of operands, the first one might be a struct type
+		// If we have an even number of operands, they should be field-value pairs
+		if len(inst.Operands)%2 == 1 {
+			// Odd number of operands - first is likely struct type
 			startIndex = 1
 		}
 

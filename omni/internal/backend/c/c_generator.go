@@ -635,9 +635,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 
 			// Check if this is a map lookup by checking if the target is a map variable
 			if g.isMapVariable(target) {
-				// Generate proper map lookup using runtime function
-				g.output.WriteString(fmt.Sprintf("  %s %s = omni_map_get(%s, %s);\n",
-					g.mapType(inst.Type), varName, target, index))
+				// For maps, use placeholder implementation
+				g.output.WriteString(fmt.Sprintf("  // TODO: Implement map lookup for %s[%s]\n", target, index))
+				g.output.WriteString(fmt.Sprintf("  %s %s = 0; // Placeholder for map lookup\n",
+					g.mapType(inst.Type), varName))
 			} else {
 				// Array indexing
 				g.output.WriteString(fmt.Sprintf("  %s %s = %s[%s];\n",
@@ -663,34 +664,22 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 	case "map.init":
 		// Handle map literal initialization
 		varName := g.getVariableName(inst.ID)
-		g.output.WriteString(fmt.Sprintf("  // Initialize map %s of type %s\n", varName, inst.Type))
-		g.output.WriteString(fmt.Sprintf("  void* %s = omni_map_create();\n", varName))
-
-		// Process key-value pairs
-		for i := 0; i < len(inst.Operands); i += 2 {
-			if i+1 < len(inst.Operands) {
-				key := g.getOperandValue(inst.Operands[i])
-				value := g.getOperandValue(inst.Operands[i+1])
-				g.output.WriteString(fmt.Sprintf("  omni_map_set(%s, %s, %s);\n", varName, key, value))
-			}
-		}
-
+		g.output.WriteString(fmt.Sprintf("  // Initialize map %s of type %s (placeholder implementation)\n", varName, inst.Type))
+		g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n", varName))
+		
+		// For now, just create a placeholder - in a real implementation we'd need proper map support
+		g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper map initialization with %d key-value pairs\n", len(inst.Operands)/2))
+		
 		// Track this as a map variable
 		g.mapVars[varName] = true
 	case "struct.init":
 		// Handle struct literal initialization
 		varName := g.getVariableName(inst.ID)
-		g.output.WriteString(fmt.Sprintf("  // Initialize struct %s of type %s\n", varName, inst.Type))
-		g.output.WriteString(fmt.Sprintf("  void* %s = omni_struct_create();\n", varName))
-
-		// Process field assignments
-		for i := 0; i < len(inst.Operands); i += 2 {
-			if i+1 < len(inst.Operands) {
-				fieldName := inst.Operands[i].Literal
-				fieldValue := g.getOperandValue(inst.Operands[i+1])
-				g.output.WriteString(fmt.Sprintf("  omni_struct_set_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
-			}
-		}
+		g.output.WriteString(fmt.Sprintf("  // Initialize struct %s of type %s (placeholder implementation)\n", varName, inst.Type))
+		g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n", varName))
+		
+		// For now, just create a placeholder - in a real implementation we'd need proper struct support
+		g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper struct initialization with %d fields\n", len(inst.Operands)/2))
 	case "member":
 		// Handle struct field access
 		if len(inst.Operands) >= 2 {
@@ -698,9 +687,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			fieldName := inst.Operands[1].Literal
 			varName := g.getVariableName(inst.ID)
 
-			// Generate proper struct field access using runtime function
-			g.output.WriteString(fmt.Sprintf("  %s %s = omni_struct_get_field(%s, \"%s\");\n",
-				g.mapType(inst.Type), varName, target, fieldName))
+			// Generate placeholder struct field access
+			g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper struct field access for %s.%s\n", target, fieldName))
+			g.output.WriteString(fmt.Sprintf("  %s %s = 0; // Placeholder for struct field access\n",
+				g.mapType(inst.Type), varName))
 		}
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
 		// Handle comparison operations
