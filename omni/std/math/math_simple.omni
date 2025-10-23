@@ -1,7 +1,7 @@
 // std.math - Mathematical functions for OmniLang
 
 // abs returns the absolute value of an integer
-func abs(x:int) {
+func abs(x:int):int {
     if x < 0 {
         return -x
     }
@@ -9,7 +9,7 @@ func abs(x:int) {
 }
 
 // max returns the maximum of two integers
-func max(a:int, b:int) {
+func max(a:int, b:int):int {
     if a > b {
         return a
     }
@@ -17,7 +17,7 @@ func max(a:int, b:int) {
 }
 
 // min returns the minimum of two integers
-func min(a:int, b:int) {
+func min(a:int, b:int):int {
     if a < b {
         return a
     }
@@ -25,7 +25,7 @@ func min(a:int, b:int) {
 }
 
 // toString converts an integer to a string
-func toString(n:int) {
+func toString(n:int):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
     return ""
