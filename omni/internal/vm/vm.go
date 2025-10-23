@@ -1529,6 +1529,14 @@ func toString(value Result) (string, error) {
 		return v, nil
 	case int:
 		return fmt.Sprintf("%d", v), nil
+	case int32:
+		return fmt.Sprintf("%d", v), nil
+	case int64:
+		return fmt.Sprintf("%d", v), nil
+	case float32:
+		return fmt.Sprintf("%g", v), nil
+	case float64:
+		return fmt.Sprintf("%g", v), nil
 	case bool:
 		if v {
 			return "true", nil

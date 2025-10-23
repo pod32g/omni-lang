@@ -1760,6 +1760,9 @@ func (c *Checker) processImport(imp *ast.ImportDecl) {
 		// Register the module's function signatures
 		c.registerModuleFunctionSignatures(module, imp.Path)
 
+		// Process nested imports recursively
+		c.processImports(module)
+
 		// Add std symbols to imports
 		c.imports["io"] = true
 		c.imports["math"] = true
@@ -1906,7 +1909,8 @@ func (c *Checker) registerModuleFunctionSignatures(mod *ast.Module, importPath [
 			// Build the function signature
 			sig := FunctionSignature{Return: "void"}
 			if fn.Return != nil {
-				sig.Return = c.resolveTypeExpr(fn.Return)
+				resolvedType := c.resolveTypeExpr(fn.Return)
+				sig.Return = resolvedType
 			}
 			sig.Params = make([]string, len(fn.Params))
 			for i, param := range fn.Params {

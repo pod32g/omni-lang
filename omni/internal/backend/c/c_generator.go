@@ -666,10 +666,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		varName := g.getVariableName(inst.ID)
 		g.output.WriteString(fmt.Sprintf("  // Initialize map %s of type %s (placeholder implementation)\n", varName, inst.Type))
 		g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n", varName))
-		
+
 		// For now, just create a placeholder - in a real implementation we'd need proper map support
 		g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper map initialization with %d key-value pairs\n", len(inst.Operands)/2))
-		
+
 		// Track this as a map variable
 		g.mapVars[varName] = true
 	case "struct.init":
@@ -677,7 +677,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		varName := g.getVariableName(inst.ID)
 		g.output.WriteString(fmt.Sprintf("  // Initialize struct %s of type %s (placeholder implementation)\n", varName, inst.Type))
 		g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n", varName))
-		
+
 		// For now, just create a placeholder - in a real implementation we'd need proper struct support
 		g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper struct initialization with %d fields\n", len(inst.Operands)/2))
 	case "member":
