@@ -148,28 +148,28 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 		}
 	}
 
-	// Add the omni std directory to search paths
-	// Find the omni root directory by looking for the std directory
-	if abs, err := filepath.Abs(baseDir); err == nil {
-		// Walk up the directory tree to find the omni root
-		current := abs
-		for {
-			stdPath := filepath.Join(current, "std")
-			if _, err := os.Stat(stdPath); err == nil {
-				// Check if this is the main std directory (contains std.omni)
-				mainStdPath := filepath.Join(stdPath, "std.omni")
-				if _, err := os.Stat(mainStdPath); err == nil {
-					loader.AddSearchPath(current)
-					break
+		// Add the omni std directory to search paths
+		// Find the omni root directory by looking for the std directory
+		if abs, err := filepath.Abs(baseDir); err == nil {
+			// Walk up the directory tree to find the omni root
+			current := abs
+			for {
+				stdPath := filepath.Join(current, "std")
+				if _, err := os.Stat(stdPath); err == nil {
+					// Check if this is the main std directory (contains std.omni)
+					mainStdPath := filepath.Join(stdPath, "std.omni")
+					if _, err := os.Stat(mainStdPath); err == nil {
+						loader.AddSearchPath(current)
+						break
+					}
 				}
+				parent := filepath.Dir(current)
+				if parent == current {
+					break // Reached root
+				}
+				current = parent
 			}
-			parent := filepath.Dir(current)
-			if parent == current {
-				break // Reached root
-			}
-			current = parent
 		}
-	}
 
 	// Collect imports from both Module.Imports and top-level decls
 	imports := make([]*ast.ImportDecl, 0, len(mod.Imports))

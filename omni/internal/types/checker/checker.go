@@ -41,8 +41,12 @@ func Check(filename, src string, mod *ast.Module) error {
 		for {
 			stdPath := filepath.Join(current, "std")
 			if _, err := os.Stat(stdPath); err == nil {
-				c.moduleLoader.AddSearchPath(current)
-				break
+				// Check if this is the main std directory (contains std.omni)
+				mainStdPath := filepath.Join(stdPath, "std.omni")
+				if _, err := os.Stat(mainStdPath); err == nil {
+					c.moduleLoader.AddSearchPath(current)
+					break
+				}
 			}
 			parent := filepath.Dir(current)
 			if parent == current {
@@ -54,9 +58,9 @@ func Check(filename, src string, mod *ast.Module) error {
 	c.initBuiltins()
 	c.collectTypeDecls(mod)
 	c.enterScope()
+	c.registerTopLevelSymbols(mod)
 	c.processImports(mod)
 	c.registerMergedFunctionSignatures(mod)
-	c.registerTopLevelSymbols(mod)
 	c.checkModule(mod)
 	c.leaveScope()
 
@@ -325,7 +329,11 @@ func (c *Checker) checkModule(mod *ast.Module) {
 		case *ast.EnumDecl:
 			// Enumerations currently require no additional checks beyond registration.
 		case *ast.FuncDecl:
-			c.checkFunc(d)
+			// Skip checking namespaced functions (imported/merged from std modules)
+			// They were already validated when the std module was parsed
+			if !strings.Contains(d.Name, ".") {
+				c.checkFunc(d)
+			}
 		}
 	}
 }
@@ -1742,6 +1750,7 @@ func (c *Checker) processImports(mod *ast.Module) {
 	}
 }
 
+
 func (c *Checker) processImport(imp *ast.ImportDecl) {
 	if len(imp.Path) == 0 {
 		c.report(imp.Span(), "empty import path", "provide a valid import path")
@@ -1760,8 +1769,16 @@ func (c *Checker) processImport(imp *ast.ImportDecl) {
 		// Register the module's function signatures
 		c.registerModuleFunctionSignatures(module, imp.Path)
 
-		// Process nested imports recursively
-		c.processImports(module)
+		// Process nested imports recursively (but don't process function declarations)
+		// Only process imports, not function declarations
+		for _, nestedImp := range module.Imports {
+			c.processImport(nestedImp)
+		}
+		for _, decl := range module.Decls {
+			if nestedImp, ok := decl.(*ast.ImportDecl); ok {
+				c.processImport(nestedImp)
+			}
+		}
 
 		// Add std symbols to imports
 		c.imports["io"] = true
