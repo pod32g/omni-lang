@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -147,15 +148,21 @@ func runVM(testFile string) (string, error) {
 	// Get the directory where the test files are located
 	// Use the directory containing the test file
 
+	// Get absolute path to the test file
+	absTestFile, err := filepath.Abs(testFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for test file: %v", err)
+	}
+
 	// Debug: Check if file exists
-	if _, err := os.Stat(testFile); os.IsNotExist(err) {
-		return "", fmt.Errorf("test file does not exist: %s (working directory: %s)", testFile, func() string {
+	if _, err := os.Stat(absTestFile); os.IsNotExist(err) {
+		return "", fmt.Errorf("test file does not exist: %s (working directory: %s)", absTestFile, func() string {
 			wd, _ := os.Getwd()
 			return wd
 		}())
 	}
 
-	cmd := exec.Command("../../bin/omnir", testFile)
+	cmd := exec.Command("../../bin/omnir", absTestFile)
 	// Set the working directory to tests/e2e so relative paths work correctly
 	cmd.Dir = "."
 	// Set library path for VM execution (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)
