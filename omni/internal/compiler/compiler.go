@@ -578,6 +578,7 @@ func compileCWrapperWithOpt(cPath, outputPath string, optLevel string) error {
 		"-std=c99",
 		"-Wall",
 		"-Wextra",
+		"-lm",
 	}
 
 	// Add optimization flags
@@ -642,6 +643,7 @@ func compileCWrapperWithDebug(cPath, outputPath string, optLevel string) error {
 		"-Wall",
 		"-Wextra",
 		"-g", // Generate debug symbols
+		"-lm",
 	}
 
 	// Add optimization flags
@@ -747,6 +749,7 @@ func compileCWrapper(cPath, outputPath string) error {
 		"-std=c99",
 		"-Wall",
 		"-Wextra",
+		"-lm",
 	}
 
 	// Add platform-specific flags
