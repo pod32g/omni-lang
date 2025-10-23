@@ -145,10 +145,9 @@ func TestForEmpty(t *testing.T) {
 func runVM(testFile string) (string, error) {
 	// Get the directory where the test files are located
 	// Use the directory containing the test file
-	testDir := "."
 
 	cmd := exec.Command("../../bin/omnir", testFile)
-	cmd.Dir = testDir
+	cmd.Dir = "."
 	// Set library path for VM execution (DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH on Linux)
 	cmd.Env = append(cmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
@@ -167,11 +166,10 @@ func runVM(testFile string) (string, error) {
 func runCBackend(testFile string) (string, error) {
 	// Get the directory where the test files are located
 	// Use the directory containing the test file
-	testDir := "."
 
 	// Compile with C backend using the built binary
 	compileCmd := exec.Command("../../bin/omnic", "-backend", "c", "-emit", "exe", testFile)
-	compileCmd.Dir = testDir
+	compileCmd.Dir = "."
 	// Set environment variables for compilation
 	compileCmd.Env = append(compileCmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
 	compileCmd.Env = append(compileCmd.Env, "LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
@@ -184,7 +182,7 @@ func runCBackend(testFile string) (string, error) {
 	// Run the compiled executable (it's created in the same directory as the source file)
 	executableName := testFile[:len(testFile)-5] // Remove .omni extension
 	runCmd := exec.Command("./" + executableName)
-	runCmd.Dir = testDir
+	runCmd.Dir = "."
 
 	// Set environment variables to find the runtime library
 	runCmd.Env = append(runCmd.Env, "DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix")
