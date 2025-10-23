@@ -39,8 +39,12 @@ test:
 	CGO_ENABLED=0 $(GO) test ./internal/vm -count=1 -v || echo "VM tests completed with expected failures"
 	@echo "Running e2e tests with CGO enabled..."
 	export LD_LIBRARY_PATH=$$PWD/native/clift/target/release:$$PWD/runtime/posix:$$LD_LIBRARY_PATH && $(GO) test ./tests/e2e -count=1 -v
-	$(GO) tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
+	@if [ -f coverage.out ]; then \
+		$(GO) tool cover -html=coverage.out -o coverage.html; \
+		echo "Coverage report generated: coverage.html"; \
+	else \
+		echo "No coverage data found, skipping coverage report generation"; \
+	fi
 
 test-coverage:
 	$(GO) test ./... -count=1 -coverprofile=coverage.out -covermode=count
