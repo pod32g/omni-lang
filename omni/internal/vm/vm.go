@@ -313,12 +313,14 @@ func execPhi(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (R
 
 // execArrayInit handles array initialization
 func execArrayInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
-	// Extract element type from array type (e.g., "[]<int>" -> "int")
+	// Extract element type from array type (e.g., "[]<int>" -> "int", "[]int" -> "int")
 	elementType := inst.Type
 	if strings.HasPrefix(elementType, "[]<") && strings.HasSuffix(elementType, ">") {
 		elementType = elementType[3 : len(elementType)-1]
 	} else if strings.HasPrefix(elementType, "array<") && strings.HasSuffix(elementType, ">") {
 		elementType = elementType[6 : len(elementType)-1]
+	} else if strings.HasPrefix(elementType, "[]") {
+		elementType = elementType[2:]
 	}
 
 	// Handle nested array types like "[]<[]<int>>"
@@ -465,7 +467,7 @@ func execIndex(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) 
 	}
 
 	// Handle array indexing
-	if strings.HasPrefix(target.Type, "[]<") || strings.HasPrefix(target.Type, "array<") {
+	if strings.HasPrefix(target.Type, "[]<") || strings.HasPrefix(target.Type, "array<") || strings.HasPrefix(target.Type, "[]") {
 		switch arr := target.Value.(type) {
 		case []int:
 			if indexVal < 0 || indexVal >= len(arr) {

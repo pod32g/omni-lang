@@ -249,32 +249,44 @@ func TestUnaryOperations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fn := mir.NewFunction("main", "int", nil)
+			returnType := "int"
+			if tt.op == "not" {
+				returnType = "bool"
+			}
+			fn := mir.NewFunction("main", returnType, nil)
 			block := fn.NewBlock("entry")
 
-			// Create operand
+			// Create operand with correct type
 			v0 := fn.NextValue()
+			operandType := "int"
+			if tt.operand == "true" || tt.operand == "false" {
+				operandType = "bool"
+			}
 			block.Instructions = append(block.Instructions, mir.Instruction{
 				ID:   v0,
 				Op:   "const",
-				Type: "int",
+				Type: operandType,
 				Operands: []mir.Operand{
-					{Kind: mir.OperandLiteral, Literal: tt.operand, Type: "int"},
+					{Kind: mir.OperandLiteral, Literal: tt.operand, Type: operandType},
 				},
 			})
 
 			// Create unary operation
 			v1 := fn.NextValue()
+			resultType := "int"
+			if tt.op == "not" {
+				resultType = "bool"
+			}
 			block.Instructions = append(block.Instructions, mir.Instruction{
 				ID:   v1,
 				Op:   tt.op,
-				Type: "int",
+				Type: resultType,
 				Operands: []mir.Operand{
-					{Kind: mir.OperandValue, Value: v0, Type: "int"},
+					{Kind: mir.OperandValue, Value: v0, Type: operandType},
 				},
 			})
 
-			block.Terminator = mir.Terminator{Op: "ret", Operands: []mir.Operand{{Kind: mir.OperandValue, Value: v1, Type: "int"}}}
+			block.Terminator = mir.Terminator{Op: "ret", Operands: []mir.Operand{{Kind: mir.OperandValue, Value: v1, Type: resultType}}}
 
 			mod := &mir.Module{Functions: []*mir.Function{fn}}
 
@@ -379,9 +391,9 @@ func TestArrayOperations(t *testing.T) {
 			t.Errorf("Expected type []int, got %s", res.Type)
 		}
 
-		arr, ok := res.Value.([]interface{})
+		arr, ok := res.Value.([]int)
 		if !ok {
-			t.Fatalf("Expected array, got %T", res.Value)
+			t.Fatalf("Expected []int array, got %T", res.Value)
 		}
 
 		if len(arr) != 3 {
@@ -486,7 +498,7 @@ func TestMapOperations(t *testing.T) {
 			t.Errorf("Expected type map<string,int>, got %s", res.Type)
 		}
 
-		m, ok := res.Value.(map[string]interface{})
+		m, ok := res.Value.(map[interface{}]interface{})
 		if !ok {
 			t.Fatalf("Expected map, got %T", res.Value)
 		}
