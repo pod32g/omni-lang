@@ -152,6 +152,7 @@ test:
     - rustup default stable
   script:
     - cd omni
+    - make clean
     - make build-runtime
     - make build-rust
     - export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
@@ -190,6 +191,8 @@ integration-test:
     - echo "=== INTEGRATION TEST JOB STARTING ==="
     - echo "This should definitely appear in CI log"
     - cd omni
+    - echo "Cleaning build artifacts first"
+    - make clean
     - echo "Building runtime library first"
     - make build-runtime
     - echo "Building Rust components"
@@ -236,6 +239,7 @@ comprehensive-test:
     - rustup default stable
   script:
     - cd omni
+    - make clean
     - make build-runtime
     - make build-rust
     - make build
@@ -286,6 +290,7 @@ benchmark:
     - rustup default stable
   script:
     - cd omni
+    - make clean
     - make build-rust
     - make build-runtime
     - make build
@@ -312,6 +317,7 @@ build-linux:
     - rustup default stable
   script:
     - cd omni
+    - make clean
     - make build-runtime
     - make build-rust
     - make build
