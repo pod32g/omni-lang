@@ -62,6 +62,31 @@ int32_t omni_array_length(int32_t* arr);
 int32_t omni_array_get_int(int32_t* arr, int32_t index);
 void omni_array_set_int(int32_t* arr, int32_t index, int32_t value);
 
+// Map operations
+typedef struct omni_map omni_map_t;
+omni_map_t* omni_map_create();
+void omni_map_destroy(omni_map_t* map);
+void omni_map_put_string_int(omni_map_t* map, const char* key, int32_t value);
+void omni_map_put_int_int(omni_map_t* map, int32_t key, int32_t value);
+int32_t omni_map_get_string_int(omni_map_t* map, const char* key);
+int32_t omni_map_get_int_int(omni_map_t* map, int32_t key);
+int32_t omni_map_contains_string(omni_map_t* map, const char* key);
+int32_t omni_map_contains_int(omni_map_t* map, int32_t key);
+int32_t omni_map_size(omni_map_t* map);
+
+// Struct operations
+typedef struct omni_struct omni_struct_t;
+omni_struct_t* omni_struct_create();
+void omni_struct_destroy(omni_struct_t* struct_ptr);
+void omni_struct_set_string_field(omni_struct_t* struct_ptr, const char* field_name, const char* value);
+void omni_struct_set_int_field(omni_struct_t* struct_ptr, const char* field_name, int32_t value);
+void omni_struct_set_float_field(omni_struct_t* struct_ptr, const char* field_name, double value);
+void omni_struct_set_bool_field(omni_struct_t* struct_ptr, const char* field_name, int32_t value);
+const char* omni_struct_get_string_field(omni_struct_t* struct_ptr, const char* field_name);
+int32_t omni_struct_get_int_field(omni_struct_t* struct_ptr, const char* field_name);
+double omni_struct_get_float_field(omni_struct_t* struct_ptr, const char* field_name);
+int32_t omni_struct_get_bool_field(omni_struct_t* struct_ptr, const char* field_name);
+
 double omni_pow(double x, double y);
 double omni_sqrt(double x);
 double omni_floor(double x);

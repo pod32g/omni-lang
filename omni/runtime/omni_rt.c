@@ -549,3 +549,485 @@ void omni_exit(int32_t code) {
 
 // Entry point - this will be implemented by the generated code
 // The generated code will provide the omni_main function
+
+// ============================================================================
+// Map Implementation
+// ============================================================================
+
+// Simple hash map implementation for OmniLang maps
+typedef struct omni_map_entry {
+    void* key;
+    void* value;
+    struct omni_map_entry* next;
+} omni_map_entry_t;
+
+struct omni_map {
+    omni_map_entry_t** buckets;
+    int32_t bucket_count;
+    int32_t size;
+};
+
+// Simple hash function for strings
+static uint32_t hash_string(const char* str) {
+    uint32_t hash = 5381;
+    int c;
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c;
+    }
+    return hash;
+}
+
+// Simple hash function for integers
+static uint32_t hash_int(int32_t value) {
+    return (uint32_t)value;
+}
+
+omni_map_t* omni_map_create() {
+    omni_map_t* map = (omni_map_t*)malloc(sizeof(omni_map_t));
+    if (!map) return NULL;
+    
+    map->bucket_count = 16; // Start with 16 buckets
+    map->size = 0;
+    map->buckets = (omni_map_entry_t**)calloc(map->bucket_count, sizeof(omni_map_entry_t*));
+    if (!map->buckets) {
+        free(map);
+        return NULL;
+    }
+    
+    return map;
+}
+
+void omni_map_destroy(omni_map_t* map) {
+    if (!map) return;
+    
+    for (int32_t i = 0; i < map->bucket_count; i++) {
+        omni_map_entry_t* entry = map->buckets[i];
+        while (entry) {
+            omni_map_entry_t* next = entry->next;
+            free(entry->key);
+            free(entry->value);
+            free(entry);
+            entry = next;
+        }
+    }
+    
+    free(map->buckets);
+    free(map);
+}
+
+void omni_map_put_string_int(omni_map_t* map, const char* key, int32_t value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            // Update existing value
+            *(int32_t*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(strlen(key) + 1);
+    entry->value = malloc(sizeof(int32_t));
+    if (!entry->key || !entry->value) {
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    strcpy((char*)entry->key, key);
+    *(int32_t*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_int_int(omni_map_t* map, int32_t key, int32_t value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            // Update existing value
+            *(int32_t*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(sizeof(int32_t));
+    entry->value = malloc(sizeof(int32_t));
+    if (!entry->key || !entry->value) {
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    *(int32_t*)entry->key = key;
+    *(int32_t*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+int32_t omni_map_get_string_int(omni_map_t* map, const char* key) {
+    if (!map) return 0;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            return *(int32_t*)entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return 0; // Key not found, return default value
+}
+
+int32_t omni_map_get_int_int(omni_map_t* map, int32_t key) {
+    if (!map) return 0;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            return *(int32_t*)entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return 0; // Key not found, return default value
+}
+
+int32_t omni_map_contains_string(omni_map_t* map, const char* key) {
+    if (!map) return 0;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            return 1; // Found
+        }
+        entry = entry->next;
+    }
+    
+    return 0; // Not found
+}
+
+int32_t omni_map_contains_int(omni_map_t* map, int32_t key) {
+    if (!map) return 0;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            return 1; // Found
+        }
+        entry = entry->next;
+    }
+    
+    return 0; // Not found
+}
+
+int32_t omni_map_size(omni_map_t* map) {
+    return map ? map->size : 0;
+}
+
+// ============================================================================
+// Struct Implementation
+// ============================================================================
+
+// Simple struct implementation for OmniLang structs
+typedef struct omni_struct_field {
+    char* name;
+    void* value;
+    int32_t value_type; // 0=string, 1=int, 2=float, 3=bool
+    struct omni_struct_field* next;
+} omni_struct_field_t;
+
+struct omni_struct {
+    omni_struct_field_t* fields;
+};
+
+omni_struct_t* omni_struct_create() {
+    omni_struct_t* struct_ptr = (omni_struct_t*)malloc(sizeof(omni_struct_t));
+    if (!struct_ptr) return NULL;
+    
+    struct_ptr->fields = NULL;
+    return struct_ptr;
+}
+
+void omni_struct_destroy(omni_struct_t* struct_ptr) {
+    if (!struct_ptr) return;
+    
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        omni_struct_field_t* next = field->next;
+        free(field->name);
+        if (field->value_type == 0) { // string
+            free((char*)field->value);
+        } else {
+            free(field->value);
+        }
+        free(field);
+        field = next;
+    }
+    
+    free(struct_ptr);
+}
+
+void omni_struct_set_string_field(omni_struct_t* struct_ptr, const char* field_name, const char* value) {
+    if (!struct_ptr) return;
+    
+    // Check if field already exists
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            // Update existing field
+            if (field->value_type == 0) { // string
+                free((char*)field->value);
+            } else {
+                free(field->value);
+            }
+            field->value = malloc(strlen(value) + 1);
+            if (field->value) {
+                strcpy((char*)field->value, value);
+                field->value_type = 0; // string
+            }
+            return;
+        }
+        field = field->next;
+    }
+    
+    // Create new field
+    field = (omni_struct_field_t*)malloc(sizeof(omni_struct_field_t));
+    if (!field) return;
+    
+    field->name = malloc(strlen(field_name) + 1);
+    field->value = malloc(strlen(value) + 1);
+    if (!field->name || !field->value) {
+        free(field->name);
+        free(field->value);
+        free(field);
+        return;
+    }
+    
+    strcpy(field->name, field_name);
+    strcpy((char*)field->value, value);
+    field->value_type = 0; // string
+    field->next = struct_ptr->fields;
+    struct_ptr->fields = field;
+}
+
+void omni_struct_set_int_field(omni_struct_t* struct_ptr, const char* field_name, int32_t value) {
+    if (!struct_ptr) return;
+    
+    // Check if field already exists
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            // Update existing field
+            if (field->value_type == 0) { // string
+                free((char*)field->value);
+            } else {
+                free(field->value);
+            }
+            field->value = malloc(sizeof(int32_t));
+            if (field->value) {
+                *(int32_t*)field->value = value;
+                field->value_type = 1; // int
+            }
+            return;
+        }
+        field = field->next;
+    }
+    
+    // Create new field
+    field = (omni_struct_field_t*)malloc(sizeof(omni_struct_field_t));
+    if (!field) return;
+    
+    field->name = malloc(strlen(field_name) + 1);
+    field->value = malloc(sizeof(int32_t));
+    if (!field->name || !field->value) {
+        free(field->name);
+        free(field->value);
+        free(field);
+        return;
+    }
+    
+    strcpy(field->name, field_name);
+    *(int32_t*)field->value = value;
+    field->value_type = 1; // int
+    field->next = struct_ptr->fields;
+    struct_ptr->fields = field;
+}
+
+void omni_struct_set_float_field(omni_struct_t* struct_ptr, const char* field_name, double value) {
+    if (!struct_ptr) return;
+    
+    // Check if field already exists
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            // Update existing field
+            if (field->value_type == 0) { // string
+                free((char*)field->value);
+            } else {
+                free(field->value);
+            }
+            field->value = malloc(sizeof(double));
+            if (field->value) {
+                *(double*)field->value = value;
+                field->value_type = 2; // float
+            }
+            return;
+        }
+        field = field->next;
+    }
+    
+    // Create new field
+    field = (omni_struct_field_t*)malloc(sizeof(omni_struct_field_t));
+    if (!field) return;
+    
+    field->name = malloc(strlen(field_name) + 1);
+    field->value = malloc(sizeof(double));
+    if (!field->name || !field->value) {
+        free(field->name);
+        free(field->value);
+        free(field);
+        return;
+    }
+    
+    strcpy(field->name, field_name);
+    *(double*)field->value = value;
+    field->value_type = 2; // float
+    field->next = struct_ptr->fields;
+    struct_ptr->fields = field;
+}
+
+void omni_struct_set_bool_field(omni_struct_t* struct_ptr, const char* field_name, int32_t value) {
+    if (!struct_ptr) return;
+    
+    // Check if field already exists
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            // Update existing field
+            if (field->value_type == 0) { // string
+                free((char*)field->value);
+            } else {
+                free(field->value);
+            }
+            field->value = malloc(sizeof(int32_t));
+            if (field->value) {
+                *(int32_t*)field->value = value;
+                field->value_type = 3; // bool
+            }
+            return;
+        }
+        field = field->next;
+    }
+    
+    // Create new field
+    field = (omni_struct_field_t*)malloc(sizeof(omni_struct_field_t));
+    if (!field) return;
+    
+    field->name = malloc(strlen(field_name) + 1);
+    field->value = malloc(sizeof(int32_t));
+    if (!field->name || !field->value) {
+        free(field->name);
+        free(field->value);
+        free(field);
+        return;
+    }
+    
+    strcpy(field->name, field_name);
+    *(int32_t*)field->value = value;
+    field->value_type = 3; // bool
+    field->next = struct_ptr->fields;
+    struct_ptr->fields = field;
+}
+
+const char* omni_struct_get_string_field(omni_struct_t* struct_ptr, const char* field_name) {
+    if (!struct_ptr) return "";
+    
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0 && field->value_type == 0) {
+            return (const char*)field->value;
+        }
+        field = field->next;
+    }
+    
+    return ""; // Field not found, return default value
+}
+
+int32_t omni_struct_get_int_field(omni_struct_t* struct_ptr, const char* field_name) {
+    if (!struct_ptr) return 0;
+    
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0 && field->value_type == 1) {
+            return *(int32_t*)field->value;
+        }
+        field = field->next;
+    }
+    
+    return 0; // Field not found, return default value
+}
+
+double omni_struct_get_float_field(omni_struct_t* struct_ptr, const char* field_name) {
+    if (!struct_ptr) return 0.0;
+    
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0 && field->value_type == 2) {
+            return *(double*)field->value;
+        }
+        field = field->next;
+    }
+    
+    return 0.0; // Field not found, return default value
+}
+
+int32_t omni_struct_get_bool_field(omni_struct_t* struct_ptr, const char* field_name) {
+    if (!struct_ptr) return 0;
+    
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0 && field->value_type == 3) {
+            return *(int32_t*)field->value;
+        }
+        field = field->next;
+    }
+    
+    return 0; // Field not found, return default value
+}

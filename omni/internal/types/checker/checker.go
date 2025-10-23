@@ -1454,7 +1454,7 @@ func (c *Checker) typesEqual(a, b string) bool {
 		aElement := c.getArrayElementType(a)
 		bElement := c.getArrayElementType(b)
 		// If one is a generic type parameter (T) and the other is concrete, they're compatible
-		if (c.isTypeParam(aElement) || c.isTypeParam(bElement)) {
+		if c.isTypeParam(aElement) || c.isTypeParam(bElement) {
 			return true
 		}
 		return c.typesEqual(aElement, bElement)

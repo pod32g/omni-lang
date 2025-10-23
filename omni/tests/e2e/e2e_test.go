@@ -368,7 +368,7 @@ func TestMapBasic(t *testing.T) {
 func TestMapComprehensive(t *testing.T) {
 	testFile := "map_comprehensive.omni"
 	expectedVM := "274" // 95 + 87 + 92 + 0 = 274
-	expectedC := "380"  // 95 + 95 + 95 + 95 = 380 (placeholder returns 95 for all lookups)
+	expectedC := "274"  // 95 + 87 + 92 + 0 = 274 (real map implementation)
 
 	// Test VM backend
 	result, err := runVM(testFile)
@@ -415,7 +415,7 @@ func TestStructBasic(t *testing.T) {
 func TestStructComprehensive(t *testing.T) {
 	testFile := "struct_comprehensive.omni"
 	expectedVM := "30" // 10 + 20 = 30
-	expectedC := "20"  // 10 + 10 = 20 (placeholder returns 10 for all field accesses)
+	expectedC := "30"  // 10 + 20 = 30 (real struct implementation)
 
 	// Test VM backend
 	result, err := runVM(testFile)
@@ -556,7 +556,7 @@ func TestLogicalOr(t *testing.T) {
 
 func TestStringOperations(t *testing.T) {
 	testFile := "new_features/test_string_operations_comprehensive.omni"
-	expected := "Concatenation: Hello, World!\nSubstring (0,5): Hello\nChar at 0: 72\nStarts with 'Hello': true\nEnds with 'World!': true\nContains 'World': true\nIndex of 'World': 7\nLast index of 'l': 10\nTrim result: 'Hello World'\nTo upper: HELLO, WORLD!\nTo lower: hello, world!\nString equals: true\nString compare (Apple vs Banana): -1\n0"
+	expected := "String length: 13\nConcatenation: Hello, World!\nSubstring (0,5): Hello\nChar at 0: 72\nStarts with 'Hello': true\nEnds with 'World!': true\nContains 'World': true\nIndex of 'World': 7\nLast index of 'l': 10\nTrim result: 'Hello World'\nTo upper: HELLO, WORLD!\nTo lower: hello, world!\nString equals: true\nString compare (Apple vs Banana): -1\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)

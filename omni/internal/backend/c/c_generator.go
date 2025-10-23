@@ -633,16 +633,13 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			index := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
 
-			// Check if this is a map lookup by checking if the target is a map variable
+			// Check if target is a map variable
 			if g.isMapVariable(target) {
-				// For maps, use placeholder implementation
-				g.output.WriteString(fmt.Sprintf("  // TODO: Implement map lookup for %s[%s]\n", target, index))
-				g.output.WriteString(fmt.Sprintf("  %s %s = 0; // Placeholder for map lookup\n",
-					g.mapType(inst.Type), varName))
+				// Map indexing - assume string key for now (can be enhanced later)
+				g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_map_get_string_int(%s, %s);\n", varName, target, index))
 			} else {
 				// Array indexing
-				g.output.WriteString(fmt.Sprintf("  %s %s = %s[%s];\n",
-					g.mapType(inst.Type), varName, target, index))
+				g.output.WriteString(fmt.Sprintf("  %s %s = %s[%s];\n", g.mapType(inst.Type), varName, target, index))
 			}
 		}
 	case "array.init":
@@ -662,35 +659,84 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			g.output.WriteString("};\n")
 		}
 	case "map.init":
-		// Handle map literal initialization
+		// Handle map initialization
 		varName := g.getVariableName(inst.ID)
-		g.output.WriteString(fmt.Sprintf("  // Initialize map %s of type %s (placeholder implementation)\n", varName, inst.Type))
-		g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n", varName))
+		g.output.WriteString(fmt.Sprintf("  omni_map_t* %s = omni_map_create();\n", varName))
 
-		// For now, just create a placeholder - in a real implementation we'd need proper map support
-		g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper map initialization with %d key-value pairs\n", len(inst.Operands)/2))
+		// Process key-value pairs from operands
+		for i := 0; i < len(inst.Operands); i += 2 {
+			if i+1 < len(inst.Operands) {
+				key := g.getOperandValue(inst.Operands[i])
+				value := g.getOperandValue(inst.Operands[i+1])
 
-		// Track this as a map variable
+				// Determine key and value types from the map type
+				mapType := inst.Type
+				if strings.HasPrefix(mapType, "map<") && strings.HasSuffix(mapType, ">") {
+					inner := mapType[4 : len(mapType)-1] // Remove "map<" and ">"
+					parts := strings.Split(inner, ",")
+					if len(parts) == 2 {
+						keyType := strings.TrimSpace(parts[0])
+						valueType := strings.TrimSpace(parts[1])
+
+						// Generate appropriate put function call based on types
+						if keyType == "string" && valueType == "int" {
+							g.output.WriteString(fmt.Sprintf("  omni_map_put_string_int(%s, %s, %s);\n", varName, key, value))
+						} else if keyType == "int" && valueType == "int" {
+							g.output.WriteString(fmt.Sprintf("  omni_map_put_int_int(%s, %s, %s);\n", varName, key, value))
+						} else {
+							// Fallback for other type combinations
+							g.output.WriteString(fmt.Sprintf("  // TODO: Handle map type %s\n", mapType))
+						}
+					}
+				}
+			}
+		}
+
+		// Mark this variable as a map
 		g.mapVars[varName] = true
 	case "struct.init":
-		// Handle struct literal initialization
+		// Handle struct initialization
 		varName := g.getVariableName(inst.ID)
-		g.output.WriteString(fmt.Sprintf("  // Initialize struct %s of type %s (placeholder implementation)\n", varName, inst.Type))
-		g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n", varName))
+		g.output.WriteString(fmt.Sprintf("  omni_struct_t* %s = omni_struct_create();\n", varName))
 
-		// For now, just create a placeholder - in a real implementation we'd need proper struct support
-		g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper struct initialization with %d fields\n", len(inst.Operands)/2))
+		// Process field-value pairs from operands
+		// Handle different operand formats: [field1Value, field2Value, ...] or [field1Name, field1Value, field2Name, field2Value, ...]
+		if len(inst.Operands) > 0 {
+			// Check if first operand is a field name (literal) or field value
+			if len(inst.Operands) >= 2 && inst.Operands[0].Kind == mir.OperandLiteral {
+				// Named field format: [field1Name, field1Value, field2Name, field2Value, ...]
+				// Skip first operand if it's a struct type (odd number of operands)
+				startIndex := 0
+				if len(inst.Operands)%2 == 1 {
+					startIndex = 1 // First operand is struct type
+				}
+
+				// Process field-value pairs
+				for i := startIndex; i < len(inst.Operands); i += 2 {
+					if i+1 < len(inst.Operands) {
+						fieldName := inst.Operands[i].Literal
+						fieldValue := g.getOperandValue(inst.Operands[i+1])
+
+						// Determine field type from the value operand
+						// For now, assume all values are int (can be enhanced later)
+						g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+					}
+				}
+			} else {
+				// Positional field format: [field1Value, field2Value, ...]
+				// For now, just create empty struct (can be enhanced later with field names)
+				g.output.WriteString(fmt.Sprintf("  // TODO: Handle positional struct initialization\n"))
+			}
+		}
 	case "member":
-		// Handle struct field access
+		// Handle struct member access
 		if len(inst.Operands) >= 2 {
-			target := g.getOperandValue(inst.Operands[0])
+			structVar := g.getOperandValue(inst.Operands[0])
 			fieldName := inst.Operands[1].Literal
 			varName := g.getVariableName(inst.ID)
 
-			// Generate placeholder struct field access
-			g.output.WriteString(fmt.Sprintf("  // TODO: Implement proper struct field access for %s.%s\n", target, fieldName))
-			g.output.WriteString(fmt.Sprintf("  %s %s = 0; // Placeholder for struct field access\n",
-				g.mapType(inst.Type), varName))
+			// For now, assume all fields are int (can be enhanced later)
+			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
 		}
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
 		// Handle comparison operations
@@ -1057,6 +1103,16 @@ func (g *CGenerator) mapType(omniType string) string {
 	if strings.HasPrefix(omniType, "array<") && strings.HasSuffix(omniType, ">") {
 		elementType := omniType[6 : len(omniType)-1]
 		return g.mapType(elementType) // Don't add [] here, it's added in the declaration
+	}
+
+	// Handle map types: map<KeyType,ValueType>
+	if strings.HasPrefix(omniType, "map<") && strings.HasSuffix(omniType, ">") {
+		return "omni_map_t*"
+	}
+
+	// Handle struct types: struct<Field1Type,Field2Type,...>
+	if strings.HasPrefix(omniType, "struct<") && strings.HasSuffix(omniType, ">") {
+		return "omni_struct_t*"
 	}
 
 	switch omniType {
