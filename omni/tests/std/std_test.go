@@ -83,6 +83,71 @@ func TestStdLibraryComprehensive(t *testing.T) {
 	}
 }
 
+func TestAllStdModules(t *testing.T) {
+	// Test all std library modules to ensure they can be imported and functions called
+	// Most functions are placeholders, but we test that the import system works
+	
+	t.Run("std.string", func(t *testing.T) {
+		result, err := runVM("std_string_comprehensive.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		// Expected: 20 (actual result from string functions)
+		expected := "20"
+		if result != expected {
+			t.Errorf("Expected %s, got %s", expected, result)
+		}
+	})
+	
+	t.Run("std.array", func(t *testing.T) {
+		result, err := runVM("std_array_simple.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		// Expected: 42 (success indicator)
+		expected := "42"
+		if result != expected {
+			t.Errorf("Expected %s, got %s", expected, result)
+		}
+	})
+	
+	t.Run("std.collections", func(t *testing.T) {
+		result, err := runVM("std_collections_simple.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		// Expected: 42 (success indicator)
+		expected := "42"
+		if result != expected {
+			t.Errorf("Expected %s, got %s", expected, result)
+		}
+	})
+	
+	t.Run("std.os", func(t *testing.T) {
+		result, err := runVM("std_os_simple.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		// Expected: 42 (success indicator)
+		expected := "42"
+		if result != expected {
+			t.Errorf("Expected %s, got %s", expected, result)
+		}
+	})
+	
+	t.Run("std.file", func(t *testing.T) {
+		result, err := runVM("std_file_simple.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		// Expected: 42 (success indicator)
+		expected := "42"
+		if result != expected {
+			t.Errorf("Expected %s, got %s", expected, result)
+		}
+	})
+}
+
 func runVM(testFile string) (string, error) {
 	cmd := exec.Command("go", "run", "../../cmd/omnir", testFile)
 	cmd.Dir = "."

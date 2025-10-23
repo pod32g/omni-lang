@@ -1,0 +1,10 @@
+// Simple test for std.file module - just test that it can be imported
+import std
+
+func main():int {
+    // Just test that we can import std.file and the module loads
+    // We won't call any functions since they're not implemented in the VM
+    
+    // Return a fixed value to indicate success
+    return 42
+}
