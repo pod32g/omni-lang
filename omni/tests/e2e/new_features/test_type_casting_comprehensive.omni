@@ -1,0 +1,58 @@
+import std
+
+func main(): int {
+    // Test basic type casting
+    let x = 42
+    let y = 3.14
+    let z = true
+    
+    // Test int to float
+    let x_float = (float)x
+    std.io.print("int to float: ")
+    std.io.println_float(x_float)
+    
+    // Test float to int
+    let y_int = (int)y
+    std.io.print("float to int: ")
+    std.io.println_int(y_int)
+    
+    // Test int to string
+    let x_string = std.int_to_string(x)
+    std.io.print("int to string: ")
+    std.io.println(x_string)
+    
+    // Test float to string
+    let y_string = std.float_to_string(y)
+    std.io.print("float to string: ")
+    std.io.println(y_string)
+    
+    // Test bool to string
+    let z_string = std.bool_to_string(z)
+    std.io.print("bool to string: ")
+    std.io.println(z_string)
+    
+    // Test string to int
+    let s1 = "123"
+    let s1_int = std.string_to_int(s1)
+    std.io.print("string to int: ")
+    std.io.println_int(s1_int)
+    
+    // Test string to float
+    let s2 = "3.14"
+    let s2_float = std.string_to_float(s2)
+    std.io.print("string to float: ")
+    std.io.println_float(s2_float)
+    
+    // Test string to bool
+    let s3 = "true"
+    let s3_bool = std.string_to_bool(s3)
+    std.io.print("string to bool: ")
+    std.io.println_bool(s3_bool)
+    
+    // Test nested casting
+    let nested = (float)(int)3.99
+    std.io.print("nested cast (float)(int)3.99: ")
+    std.io.println_float(nested)
+    
+    return 0
+}

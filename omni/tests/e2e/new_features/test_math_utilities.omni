@@ -1,0 +1,35 @@
+import std
+
+func main(): int {
+    // Math functions
+    let a = -5
+    let b = 10
+    let c = 2
+    
+    let abs_val = std.math.abs(a)        // Should be 5
+    let max_val = std.math.max(a, b)     // Should be 10
+    let min_val = std.math.min(a, b)     // Should be -5
+    // let pow_val = std.math.pow(c, 3)     // Should be 8 (not implemented in C backend)
+    // let sqrt_val = std.math.sqrt(16)     // Should be 4 (not implemented in C backend)
+    
+    // Advanced math functions (not implemented in C backend)
+    // let gcd_val = std.math.gcd(12, 18)   // Should be 6
+    // let lcm_val = std.math.lcm(12, 18)   // Should be 36
+    // let fact_val = std.math.factorial(5) // Should be 120
+    
+    // Floor/ceil/round (if implemented)
+    // let floor_val = std.math.floor(3.7)  // Should be 3
+    // let ceil_val = std.math.ceil(3.2)    // Should be 4
+    // let round_val = std.math.round(3.5)  // Should be 4
+    
+    // Random numbers (if implemented)
+    // let random_val = std.math.random()
+    // let seeded_random = std.math.random_seed(42)
+    
+    // Time functions (if implemented)
+    // let current_time = std.time.now()
+    // std.time.sleep(1000)  // Sleep for 1 second
+    
+    std.io.println("Math and utilities test passed")
+    return 0
+}

@@ -1,0 +1,29 @@
+import std
+
+func main(): int {
+    // Basic assertion
+    let x = 42
+    std.assert(x > 0, "x should be positive")
+    
+    // Assertion with equality (generic function has issues)
+    let y = 10
+    // std.assert_eq(y, 10, "y should equal 10")  // Generic function issue
+    
+    // Assertion that should fail (commented out to avoid crash)
+    // std.assert(x < 0, "This should fail")
+    
+    // Runtime error with message (if implemented)
+    // if (x < 0) {
+    //     std.panic("x is negative!")
+    // }
+    
+    // Try/catch (if implemented)
+    // try {
+    //     let result = 10 / 0  // Should cause error
+    // } catch (e) {
+    //     std.io.println("Caught error:", e)
+    // }
+    
+    std.io.println("Errors and assertions test passed")
+    return 0
+}

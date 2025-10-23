@@ -1,0 +1,26 @@
+import std
+
+func main(): int {
+    let arr = [1, 2, 3, 4, 5]
+    
+    // Test array length using built-in method
+    let len = arr.len()
+    std.io.print("Array length: ")
+    std.io.println_int(len)
+    
+    // Test array indexing
+    let first = arr[0]
+    std.io.print("First element: ")
+    std.io.println_int(first)
+    
+    let third = arr[2]
+    std.io.print("Third element: ")
+    std.io.println_int(third)
+    
+    // Test array indexing
+    let second = arr[1]
+    std.io.print("Second element: ")
+    std.io.println_int(second)
+    
+    return 0
+}

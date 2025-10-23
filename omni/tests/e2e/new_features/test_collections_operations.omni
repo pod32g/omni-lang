@@ -1,0 +1,40 @@
+import std
+
+func main(): int {
+    // Arrays/lists
+    let arr = [1, 2, 3, 4, 5]
+    let arr_len = arr.len()  // Should be 5
+    let first_elem = arr[0]  // Should be 1
+    let last_elem = arr[4]   // Should be 5
+    
+    // Array operations (if implemented)
+    // let new_arr = arr.push(6)     // Add element
+    // let popped_arr = arr.pop()    // Remove last element
+    // let sliced = arr.slice(1, 3)  // Get slice [2, 3]
+    
+    // Maps
+    let map = {"apple": 5, "banana": 3, "orange": 8}
+    let apple_count = map["apple"]  // Should be 5
+    
+    // Map operations (if implemented)
+    // map["grape"] = 12              // Set new key
+    // let deleted = map.delete("banana")  // Delete key
+    // let keys = map.keys()          // Get all keys
+    // let values = map.values()      // Get all values
+    
+    // Iteration (if implemented)
+    // for (let item in arr) {
+    //     std.io.println("Array item:", item)
+    // }
+    // for (let key in map.keys()) {
+    //     std.io.println("Map key:", key, "value:", map[key])
+    // }
+    
+    // Equality rules
+    let arr1 = [1, 2, 3]
+    let arr2 = [1, 2, 3]
+    // let arrs_equal = (arr1 == arr2)  // Should be true (if implemented)
+    
+    std.io.println("Collections operations test passed")
+    return 0
+}

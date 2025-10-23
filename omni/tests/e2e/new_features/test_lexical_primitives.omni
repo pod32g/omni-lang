@@ -1,0 +1,49 @@
+import std
+
+func main(): int {
+    // Test null literal
+    let nullValue = null
+    std.io.println("Null literal test passed")
+    
+    // Test hex literals
+    let hex1 = 0xFF
+    let hex2 = 0x1A
+    let hex3 = 0x10_00
+    std.io.print("Hex 0xFF: ")
+    std.io.println_int(hex1)
+    std.io.print("Hex 0x1A: ")
+    std.io.println_int(hex2)
+    std.io.print("Hex 0x10_00: ")
+    std.io.println_int(hex3)
+    
+    // Test binary literals
+    let binary1 = 0b1010
+    let binary2 = 0b1111_0000
+    let binary3 = 0b1
+    std.io.print("Binary 0b1010: ")
+    std.io.println_int(binary1)
+    std.io.print("Binary 0b1111_0000: ")
+    std.io.println_int(binary2)
+    std.io.print("Binary 0b1: ")
+    std.io.println_int(binary3)
+    
+    // Test scientific notation
+    let sci1 = 1.0e5
+    let sci2 = 2.5e-3
+    let sci3 = 1.23E+2
+    std.io.print("Scientific 1.0e5: ")
+    std.io.println(std.float_to_string(sci1))
+    std.io.print("Scientific 2.5e-3: ")
+    std.io.println(std.float_to_string(sci2))
+    std.io.print("Scientific 1.23E+2: ")
+    std.io.println(std.float_to_string(sci3))
+    
+    // Test mixed operations
+    let hexInt = hex1
+    let binaryInt = binary1
+    let sum = (float) hexInt + (float) binaryInt + sci1
+    std.io.print("Mixed sum: ")
+    std.io.println(std.float_to_string(sum))
+    
+    return 0
+}

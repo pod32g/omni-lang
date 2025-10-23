@@ -1,0 +1,56 @@
+import std
+
+func main(): int {
+    // Test nested shadowing
+    let x = 1
+    std.io.print("Level 0 x: ")
+    std.io.println_int(x)
+    
+    {
+        let x = 2
+        std.io.print("Level 1 x: ")
+        std.io.println_int(x)
+        
+        {
+            let x = 3
+            std.io.print("Level 2 x: ")
+            std.io.println_int(x)
+        }
+        
+        std.io.print("Level 1 x after inner block: ")
+        std.io.println_int(x)
+    }
+    
+    std.io.print("Level 0 x after all blocks: ")
+    std.io.println_int(x)
+    
+    // Test different variable types shadowing
+    let name = "outer"
+    std.io.print("Outer name: ")
+    std.io.println(name)
+    
+    {
+        let name = 42  // Shadow with different type
+        std.io.print("Inner name (int): ")
+        std.io.println_int(name)
+    }
+    
+    std.io.print("Outer name after block: ")
+    std.io.println(name)
+    
+    // Test mutable vs immutable shadowing
+    let immutable = 100
+    {
+        var mutable = 200  // Shadow with mutable variable
+        std.io.print("Inner mutable: ")
+        std.io.println_int(mutable)
+        mutable = 300
+        std.io.print("Inner mutable after assignment: ")
+        std.io.println_int(mutable)
+    }
+    
+    std.io.print("Outer immutable: ")
+    std.io.println_int(immutable)
+    
+    return 0
+}

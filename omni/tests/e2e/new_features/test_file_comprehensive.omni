@@ -1,0 +1,39 @@
+import std.file
+
+func main(): int {
+    // Test file existence
+    let exists_result = file.exists("test.txt")
+    std.io.print("File exists: ")
+    std.io.println_int(exists_result)
+    
+    // Test file size
+    let size_result = file.size("test.txt")
+    std.io.print("File size: ")
+    std.io.println_int(size_result)
+    
+    // Test file operations
+    let handle = file.open("test.txt", "w")
+    std.io.print("File open handle: ")
+    std.io.println_int(handle)
+    
+    if handle >= 0 {
+        let write_result = file.write(handle, "Hello, World!", 13)
+        std.io.print("Bytes written: ")
+        std.io.println_int(write_result)
+        
+        let close_result = file.close(handle)
+        std.io.print("File close result: ")
+        std.io.println_int(close_result)
+        
+        // Now check if file exists and get its size
+        let exists_after = file.exists("test.txt")
+        std.io.print("File exists after write: ")
+        std.io.println_int(exists_after)
+        
+        let size_after = file.size("test.txt")
+        std.io.print("File size after write: ")
+        std.io.println_int(size_after)
+    }
+    
+    return 0
+}

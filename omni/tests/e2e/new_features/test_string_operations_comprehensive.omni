@@ -1,0 +1,64 @@
+import std
+
+func main(): int {
+    let test_string = "Hello, World!"
+    
+    // Test string length
+    let len = std.string.length(test_string)
+    std.io.println("String length: " + std.int_to_string(len))
+    
+    // Test string concatenation
+    let concat_result = std.string.concat("Hello", ", World!")
+    std.io.println("Concatenation: " + concat_result)
+    
+    // Test substring
+    let substring_result = std.string.substring(test_string, 0, 5)
+    std.io.println("Substring (0,5): " + substring_result)
+    
+    // Test char_at
+    let char_result = std.string.char_at(test_string, 0)
+    std.io.println("Char at 0: " + char_result)
+    
+    // Test starts_with
+    let starts_result = std.string.starts_with(test_string, "Hello")
+    std.io.println("Starts with 'Hello': " + std.bool_to_string(starts_result))
+    
+    // Test ends_with
+    let ends_result = std.string.ends_with(test_string, "World!")
+    std.io.println("Ends with 'World!': " + std.bool_to_string(ends_result))
+    
+    // Test contains
+    let contains_result = std.string.contains(test_string, "World")
+    std.io.println("Contains 'World': " + std.bool_to_string(contains_result))
+    
+    // Test index_of
+    let index_result = std.string.index_of(test_string, "World")
+    std.io.println("Index of 'World': " + std.int_to_string(index_result))
+    
+    // Test last_index_of
+    let last_index_result = std.string.last_index_of(test_string, "l")
+    std.io.println("Last index of 'l': " + std.int_to_string(last_index_result))
+    
+    // Test trim
+    let trim_test = "  Hello World  "
+    let trim_result = std.string.trim(trim_test)
+    std.io.println("Trim result: '" + trim_result + "'")
+    
+    // Test to_upper
+    let upper_result = std.string.to_upper(test_string)
+    std.io.println("To upper: " + upper_result)
+    
+    // Test to_lower
+    let lower_result = std.string.to_lower(test_string)
+    std.io.println("To lower: " + lower_result)
+    
+    // Test string equals
+    let equals_result = std.string.equals("Hello", "Hello")
+    std.io.println("String equals: " + std.bool_to_string(equals_result))
+    
+    // Test string compare
+    let compare_result = std.string.compare("Apple", "Banana")
+    std.io.println("String compare (Apple vs Banana): " + std.int_to_string(compare_result))
+    
+    return 0
+}

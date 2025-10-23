@@ -1,0 +1,50 @@
+import std
+
+func main(): int {
+    // Test while loop
+    std.io.println("Testing while loop:")
+    var i = 0
+    while i < 5 {
+        std.io.print("  i = ")
+        std.io.println_int(i)
+        i = i + 1
+    }
+    
+    // Test break
+    std.io.println("Testing break:")
+    var j = 0
+    while j < 10 {
+        if j == 3 {
+            break
+        }
+        std.io.print("  j = ")
+        std.io.println_int(j)
+        j = j + 1
+    }
+    
+    // Test continue
+    std.io.println("Testing continue:")
+    var k = 0
+    while k < 5 {
+        k = k + 1
+        if k == 3 {
+            continue
+        }
+        std.io.print("  k = ")
+        std.io.println_int(k)
+    }
+    
+    // Test break in for loop
+    std.io.println("Testing break in while loop:")
+    var m = 0
+    while m < 10 {
+        if m == 4 {
+            break
+        }
+        std.io.print("  m = ")
+        std.io.println_int(m)
+        m = m + 1
+    }
+    
+    return 0
+}
