@@ -180,8 +180,14 @@ import std.math
 let max_val:int = std.math.max(a, b)
 let min_val:int = std.math.min(a, b)
 let abs_val:int = std.math.abs(-10)
+let pow_val:float = std.math.pow(2.0, 8.0)
+let sqrt_val:float = std.math.sqrt(16.0)
+let floor_val:float = std.math.floor(3.7)
+let ceil_val:float = std.math.ceil(3.2)
+let round_val:float = std.math.round(3.5)
 let gcd_val:int = std.math.gcd(15, 25)
-let pow_val:int = std.math.pow(2, 8)
+let lcm_val:int = std.math.lcm(12, 18)
+let fact_val:int = std.math.factorial(5)
 ```
 
 ### String
@@ -193,6 +199,14 @@ let upper:string = std.string.to_upper(s)
 let lower:string = std.string.to_lower(s)
 let concat:string = std.string.concat(a, b)
 let substr:string = std.string.substring(s, 0, 5)
+let char:char = std.string.char_at(s, 0)
+let starts:bool = std.string.starts_with(s, "prefix")
+let ends:bool = std.string.ends_with(s, "suffix")
+let contains:bool = std.string.contains(s, "substring")
+let index:int = std.string.index_of(s, "substring")
+let trimmed:string = std.string.trim(s)
+let equals:bool = std.string.equals(s1, s2)
+let compare:int = std.string.compare(s1, s2)
 ```
 
 ### Array
@@ -205,15 +219,54 @@ std.array.set(arr, 0, value)
 let new_arr:array<T> = std.array.append(arr, value)
 ```
 
-### OS
+### File I/O
 ```omni
-import std.os
+import std.file
 
-std.os.exit(0)
-let env:string = std.os.getenv("PATH")
-let cwd:string = std.os.getcwd()
-let exists:bool = std.os.exists("file.txt")
-let content:string = std.os.read_file("file.txt")
+let handle:int = std.file.open("file.txt", "r")
+let content:int = std.file.read(handle, buffer)
+std.file.write(handle, "Hello")
+std.file.close(handle)
+let exists:bool = std.file.exists("file.txt")
+let size:int = std.file.size("file.txt")
+let pos:int = std.file.tell(handle)
+std.file.seek(handle, 0)
+```
+
+### Type Conversion
+```omni
+import std
+
+let num_str:string = std.int_to_string(42)
+let float_str:string = std.float_to_string(3.14)
+let bool_str:string = std.bool_to_string(true)
+let str_to_int:int = std.string_to_int("123")
+let str_to_float:float = std.string_to_float("3.14")
+let str_to_bool:bool = std.string_to_bool("true")
+```
+
+### Bitwise Operations
+```omni
+let a:int = 0b1010  // 10 in binary
+let b:int = 0b1100  // 12 in binary
+
+let and_result:int = a & b     // 0b1000 = 8
+let or_result:int = a | b      // 0b1110 = 14
+let xor_result:int = a ^ b     // 0b0110 = 6
+let not_result:int = ~a        // bitwise NOT
+let left_shift:int = a << 2    // 0b101000 = 40
+let right_shift:int = b >> 1   // 0b0110 = 6
+```
+
+### Testing
+```omni
+import std
+
+test.start("My Tests")
+assert.true(condition, "message")
+assert.false(condition, "message")
+assert.eq(actual, expected, "message")
+test.end()
 ```
 
 ## Compiler Usage

@@ -16,48 +16,54 @@ var instructionHandlers map[string]instructionHandler
 
 func init() {
 	instructionHandlers = map[string]instructionHandler{
-		"const":        execConst,
-		"add":          execArithmetic,
-		"sub":          execArithmetic,
-		"mul":          execArithmetic,
-		"div":          execArithmetic,
-		"mod":          execArithmetic,
-		"strcat":       execStringConcat,
-		"neg":          execUnary,
-		"not":          execUnary,
-		"cmp.eq":       execComparison,
-		"cmp.neq":      execComparison,
-		"cmp.lt":       execComparison,
-		"cmp.lte":      execComparison,
-		"cmp.gt":       execComparison,
-		"cmp.gte":      execComparison,
-		"and":          execLogical,
-		"or":           execLogical,
-		"call":         execCall,
-		"struct.init":  execStructInit,
-		"array.init":   execArrayInit,
-		"index":        execIndex,
-		"assign":       execAssign,
-		"map.init":     execMapInit,
-		"member":       execMember,
-		"phi":          execPhi,
-		"malloc":       execMalloc,
-		"free":         execFree,
-		"realloc":      execRealloc,
-		"file.open":    execFileOpen,
-		"file.close":   execFileClose,
-		"file.read":    execFileRead,
-		"file.write":   execFileWrite,
-		"file.seek":    execFileSeek,
-		"file.tell":    execFileTell,
-		"file.exists":  execFileExists,
-		"file.size":    execFileSize,
-		"test.start":   execTestStart,
-		"test.end":     execTestEnd,
-		"assert":       execAssert,
-		"assert.eq":    execAssertEq,
-		"assert.true":  execAssertTrue,
-		"assert.false": execAssertFalse,
+		"const":           execConst,
+		"add":             execArithmetic,
+		"sub":             execArithmetic,
+		"mul":             execArithmetic,
+		"div":             execArithmetic,
+		"mod":             execArithmetic,
+		"strcat":          execStringConcat,
+		"neg":             execUnary,
+		"not":             execUnary,
+		"cmp.eq":          execComparison,
+		"cmp.neq":         execComparison,
+		"cmp.lt":          execComparison,
+		"cmp.lte":         execComparison,
+		"cmp.gt":          execComparison,
+		"cmp.gte":         execComparison,
+		"and":             execLogical,
+		"or":              execLogical,
+		"call":            execCall,
+		"struct.init":     execStructInit,
+		"array.init":      execArrayInit,
+		"index":           execIndex,
+		"assign":          execAssign,
+		"map.init":        execMapInit,
+		"member":          execMember,
+		"phi":             execPhi,
+		"malloc":          execMalloc,
+		"free":            execFree,
+		"realloc":         execRealloc,
+		"file.open":       execFileOpen,
+		"file.close":      execFileClose,
+		"file.read":       execFileRead,
+		"file.write":      execFileWrite,
+		"file.seek":       execFileSeek,
+		"file.tell":       execFileTell,
+		"file.exists":     execFileExists,
+		"file.size":       execFileSize,
+		"test.start":      execTestStart,
+		"test.end":        execTestEnd,
+		"assert":          execAssert,
+		"assert.eq":       execAssertEq,
+		"assert.true":     execAssertTrue,
+		"assert.false":    execAssertFalse,
+		"func.ref":        execFuncRef,
+		"func.assign":     execFuncAssign,
+		"func.call":       execFuncCall,
+		"closure.create":  execClosureCreate,
+		"closure.capture": execClosureCapture,
+		"closure.bind":    execClosureBind,
 	}
 }
 
@@ -1366,7 +1372,9 @@ func literalResult(op mir.Operand) (Result, error) {
 	}
 	switch typ {
 	case "int", "long", "byte":
-		v, err := strconv.Atoi(op.Literal)
+		// Handle hex and binary literals
+		convertedLiteral := convertLiteralToDecimal(op.Literal)
+		v, err := strconv.Atoi(convertedLiteral)
 		if err != nil {
 			return Result{}, fmt.Errorf("invalid int literal %q", op.Literal)
 		}
@@ -1387,6 +1395,8 @@ func literalResult(op mir.Operand) (Result, error) {
 		return Result{}, fmt.Errorf("invalid bool literal %q", op.Literal)
 	case "char", "string":
 		return Result{Type: typ, Value: strings.Trim(op.Literal, "\"")}, nil
+	case "null":
+		return Result{Type: typ, Value: nil}, nil
 	default:
 		return Result{Type: typ, Value: nil}, nil
 	}
@@ -1396,6 +1406,9 @@ func inferLiteralType(lit string) string {
 	if lit == "true" || lit == "false" {
 		return "bool"
 	}
+	if lit == "null" {
+		return "null"
+	}
 	if _, err := strconv.Atoi(lit); err == nil {
 		return "int"
 	}
@@ -1403,6 +1416,31 @@ func inferLiteralType(lit string) string {
 		return "string"
 	}
 	return "<unknown>"
+}
+
+// convertLiteralToDecimal converts hex and binary literals to decimal
+func convertLiteralToDecimal(literal string) string {
+	if strings.HasPrefix(literal, "0x") || strings.HasPrefix(literal, "0X") {
+		// Hex literal - convert to decimal
+		hexStr := literal[2:]
+		// Remove underscores
+		hexStr = strings.ReplaceAll(hexStr, "_", "")
+		// Convert to int64 and back to string
+		if val, err := strconv.ParseInt(hexStr, 16, 64); err == nil {
+			return strconv.FormatInt(val, 10)
+		}
+	} else if strings.HasPrefix(literal, "0b") || strings.HasPrefix(literal, "0B") {
+		// Binary literal - convert to decimal
+		binaryStr := literal[2:]
+		// Remove underscores
+		binaryStr = strings.ReplaceAll(binaryStr, "_", "")
+		// Convert to int64 and back to string
+		if val, err := strconv.ParseInt(binaryStr, 2, 64); err == nil {
+			return strconv.FormatInt(val, 10)
+		}
+	}
+	// Return as-is for regular decimal literals
+	return literal
 }
 
 func toInt(value Result) (int, error) {
@@ -1838,4 +1876,146 @@ func execAssertFalse(funcs map[string]*mir.Function, fr *frame, inst mir.Instruc
 	}
 
 	return Result{Type: "void", Value: nil}, nil
+}
+
+// execFuncRef handles function reference (getting a function pointer)
+func execFuncRef(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 1 {
+		return Result{}, fmt.Errorf("func.ref: expected at least 1 operand")
+	}
+
+	funcName := inst.Operands[0].Literal
+
+	// Store the function name as the value
+	// The type will be the function type from the instruction
+	return Result{Type: inst.Type, Value: funcName}, nil
+}
+
+// execFuncAssign handles function assignment
+func execFuncAssign(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 1 {
+		return Result{}, fmt.Errorf("func.assign: expected at least 1 operand")
+	}
+
+	funcValue := operandValue(fr, inst.Operands[0])
+	return funcValue, nil
+}
+
+// execFuncCall handles function call through function pointer or closure
+func execFuncCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 1 {
+		return Result{}, fmt.Errorf("func.call: expected at least 1 operand")
+	}
+
+	funcValue := operandValue(fr, inst.Operands[0])
+
+	// Check if this is a closure or a simple function reference
+	if closure, ok := funcValue.Value.(map[string]interface{}); ok {
+		// This is a closure - extract the function name and captured variables
+		funcName, ok := closure["function"].(string)
+		if !ok {
+			return Result{}, fmt.Errorf("func.call: closure function name is not a string")
+		}
+
+		// Get the function from the map
+		fn, exists := funcs[funcName]
+		if !exists {
+			return Result{}, fmt.Errorf("func.call: function %q not found", funcName)
+		}
+
+		// Prepare arguments: first the lambda parameters, then the captured variables
+		args := make([]Result, len(inst.Operands)-1)
+		for i, op := range inst.Operands[1:] {
+			args[i] = operandValue(fr, op)
+		}
+
+		// Add captured variables as additional arguments
+		if captured, ok := closure["captured"].(map[string]interface{}); ok {
+			for _, capturedValue := range captured {
+				args = append(args, Result{Type: "int", Value: capturedValue}) // Default to int type
+			}
+		}
+
+		// Call the function with all arguments
+		return execFunction(funcs, fn, args)
+	} else {
+		// This is a simple function reference
+		funcName, ok := funcValue.Value.(string)
+		if !ok {
+			return Result{}, fmt.Errorf("func.call: function value is not a string or closure")
+		}
+
+		// Get the function from the map
+		fn, exists := funcs[funcName]
+		if !exists {
+			return Result{}, fmt.Errorf("func.call: function %q not found", funcName)
+		}
+
+		// Prepare arguments
+		args := make([]Result, len(inst.Operands)-1)
+		for i, op := range inst.Operands[1:] {
+			args[i] = operandValue(fr, op)
+		}
+
+		// Call the function
+		return execFunction(funcs, fn, args)
+	}
+}
+
+// execClosureCreate handles closure creation
+func execClosureCreate(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 1 {
+		return Result{}, fmt.Errorf("closure.create: expected at least 1 operand")
+	}
+
+	funcName := inst.Operands[0].Literal
+
+	// Create a closure structure
+	closure := map[string]interface{}{
+		"function": funcName,
+		"captured": make(map[string]interface{}),
+	}
+
+	return Result{Type: inst.Type, Value: closure}, nil
+}
+
+// execClosureCapture handles capturing variables in a closure
+func execClosureCapture(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 3 {
+		return Result{}, fmt.Errorf("closure.capture: expected at least 3 operands")
+	}
+
+	closureValue := operandValue(fr, inst.Operands[0])
+	varName := inst.Operands[1].Literal
+	varValue := operandValue(fr, inst.Operands[2])
+
+	// Get the closure map
+	closure, ok := closureValue.Value.(map[string]interface{})
+	if !ok {
+		return Result{}, fmt.Errorf("closure.capture: closure value is not a map")
+	}
+
+	// Get the captured variables map
+	captured, ok := closure["captured"].(map[string]interface{})
+	if !ok {
+		return Result{}, fmt.Errorf("closure.capture: captured variables is not a map")
+	}
+
+	// Store the captured variable
+	captured[varName] = varValue.Value
+
+	return Result{Type: "void", Value: nil}, nil
+}
+
+// execClosureBind handles binding a closure to create a function reference
+func execClosureBind(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 1 {
+		return Result{}, fmt.Errorf("closure.bind: expected at least 1 operand")
+	}
+
+	closureValue := operandValue(fr, inst.Operands[0])
+
+	// Return the closure as a function reference
+	// The closure contains both the function name and captured variables
+	return Result{Type: inst.Type, Value: closureValue.Value}, nil
 }

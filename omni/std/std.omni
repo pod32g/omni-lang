@@ -19,6 +19,9 @@ import std.os
 // Re-export collections functions
 import std.collections
 
+// Re-export file functions
+import std.file
+
 // Common utility functions
 func assert(condition:bool, message:string) {
     if !condition {

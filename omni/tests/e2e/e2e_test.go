@@ -192,7 +192,7 @@ func runCBackend(testFile string) (string, error) {
 	runCmd.Env = append(runCmd.Env, "PATH=/usr/bin:/bin:/usr/sbin:/sbin")
 
 	output, err := runCmd.Output()
-	
+
 	// Always try to parse stdout first, regardless of exit code
 	result := string(output)
 	// Look for "OmniLang program result: X" pattern
@@ -202,7 +202,7 @@ func runCBackend(testFile string) (string, error) {
 			return strings.TrimSpace(line[len("OmniLang program result: "):]), nil
 		}
 	}
-	
+
 	// If no stdout result found, check if it's an exit error with a non-zero code
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -212,7 +212,7 @@ func runCBackend(testFile string) (string, error) {
 		}
 		return "", fmt.Errorf("execution failed: %v", err)
 	}
-	
+
 	return "", fmt.Errorf("could not find program result in output: %s", result)
 }
 
@@ -549,5 +549,175 @@ func TestLogicalOr(t *testing.T) {
 	}
 	if result != expected {
 		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+// New Features Tests
+
+func TestStringOperations(t *testing.T) {
+	testFile := "new_features/test_string_operations_comprehensive.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestMathUtilities(t *testing.T) {
+	testFile := "new_features/test_math_utilities.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestFileIO(t *testing.T) {
+	testFile := "new_features/test_file_comprehensive.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestBitwiseOperations(t *testing.T) {
+	testFile := "new_features/test_bitwise_ops.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestTypeCasting(t *testing.T) {
+	testFile := "new_features/test_type_casting_comprehensive.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestLexicalPrimitives(t *testing.T) {
+	testFile := "new_features/test_lexical_primitives.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestControlFlow(t *testing.T) {
+	testFile := "new_features/test_control_flow.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestVariableShadowing(t *testing.T) {
+	testFile := "new_features/test_variable_shadowing.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestFirstClassFunctions(t *testing.T) {
+	testFile := "new_features/test_first_class_complete.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestCollectionsOperations(t *testing.T) {
+	testFile := "new_features/test_collections_operations.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestArrayOperations(t *testing.T) {
+	testFile := "new_features/test_array_operations.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestErrorAssertions(t *testing.T) {
+	testFile := "new_features/test_errors_assertions.omni"
+	expected := "0" // All tests pass
+
+	// Test VM execution
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
 	}
 }

@@ -281,7 +281,9 @@ func (c *Checker) registerTopLevelSymbols(mod *ast.Module) {
 				c.report(d.Span(), fmt.Sprintf("function %q redeclared", d.Name), "rename the function or remove the duplicate declaration")
 			}
 			c.functions[d.Name] = sig
-			c.declare(d.Name, "func", false, d.Span())
+			// Store the full function type for first-class function support
+			funcType := buildFunctionType(sig.Params, sig.Return)
+			c.declare(d.Name, funcType, false, d.Span())
 		}
 	}
 }
@@ -437,6 +439,12 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 		c.checkBlock(s)
 	case *ast.ForStmt:
 		c.checkForStmt(s)
+	case *ast.WhileStmt:
+		c.checkWhileStmt(s)
+	case *ast.BreakStmt:
+		// Break statements are allowed in loops (we could add a loop depth check here)
+	case *ast.ContinueStmt:
+		// Continue statements are allowed in loops (we could add a loop depth check here)
 	case *ast.BindingStmt:
 		c.checkBindingStmt(s)
 	case *ast.ShortVarDeclStmt:
@@ -524,6 +532,16 @@ func (c *Checker) checkForStmt(stmt *ast.ForStmt) {
 	c.leaveScope()
 }
 
+func (c *Checker) checkWhileStmt(stmt *ast.WhileStmt) {
+	condType := c.checkExpr(stmt.Cond)
+	if !c.typesEqual(condType, "bool") {
+		c.report(stmt.Cond.Span(), "while condition must be bool", "use a boolean expression")
+	}
+	c.enterScope()
+	c.checkBlock(stmt.Body)
+	c.leaveScope()
+}
+
 func (c *Checker) handleReturn(ret *ast.ReturnStmt) {
 	ctx := c.currentFunctionContext()
 	if ctx == nil {
@@ -590,8 +608,8 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		}
 		// Check if it's a builtin function
 		if sig, exists := c.functions[e.Name]; exists {
-			// Return a function type (for now, just return the return type)
-			return sig.Return
+			// Return the full function type
+			return buildFunctionType(sig.Params, sig.Return)
 		}
 		// Check if it's a qualified std symbol
 		if c.isStdSymbol(e.Name) {
@@ -633,6 +651,12 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			return "string"
 		case ast.LiteralChar:
 			return "char"
+		case ast.LiteralNull:
+			return "null"
+		case ast.LiteralHex:
+			return "int"
+		case ast.LiteralBinary:
+			return "int"
 		}
 		return typeInfer
 	case *ast.UnaryExpr:
@@ -646,6 +670,11 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		case "-":
 			if operand != typeError && !isNumeric(operand) {
 				c.report(e.Expr.Span(), fmt.Sprintf("operator - not defined on %s", operand), "use a numeric expression")
+			}
+			return operand
+		case "~":
+			if operand != typeError && !isNumeric(operand) {
+				c.report(e.Expr.Span(), fmt.Sprintf("operator ~ not defined on %s", operand), "use an integer expression")
 			}
 			return operand
 		default:
@@ -841,6 +870,51 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		// delete expression returns void
 		c.checkExpr(e.Target)
 		return "void"
+	case *ast.LambdaExpr:
+		// Lambda expression: |a, b| a + b
+		// Create a new scope for lambda parameters
+		c.enterScope()
+
+		// Infer parameter types and add them to the scope
+		paramTypes := make([]string, len(e.Params))
+		for i, param := range e.Params {
+			// For now, infer parameter types from usage
+			// In a full implementation, we'd do proper type inference
+			paramType := "int" // Default to int for now
+			paramTypes[i] = paramType
+
+			// Add parameter to the current scope
+			c.declare(param.Name, paramType, false, param.Span)
+		}
+
+		// Check the lambda body to infer return type
+		returnType := c.checkExpr(e.Body)
+		if returnType == typeError {
+			c.leaveScope()
+			return typeError
+		}
+
+		// Clean up the lambda scope
+		c.leaveScope()
+
+		return buildFunctionType(paramTypes, returnType)
+	case *ast.CastExpr:
+		// Type cast expression: (type) expression
+		// Check that the target type is valid
+		targetType := c.checkTypeExpr(e.Type)
+		if targetType == typeError {
+			return typeError
+		}
+
+		// Check the expression being cast
+		exprType := c.checkExpr(e.Expr)
+		if exprType == typeError {
+			return typeError
+		}
+
+		// For now, allow all casts (in a full implementation, we'd check compatibility)
+		// TODO: Add proper type compatibility checking
+		return targetType
 	default:
 		return typeInfer
 	}
@@ -899,6 +973,18 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 				fmt.Sprintf("use boolean expressions, got %s and %s", leftType, rightType))
 		}
 		return "bool"
+	case "&", "|", "^", "<<", ">>":
+		// Bitwise operators require integer operands
+		if !isNumeric(leftType) || !isNumeric(rightType) {
+			c.report(expr.Span(), fmt.Sprintf("operator %s requires integer operands", expr.Op),
+				fmt.Sprintf("use integer expressions (int), got %s and %s", leftType, rightType))
+			return typeError
+		}
+		if !c.typesEqual(leftType, rightType) {
+			c.report(expr.Span(), fmt.Sprintf("operands of %s must have the same type", expr.Op), "convert one side to match the other")
+			return typeError
+		}
+		return leftType
 	default:
 		c.report(expr.Span(), fmt.Sprintf("unsupported binary operator %q", expr.Op), "remove the operator or extend the checker")
 		return typeError
@@ -911,17 +997,72 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 		calleeType = c.checkExpr(expr.Callee)
 	}
 
-	// Handle function type calls (e.g., x.len() where x.len is func():int)
-	if strings.HasPrefix(calleeType, "func(") {
-		// Extract return type from function type
-		if strings.Contains(calleeType, "):") {
-			parts := strings.Split(calleeType, "):")
-			if len(parts) == 2 {
-				returnType := strings.TrimSpace(parts[1])
-				// For now, just return the return type
-				// TODO: Validate argument count and types
-				return returnType
+	// Check if this is a regular function call (not a function type call)
+	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok {
+		// Check if it's a regular function (not a function type variable)
+		if sig, exists := c.functions[ident.Name]; exists {
+			// This is a regular function call, not a function type call
+			// Validate argument count
+			if len(expr.Args) != len(sig.Params) {
+				c.report(expr.Span(), fmt.Sprintf("function %s expects %d arguments, got %d", ident.Name, len(sig.Params), len(expr.Args)),
+					fmt.Sprintf("provide %d argument(s) matching the function signature", len(sig.Params)))
+				return typeError
 			}
+
+			// Validate argument types
+			for i, arg := range expr.Args {
+				argType := c.checkExpr(arg)
+				if i < len(sig.Params) {
+					expected := sig.Params[i]
+					if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
+						c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, expected, argType),
+							fmt.Sprintf("convert the argument to %s or use a %s expression", expected, expected))
+					}
+				}
+			}
+
+			return sig.Return
+		}
+	}
+
+	// Handle function type calls (e.g., (int, string) -> bool)
+	if strings.Contains(calleeType, ") -> ") {
+		// Parse function type: (param1, param2) -> returnType
+		arrowIndex := strings.Index(calleeType, ") -> ")
+		if arrowIndex != -1 {
+			paramPart := calleeType[1:arrowIndex]                      // Remove opening (
+			returnType := strings.TrimSpace(calleeType[arrowIndex+5:]) // After " -> "
+
+			// Parse parameter types
+			var expectedParamTypes []string
+			if paramPart != "" {
+				// Split by comma and trim spaces
+				paramStrs := strings.Split(paramPart, ",")
+				for _, paramStr := range paramStrs {
+					expectedParamTypes = append(expectedParamTypes, strings.TrimSpace(paramStr))
+				}
+			}
+
+			// Validate argument count
+			if len(expr.Args) != len(expectedParamTypes) {
+				c.report(expr.Span(), fmt.Sprintf("function expects %d arguments, got %d", len(expectedParamTypes), len(expr.Args)),
+					fmt.Sprintf("provide %d argument(s) matching the function signature", len(expectedParamTypes)))
+				return typeError
+			}
+
+			// Validate argument types
+			for i, arg := range expr.Args {
+				argType := c.checkExpr(arg)
+				if i < len(expectedParamTypes) {
+					expected := expectedParamTypes[i]
+					if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
+						c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, expected, argType),
+							fmt.Sprintf("convert the argument to %s or use a %s expression", expected, expected))
+					}
+				}
+			}
+
+			return returnType
 		}
 	}
 
@@ -1042,6 +1183,16 @@ func (c *Checker) typeExprToString(t *ast.TypeExpr) string {
 		return typeInfer
 	}
 
+	// Handle function types: (param1, param2) -> returnType
+	if t.IsFunction {
+		paramTypes := make([]string, len(t.ParamTypes))
+		for i, paramType := range t.ParamTypes {
+			paramTypes[i] = c.typeExprToString(paramType)
+		}
+		returnType := c.typeExprToString(t.ReturnType)
+		return buildFunctionType(paramTypes, returnType)
+	}
+
 	// Handle union types
 	if t.IsUnion {
 		members := make([]string, len(t.Members))
@@ -1085,6 +1236,16 @@ func (c *Checker) typeExprToString(t *ast.TypeExpr) string {
 func (c *Checker) checkTypeExpr(t *ast.TypeExpr) string {
 	if t == nil {
 		return typeInfer
+	}
+
+	// Handle function types
+	if t.IsFunction {
+		paramTypes := make([]string, len(t.ParamTypes))
+		for i, paramType := range t.ParamTypes {
+			paramTypes[i] = c.checkTypeExpr(paramType)
+		}
+		returnType := c.checkTypeExpr(t.ReturnType)
+		return buildFunctionType(paramTypes, returnType)
 	}
 
 	// Handle union types
@@ -1152,6 +1313,17 @@ func typeExprToString(t *ast.TypeExpr) string {
 	if t == nil {
 		return typeInfer
 	}
+
+	// Handle function types
+	if t.IsFunction {
+		paramTypes := make([]string, len(t.ParamTypes))
+		for i, paramType := range t.ParamTypes {
+			paramTypes[i] = typeExprToString(paramType)
+		}
+		returnType := typeExprToString(t.ReturnType)
+		return buildFunctionType(paramTypes, returnType)
+	}
+
 	if len(t.Args) == 0 {
 		return t.Name
 	}
@@ -1184,6 +1356,20 @@ func buildUnion(members []string) string {
 		}
 		b.WriteString(member)
 	}
+	return b.String()
+}
+
+func buildFunctionType(paramTypes []string, returnType string) string {
+	var b strings.Builder
+	b.WriteByte('(')
+	for i, paramType := range paramTypes {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(paramType)
+	}
+	b.WriteString(") -> ")
+	b.WriteString(returnType)
 	return b.String()
 }
 

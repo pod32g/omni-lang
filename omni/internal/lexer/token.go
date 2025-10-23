@@ -15,6 +15,9 @@ const (
 	TokenFloatLiteral
 	TokenStringLiteral
 	TokenCharLiteral
+	TokenNullLiteral
+	TokenHexLiteral
+	TokenBinaryLiteral
 
 	// Keywords
 	TokenLet
@@ -29,6 +32,9 @@ const (
 	TokenElse
 	TokenFor
 	TokenIn
+	TokenWhile
+	TokenBreak
+	TokenContinue
 	TokenTrue
 	TokenFalse
 	TokenNew
@@ -62,7 +68,13 @@ const (
 	TokenGreaterEqual
 	TokenAndAnd
 	TokenOrOr
-	TokenPipe // |
+	TokenPipe      // |
+	TokenAmpersand // &
+	TokenCaret     // ^
+	TokenTilde     // ~
+	TokenLShift    // <<
+	TokenRShift    // >>
+	TokenQuestion  // ?
 	TokenPlusPlus
 	TokenMinusMinus
 	TokenArrow    // ->
@@ -77,6 +89,9 @@ var kindNames = map[Kind]string{
 	TokenFloatLiteral:  "FLOAT",
 	TokenStringLiteral: "STRING",
 	TokenCharLiteral:   "CHAR",
+	TokenNullLiteral:   "NULL",
+	TokenHexLiteral:    "HEX",
+	TokenBinaryLiteral: "BINARY",
 	TokenLet:           "LET",
 	TokenVar:           "VAR",
 	TokenFunc:          "FUNC",
@@ -89,6 +104,9 @@ var kindNames = map[Kind]string{
 	TokenElse:          "ELSE",
 	TokenFor:           "FOR",
 	TokenIn:            "IN",
+	TokenWhile:         "WHILE",
+	TokenBreak:         "BREAK",
+	TokenContinue:      "CONTINUE",
 	TokenTrue:          "TRUE",
 	TokenFalse:         "FALSE",
 	TokenNew:           "NEW",
@@ -119,6 +137,12 @@ var kindNames = map[Kind]string{
 	TokenAndAnd:        "AND_AND",
 	TokenOrOr:          "OR_OR",
 	TokenPipe:          "PIPE",
+	TokenAmpersand:     "AMPERSAND",
+	TokenCaret:         "CARET",
+	TokenTilde:         "TILDE",
+	TokenLShift:        "L_SHIFT",
+	TokenRShift:        "R_SHIFT",
+	TokenQuestion:      "QUESTION",
 	TokenPlusPlus:      "PLUS_PLUS",
 	TokenMinusMinus:    "MINUS_MINUS",
 	TokenArrow:         "ARROW",

@@ -26,6 +26,18 @@ void* omni_realloc(void* ptr, size_t new_size);
 // String operations
 char* omni_strcat(const char* str1, const char* str2);
 int32_t omni_strlen(const char* str);
+char* omni_substring(const char* str, int32_t start, int32_t end);
+char omni_char_at(const char* str, int32_t index);
+int32_t omni_starts_with(const char* str, const char* prefix);
+int32_t omni_ends_with(const char* str, const char* suffix);
+int32_t omni_contains(const char* str, const char* substr);
+int32_t omni_index_of(const char* str, const char* substr);
+int32_t omni_last_index_of(const char* str, const char* substr);
+char* omni_trim(const char* str);
+char* omni_to_upper(const char* str);
+char* omni_to_lower(const char* str);
+int32_t omni_string_equals(const char* a, const char* b);
+int32_t omni_string_compare(const char* a, const char* b);
 
 // Array operations
 int32_t omni_len(void* array, size_t element_size);
@@ -39,6 +51,25 @@ int32_t omni_abs(int32_t x);
 int32_t omni_max(int32_t a, int32_t b);
 int32_t omni_min(int32_t a, int32_t b);
 char* omni_int_to_string(int32_t value);
+char* omni_float_to_string(double value);
+char* omni_bool_to_string(int32_t value);
+int32_t omni_string_to_int(const char* str);
+double omni_string_to_float(const char* str);
+int32_t omni_string_to_bool(const char* str);
+
+// Array operations
+int32_t omni_array_length(int32_t* arr);
+int32_t omni_array_get_int(int32_t* arr, int32_t index);
+void omni_array_set_int(int32_t* arr, int32_t index, int32_t value);
+
+double omni_pow(double x, double y);
+double omni_sqrt(double x);
+double omni_floor(double x);
+double omni_ceil(double x);
+double omni_round(double x);
+int32_t omni_gcd(int32_t a, int32_t b);
+int32_t omni_lcm(int32_t a, int32_t b);
+int32_t omni_factorial(int32_t n);
 
 // File I/O operations
 int32_t omni_file_open(const char* filename, const char* mode);

@@ -142,25 +142,6 @@ func main():int {
 }
 ```
 
-### String Operations
-
-```omni
-import std
-
-func main():int {
-    // String concatenation with mixed types
-    let name:string = "Alice"
-    let age:int = 30
-    let message:string = "Hello " + name + ", you are " + age + " years old"
-    std.io.println(message)
-    
-    // String concatenation with other strings
-    let greeting:string = "Hello " + "World"
-    std.io.println(greeting)
-    
-    return 0
-}
-```
 
 ### Unary Expressions
 
@@ -318,10 +299,202 @@ func main():int {
     let abs_val:int = std.math.abs(-42)
     
     // Advanced operations
-    let pow_val:int = std.math.pow(2, 8)        // 2^8 = 256
-    let gcd_val:int = std.math.gcd(48, 72)      // 24
-    let lcm_val:int = std.math.lcm(12, 18)      // 36
-    let fact_val:int = std.math.factorial(5)    // 120
+    let pow_val:float = std.math.pow(2.0, 8.0)        // 2^8 = 256.0
+    let sqrt_val:float = std.math.sqrt(16.0)          // 4.0
+    let floor_val:float = std.math.floor(3.7)         // 3.0
+    let ceil_val:float = std.math.ceil(3.2)           // 4.0
+    let round_val:float = std.math.round(3.5)         // 4.0
+    let gcd_val:int = std.math.gcd(48, 72)            // 24
+    let lcm_val:int = std.math.lcm(12, 18)            // 36
+    let fact_val:int = std.math.factorial(5)          // 120
+    
+    return 0
+}
+```
+
+### Bitwise Operations
+
+```omni
+import std
+
+func main():int {
+    let a:int = 0b1010  // 10 in binary
+    let b:int = 0b1100  // 12 in binary
+    
+    // Bitwise operations
+    let and_result:int = a & b     // 0b1000 = 8
+    let or_result:int = a | b      // 0b1110 = 14
+    let xor_result:int = a ^ b     // 0b0110 = 6
+    let not_result:int = ~a        // bitwise NOT
+    let left_shift:int = a << 2    // 0b101000 = 40
+    let right_shift:int = b >> 1   // 0b0110 = 6
+    
+    std.io.println_int(and_result)
+    std.io.println_int(or_result)
+    std.io.println_int(xor_result)
+    
+    return 0
+}
+```
+
+### Type Conversion
+
+```omni
+import std
+
+func main():int {
+    let num:int = 42
+    let pi:float = 3.14159
+    let flag:bool = true
+    
+    // Explicit type casting
+    let int_to_float:float = (float)num
+    let float_to_int:int = (int)pi
+    
+    // String conversion functions
+    let num_str:string = std.int_to_string(num)        // "42"
+    let float_str:string = std.float_to_string(pi)     // "3.14159"
+    let bool_str:string = std.bool_to_string(flag)     // "true"
+    
+    // String to other types
+    let str_to_int:int = std.string_to_int("123")      // 123
+    let str_to_float:float = std.string_to_float("3.14") // 3.14
+    let str_to_bool:bool = std.string_to_bool("true")  // true
+    
+    return 0
+}
+```
+
+### File I/O Operations
+
+```omni
+import std
+
+func main():int {
+    let filename:string = "test.txt"
+    let content:string = "Hello, OmniLang!"
+    
+    // Check if file exists
+    if std.file.exists(filename) {
+        std.io.println("File exists")
+        let size:int = std.file.size(filename)
+        std.io.println("File size: " + size)
+    }
+    
+    // Write to file
+    let handle:int = std.file.open(filename, "w")
+    if handle >= 0 {
+        let written:int = std.file.write(handle, content)
+        std.file.close(handle)
+        std.io.println("Written " + written + " bytes")
+    }
+    
+    // Read from file
+    let read_handle:int = std.file.open(filename, "r")
+    if read_handle >= 0 {
+        let buffer:string = "                "  // 16 character buffer
+        let read_bytes:int = std.file.read(read_handle, buffer)
+        std.file.close(read_handle)
+        std.io.println("Read: " + buffer)
+    }
+    
+    return 0
+}
+```
+
+### Advanced Control Flow
+
+```omni
+import std
+
+func main():int {
+    let count:int = 0
+    
+    // While loop with break and continue
+    while count < 10 {
+        count = count + 1
+        
+        if count == 3 {
+            continue  // Skip this iteration
+        }
+        
+        if count == 8 {
+            break     // Exit the loop
+        }
+        
+        std.io.println_int(count)
+    }
+    
+    // Block scope and variable shadowing
+    let x:int = 10
+    {
+        let x:int = 20  // Shadows outer x
+        std.io.println_int(x)  // Prints 20
+    }
+    std.io.println_int(x)  // Prints 10
+    
+    return 0
+}
+```
+
+### First-Class Functions
+
+```omni
+import std
+
+func add(a:int, b:int):int {
+    return a + b
+}
+
+func main():int {
+    // Function types
+    let func_var:(int, int) -> int = add
+    
+    // Lambda expressions
+    let square = |x:int| x * x
+    let result1:int = square(5)  // 25
+    
+    // Closures with variable capture
+    let multiplier:int = 3
+    let multiply = |x:int| x * multiplier
+    let result2:int = multiply(4)  // 12
+    
+    // Function calls through variables
+    let result3:int = func_var(10, 20)  // 30
+    
+    std.io.println_int(result1)
+    std.io.println_int(result2)
+    std.io.println_int(result3)
+    
+    return 0
+}
+```
+
+### Testing Framework
+
+```omni
+import std
+
+func add(a:int, b:int):int {
+    return a + b
+}
+
+func main():int {
+    test.start("Math Functions")
+    
+    // Basic assertions
+    assert.true(add(2, 3) == 5, "Addition should work")
+    assert.false(add(1, 1) == 3, "Wrong addition should fail")
+    
+    // Equality assertions
+    assert.eq(add(5, 5), 10, "5 + 5 should equal 10")
+    assert.eq(std.string.length("hello"), 5, "String length should be 5")
+    
+    // Type conversion testing
+    assert.eq(std.int_to_string(42), "42", "Int to string conversion")
+    assert.eq(std.string_to_int("123"), 123, "String to int conversion")
+    
+    test.end()
     
     return 0
 }
@@ -703,6 +876,19 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - ✅ Performance optimizations and regression testing
 - ✅ **Enhanced CI/CD pipeline** with std import testing and warning detection
 - ✅ Fixed library path issues for macOS binaries
+
+### 🚀 **NEW: Complete Basic Language Features (v0.4.4+)**
+- ✅ **String Operations** - length, substring, char_at, starts_with, ends_with, contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
+- ✅ **Advanced Math Functions** - pow, sqrt, floor, ceil, round, gcd, lcm, factorial
+- ✅ **File I/O Operations** - open, close, read, write, seek, tell, exists, size
+- ✅ **Bitwise Operators** - &, |, ^, ~, <<, >> with correct precedence
+- ✅ **Type Conversion** - explicit casting (type)expr, int_to_string, float_to_string, bool_to_string, string_to_int, string_to_float, string_to_bool
+- ✅ **Lexical Primitives** - null literals, hex literals (0xFF), binary literals (0b1010), scientific notation (1.0e-5)
+- ✅ **Advanced Control Flow** - while loops, break and continue statements
+- ✅ **Advanced Variables & Scope** - block scope with {}, variable shadowing rules
+- ✅ **Collections Operations** - basic array operations (length, get, set) with runtime support
+- ✅ **First-Class Functions** - function types, lambda expressions, closures with variable capture
+- ✅ **Testing Framework** - built-in testing with assertions (test.start, test.end, assert, assert.eq, assert.true, assert.false)
 
 ### Upcoming Phases
 - 🔄 **Phase 1**: Language Features (for loops, memory management, error handling)

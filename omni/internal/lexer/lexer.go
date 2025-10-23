@@ -10,22 +10,26 @@ import (
 const eofRune = -1
 
 var keywords = map[string]Kind{
-	"let":    TokenLet,
-	"var":    TokenVar,
-	"func":   TokenFunc,
-	"return": TokenReturn,
-	"struct": TokenStruct,
-	"enum":   TokenEnum,
-	"import": TokenImport,
-	"as":     TokenAs,
-	"if":     TokenIf,
-	"else":   TokenElse,
-	"for":    TokenFor,
-	"in":     TokenIn,
-	"true":   TokenTrue,
-	"false":  TokenFalse,
-	"new":    TokenNew,
-	"delete": TokenDelete,
+	"let":      TokenLet,
+	"var":      TokenVar,
+	"func":     TokenFunc,
+	"return":   TokenReturn,
+	"struct":   TokenStruct,
+	"enum":     TokenEnum,
+	"import":   TokenImport,
+	"as":       TokenAs,
+	"if":       TokenIf,
+	"else":     TokenElse,
+	"for":      TokenFor,
+	"in":       TokenIn,
+	"while":    TokenWhile,
+	"break":    TokenBreak,
+	"continue": TokenContinue,
+	"true":     TokenTrue,
+	"false":    TokenFalse,
+	"null":     TokenNullLiteral,
+	"new":      TokenNew,
+	"delete":   TokenDelete,
 }
 
 // Lexer transforms a source buffer into a stream of tokens while tracking
@@ -165,12 +169,18 @@ func (l *Lexer) NextToken() (Token, error) {
 		return l.emitToken(TokenBang, startPos, startOffset)
 	case '<':
 		l.advance()
+		if l.match('<') {
+			return l.emitToken(TokenLShift, startPos, startOffset)
+		}
 		if l.match('=') {
 			return l.emitToken(TokenLessEqual, startPos, startOffset)
 		}
 		return l.emitToken(TokenLess, startPos, startOffset)
 	case '>':
 		l.advance()
+		if l.match('>') {
+			return l.emitToken(TokenRShift, startPos, startOffset)
+		}
 		if l.match('=') {
 			return l.emitToken(TokenGreaterEqual, startPos, startOffset)
 		}
@@ -180,6 +190,16 @@ func (l *Lexer) NextToken() (Token, error) {
 		if l.match('&') {
 			return l.emitToken(TokenAndAnd, startPos, startOffset)
 		}
+		return l.emitToken(TokenAmpersand, startPos, startOffset)
+	case '^':
+		l.advance()
+		return l.emitToken(TokenCaret, startPos, startOffset)
+	case '~':
+		l.advance()
+		return l.emitToken(TokenTilde, startPos, startOffset)
+	case '?':
+		l.advance()
+		return l.emitToken(TokenQuestion, startPos, startOffset)
 	case '|':
 		l.advance()
 		if l.match('|') {
@@ -211,7 +231,54 @@ func (l *Lexer) scanIdentifier() (Token, error) {
 
 func (l *Lexer) scanNumber() (Token, error) {
 	startPos, startOffset := l.mark()
+
+	// Check for hex literal (0x...)
+	if l.peek() == '0' && l.peekRuneAhead(1) == 'x' {
+		l.advance() // consume '0'
+		l.advance() // consume 'x'
+
+		// Scan hex digits
+		for {
+			r := l.peek()
+			if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') || r == '_' {
+				l.advance()
+			} else {
+				break
+			}
+		}
+
+		lexeme := l.slice(startOffset)
+		if strings.HasSuffix(lexeme, "_") {
+			return Token{}, l.errorf(startPos, "hex literal cannot end with underscore")
+		}
+		return l.emitTokenWithLexeme(TokenHexLiteral, startPos, startOffset, lexeme), nil
+	}
+
+	// Check for binary literal (0b...)
+	if l.peek() == '0' && l.peekRuneAhead(1) == 'b' {
+		l.advance() // consume '0'
+		l.advance() // consume 'b'
+
+		// Scan binary digits
+		for {
+			r := l.peek()
+			if r == '0' || r == '1' || r == '_' {
+				l.advance()
+			} else {
+				break
+			}
+		}
+
+		lexeme := l.slice(startOffset)
+		if strings.HasSuffix(lexeme, "_") {
+			return Token{}, l.errorf(startPos, "binary literal cannot end with underscore")
+		}
+		return l.emitTokenWithLexeme(TokenBinaryLiteral, startPos, startOffset, lexeme), nil
+	}
+
+	// Regular decimal number
 	hasDot := false
+	hasExponent := false
 
 	for {
 		r := l.peek()
@@ -220,9 +287,16 @@ func (l *Lexer) scanNumber() (Token, error) {
 			l.advance()
 		case r == '_' && l.peekAheadIsDigit():
 			l.advance()
-		case r == '.' && !hasDot && unicode.IsDigit(l.peekRuneAhead(1)):
+		case r == '.' && !hasDot && !hasExponent && unicode.IsDigit(l.peekRuneAhead(1)):
 			hasDot = true
 			l.advance()
+		case (r == 'e' || r == 'E') && !hasExponent:
+			hasExponent = true
+			l.advance()
+			// Check for optional sign after exponent
+			if l.peek() == '+' || l.peek() == '-' {
+				l.advance()
+			}
 		default:
 			goto done
 		}
@@ -232,7 +306,7 @@ done:
 	if strings.HasSuffix(lexeme, "_") {
 		return Token{}, l.errorf(startPos, "numeric literal cannot end with underscore")
 	}
-	if hasDot {
+	if hasDot || hasExponent {
 		return l.emitTokenWithLexeme(TokenFloatLiteral, startPos, startOffset, lexeme), nil
 	}
 	return l.emitTokenWithLexeme(TokenIntLiteral, startPos, startOffset, lexeme), nil

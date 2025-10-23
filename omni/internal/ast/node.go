@@ -46,6 +46,13 @@ type TypeExpr struct {
 	// For union types: int | string | bool
 	IsUnion bool
 	Members []*TypeExpr // The types in the union
+	// For function types: (int, string) -> bool
+	IsFunction bool
+	ParamTypes []*TypeExpr // Parameter types for function types
+	ReturnType *TypeExpr   // Return type for function types
+	// For optional types: Option<T> or T?
+	IsOptional   bool
+	OptionalType *TypeExpr // The wrapped type for Option<T>
 }
 
 func (t *TypeExpr) Span() lexer.Span { return t.SpanInfo }
@@ -203,6 +210,35 @@ func (s *IfStmt) Span() lexer.Span { return s.SpanInfo }
 func (s *IfStmt) node()            {}
 func (s *IfStmt) stmt()            {}
 
+// WhileStmt expresses a while loop.
+type WhileStmt struct {
+	SpanInfo lexer.Span
+	Cond     Expr
+	Body     *BlockStmt
+}
+
+func (s *WhileStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *WhileStmt) node()            {}
+func (s *WhileStmt) stmt()            {}
+
+// BreakStmt exits a loop.
+type BreakStmt struct {
+	SpanInfo lexer.Span
+}
+
+func (s *BreakStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *BreakStmt) node()            {}
+func (s *BreakStmt) stmt()            {}
+
+// ContinueStmt skips to the next loop iteration.
+type ContinueStmt struct {
+	SpanInfo lexer.Span
+}
+
+func (s *ContinueStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *ContinueStmt) node()            {}
+func (s *ContinueStmt) stmt()            {}
+
 // Expr categories -----------------------------------------------------------
 
 // Expr represents an expression node.
@@ -230,6 +266,9 @@ const (
 	LiteralString LiteralKind = "string"
 	LiteralChar   LiteralKind = "char"
 	LiteralBool   LiteralKind = "bool"
+	LiteralNull   LiteralKind = "null"
+	LiteralHex    LiteralKind = "hex"
+	LiteralBinary LiteralKind = "binary"
 )
 
 // LiteralExpr stores literal values as raw lexemes.
@@ -385,3 +424,25 @@ type DeleteExpr struct {
 func (e *DeleteExpr) Span() lexer.Span { return e.SpanInfo }
 func (e *DeleteExpr) node()            {}
 func (e *DeleteExpr) expr()            {}
+
+// LambdaExpr models lambda/anonymous functions: |a, b| a + b
+type LambdaExpr struct {
+	SpanInfo lexer.Span
+	Params   []Param
+	Body     Expr
+}
+
+func (e *LambdaExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *LambdaExpr) node()            {}
+func (e *LambdaExpr) expr()            {}
+
+// CastExpr represents a type cast expression: (type) expression
+type CastExpr struct {
+	SpanInfo lexer.Span
+	Type     *TypeExpr
+	Expr     Expr
+}
+
+func (e *CastExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *CastExpr) node()            {}
+func (e *CastExpr) expr()            {}

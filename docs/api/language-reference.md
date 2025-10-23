@@ -62,16 +62,18 @@ array map
 
 ```omni
 let decimal = 42
-let hex = 0x2A
-let binary = 0b101010
-let octal = 0o52
+let hex = 0x2A        // 42 in hexadecimal
+let binary = 0b101010 // 42 in binary
+let octal = 0o52      // 42 in octal
 ```
 
 #### Float Literals
 
 ```omni
 let pi = 3.14159
-let scientific = 1.23e-4
+let scientific = 1.23e-4    // Scientific notation
+let large = 1.0e5          // 100000.0
+let small = 1.0e-5         // 0.00001
 ```
 
 #### String Literals
@@ -97,6 +99,12 @@ let tab = '\t'
 ```omni
 let truth = true
 let falsity = false
+```
+
+#### Null Literal
+
+```omni
+let null_value = null
 ```
 
 ## Types
@@ -185,6 +193,18 @@ let w = true        // inferred as bool
 | `-` | Negation | `-x` |
 | `+` | Unary plus | `+x` |
 | `!` | Logical NOT | `!flag` |
+| `~` | Bitwise NOT | `~x` |
+
+### Bitwise Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `&` | Bitwise AND | `a & b` |
+| `|` | Bitwise OR | `a | b` |
+| `^` | Bitwise XOR | `a ^ b` |
+| `~` | Bitwise NOT | `~a` |
+| `<<` | Left shift | `a << 2` |
+| `>>` | Right shift | `a >> 1` |
 
 ### String Concatenation
 
@@ -194,6 +214,30 @@ The `+` operator can be used for string concatenation with automatic type conver
 let greeting = "Hello " + "World"           // "Hello World"
 let message = "Age: " + 25                  // "Age: 25"
 let info = 42 + " items found"              // "42 items found"
+```
+
+### Type Conversion
+
+#### Explicit Type Casting
+
+```omni
+let x:int = 42
+let y:float = (float)x        // Convert int to float
+let z:int = (int)3.14         // Convert float to int
+```
+
+#### Type Conversion Functions
+
+```omni
+// Convert to string
+let num_str:string = std.int_to_string(42)      // "42"
+let float_str:string = std.float_to_string(3.14) // "3.14"
+let bool_str:string = std.bool_to_string(true)   // "true"
+
+// Convert from string
+let str_to_int:int = std.string_to_int("123")    // 123
+let str_to_float:float = std.string_to_float("3.14") // 3.14
+let str_to_bool:bool = std.string_to_bool("true")    // true
 ```
 
 ## Statements
@@ -225,6 +269,8 @@ print("Hello")
     x + y
 }
 ```
+
+Block statements create a new scope where variables can be declared and shadow outer variables.
 
 ### If Statement
 

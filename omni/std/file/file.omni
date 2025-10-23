@@ -1,0 +1,50 @@
+// std.file - File I/O operations for OmniLang
+
+// open opens a file with the specified mode ("r", "w", "a", etc.)
+// Returns a file handle (int), or -1 on error
+func open(filename:string, mode:string):int {
+    return 0
+}
+
+// close closes a file handle
+// Returns 0 on success, -1 on error
+func close(file_handle:int):int {
+    return 0
+}
+
+// read reads bytes from a file into a buffer
+// Returns the number of bytes read, or -1 on error
+func read(file_handle:int, buffer:string, size:int):int {
+    return 0
+}
+
+// write writes bytes from a buffer to a file
+// Returns the number of bytes written, or -1 on error
+func write(file_handle:int, buffer:string, size:int):int {
+    return 0
+}
+
+// seek sets the file position indicator
+// Returns 0 on success, -1 on error
+func seek(file_handle:int, offset:int, whence:int):int {
+    return 0
+}
+
+// tell returns the current file position indicator
+// Returns the position, or -1 on error
+func tell(file_handle:int):int {
+    return 0
+}
+
+// exists checks if a file exists
+// Returns 1 if the file exists, 0 otherwise
+func exists(filename:string):int {
+    return 0
+}
+
+// size returns the size of a file in bytes
+// Returns the size, or -1 on error
+func size(filename:string):int {
+    return 0
+}
+

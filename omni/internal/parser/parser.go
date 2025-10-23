@@ -344,10 +344,18 @@ func (p *Parser) parseStmt() (ast.Stmt, error) {
 		return p.parseIfStmt()
 	case lexer.TokenFor:
 		return p.parseForStmt()
+	case lexer.TokenWhile:
+		return p.parseWhileStmt()
+	case lexer.TokenBreak:
+		return p.parseBreakStmt()
+	case lexer.TokenContinue:
+		return p.parseContinueStmt()
 	case lexer.TokenLet:
 		return p.parseBindingStmt(false)
 	case lexer.TokenVar:
 		return p.parseBindingStmt(true)
+	case lexer.TokenLBrace:
+		return p.parseBlock()
 	default:
 		expr, err := p.parseExpr()
 		if err != nil {
@@ -404,6 +412,30 @@ func (p *Parser) parseIfStmt() (ast.Stmt, error) {
 		end = elseStmt.Span().End
 	}
 	return &ast.IfStmt{SpanInfo: lexer.Span{Start: tok.Span.Start, End: end}, Cond: cond, Then: thenBlock, Else: elseStmt}, nil
+}
+
+func (p *Parser) parseWhileStmt() (ast.Stmt, error) {
+	tok := p.advance()
+	cond, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	body, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+	span := lexer.Span{Start: tok.Span.Start, End: body.Span().End}
+	return &ast.WhileStmt{SpanInfo: span, Cond: cond, Body: body}, nil
+}
+
+func (p *Parser) parseBreakStmt() (ast.Stmt, error) {
+	tok := p.advance()
+	return &ast.BreakStmt{SpanInfo: tok.Span}, nil
+}
+
+func (p *Parser) parseContinueStmt() (ast.Stmt, error) {
+	tok := p.advance()
+	return &ast.ContinueStmt{SpanInfo: tok.Span}, nil
 }
 
 func (p *Parser) parseForStmt() (ast.Stmt, error) {
@@ -562,11 +594,59 @@ func (p *Parser) parseLogicalOr() (ast.Expr, error) {
 }
 
 func (p *Parser) parseLogicalAnd() (ast.Expr, error) {
-	left, err := p.parseEquality()
+	left, err := p.parseBitwiseOr()
 	if err != nil {
 		return nil, err
 	}
 	for p.match(lexer.TokenAndAnd) {
+		op := p.previous().Lexeme
+		right, err := p.parseBitwiseOr()
+		if err != nil {
+			return nil, err
+		}
+		left = &ast.BinaryExpr{SpanInfo: lexer.Span{Start: left.Span().Start, End: right.Span().End}, Left: left, Op: op, Right: right}
+	}
+	return left, nil
+}
+
+func (p *Parser) parseBitwiseOr() (ast.Expr, error) {
+	left, err := p.parseBitwiseXor()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(lexer.TokenPipe) {
+		op := p.previous().Lexeme
+		right, err := p.parseBitwiseXor()
+		if err != nil {
+			return nil, err
+		}
+		left = &ast.BinaryExpr{SpanInfo: lexer.Span{Start: left.Span().Start, End: right.Span().End}, Left: left, Op: op, Right: right}
+	}
+	return left, nil
+}
+
+func (p *Parser) parseBitwiseXor() (ast.Expr, error) {
+	left, err := p.parseBitwiseAnd()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(lexer.TokenCaret) {
+		op := p.previous().Lexeme
+		right, err := p.parseBitwiseAnd()
+		if err != nil {
+			return nil, err
+		}
+		left = &ast.BinaryExpr{SpanInfo: lexer.Span{Start: left.Span().Start, End: right.Span().End}, Left: left, Op: op, Right: right}
+	}
+	return left, nil
+}
+
+func (p *Parser) parseBitwiseAnd() (ast.Expr, error) {
+	left, err := p.parseEquality()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(lexer.TokenAmpersand) {
 		op := p.previous().Lexeme
 		right, err := p.parseEquality()
 		if err != nil {
@@ -594,13 +674,33 @@ func (p *Parser) parseEquality() (ast.Expr, error) {
 }
 
 func (p *Parser) parseComparison() (ast.Expr, error) {
-	left, err := p.parseTerm()
+	left, err := p.parseShift()
 	if err != nil {
 		return nil, err
 	}
 	for {
 		switch p.peekKind() {
 		case lexer.TokenLess, lexer.TokenLessEqual, lexer.TokenGreater, lexer.TokenGreaterEqual:
+			op := p.advance()
+			right, err := p.parseShift()
+			if err != nil {
+				return nil, err
+			}
+			left = &ast.BinaryExpr{SpanInfo: lexer.Span{Start: left.Span().Start, End: right.Span().End}, Left: left, Op: op.Lexeme, Right: right}
+		default:
+			return left, nil
+		}
+	}
+}
+
+func (p *Parser) parseShift() (ast.Expr, error) {
+	left, err := p.parseTerm()
+	if err != nil {
+		return nil, err
+	}
+	for {
+		switch p.peekKind() {
+		case lexer.TokenLShift, lexer.TokenRShift:
 			op := p.advance()
 			right, err := p.parseTerm()
 			if err != nil {
@@ -655,13 +755,45 @@ func (p *Parser) parseFactor() (ast.Expr, error) {
 
 func (p *Parser) parseUnary() (ast.Expr, error) {
 	switch p.peekKind() {
-	case lexer.TokenBang, lexer.TokenMinus:
+	case lexer.TokenBang, lexer.TokenMinus, lexer.TokenTilde:
 		op := p.advance()
 		expr, err := p.parseUnary()
 		if err != nil {
 			return nil, err
 		}
 		return &ast.UnaryExpr{SpanInfo: lexer.Span{Start: op.Span.Start, End: expr.Span().End}, Op: op.Lexeme, Expr: expr}, nil
+	case lexer.TokenLParen:
+		// Check if this is a type cast: (type) expression
+		startPos := p.current().Span.Start
+		savedPos := p.pos
+		p.advance() // consume '('
+
+		// Try to parse as a type expression
+		typeExpr, err := p.parseTypeExpr()
+		if err != nil {
+			// Not a type cast, fall back to regular expression parsing
+			p.pos = savedPos // restore position
+			return p.parsePostfix()
+		}
+
+		// Check if next token is ')'
+		if !p.match(lexer.TokenRParen) {
+			// Not a type cast, fall back to regular expression parsing
+			p.pos = savedPos // restore position
+			return p.parsePostfix()
+		}
+
+		// Parse the expression to be cast
+		expr, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+
+		return &ast.CastExpr{
+			SpanInfo: lexer.Span{Start: startPos, End: expr.Span().End},
+			Type:     typeExpr,
+			Expr:     expr,
+		}, nil
 	}
 	return p.parsePostfix()
 }
@@ -754,6 +886,12 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralChar, Value: tok.Lexeme}, nil
 	case lexer.TokenTrue, lexer.TokenFalse:
 		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralBool, Value: tok.Lexeme}, nil
+	case lexer.TokenNullLiteral:
+		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralNull, Value: tok.Lexeme}, nil
+	case lexer.TokenHexLiteral:
+		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralHex, Value: tok.Lexeme}, nil
+	case lexer.TokenBinaryLiteral:
+		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralBinary, Value: tok.Lexeme}, nil
 	case lexer.TokenLParen:
 		expr, err := p.parseExpr()
 		if err != nil {
@@ -761,6 +899,9 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 		}
 		p.expect(lexer.TokenRParen)
 		return expr, nil
+	case lexer.TokenPipe:
+		// Lambda expression: |a, b| a + b
+		return p.parseLambda(tok)
 	case lexer.TokenLBracket:
 		elems := []ast.Expr{}
 		if !p.match(lexer.TokenRBracket) {
@@ -965,14 +1106,54 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 		return &ast.TypeExpr{SpanInfo: span, Name: "*" + baseType.Name}, nil
 	}
 
-	// Handle parentheses around types: (Type)
+	// Handle parentheses around types: (Type) or function types: (int, string) -> bool
 	if p.match(lexer.TokenLParen) {
-		typ, err := p.parseTypeExpr()
-		if err != nil {
-			return nil, err
+		start := p.previous().Span.Start
+
+		// Try to parse as function type first
+		paramTypes := []*ast.TypeExpr{}
+
+		// Parse parameter types
+		if !p.match(lexer.TokenRParen) {
+			for {
+				paramType, err := p.parseSingleType()
+				if err != nil {
+					return nil, err
+				}
+				paramTypes = append(paramTypes, paramType)
+
+				if p.match(lexer.TokenRParen) {
+					break
+				}
+				if !p.match(lexer.TokenComma) {
+					return nil, p.errorAtCurrent("expected ',' or ')' in function type")
+				}
+			}
 		}
-		p.expect(lexer.TokenRParen)
-		return typ, nil
+
+		// Check if this is a function type (has -> after )
+		if p.match(lexer.TokenArrow) {
+			// This is a function type: (params) -> returnType
+			returnType, err := p.parseTypeExpr()
+			if err != nil {
+				return nil, err
+			}
+			span := lexer.Span{Start: start, End: returnType.SpanInfo.End}
+			return &ast.TypeExpr{
+				SpanInfo:   span,
+				IsFunction: true,
+				ParamTypes: paramTypes,
+				ReturnType: returnType,
+			}, nil
+		}
+
+		// If no -> found, this is just a parenthesized type
+		if len(paramTypes) == 1 {
+			return paramTypes[0], nil
+		}
+
+		// Multiple types without -> is an error
+		return nil, p.errorAtCurrent("multiple types in parentheses must be followed by '->' for function type")
 	}
 
 	// Handle simple identifier types
@@ -999,6 +1180,17 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 		typeExpr.Args = args
 		typeExpr.SpanInfo.End = p.previous().Span.End
 	}
+
+	// Check for optional type syntax: T?
+	if p.match(lexer.TokenQuestion) {
+		span := lexer.Span{Start: typeExpr.SpanInfo.Start, End: p.previous().Span.End}
+		return &ast.TypeExpr{
+			SpanInfo:     span,
+			IsOptional:   true,
+			OptionalType: typeExpr,
+		}, nil
+	}
+
 	return typeExpr, nil
 }
 
@@ -1170,6 +1362,50 @@ func (p *Parser) parseDeleteExpr(tok lexer.Token) (ast.Expr, error) {
 	}
 	span := lexer.Span{Start: tok.Span.Start, End: expr.Span().End}
 	return &ast.DeleteExpr{SpanInfo: span, Target: expr}, nil
+}
+
+func (p *Parser) parseLambda(startTok lexer.Token) (ast.Expr, error) {
+	// Parse lambda parameters: |a, b|
+	params := []ast.Param{}
+
+	// Parse parameters until we hit the closing |
+	for {
+		if p.match(lexer.TokenPipe) {
+			// End of parameters
+			break
+		}
+
+		// Parse parameter name
+		paramName := p.expect(lexer.TokenIdentifier)
+
+		// For now, we'll infer parameter types
+		// In a full implementation, we might support type annotations: |a: int, b: int|
+		param := ast.Param{
+			Name: paramName.Lexeme,
+			Type: nil, // Type will be inferred
+			Span: paramName.Span,
+		}
+		params = append(params, param)
+
+		// Check for comma separator
+		if p.match(lexer.TokenComma) {
+			continue
+		}
+
+		// If we don't see a comma, we should see the closing |
+		if p.peekKind() != lexer.TokenPipe {
+			return nil, p.errorAtCurrent("expected ',' or '|' in lambda parameters")
+		}
+	}
+
+	// Parse lambda body
+	body, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	span := lexer.Span{Start: startTok.Span.Start, End: body.Span().End}
+	return &ast.LambdaExpr{SpanInfo: span, Params: params, Body: body}, nil
 }
 
 func splitLines(input string) []string {

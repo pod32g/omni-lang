@@ -2,6 +2,7 @@ package cbackend
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/omni-lang/omni/internal/mir"
@@ -103,6 +104,10 @@ func (g *CGenerator) generate() (string, error) {
 	g.writeHeader()
 	g.writeStdLibFunctions()
 
+	// Generate function declarations first
+	g.writeFunctionDeclarations()
+
+	// Then generate function definitions
 	for _, fn := range g.module.Functions {
 		if err := g.generateFunction(fn); err != nil {
 			return "", err
@@ -196,6 +201,55 @@ func (g *CGenerator) writeStdLibFunctions() {
 	// No need to generate them here since they're linked from libomni_rt.so
 }
 
+// writeFunctionDeclarations writes function declarations for all functions
+func (g *CGenerator) writeFunctionDeclarations() {
+	for _, fn := range g.module.Functions {
+		// Skip functions that are provided by the runtime
+		if g.isRuntimeProvidedFunction(fn.Name) {
+			continue
+		}
+
+		// Generate function declaration
+		returnType := g.mapType(fn.ReturnType)
+		funcName := g.mapFunctionName(fn.Name)
+		if fn.Name == "main" {
+			funcName = "omni_main"
+		}
+
+		// Handle function pointer return types
+		if strings.Contains(fn.ReturnType, ") -> ") {
+			// This is a function pointer return type - need special handling
+			g.output.WriteString(g.generateCompleteFunctionSignature(fn.ReturnType, funcName, fn.Params))
+			g.output.WriteString(";\n")
+		} else {
+			g.output.WriteString(fmt.Sprintf("%s %s(", returnType, funcName))
+
+			// Generate parameters
+			for i, param := range fn.Params {
+				if i > 0 {
+					g.output.WriteString(", ")
+				}
+				// Check if this is a function pointer type
+				if strings.Contains(param.Type, ") -> ") {
+					// Generate function pointer parameter with correct C syntax
+					g.output.WriteString(g.mapFunctionTypeWithName(param.Type, param.Name))
+				} else {
+					paramType := g.mapType(param.Type)
+
+					// Special handling for file.read buffer parameter
+					if fn.Name == "file.read" && param.Name == "buffer" && param.Type == "string" {
+						paramType = "char*" // Buffer parameter should be writable
+					}
+
+					g.output.WriteString(fmt.Sprintf("%s %s", paramType, param.Name))
+				}
+			}
+			g.output.WriteString(");\n")
+		}
+	}
+	g.output.WriteString("\n")
+}
+
 // generateFunction generates C code for a single function
 func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	// Skip functions that are provided by the runtime
@@ -220,17 +274,42 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	if fn.Name == "main" {
 		funcName = "omni_main"
 	}
-	g.output.WriteString(fmt.Sprintf("%s %s(", returnType, funcName))
 
-	// Generate parameters
-	for i, param := range fn.Params {
-		if i > 0 {
-			g.output.WriteString(", ")
+	// Handle function pointer return types
+	if strings.Contains(fn.ReturnType, ") -> ") {
+		// This is a function pointer return type - need special handling
+		g.output.WriteString(g.generateCompleteFunctionSignature(fn.ReturnType, funcName, fn.Params))
+		g.output.WriteString(" {\n")
+	} else {
+		g.output.WriteString(fmt.Sprintf("%s %s(", returnType, funcName))
+
+		// Generate parameters
+		for i, param := range fn.Params {
+			if i > 0 {
+				g.output.WriteString(", ")
+			}
+			// Check if this is a function pointer type
+			if strings.Contains(param.Type, ") -> ") {
+				// Generate function pointer parameter with correct C syntax
+				g.output.WriteString(g.mapFunctionTypeWithName(param.Type, param.Name))
+			} else {
+				paramType := g.mapType(param.Type)
+
+				// Special handling for file.read buffer parameter
+				if fn.Name == "file.read" && param.Name == "buffer" && param.Type == "string" {
+					paramType = "char*" // Buffer parameter should be writable
+				}
+
+				g.output.WriteString(fmt.Sprintf("%s %s", paramType, param.Name))
+			}
 		}
-		paramType := g.mapType(param.Type)
-		g.output.WriteString(fmt.Sprintf("%s %s", paramType, param.Name))
+		g.output.WriteString(") {\n")
 	}
-	g.output.WriteString(") {\n")
+
+	// Map parameter SSA values to their names
+	for _, param := range fn.Params {
+		g.variables[param.ID] = param.Name
+	}
 
 	// Generate function body
 	for _, block := range fn.Blocks {
@@ -290,10 +369,12 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			literalValue := g.getOperandValue(inst.Operands[0])
 			switch inst.Type {
 			case "int":
+				// Convert hex and binary literals to decimal
+				convertedValue := g.convertLiteralToDecimal(literalValue)
 				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s;\n",
-					varName, literalValue))
+					varName, convertedValue))
 				// Mark variables that are initialized to 0 as potentially mutable (like sum variables)
-				if literalValue == "0" {
+				if convertedValue == "0" {
 					g.mutableVars[inst.ID] = true
 				}
 			case "float", "double":
@@ -305,8 +386,18 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			case "bool":
 				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s;\n",
 					varName, literalValue))
+			case "null":
+				g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n",
+					varName))
 			default:
-				g.output.WriteString(fmt.Sprintf("  // TODO: Handle const type %s\n", inst.Type))
+				// Check if this is a function type
+				if strings.Contains(inst.Type, ") -> ") {
+					// Function type - assign function pointer
+					g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n",
+						g.mapType(inst.Type), varName, literalValue))
+				} else {
+					g.output.WriteString(fmt.Sprintf("  // TODO: Handle const type %s\n", inst.Type))
+				}
 			}
 		}
 	case "add":
@@ -372,6 +463,51 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			g.output.WriteString(fmt.Sprintf("  %s %s = %s %% %s;\n",
 				g.mapType(inst.Type), varName, left, right))
 		}
+	case "bitand":
+		// Handle bitwise AND
+		if len(inst.Operands) >= 2 {
+			left := g.getOperandValue(inst.Operands[0])
+			right := g.getOperandValue(inst.Operands[1])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s & %s;\n",
+				g.mapType(inst.Type), varName, left, right))
+		}
+	case "bitor":
+		// Handle bitwise OR
+		if len(inst.Operands) >= 2 {
+			left := g.getOperandValue(inst.Operands[0])
+			right := g.getOperandValue(inst.Operands[1])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s | %s;\n",
+				g.mapType(inst.Type), varName, left, right))
+		}
+	case "bitxor":
+		// Handle bitwise XOR
+		if len(inst.Operands) >= 2 {
+			left := g.getOperandValue(inst.Operands[0])
+			right := g.getOperandValue(inst.Operands[1])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s ^ %s;\n",
+				g.mapType(inst.Type), varName, left, right))
+		}
+	case "lshift":
+		// Handle left shift
+		if len(inst.Operands) >= 2 {
+			left := g.getOperandValue(inst.Operands[0])
+			right := g.getOperandValue(inst.Operands[1])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s << %s;\n",
+				g.mapType(inst.Type), varName, left, right))
+		}
+	case "rshift":
+		// Handle right shift
+		if len(inst.Operands) >= 2 {
+			left := g.getOperandValue(inst.Operands[0])
+			right := g.getOperandValue(inst.Operands[1])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s >> %s;\n",
+				g.mapType(inst.Type), varName, left, right))
+		}
 	case "strcat":
 		// Handle string concatenation
 		if len(inst.Operands) >= 2 {
@@ -400,6 +536,23 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			g.output.WriteString(fmt.Sprintf("  %s %s = !%s;\n",
 				g.mapType(inst.Type), varName, operand))
 		}
+	case "bitnot":
+		// Handle bitwise not
+		if len(inst.Operands) >= 1 {
+			operand := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			g.output.WriteString(fmt.Sprintf("  %s %s = ~%s;\n",
+				g.mapType(inst.Type), varName, operand))
+		}
+	case "cast":
+		// Handle type cast
+		if len(inst.Operands) >= 1 {
+			operand := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			targetType := g.mapType(inst.Type)
+			g.output.WriteString(fmt.Sprintf("  %s %s = (%s)%s;\n",
+				targetType, varName, targetType, operand))
+		}
 	case "and":
 		// Handle logical and
 		if len(inst.Operands) >= 2 {
@@ -421,7 +574,14 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 	case "call", "call.int", "call.void", "call.string", "call.bool":
 		// Handle function calls
 		if len(inst.Operands) > 0 {
-			funcName := g.getOperandValue(inst.Operands[0])
+			// Get the function name from the first operand
+			// For literal function names, use the Literal field directly
+			var funcName string
+			if inst.Operands[0].Kind == mir.OperandLiteral {
+				funcName = inst.Operands[0].Literal
+			} else {
+				funcName = g.getOperandValue(inst.Operands[0])
+			}
 
 			// Special handling for len() function
 			if funcName == "len" && len(inst.Operands) == 2 {
@@ -447,8 +607,16 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(");\n")
 			} else {
 				varName := g.getVariableName(inst.ID)
-				g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
-					g.mapType(inst.Type), varName, cFuncName))
+				// Check if the result type is a function type
+				if strings.Contains(inst.Type, ") -> ") {
+					// Generate function pointer variable declaration
+					g.output.WriteString(fmt.Sprintf("  %s = %s(",
+						g.mapFunctionTypeWithName(inst.Type, varName), cFuncName))
+				} else {
+					// Regular variable declaration
+					g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
+						g.mapType(inst.Type), varName, cFuncName))
+				}
 				// Add arguments
 				for i, arg := range inst.Operands[1:] {
 					if i > 0 {
@@ -729,6 +897,53 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			message := g.getOperandValue(inst.Operands[1])
 			g.output.WriteString(fmt.Sprintf("  omni_assert_false(%s, %s);\n", condition, message))
 		}
+	case "func.ref":
+		// Handle function reference: getting a pointer to a function
+		if len(inst.Operands) >= 1 {
+			funcName := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			// Map the function name (e.g., std.io.println -> omni_println)
+			mappedName := g.mapFunctionName(funcName)
+			// Generate C code to reference the function
+			// The syntax is: returnType (*varName)(params) = funcName;
+			g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
+				g.mapFunctionTypeWithName(inst.Type, varName), mappedName))
+		}
+	case "func.assign":
+		// Handle function assignment: func_var = function_name
+		if len(inst.Operands) >= 1 {
+			funcName := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			// Check if this is a function type
+			if strings.Contains(inst.Type, ") -> ") {
+				// Generate function pointer variable declaration
+				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
+					g.mapFunctionTypeWithName(inst.Type, varName), funcName))
+			} else {
+				// Regular variable assignment
+				g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n",
+					g.mapType(inst.Type), varName, funcName))
+			}
+		}
+	case "func.call":
+		// Handle function call through function pointer
+		if len(inst.Operands) >= 1 {
+			funcPtr := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+
+			// Build function call with arguments
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
+				g.mapType(inst.Type), varName, funcPtr))
+
+			// Add arguments
+			for i, arg := range inst.Operands[1:] {
+				if i > 0 {
+					g.output.WriteString(", ")
+				}
+				g.output.WriteString(g.getOperandValue(arg))
+			}
+			g.output.WriteString(");\n")
+		}
 	default:
 		// Handle unknown instructions
 		g.output.WriteString(fmt.Sprintf("  // TODO: Implement instruction %s\n", inst.Op))
@@ -805,6 +1020,11 @@ func (g *CGenerator) isMapVariable(varName string) bool {
 
 // mapType converts OmniLang types to C types
 func (g *CGenerator) mapType(omniType string) string {
+	// Handle function types: (param1, param2) -> returnType
+	if strings.Contains(omniType, ") -> ") {
+		return g.mapFunctionType(omniType)
+	}
+
 	// Handle array types: []<ElementType>
 	if strings.HasPrefix(omniType, "[]<") && strings.HasSuffix(omniType, ">") {
 		elementType := omniType[3 : len(omniType)-1]
@@ -834,6 +1054,216 @@ func (g *CGenerator) mapType(omniType string) string {
 	}
 }
 
+// mapFunctionType converts OmniLang function types to C function pointer types
+func (g *CGenerator) mapFunctionType(omniType string) string {
+	// Parse function type: (param1, param2) -> returnType
+	arrowIndex := strings.Index(omniType, ") -> ")
+	if arrowIndex == -1 {
+		return "void*" // Fallback for malformed function types
+	}
+
+	paramPart := omniType[1:arrowIndex]                      // Remove opening (
+	returnType := strings.TrimSpace(omniType[arrowIndex+5:]) // After " -> "
+
+	// Parse parameter types
+	var paramTypes []string
+	if paramPart != "" {
+		// Split by comma and trim spaces
+		paramStrs := strings.Split(paramPart, ",")
+		for _, paramStr := range paramStrs {
+			paramType := strings.TrimSpace(paramStr)
+			paramTypes = append(paramTypes, g.mapType(paramType))
+		}
+	}
+
+	// Build C function pointer type: returnType (*)(param1, param2, ...)
+	var cType strings.Builder
+	cType.WriteString(g.mapType(returnType))
+	cType.WriteString(" (*)(")
+	for i, paramType := range paramTypes {
+		if i > 0 {
+			cType.WriteString(", ")
+		}
+		cType.WriteString(paramType)
+	}
+	cType.WriteString(")")
+
+	return cType.String()
+}
+
+// mapFunctionTypeWithName converts OmniLang function types to C function pointer types with parameter name
+func (g *CGenerator) mapFunctionTypeWithName(omniType string, paramName string) string {
+	// Parse function type: (param1, param2) -> returnType
+	arrowIndex := strings.Index(omniType, ") -> ")
+	if arrowIndex == -1 {
+		return "void* " + paramName // Fallback for malformed function types
+	}
+
+	paramPart := omniType[1:arrowIndex]                      // Remove opening (
+	returnType := strings.TrimSpace(omniType[arrowIndex+5:]) // After " -> "
+
+	// Parse parameter types
+	var paramTypes []string
+	if paramPart != "" {
+		// Split by comma and trim spaces
+		paramStrs := strings.Split(paramPart, ",")
+		for _, paramStr := range paramStrs {
+			paramType := strings.TrimSpace(paramStr)
+			paramTypes = append(paramTypes, g.mapType(paramType))
+		}
+	}
+
+	// Build C function pointer type with name: returnType (*paramName)(param1, param2, ...)
+	var cType strings.Builder
+	cType.WriteString(g.mapType(returnType))
+	cType.WriteString(" (*")
+	cType.WriteString(paramName)
+	cType.WriteString(")(")
+	for i, paramType := range paramTypes {
+		if i > 0 {
+			cType.WriteString(", ")
+		}
+		cType.WriteString(paramType)
+	}
+	cType.WriteString(")")
+
+	return cType.String()
+}
+
+// mapFunctionReturnType converts OmniLang function types to C function pointer return types
+func (g *CGenerator) mapFunctionReturnType(omniType string) string {
+	// Parse function type: (param1, param2) -> returnType
+	arrowIndex := strings.Index(omniType, ") -> ")
+	if arrowIndex == -1 {
+		return "void*" // Fallback for malformed function types
+	}
+
+	paramPart := omniType[1:arrowIndex]                      // Remove opening (
+	returnType := strings.TrimSpace(omniType[arrowIndex+5:]) // After " -> "
+
+	// Parse parameter types
+	var paramTypes []string
+	if paramPart != "" {
+		// Split by comma and trim spaces
+		paramStrs := strings.Split(paramPart, ",")
+		for _, paramStr := range paramStrs {
+			paramType := strings.TrimSpace(paramStr)
+			paramTypes = append(paramTypes, g.mapType(paramType))
+		}
+	}
+
+	// Build C function pointer return type: returnType (*)(param1, param2, ...)
+	var cType strings.Builder
+	cType.WriteString(g.mapType(returnType))
+	cType.WriteString(" (*)(")
+	for i, paramType := range paramTypes {
+		if i > 0 {
+			cType.WriteString(", ")
+		}
+		cType.WriteString(paramType)
+	}
+	cType.WriteString(")")
+
+	return cType.String()
+}
+
+// generateFunctionPointerReturnType generates C function pointer return type with function name
+func (g *CGenerator) generateFunctionPointerReturnType(omniType string, funcName string) string {
+	// Parse function type: (param1, param2) -> returnType
+	arrowIndex := strings.Index(omniType, ") -> ")
+	if arrowIndex == -1 {
+		return "void* " + funcName + "(" // Fallback for malformed function types
+	}
+
+	paramPart := omniType[1:arrowIndex]                      // Remove opening (
+	returnType := strings.TrimSpace(omniType[arrowIndex+5:]) // After " -> "
+
+	// Parse parameter types
+	var paramTypes []string
+	if paramPart != "" {
+		// Split by comma and trim spaces
+		paramStrs := strings.Split(paramPart, ",")
+		for _, paramStr := range paramStrs {
+			paramType := strings.TrimSpace(paramStr)
+			paramTypes = append(paramTypes, g.mapType(paramType))
+		}
+	}
+
+	// Build C function pointer return type: returnType (*funcName)(param1, param2, ...)
+	var cType strings.Builder
+	cType.WriteString(g.mapType(returnType))
+	cType.WriteString(" (*")
+	cType.WriteString(funcName)
+	cType.WriteString(")(")
+	for i, paramType := range paramTypes {
+		if i > 0 {
+			cType.WriteString(", ")
+		}
+		cType.WriteString(paramType)
+	}
+	cType.WriteString(")")
+
+	return cType.String()
+}
+
+// generateCompleteFunctionSignature generates complete C function signature with function pointer return type
+func (g *CGenerator) generateCompleteFunctionSignature(returnType string, funcName string, params []mir.Param) string {
+	// Parse function type: (param1, param2) -> returnType
+	arrowIndex := strings.Index(returnType, ") -> ")
+	if arrowIndex == -1 {
+		return "void* " + funcName + "(" // Fallback for malformed function types
+	}
+
+	paramPart := returnType[1:arrowIndex]                          // Remove opening (
+	funcReturnType := strings.TrimSpace(returnType[arrowIndex+5:]) // After " -> "
+
+	// Parse function pointer parameter types
+	var funcParamTypes []string
+	if paramPart != "" {
+		// Split by comma and trim spaces
+		paramStrs := strings.Split(paramPart, ",")
+		for _, paramStr := range paramStrs {
+			paramType := strings.TrimSpace(paramStr)
+			funcParamTypes = append(funcParamTypes, g.mapType(paramType))
+		}
+	}
+
+	// Build C function signature: returnType (*funcName(function_params))(function_pointer_params)
+	var cType strings.Builder
+	cType.WriteString(g.mapType(funcReturnType))
+	cType.WriteString(" (*")
+	cType.WriteString(funcName)
+	cType.WriteString("(")
+
+	// Add function parameters
+	for i, param := range params {
+		if i > 0 {
+			cType.WriteString(", ")
+		}
+		// Check if this is a function pointer type
+		if strings.Contains(param.Type, ") -> ") {
+			// Generate function pointer parameter with correct C syntax
+			cType.WriteString(g.mapFunctionTypeWithName(param.Type, param.Name))
+		} else {
+			paramType := g.mapType(param.Type)
+			cType.WriteString(fmt.Sprintf("%s %s", paramType, param.Name))
+		}
+	}
+
+	cType.WriteString("))(")
+
+	// Add function pointer parameter types
+	for i, paramType := range funcParamTypes {
+		if i > 0 {
+			cType.WriteString(", ")
+		}
+		cType.WriteString(paramType)
+	}
+	cType.WriteString(")")
+
+	return cType.String()
+}
+
 // mapFunctionName maps OmniLang function names to C function names
 func (g *CGenerator) mapFunctionName(funcName string) string {
 	switch funcName {
@@ -849,6 +1279,22 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_min"
 	case "std.math.toString":
 		return "omni_int_to_string"
+	case "std.math.pow":
+		return "omni_pow"
+	case "std.math.sqrt":
+		return "omni_sqrt"
+	case "std.math.floor":
+		return "omni_floor"
+	case "std.math.ceil":
+		return "omni_ceil"
+	case "std.math.round":
+		return "omni_round"
+	case "std.math.gcd":
+		return "omni_gcd"
+	case "std.math.lcm":
+		return "omni_lcm"
+	case "std.math.factorial":
+		return "omni_factorial"
 
 	// IO functions
 	case "std.io.print":
@@ -867,6 +1313,36 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_print_bool"
 	case "std.io.println_bool":
 		return "omni_println_bool"
+
+	// String functions
+	case "std.string.length":
+		return "omni_strlen"
+	case "std.string.concat":
+		return "omni_strcat"
+	case "std.string.substring":
+		return "omni_substring"
+	case "std.string.char_at":
+		return "omni_char_at"
+	case "std.string.starts_with":
+		return "omni_starts_with"
+	case "std.string.ends_with":
+		return "omni_ends_with"
+	case "std.string.contains":
+		return "omni_contains"
+	case "std.string.index_of":
+		return "omni_index_of"
+	case "std.string.last_index_of":
+		return "omni_last_index_of"
+	case "std.string.trim":
+		return "omni_trim"
+	case "std.string.to_upper":
+		return "omni_to_upper"
+	case "std.string.to_lower":
+		return "omni_to_lower"
+	case "std.string.equals":
+		return "omni_string_equals"
+	case "std.string.compare":
+		return "omni_string_compare"
 
 	// OS functions
 	case "std.os.exit":
@@ -889,6 +1365,13 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_string_to_float"
 	case "std.string_to_bool":
 		return "omni_string_to_bool"
+	// Array operations
+	case "std.array.length":
+		return "omni_array_length"
+	case "std.array.get":
+		return "omni_array_get_int"
+	case "std.array.set":
+		return "omni_array_set_int"
 	case "std.test.start":
 		return "omni_test_start"
 	case "std.test.end":
@@ -913,6 +1396,23 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "free"
 	case "realloc":
 		return "realloc"
+	// File operations
+	case "std.file.open":
+		return "omni_file_open"
+	case "std.file.close":
+		return "omni_file_close"
+	case "std.file.read":
+		return "omni_file_read"
+	case "std.file.write":
+		return "omni_file_write"
+	case "std.file.seek":
+		return "omni_file_seek"
+	case "std.file.tell":
+		return "omni_file_tell"
+	case "std.file.exists":
+		return "omni_file_exists"
+	case "std.file.size":
+		return "omni_file_size"
 	case "file.open":
 		return "omni_file_open"
 	case "file.close":
@@ -952,20 +1452,51 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 	// List of functions that are provided by the runtime
 	runtimeFunctions := map[string]bool{
-		"std.io.print":         true,
-		"std.io.println":       true,
-		"std.io.print_int":     true,
-		"std.io.println_int":   true,
-		"std.io.print_float":   true,
-		"std.io.println_float": true,
-		"std.io.print_bool":    true,
-		"std.io.println_bool":  true,
-		"std.math.abs":         true,
-		"std.math.max":         true,
-		"std.math.min":         true,
-		"std.os.exit":          true,
-		"std.int_to_string":    true,
-		"std.free":             true,
+		"std.io.print":             true,
+		"std.io.println":           true,
+		"std.io.print_int":         true,
+		"std.io.println_int":       true,
+		"std.io.print_float":       true,
+		"std.io.println_float":     true,
+		"std.io.print_bool":        true,
+		"std.io.println_bool":      true,
+		"std.string.length":        true,
+		"std.string.concat":        true,
+		"std.string.substring":     true,
+		"std.string.char_at":       true,
+		"std.string.starts_with":   true,
+		"std.string.ends_with":     true,
+		"std.string.contains":      true,
+		"std.string.index_of":      true,
+		"std.string.last_index_of": true,
+		"std.string.trim":          true,
+		"std.string.to_upper":      true,
+		"std.string.to_lower":      true,
+		"std.string.equals":        true,
+		"std.string.compare":       true,
+		"std.math.abs":             true,
+		"std.math.max":             true,
+		"std.math.min":             true,
+		"std.math.pow":             true,
+		"std.math.sqrt":            true,
+		"std.math.floor":           true,
+		"std.math.ceil":            true,
+		"std.math.round":           true,
+		"std.math.gcd":             true,
+		"std.math.lcm":             true,
+		"std.math.factorial":       true,
+		"std.os.exit":              true,
+		// File operations
+		"file.open":         true,
+		"file.close":        true,
+		"file.read":         true,
+		"file.write":        true,
+		"file.seek":         true,
+		"file.tell":         true,
+		"file.exists":       true,
+		"file.size":         true,
+		"std.int_to_string": true,
+		"std.free":          true,
 		// Skip std module utility functions that are not implemented in runtime
 		"std.assert":          true,
 		"std.assert_eq":       true,
@@ -977,6 +1508,10 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.string_to_bool":  true,
 		"std.malloc":          true,
 		"std.realloc":         true,
+		// Array operations
+		"std.array.length": true,
+		"std.array.get":    true,
+		"std.array.set":    true,
 	}
 
 	return runtimeFunctions[funcName]
@@ -991,6 +1526,31 @@ func (g *CGenerator) getVariableName(id mir.ValueID) string {
 	varName := fmt.Sprintf("v%d", int(id))
 	g.variables[id] = varName
 	return varName
+}
+
+// convertLiteralToDecimal converts hex and binary literals to decimal
+func (g *CGenerator) convertLiteralToDecimal(literal string) string {
+	if strings.HasPrefix(literal, "0x") || strings.HasPrefix(literal, "0X") {
+		// Hex literal - convert to decimal
+		hexStr := literal[2:]
+		// Remove underscores
+		hexStr = strings.ReplaceAll(hexStr, "_", "")
+		// Convert to int64 and back to string
+		if val, err := strconv.ParseInt(hexStr, 16, 64); err == nil {
+			return strconv.FormatInt(val, 10)
+		}
+	} else if strings.HasPrefix(literal, "0b") || strings.HasPrefix(literal, "0B") {
+		// Binary literal - convert to decimal
+		binaryStr := literal[2:]
+		// Remove underscores
+		binaryStr = strings.ReplaceAll(binaryStr, "_", "")
+		// Convert to int64 and back to string
+		if val, err := strconv.ParseInt(binaryStr, 2, 64); err == nil {
+			return strconv.FormatInt(val, 10)
+		}
+	}
+	// Return as-is for regular decimal literals
+	return literal
 }
 
 // writeMain writes the main function that calls the OmniLang main

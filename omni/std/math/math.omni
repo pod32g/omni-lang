@@ -30,3 +30,59 @@ func toString(n:int) {
     // during compilation. The actual implementation is in the backend.
     return ""
 }
+
+// pow returns x raised to the power of y
+func pow(x:float, y:float):float {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0.0
+}
+
+// sqrt returns the square root of x
+func sqrt(x:float):float {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0.0
+}
+
+// floor returns the largest integer value less than or equal to x
+func floor(x:float):float {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0.0
+}
+
+// ceil returns the smallest integer value greater than or equal to x
+func ceil(x:float):float {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0.0
+}
+
+// round returns the nearest integer value to x
+func round(x:float):float {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0.0
+}
+
+// gcd returns the greatest common divisor of a and b
+func gcd(a:int, b:int):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// lcm returns the least common multiple of a and b
+func lcm(a:int, b:int):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// factorial returns the factorial of n
+func factorial(n:int):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}

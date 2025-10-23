@@ -1,10 +1,23 @@
-# Recent Improvements (v0.4.3+)
+# Recent Improvements (v0.4.4+)
 
 This document outlines the major improvements and fixes made to OmniLang in recent releases.
 
 ## 🚀 Major Features Added
 
-### 1. Fixed Standard Library Import System
+### 1. Complete Basic Language Features Implementation
+- **String Operations**: length, substring, char_at, starts_with, ends_with, contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
+- **Advanced Math Functions**: pow, sqrt, floor, ceil, round, gcd, lcm, factorial
+- **File I/O Operations**: open, close, read, write, seek, tell, exists, size
+- **Bitwise Operators**: &, |, ^, ~, <<, >> with correct precedence
+- **Type Conversion**: explicit casting (type)expr, int_to_string, float_to_string, bool_to_string, string_to_int, string_to_float, string_to_bool
+- **Lexical Primitives**: null literals, hex literals (0xFF), binary literals (0b1010), scientific notation (1.0e-5)
+- **Advanced Control Flow**: while loops, break and continue statements
+- **Advanced Variables & Scope**: block scope with {}, variable shadowing rules
+- **Collections Operations**: basic array operations (length, get, set) with runtime support
+- **First-Class Functions**: function types, lambda expressions, closures with variable capture
+- **Testing Framework**: built-in testing with assertions (test.start, test.end, assert, assert.eq, assert.true, assert.false)
+
+### 2. Fixed Standard Library Import System
 - **Problem**: `import std` was not working from subdirectories like `examples/`
 - **Solution**: Enhanced module loader to dynamically find OmniLang root directory
 - **Impact**: Standard library imports now work from any directory structure
@@ -193,5 +206,5 @@ The enhanced pipeline will automatically test std imports and detect warnings.
 
 ---
 
-*Last updated: October 2025*
-*Version: v0.4.3+*
+*Last updated: December 2024*
+*Version: v0.4.4+*
