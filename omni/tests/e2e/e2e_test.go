@@ -147,6 +147,14 @@ func runVM(testFile string) (string, error) {
 	// Get the directory where the test files are located
 	// Use the directory containing the test file
 
+	// Debug: Check if file exists
+	if _, err := os.Stat(testFile); os.IsNotExist(err) {
+		return "", fmt.Errorf("test file does not exist: %s (working directory: %s)", testFile, func() string {
+			wd, _ := os.Getwd()
+			return wd
+		}())
+	}
+
 	cmd := exec.Command("../../bin/omnir", testFile)
 	// Set the working directory to tests/e2e so relative paths work correctly
 	cmd.Dir = "."
