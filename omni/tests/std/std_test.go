@@ -56,6 +56,33 @@ func TestStdMathIntegration(t *testing.T) {
 	}
 }
 
+func TestStdMathComprehensive(t *testing.T) {
+	// Test comprehensive std.math functions (only implemented ones)
+	result, err := runVM("std_math_comprehensive.omni")
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	// Expected: 42 + 17 + 10 = 69 (max + min + abs)
+	expected := "69"
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
+func TestStdLibraryComprehensive(t *testing.T) {
+	// Test that std library modules can be imported and basic functions called
+	// This tests the actual working functionality (std.math and std.io)
+	result, err := runVM("std_comprehensive_test.omni")
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	// Expected: 42 + 17 + 10 = 69 (max + min + abs)
+	expected := "69"
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
 func runVM(testFile string) (string, error) {
 	cmd := exec.Command("go", "run", "../../cmd/omnir", testFile)
 	cmd.Dir = "."

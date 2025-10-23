@@ -1,0 +1,16 @@
+// Comprehensive test for standard library - test what actually works
+import std
+
+func main():int {
+    // Test std.math functions (these are implemented)
+    let a:int = 42
+    let b:int = 17
+    
+    let max_val:int = std.math.max(a, b)  // Should be 42
+    let min_val:int = std.math.min(a, b)  // Should be 17
+    let abs_val:int = std.math.abs(-10)   // Should be 10
+    
+    // Return a combination of math results to verify functionality
+    let result:int = max_val + min_val + abs_val
+    return result  // Should be 42 + 17 + 10 = 69
+}

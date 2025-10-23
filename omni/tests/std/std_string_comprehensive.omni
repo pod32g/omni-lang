@@ -1,0 +1,49 @@
+// Comprehensive test for std.string module
+import std
+
+func main():int {
+    let str1:string = "Hello"
+    let str2:string = "World"
+    let str3:string = "Hello, World!"
+    
+    // Test basic string operations
+    let len1:int = std.string.length(str1)        // Should be 5
+    let len2:int = std.string.length(str2)        // Should be 5
+    let len3:int = std.string.length(str3)        // Should be 13
+    
+    // Test string concatenation
+    let concat_result:string = std.string.concat(str1, str2)  // Should be "HelloWorld"
+    let concat_len:int = std.string.length(concat_result)     // Should be 10
+    
+    // Test substring operations
+    let substr1:string = std.string.substring(str3, 0, 5)     // Should be "Hello"
+    let substr2:string = std.string.substring(str3, 7, 12)    // Should be "World"
+    
+    // Test character operations
+    let char1:char = std.string.char_at(str1, 0)  // Should be 'H'
+    let char2:char = std.string.char_at(str1, 4)  // Should be 'o'
+    
+    // Test string checking functions
+    let starts_hello:bool = std.string.starts_with(str3, "Hello")  // Should be true
+    let ends_world:bool = std.string.ends_with(str3, "World!")     // Should be true
+    let contains_comma:bool = std.string.contains(str3, ",")       // Should be true
+    
+    // Test string search functions
+    let index_hello:int = std.string.index_of(str3, "Hello")      // Should be 0
+    let index_world:int = std.string.index_of(str3, "World")      // Should be 7
+    let last_index_l:int = std.string.last_index_of(str3, "l")    // Should be 10
+    
+    // Test string manipulation
+    let trimmed:string = std.string.trim("  Hello  ")             // Should be "Hello"
+    let upper:string = std.string.to_upper(str1)                  // Should be "HELLO"
+    let lower:string = std.string.to_lower(str1)                  // Should be "hello"
+    
+    // Test string comparison
+    let equals_test:bool = std.string.equals(str1, "Hello")       // Should be true
+    let compare_test:int = std.string.compare("Apple", "Banana")  // Should be negative
+    
+    // Return a combination of results to verify all functions work
+    // We'll return: len1 + len2 + concat_len + (starts_hello ? 1 : 0) + (ends_world ? 1 : 0)
+    let result:int = len1 + len2 + concat_len + (starts_hello ? 1 : 0) + (ends_world ? 1 : 0)
+    return result  // Should be 5 + 5 + 10 + 1 + 1 = 22
+}

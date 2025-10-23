@@ -1,0 +1,17 @@
+// Comprehensive test for std.math module - only test implemented functions
+import std
+
+func main():int {
+    let a:int = 42
+    let b:int = 17
+    
+    // Test basic math functions (these are implemented)
+    let max_val:int = std.math.max(a, b)  // Should be 42
+    let min_val:int = std.math.min(a, b)  // Should be 17
+    let abs_val:int = std.math.abs(-10)   // Should be 10
+    
+    // Return a combination of results to verify all functions work
+    // We'll return: max + min + abs = 42 + 17 + 10 = 69
+    let result:int = max_val + min_val + abs_val
+    return result  // Should be 42 + 17 + 10 = 69
+}

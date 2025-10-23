@@ -1,0 +1,34 @@
+// Comprehensive test for std.io module
+import std
+
+func main():int {
+    // Test string printing functions
+    std.io.print("Hello ")
+    std.io.println("World!")
+    
+    // Test integer printing functions
+    let num:int = 42
+    std.io.print("Number: ")
+    std.io.println_int(num)
+    
+    // Test float printing functions
+    let float_num:float = 3.14159
+    std.io.print("Float: ")
+    std.io.println_float(float_num)
+    
+    // Test boolean printing functions
+    let bool_val:bool = true
+    std.io.print("Boolean: ")
+    std.io.println_bool(bool_val)
+    
+    // Test mixed output
+    std.io.print("Mixed: ")
+    std.io.print_int(100)
+    std.io.print(" + ")
+    std.io.print_float(0.5)
+    std.io.print(" = ")
+    std.io.println_int(100)
+    
+    // Return 0 to indicate success
+    return 0
+}

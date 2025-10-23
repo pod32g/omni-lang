@@ -1,0 +1,20 @@
+// Simple test for std.io module - test that functions can be called
+import std
+
+func main():int {
+    // Test that std.io functions can be called without crashing
+    // Most functions are placeholders that don't actually print, but we can test
+    // that the import system works and functions can be called
+    
+    std.io.print("Hello")
+    std.io.println("World")
+    std.io.print_int(42)
+    std.io.println_int(17)
+    std.io.print_float(3.14)
+    std.io.println_float(2.71)
+    std.io.print_bool(true)
+    std.io.println_bool(false)
+    
+    // Return 0 to indicate success
+    return 0
+}

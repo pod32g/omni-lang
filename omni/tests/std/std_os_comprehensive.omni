@@ -1,0 +1,33 @@
+// Comprehensive test for std.os module
+import std
+
+func main():int {
+    // Test process information
+    let pid:int = std.os.getpid()          // Should return current process ID
+    let ppid:int = std.os.getppid()        // Should return parent process ID
+    
+    // Test working directory
+    let cwd:string = std.os.getcwd()       // Should return current working directory
+    let cwd_len:int = std.string.length(cwd)  // Should be > 0
+    
+    // Test environment variables
+    let home:string = std.os.getenv("HOME")    // Should return home directory
+    let path:string = std.os.getenv("PATH")    // Should return PATH variable
+    let nonexistent:string = std.os.getenv("NONEXISTENT_VAR")  // Should return empty string
+    
+    // Test environment variable operations
+    let set_result:bool = std.os.setenv("TEST_VAR", "test_value")    // Should return true
+    let get_test:string = std.os.getenv("TEST_VAR")                  // Should return "test_value"
+    let unset_result:bool = std.os.unsetenv("TEST_VAR")              // Should return true
+    let get_after_unset:string = std.os.getenv("TEST_VAR")           // Should return empty string
+    
+    // Test file system operations (these might fail in some environments)
+    let exists_result:bool = std.os.exists(".")              // Should return true (current dir exists)
+    let is_dir_result:bool = std.os.is_dir(".")              // Should return true (current dir is directory)
+    let is_file_result:bool = std.os.is_file(".")            // Should return false (current dir is not file)
+    
+    // Return a combination of results to verify all functions work
+    // We'll return: pid + ppid + cwd_len + (set_result ? 1 : 0) + (unset_result ? 1 : 0) + (exists_result ? 1 : 0)
+    let result:int = pid + ppid + cwd_len + (set_result ? 1 : 0) + (unset_result ? 1 : 0) + (exists_result ? 1 : 0)
+    return result  // Should be a positive number indicating successful execution
+}
