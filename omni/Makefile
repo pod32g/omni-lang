@@ -75,7 +75,7 @@ build-rust:
 build-runtime:
 	@mkdir -p runtime/posix
 	@if command -v gcc >/dev/null 2>&1; then \
-		gcc -shared -fPIC -lm -o runtime/posix/libomni_rt.so runtime/omni_rt.c; \
+		gcc -shared -fPIC -o runtime/posix/libomni_rt.so runtime/omni_rt.c -lm; \
 		echo "Runtime library built successfully"; \
 	else \
 		echo "GCC not found, skipping runtime build"; \
