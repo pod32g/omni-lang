@@ -1449,6 +1449,17 @@ func (c *Checker) typesEqual(a, b string) bool {
 		return true
 	}
 
+	// Handle array type compatibility: []<T> and array<T> are compatible
+	if c.isArrayType(a) && c.isArrayType(b) {
+		aElement := c.getArrayElementType(a)
+		bElement := c.getArrayElementType(b)
+		// If one is a generic type parameter (T) and the other is concrete, they're compatible
+		if (c.isTypeParam(aElement) || c.isTypeParam(bElement)) {
+			return true
+		}
+		return c.typesEqual(aElement, bElement)
+	}
+
 	// Handle union types
 	if c.isUnionType(a) && c.isUnionType(b) {
 		return a == b // Exact union match
@@ -1461,6 +1472,26 @@ func (c *Checker) typesEqual(a, b string) bool {
 	}
 
 	return a == b
+}
+
+// isArrayType checks if a type string represents an array type
+func (c *Checker) isArrayType(typeStr string) bool {
+	return strings.HasPrefix(typeStr, "[]<") || strings.HasPrefix(typeStr, "array<")
+}
+
+// getArrayElementType extracts the element type from an array type
+func (c *Checker) getArrayElementType(typeStr string) string {
+	if strings.HasPrefix(typeStr, "[]<") {
+		// Extract from []<T> format
+		inner := typeStr[3 : len(typeStr)-1]
+		return inner
+	}
+	if strings.HasPrefix(typeStr, "array<") {
+		// Extract from array<T> format
+		inner := typeStr[6 : len(typeStr)-1]
+		return inner
+	}
+	return typeStr
 }
 
 // isUnionType checks if a type string represents a union type
@@ -1749,7 +1780,6 @@ func (c *Checker) processImports(mod *ast.Module) {
 		}
 	}
 }
-
 
 func (c *Checker) processImport(imp *ast.ImportDecl) {
 	if len(imp.Path) == 0 {

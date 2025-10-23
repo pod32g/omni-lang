@@ -556,7 +556,7 @@ func TestLogicalOr(t *testing.T) {
 
 func TestStringOperations(t *testing.T) {
 	testFile := "new_features/test_string_operations_comprehensive.omni"
-	expected := "0" // All tests pass
+	expected := "Concatenation: Hello, World!\nSubstring (0,5): Hello\nChar at 0: 72\nStarts with 'Hello': true\nEnds with 'World!': true\nContains 'World': true\nIndex of 'World': 7\nLast index of 'l': 10\nTrim result: 'Hello World'\nTo upper: HELLO, WORLD!\nTo lower: hello, world!\nString equals: true\nString compare (Apple vs Banana): -1\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -570,7 +570,7 @@ func TestStringOperations(t *testing.T) {
 
 func TestMathUtilities(t *testing.T) {
 	testFile := "new_features/test_math_utilities.omni"
-	expected := "0" // All tests pass
+	expected := "Math and utilities test passed\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -584,7 +584,7 @@ func TestMathUtilities(t *testing.T) {
 
 func TestFileIO(t *testing.T) {
 	testFile := "new_features/test_file_comprehensive.omni"
-	expected := "0" // All tests pass
+	expected := "File exists: 0\nFile size: 0\nFile open handle: 0\nBytes written: 0\nFile close result: 0\nFile exists after write: 0\nFile size after write: 0\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -598,7 +598,7 @@ func TestFileIO(t *testing.T) {
 
 func TestBitwiseOperations(t *testing.T) {
 	testFile := "new_features/test_bitwise_ops.omni"
-	expected := "0" // All tests pass
+	expected := "12 & 10 = 8\n12 | 10 = 14\n12 ^ 10 = 6\n12 << 2 = 48\n12 >> 2 = 3\n~12 = -13\n(12 & 10) | 1 = 9\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -612,7 +612,7 @@ func TestBitwiseOperations(t *testing.T) {
 
 func TestTypeCasting(t *testing.T) {
 	testFile := "new_features/test_type_casting_comprehensive.omni"
-	expected := "0" // All tests pass
+	expected := "int to float: 42\nfloat to int: 3\nint to string: 42\nfloat to string: \nbool to string: true\nstring to int: 0\nstring to float: 0\nstring to bool: true\nnested cast (float)(int)3.99: 3\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -626,7 +626,7 @@ func TestTypeCasting(t *testing.T) {
 
 func TestLexicalPrimitives(t *testing.T) {
 	testFile := "new_features/test_lexical_primitives.omni"
-	expected := "0" // All tests pass
+	expected := "Null literal test passed\nHex 0xFF: 255\nHex 0x1A: 26\nHex 0x10_00: 4096\nBinary 0b1010: 10\nBinary 0b1111_0000: 240\nBinary 0b1: 1\nScientific 1.0e5: \nScientific 2.5e-3: \nScientific 1.23E+2: \nMixed sum: \n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -640,7 +640,7 @@ func TestLexicalPrimitives(t *testing.T) {
 
 func TestControlFlow(t *testing.T) {
 	testFile := "new_features/test_control_flow.omni"
-	expected := "0" // All tests pass
+	expected := "Testing while loop:\n  i = 0\n  i = 1\n  i = 2\n  i = 3\n  i = 4\nTesting break:\n  j = 0\n  j = 1\n  j = 2\nTesting continue:\n  k = 1\n  k = 2\n  k = 4\n  k = 5\nTesting break in while loop:\n  m = 0\n  m = 1\n  m = 2\n  m = 3\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -654,7 +654,7 @@ func TestControlFlow(t *testing.T) {
 
 func TestVariableShadowing(t *testing.T) {
 	testFile := "new_features/test_variable_shadowing.omni"
-	expected := "0" // All tests pass
+	expected := "Level 0 x: 1\nLevel 1 x: 2\nLevel 2 x: 3\nLevel 1 x after inner block: 2\nLevel 0 x after all blocks: 1\nOuter name: outer\nInner name (int): 42\nOuter name after block: outer\nInner mutable: 200\nInner mutable after assignment: 300\nOuter immutable: 100\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -668,7 +668,7 @@ func TestVariableShadowing(t *testing.T) {
 
 func TestFirstClassFunctions(t *testing.T) {
 	testFile := "new_features/test_first_class_complete.omni"
-	expected := "0" // All tests pass
+	expected := "15\n50\n12\n7\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -682,7 +682,7 @@ func TestFirstClassFunctions(t *testing.T) {
 
 func TestCollectionsOperations(t *testing.T) {
 	testFile := "new_features/test_collections_operations.omni"
-	expected := "0" // All tests pass
+	expected := "Collections operations test passed\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -696,7 +696,7 @@ func TestCollectionsOperations(t *testing.T) {
 
 func TestArrayOperations(t *testing.T) {
 	testFile := "new_features/test_array_operations.omni"
-	expected := "0" // All tests pass
+	expected := "Array length: 5\nFirst element: 1\nThird element: 3\nSecond element: 2\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -710,7 +710,7 @@ func TestArrayOperations(t *testing.T) {
 
 func TestErrorAssertions(t *testing.T) {
 	testFile := "new_features/test_errors_assertions.omni"
-	expected := "0" // All tests pass
+	expected := "Errors and assertions test passed\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)

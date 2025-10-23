@@ -1133,6 +1133,25 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				return Result{Type: "string", Value: fmt.Sprintf("%d", nVal)}, true
 			}
 		}
+	case "std.int_to_string":
+		if len(operands) == 1 {
+			n := operandValue(fr, operands[0])
+			if n.Type == "int" {
+				nVal := n.Value.(int)
+				return Result{Type: "string", Value: fmt.Sprintf("%d", nVal)}, true
+			}
+		}
+	case "std.bool_to_string":
+		if len(operands) == 1 {
+			b := operandValue(fr, operands[0])
+			if b.Type == "bool" {
+				bVal := b.Value.(bool)
+				if bVal {
+					return Result{Type: "string", Value: "true"}, true
+				}
+				return Result{Type: "string", Value: "false"}, true
+			}
+		}
 	case "std.string.length":
 		if len(operands) == 1 {
 			arg := operandValue(fr, operands[0])
