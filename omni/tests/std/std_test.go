@@ -1,6 +1,7 @@
 package std
 
 import (
+	"os"
 	"os/exec"
 	"testing"
 )
@@ -42,9 +43,25 @@ func TestMathFunctions(t *testing.T) {
 	}
 }
 
+func TestStdMathIntegration(t *testing.T) {
+	// Test std.math library integration
+	result, err := runVM("std_math_integration.omni")
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	// Expected: 42 + 17 + 10 = 69 (max(42,17) + min(42,17) + abs(-10))
+	expected := "69"
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+}
+
 func runVM(testFile string) (string, error) {
 	cmd := exec.Command("go", "run", "../../cmd/omnir", testFile)
 	cmd.Dir = "."
+	// Set library path for VM execution
+	cmd.Env = append(os.Environ(), "DYLD_LIBRARY_PATH=../../runtime/posix")
+	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err

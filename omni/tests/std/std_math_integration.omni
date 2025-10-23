@@ -1,0 +1,17 @@
+// Test std.math library integration
+import std
+
+func main():int {
+    let a:int = 42
+    let b:int = 17
+    
+    // Test that std.math functions return proper types
+    let max_val:int = std.math.max(a, b)
+    let min_val:int = std.math.min(a, b)
+    let abs_val:int = std.math.abs(-10)
+    
+    // Test that they can be used in expressions
+    let result:int = max_val + min_val + abs_val
+    
+    return result
+}
