@@ -186,14 +186,18 @@ fn compile_mir_to_object(mir_json: &str, output_path: &str) -> Result<(), Compil
     compile_mir_to_object_with_opt(mir_json, output_path, "speed")
 }
 
-fn compile_mir_to_object_with_opt(mir_json: &str, output_path: &str, opt_level: &str) -> Result<(), CompileError> {
+fn compile_mir_to_object_with_opt(
+    mir_json: &str,
+    output_path: &str,
+    opt_level: &str,
+) -> Result<(), CompileError> {
     // Parse MIR JSON
     let mir_module: MirModule =
         serde_json::from_str(mir_json).map_err(|e| CompileError::InvalidJson(e.to_string()))?;
 
     // Set up Cranelift with optimization level
     let mut flag_builder = settings::builder();
-    
+
     // Set optimization level based on input
     match opt_level {
         "none" | "0" | "O0" => {
@@ -215,7 +219,7 @@ fn compile_mir_to_object_with_opt(mir_json: &str, output_path: &str, opt_level: 
             flag_builder.set("opt_level", "speed").unwrap(); // Default to speed
         }
     }
-    
+
     let flags = settings::Flags::new(flag_builder);
     let isa = cranelift_codegen::isa::lookup(Triple::host())
         .map_err(|e| CompileError::CraneliftError(e.to_string()))?
@@ -324,10 +328,10 @@ fn omni_type_to_cranelift(omni_type: &str) -> Result<cranelift_codegen::ir::Type
     match omni_type {
         "int" => Ok(I32),
         "float" | "double" => Ok(F64),
-        "bool" => Ok(I8),  // Use I8 for bool for now
-        "void" => Ok(I32), // Use I32 for void for now
+        "bool" => Ok(I8),    // Use I8 for bool for now
+        "void" => Ok(I32),   // Use I32 for void for now
         "string" => Ok(I64), // Use I64 for string pointers for now
-        "void*" => Ok(I64), // Use I64 for void* pointers
+        "void*" => Ok(I64),  // Use I64 for void* pointers
         _ => {
             // Handle pointer types: *Type
             if omni_type.starts_with('*') {
@@ -349,32 +353,41 @@ fn compile_instruction(
     match mir_inst.op.as_str() {
         "const" => {
             if mir_inst.operands.is_empty() {
-                return Err(CompileError::MirParse("const instruction requires operand".to_string()));
+                return Err(CompileError::MirParse(
+                    "const instruction requires operand".to_string(),
+                ));
             }
-            
+
             let operand = &mir_inst.operands[0];
             if operand.kind != "literal" {
-                return Err(CompileError::MirParse("const instruction requires literal operand".to_string()));
+                return Err(CompileError::MirParse(
+                    "const instruction requires literal operand".to_string(),
+                ));
             }
-            
-            let literal = operand.literal.as_ref()
+
+            let literal = operand
+                .literal
+                .as_ref()
                 .ok_or_else(|| CompileError::MirParse("Expected literal value".to_string()))?;
-            
+
             match mir_inst.inst_type.as_str() {
                 "int" => {
-                    let value = literal.parse::<i32>()
-                        .map_err(|_| CompileError::MirParse("Invalid integer literal".to_string()))?;
+                    let value = literal.parse::<i32>().map_err(|_| {
+                        CompileError::MirParse("Invalid integer literal".to_string())
+                    })?;
                     let _val = builder.ins().iconst(I32, value as i64);
                     // TODO: Store the result for later use
                 }
                 "float" | "double" => {
-                    let value = literal.parse::<f64>()
+                    let value = literal
+                        .parse::<f64>()
                         .map_err(|_| CompileError::MirParse("Invalid float literal".to_string()))?;
                     let _val = builder.ins().f64const(value);
                     // TODO: Store the result for later use
                 }
                 "bool" => {
-                    let value = literal.parse::<bool>()
+                    let value = literal
+                        .parse::<bool>()
                         .map_err(|_| CompileError::MirParse("Invalid bool literal".to_string()))?;
                     let _val = builder.ins().iconst(I8, if value { 1 } else { 0 });
                     // TODO: Store the result for later use
@@ -389,51 +402,63 @@ fn compile_instruction(
         }
         "add" => {
             if mir_inst.operands.len() < 2 {
-                return Err(CompileError::MirParse("add instruction requires 2 operands".to_string()));
+                return Err(CompileError::MirParse(
+                    "add instruction requires 2 operands".to_string(),
+                ));
             }
-            
+
             // TODO: Implement proper operand handling and value mapping
             // For now, just create a placeholder
             let _val = builder.ins().iconst(I32, 0);
         }
         "sub" => {
             if mir_inst.operands.len() < 2 {
-                return Err(CompileError::MirParse("sub instruction requires 2 operands".to_string()));
+                return Err(CompileError::MirParse(
+                    "sub instruction requires 2 operands".to_string(),
+                ));
             }
-            
+
             // TODO: Implement proper operand handling and value mapping
             let _val = builder.ins().iconst(I32, 0);
         }
         "mul" => {
             if mir_inst.operands.len() < 2 {
-                return Err(CompileError::MirParse("mul instruction requires 2 operands".to_string()));
+                return Err(CompileError::MirParse(
+                    "mul instruction requires 2 operands".to_string(),
+                ));
             }
-            
+
             // TODO: Implement proper operand handling and value mapping
             let _val = builder.ins().iconst(I32, 0);
         }
         "div" => {
             if mir_inst.operands.len() < 2 {
-                return Err(CompileError::MirParse("div instruction requires 2 operands".to_string()));
+                return Err(CompileError::MirParse(
+                    "div instruction requires 2 operands".to_string(),
+                ));
             }
-            
+
             // TODO: Implement proper operand handling and value mapping
             let _val = builder.ins().iconst(I32, 0);
         }
         "call" => {
             if mir_inst.operands.is_empty() {
-                return Err(CompileError::MirParse("call instruction requires operands".to_string()));
+                return Err(CompileError::MirParse(
+                    "call instruction requires operands".to_string(),
+                ));
             }
-            
+
             // TODO: Implement function calls
             // For now, just create a placeholder
             let _val = builder.ins().iconst(I32, 0);
         }
         "cast" => {
             if mir_inst.operands.is_empty() {
-                return Err(CompileError::MirParse("cast instruction requires operand".to_string()));
+                return Err(CompileError::MirParse(
+                    "cast instruction requires operand".to_string(),
+                ));
             }
-            
+
             // TODO: Implement type casting
             let _val = builder.ins().iconst(I32, 0);
         }
@@ -464,25 +489,35 @@ fn compile_terminator(
         }
         "br" => {
             if terminator.operands.is_empty() {
-                return Err(CompileError::MirParse("br terminator requires target block".to_string()));
+                return Err(CompileError::MirParse(
+                    "br terminator requires target block".to_string(),
+                ));
             }
-            
+
             // TODO: Implement proper branch handling
             // For now, just create a placeholder
-            builder.ins().jump(cranelift_codegen::ir::Block::from_u32(0), &[]);
+            builder
+                .ins()
+                .jump(cranelift_codegen::ir::Block::from_u32(0), &[]);
         }
         "brz" | "brnz" => {
             if terminator.operands.len() < 2 {
-                return Err(CompileError::MirParse("conditional branch requires condition and target".to_string()));
+                return Err(CompileError::MirParse(
+                    "conditional branch requires condition and target".to_string(),
+                ));
             }
-            
+
             // TODO: Implement conditional branch handling
             // For now, just create a placeholder
-            builder.ins().jump(cranelift_codegen::ir::Block::from_u32(0), &[]);
+            builder
+                .ins()
+                .jump(cranelift_codegen::ir::Block::from_u32(0), &[]);
         }
         "trap" => {
             // TODO: Implement trap/abort handling
-            builder.ins().trap(cranelift_codegen::ir::TrapCode::UnreachableCodeReached);
+            builder
+                .ins()
+                .trap(cranelift_codegen::ir::TrapCode::UnreachableCodeReached);
         }
         _ => {
             return Err(CompileError::MirParse(format!(
