@@ -1170,6 +1170,13 @@ func (g *CGenerator) mapType(omniType string) string {
 		return g.mapType(elementType) // Don't add [] here, it's added in the declaration
 	}
 
+	// Handle pointer types: *Type
+	if strings.HasPrefix(omniType, "*") {
+		baseType := omniType[1:] // Remove the *
+		baseCType := g.mapType(baseType)
+		return baseCType + "*"
+	}
+
 	// Handle map types: map<KeyType,ValueType>
 	if strings.HasPrefix(omniType, "map<") && strings.HasSuffix(omniType, ">") {
 		return "omni_map_t*"
@@ -1189,6 +1196,8 @@ func (g *CGenerator) mapType(omniType string) string {
 		return "const char*"
 	case "void":
 		return "void"
+	case "void*":
+		return "void*"
 	case "bool":
 		return "int32_t"
 	case "ptr":

@@ -893,15 +893,64 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		sym := fb.env[ident.Name]
 		return mirValue{ID: sym.Value, Type: sym.Type}, nil
 	case *ast.NewExpr:
-		// For now, just return a placeholder value
-		// TODO: Implement actual memory allocation
+		// Implement actual memory allocation
+		// new Type allocates memory for Type and returns a pointer to it
+		targetType := typeExprToString(e.Type)
+		pointerType := "*" + targetType
+		
+		// Call malloc to allocate memory (size 1 for now - should calculate actual size)
 		id := fb.fn.NextValue()
-		typ := "*" + e.Type.Name
-		return mirValue{ID: id, Type: typ}, nil
+		operands := []mir.Operand{
+			{Kind: mir.OperandLiteral, Literal: "malloc"},
+			{Kind: mir.OperandLiteral, Literal: "1"}, // Size placeholder
+		}
+		
+		mallocInst := mir.Instruction{
+			ID:       id,
+			Op:       "call",
+			Type:     "void*",
+			Operands: operands,
+		}
+		fb.block.Instructions = append(fb.block.Instructions, mallocInst)
+		
+		// Cast the void* result to the target pointer type
+		castID := fb.fn.NextValue()
+		castInst := mir.Instruction{
+			ID:    castID,
+			Op:    "cast",
+			Type:  pointerType,
+			Operands: []mir.Operand{
+				{Kind: mir.OperandValue, Value: id},
+			},
+		}
+		fb.block.Instructions = append(fb.block.Instructions, castInst)
+		
+		return mirValue{ID: castID, Type: pointerType}, nil
 	case *ast.DeleteExpr:
-		// For now, just evaluate the target expression
-		// TODO: Implement actual memory deallocation
-		return fb.lowerExpr(e.Target)
+		// Implement actual memory deallocation
+		// delete ptr calls free on the pointer
+		targetValue, err := fb.lowerExpr(e.Target)
+		if err != nil {
+			return mirValue{}, err
+		}
+		
+		// Call free to deallocate memory
+		id := fb.fn.NextValue()
+		operands := []mir.Operand{
+			{Kind: mir.OperandLiteral, Literal: "free"},
+			valueOperand(targetValue.ID, targetValue.Type),
+		}
+		
+		freeInst := mir.Instruction{
+			ID:       id,
+			Op:       "call",
+			Type:     "void",
+			Operands: operands,
+		}
+		fb.block.Instructions = append(fb.block.Instructions, freeInst)
+		
+		// Return void (no value)
+		return mirValue{ID: mir.InvalidValue, Type: "void"}, nil
 	case *ast.LambdaExpr:
 		// Lambda expression: |a, b| a + b
 		// Create an anonymous function for the lambda
