@@ -114,6 +114,63 @@ func (c *Checker) isTypeParam(name string) bool {
 	return c.typeParams[name]
 }
 
+// isFunctionTypeParam checks if a name is a type parameter of a specific function
+func (c *Checker) isFunctionTypeParam(name string, typeParams []ast.TypeParam) bool {
+	for _, param := range typeParams {
+		if param.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// inferTypeParametersFromGeneric infers type parameters from generic types
+// For example, if expected is "array<T>" and argType is "array<int>", it infers T = int
+func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeParams []ast.TypeParam) map[string]string {
+	inferred := make(map[string]string)
+	
+	// Handle array types: array<T> vs array<int>
+	if strings.HasPrefix(expected, "array<") && strings.HasSuffix(expected, ">") &&
+		strings.HasPrefix(argType, "array<") && strings.HasSuffix(argType, ">") {
+		expectedInner := expected[6 : len(expected)-1]  // Remove "array<" and ">"
+		argInner := argType[6 : len(argType)-1]        // Remove "array<" and ">"
+		
+		// If the expected inner type is a type parameter, infer it
+		if c.isFunctionTypeParam(expectedInner, typeParams) {
+			inferred[expectedInner] = argInner
+		}
+	}
+	
+	// Handle map types: map<K,V> vs map<string,int>
+	if strings.HasPrefix(expected, "map<") && strings.HasSuffix(expected, ">") &&
+		strings.HasPrefix(argType, "map<") && strings.HasSuffix(argType, ">") {
+		expectedInner := expected[4 : len(expected)-1]  // Remove "map<" and ">"
+		argInner := argType[4 : len(argType)-1]        // Remove "map<" and ">"
+		
+		// Split by comma to get key and value types
+		expectedParts := strings.Split(expectedInner, ",")
+		argParts := strings.Split(argInner, ",")
+		
+		if len(expectedParts) == 2 && len(argParts) == 2 {
+			expectedKey := strings.TrimSpace(expectedParts[0])
+			expectedValue := strings.TrimSpace(expectedParts[1])
+			argKey := strings.TrimSpace(argParts[0])
+			argValue := strings.TrimSpace(argParts[1])
+			
+			// Infer key type parameter
+			if c.isFunctionTypeParam(expectedKey, typeParams) {
+				inferred[expectedKey] = argKey
+			}
+			// Infer value type parameter
+			if c.isFunctionTypeParam(expectedValue, typeParams) {
+				inferred[expectedValue] = argValue
+			}
+		}
+	}
+	
+	return inferred
+}
+
 // Symbol represents an entry in the scope stack.
 type Symbol struct {
 	Type    string
@@ -909,9 +966,10 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		}
 		return leftType
 	case "<", "<=", ">", ">=":
-		if !isNumeric(leftType) || !isNumeric(rightType) {
-			c.report(expr.Span(), fmt.Sprintf("operator %s requires numeric operands", expr.Op),
-				fmt.Sprintf("use numeric expressions (int, float), got %s and %s", leftType, rightType))
+		// Allow comparison if both operands are the same type (including generic type parameters)
+		if !c.typesEqual(leftType, rightType) {
+			c.report(expr.Span(), fmt.Sprintf("operands of %s must have the same type", expr.Op),
+				fmt.Sprintf("ensure both sides have the same type, got %s and %s", leftType, rightType))
 			return typeError
 		}
 		return "bool"
@@ -954,6 +1012,11 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok {
 		// Check if it's a regular function (not a function type variable)
 		if sig, exists := c.functions[ident.Name]; exists {
+			// Check if this is a generic function
+			if len(sig.TypeParams) > 0 {
+				return c.checkGenericFunctionCall(expr, sig, ident.Name)
+			}
+
 			// This is a regular function call, not a function type call
 			// Validate argument count
 			if len(expr.Args) != len(sig.Params) {
@@ -1073,6 +1136,73 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 		c.checkExpr(arg)
 	}
 	return calleeType
+}
+
+// checkGenericFunctionCall handles calls to generic functions
+func (c *Checker) checkGenericFunctionCall(expr *ast.CallExpr, sig FunctionSignature, funcName string) string {
+	// First, check argument count
+	if len(expr.Args) != len(sig.Params) {
+		c.report(expr.Span(), fmt.Sprintf("function %s expects %d arguments, got %d", funcName, len(sig.Params), len(expr.Args)),
+			fmt.Sprintf("provide %d argument(s) matching the function signature", len(sig.Params)))
+		return typeError
+	}
+
+	// Infer type parameters from arguments
+	typeSubstitutions := make(map[string]string)
+	
+	// Check each argument and infer type parameters
+	for i, arg := range expr.Args {
+		argType := c.checkExpr(arg)
+		if i < len(sig.Params) {
+			expected := sig.Params[i]
+			
+			// If the expected type is a type parameter of this function, infer it from the argument
+			if c.isFunctionTypeParam(expected, sig.TypeParams) {
+				if existing, exists := typeSubstitutions[expected]; exists {
+					// Check if the inferred type matches the previous inference
+					if !c.typesEqual(existing, argType) {
+						c.report(arg.Span(), fmt.Sprintf("type parameter %s inferred as both %s and %s", expected, existing, argType),
+							"ensure all arguments for this type parameter have the same type")
+						return typeError
+					}
+				} else {
+					typeSubstitutions[expected] = argType
+				}
+			} else if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
+				// Try to infer type parameters from generic types like array<T>
+				inferred := c.inferTypeParametersFromGeneric(expected, argType, sig.TypeParams)
+				for typeParam, concreteType := range inferred {
+					if existing, exists := typeSubstitutions[typeParam]; exists {
+						if !c.typesEqual(existing, concreteType) {
+							c.report(arg.Span(), fmt.Sprintf("type parameter %s inferred as both %s and %s", typeParam, existing, concreteType),
+								"ensure all arguments for this type parameter have the same type")
+							return typeError
+						}
+					} else {
+						typeSubstitutions[typeParam] = concreteType
+					}
+				}
+				
+				// Check if the expected type contains type parameters that need substitution
+				substitutedExpected := expected
+				for typeParam, concreteType := range typeSubstitutions {
+					substitutedExpected = strings.ReplaceAll(substitutedExpected, typeParam, concreteType)
+				}
+				if !c.typesEqual(substitutedExpected, argType) {
+					c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, substitutedExpected, argType),
+						fmt.Sprintf("convert the argument to %s or use a %s expression", substitutedExpected, substitutedExpected))
+				}
+			}
+		}
+	}
+
+	// Apply type substitutions to return type
+	returnType := sig.Return
+	for typeParam, concreteType := range typeSubstitutions {
+		returnType = strings.ReplaceAll(returnType, typeParam, concreteType)
+	}
+
+	return returnType
 }
 
 func (c *Checker) checkAssignmentExpr(expr *ast.AssignmentExpr) string {
