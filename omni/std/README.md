@@ -224,75 +224,75 @@ Operating system interface functions.
 ### std.collections
 Collection data structures.
 
-**Map Functions:**
-- `size<K,V>(m:map<K,V>):int` - Map size
-- `get<K,V>(m:map<K,V>, key:K):V` - Get value by key
-- `set<K,V>(m:map<K,V>, key:K, value:V)` - Set value by key
-- `has<K,V>(m:map<K,V>, key:K):bool` - Check if key exists
-- `remove<K,V>(m:map<K,V>, key:K):bool` - Remove key-value pair
-- `clear<K,V>(m:map<K,V>)` - Clear all entries
-- `keys<K,V>(m:map<K,V>):array<K>` - Get all keys
-- `values<K,V>(m:map<K,V>):array<V>` - Get all values
-- `copy<K,V>(m:map<K,V>):map<K,V>` - Copy map
-- `merge<K,V>(a:map<K,V>, b:map<K,V>):map<K,V>` - Merge maps
+**Map Functions (for map<string, int>):**
+- `size(m:map<string, int>):int` - Map size
+- `get(m:map<string, int>, key:string):int` - Get value by key
+- `set(m:map<string, int>, key:string, value:int)` - Set value by key
+- `has(m:map<string, int>, key:string):bool` - Check if key exists
+- `remove(m:map<string, int>, key:string):bool` - Remove key-value pair
+- `clear(m:map<string, int>)` - Clear all entries
+- `keys(m:map<string, int>):array<string>` - Get all keys
+- `values(m:map<string, int>):array<int>` - Get all values
+- `copy(m:map<string, int>):map<string, int>` - Copy map
+- `merge(a:map<string, int>, b:map<string, int>):map<string, int>` - Merge maps
 
-**Set Functions:**
-- `set_create<T>():set<T>` - Create new set
-- `set_add<T>(s:set<T>, element:T):bool` - Add element to set
-- `set_remove<T>(s:set<T>, element:T):bool` - Remove element from set
-- `set_contains<T>(s:set<T>, element:T):bool` - Check if set contains element
-- `set_size<T>(s:set<T>):int` - Get set size
-- `set_clear<T>(s:set<T>)` - Clear set
-- `set_union<T>(a:set<T>, b:set<T>):set<T>` - Set union
-- `set_intersection<T>(a:set<T>, b:set<T>):set<T>` - Set intersection
-- `set_difference<T>(a:set<T>, b:set<T>):set<T>` - Set difference
+**Set Functions (for set<int>):**
+- `set_create():set<int>` - Create new set
+- `set_add(s:set<int>, element:int):bool` - Add element to set
+- `set_remove(s:set<int>, element:int):bool` - Remove element from set
+- `set_contains(s:set<int>, element:int):bool` - Check if set contains element
+- `set_size(s:set<int>):int` - Get set size
+- `set_clear(s:set<int>)` - Clear set
+- `set_union(a:set<int>, b:set<int>):set<int>` - Set union
+- `set_intersection(a:set<int>, b:set<int>):set<int>` - Set intersection
+- `set_difference(a:set<int>, b:set<int>):set<int>` - Set difference
 
-**Queue Functions:**
-- `queue_create<T>():queue<T>` - Create new queue
-- `queue_enqueue<T>(q:queue<T>, element:T)` - Add element to queue
-- `queue_dequeue<T>(q:queue<T>):T` - Remove element from queue
-- `queue_peek<T>(q:queue<T>):T` - Peek at front element
-- `queue_is_empty<T>(q:queue<T>):bool` - Check if queue is empty
-- `queue_size<T>(q:queue<T>):int` - Get queue size
-- `queue_clear<T>(q:queue<T>)` - Clear queue
+**Queue Functions (for queue<int>):**
+- `queue_create():queue<int>` - Create new queue
+- `queue_enqueue(q:queue<int>, element:int)` - Add element to queue
+- `queue_dequeue(q:queue<int>):int` - Remove element from queue
+- `queue_peek(q:queue<int>):int` - Peek at front element
+- `queue_is_empty(q:queue<int>):bool` - Check if queue is empty
+- `queue_size(q:queue<int>):int` - Get queue size
+- `queue_clear(q:queue<int>)` - Clear queue
 
-**Stack Functions:**
-- `stack_create<T>():stack<T>` - Create new stack
-- `stack_push<T>(s:stack<T>, element:T)` - Push element onto stack
-- `stack_pop<T>(s:stack<T>):T` - Pop element from stack
-- `stack_peek<T>(s:stack<T>):T` - Peek at top element
-- `stack_is_empty<T>(s:stack<T>):bool` - Check if stack is empty
-- `stack_size<T>(s:stack<T>):int` - Get stack size
-- `stack_clear<T>(s:stack<T>)` - Clear stack
+**Stack Functions (for stack<int>):**
+- `stack_create():stack<int>` - Create new stack
+- `stack_push(s:stack<int>, element:int)` - Push element onto stack
+- `stack_pop(s:stack<int>):int` - Pop element from stack
+- `stack_peek(s:stack<int>):int` - Peek at top element
+- `stack_is_empty(s:stack<int>):bool` - Check if stack is empty
+- `stack_size(s:stack<int>):int` - Get stack size
+- `stack_clear(s:stack<int>)` - Clear stack
 
-**Priority Queue Functions:**
-- `priority_queue_create<T>():priority_queue<T>` - Create new priority queue
-- `priority_queue_insert<T>(pq:priority_queue<T>, element:T, priority:int)` - Insert with priority
-- `priority_queue_extract_max<T>(pq:priority_queue<T>):T` - Extract highest priority element
-- `priority_queue_peek<T>(pq:priority_queue<T>):T` - Peek at highest priority element
-- `priority_queue_is_empty<T>(pq:priority_queue<T>):bool` - Check if priority queue is empty
-- `priority_queue_size<T>(pq:priority_queue<T>):int` - Get priority queue size
+**Priority Queue Functions (for priority_queue<int>):**
+- `priority_queue_create():priority_queue<int>` - Create new priority queue
+- `priority_queue_insert(pq:priority_queue<int>, element:int, priority:int)` - Insert with priority
+- `priority_queue_extract_max(pq:priority_queue<int>):int` - Extract highest priority element
+- `priority_queue_peek(pq:priority_queue<int>):int` - Peek at highest priority element
+- `priority_queue_is_empty(pq:priority_queue<int>):bool` - Check if priority queue is empty
+- `priority_queue_size(pq:priority_queue<int>):int` - Get priority queue size
 
-**Linked List Functions:**
-- `linked_list_create<T>():linked_list<T>` - Create new linked list
-- `linked_list_append<T>(ll:linked_list<T>, element:T)` - Append element
-- `linked_list_prepend<T>(ll:linked_list<T>, element:T)` - Prepend element
-- `linked_list_insert<T>(ll:linked_list<T>, index:int, element:T):bool` - Insert at index
-- `linked_list_remove<T>(ll:linked_list<T>, index:int):bool` - Remove at index
-- `linked_list_get<T>(ll:linked_list<T>, index:int):T` - Get element at index
-- `linked_list_set<T>(ll:linked_list<T>, index:int, element:T):bool` - Set element at index
-- `linked_list_size<T>(ll:linked_list<T>):int` - Get linked list size
-- `linked_list_is_empty<T>(ll:linked_list<T>):bool` - Check if linked list is empty
-- `linked_list_clear<T>(ll:linked_list<T>)` - Clear linked list
+**Linked List Functions (for linked_list<int>):**
+- `linked_list_create():linked_list<int>` - Create new linked list
+- `linked_list_append(ll:linked_list<int>, element:int)` - Append element
+- `linked_list_prepend(ll:linked_list<int>, element:int)` - Prepend element
+- `linked_list_insert(ll:linked_list<int>, index:int, element:int):bool` - Insert at index
+- `linked_list_remove(ll:linked_list<int>, index:int):bool` - Remove at index
+- `linked_list_get(ll:linked_list<int>, index:int):int` - Get element at index
+- `linked_list_set(ll:linked_list<int>, index:int, element:int):bool` - Set element at index
+- `linked_list_size(ll:linked_list<int>):int` - Get linked list size
+- `linked_list_is_empty(ll:linked_list<int>):bool` - Check if linked list is empty
+- `linked_list_clear(ll:linked_list<int>)` - Clear linked list
 
-**Tree Functions:**
-- `binary_tree_create<T>():binary_tree<T>` - Create new binary tree
-- `binary_tree_insert<T>(bt:binary_tree<T>, element:T)` - Insert element
-- `binary_tree_search<T>(bt:binary_tree<T>, element:T):bool` - Search for element
-- `binary_tree_remove<T>(bt:binary_tree<T>, element:T):bool` - Remove element
-- `binary_tree_size<T>(bt:binary_tree<T>):int` - Get tree size
-- `binary_tree_is_empty<T>(bt:binary_tree<T>):bool` - Check if tree is empty
-- `binary_tree_clear<T>(bt:binary_tree<T>)` - Clear tree
+**Tree Functions (for binary_tree<int>):**
+- `binary_tree_create():binary_tree<int>` - Create new binary tree
+- `binary_tree_insert(bt:binary_tree<int>, element:int)` - Insert element
+- `binary_tree_search(bt:binary_tree<int>, element:int):bool` - Search for element
+- `binary_tree_remove(bt:binary_tree<int>, element:int):bool` - Remove element
+- `binary_tree_size(bt:binary_tree<int>):int` - Get tree size
+- `binary_tree_is_empty(bt:binary_tree<int>):bool` - Check if tree is empty
+- `binary_tree_clear(bt:binary_tree<int>)` - Clear tree
 
 ### std.algorithms
 Common algorithms for sorting, searching, and data manipulation.
