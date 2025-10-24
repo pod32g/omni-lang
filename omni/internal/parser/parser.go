@@ -1506,24 +1506,24 @@ func (p *Parser) parseStringInterpolation(tok lexer.Token) (ast.Expr, error) {
 // parseTryStmt parses a try-catch-finally statement
 func (p *Parser) parseTryStmt() (ast.Stmt, error) {
 	startPos := p.expect(lexer.TokenTry).Span.Start
-	
+
 	// Parse try block
 	tryBlock, err := p.parseBlock()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var catchClauses []*ast.CatchClause
-	
+
 	// Parse catch clauses
 	for p.match(lexer.TokenCatch) {
 		catchClause := &ast.CatchClause{SpanInfo: p.previous().Span}
-		
+
 		// Parse optional exception variable and type
 		if p.match(lexer.TokenLParen) {
 			if p.peekKind() == lexer.TokenIdentifier {
 				catchClause.ExceptionVar = p.advance().Lexeme
-				
+
 				// Parse optional exception type
 				if p.match(lexer.TokenColon) {
 					if p.peekKind() == lexer.TokenIdentifier {
@@ -1533,22 +1533,22 @@ func (p *Parser) parseTryStmt() (ast.Stmt, error) {
 					}
 				}
 			}
-			
+
 			if !p.match(lexer.TokenRParen) {
 				return nil, p.errorAtCurrent("expected closing parenthesis in catch clause")
 			}
 		}
-		
+
 		// Parse catch block
 		catchBlock, err := p.parseBlock()
 		if err != nil {
 			return nil, err
 		}
 		catchClause.Block = catchBlock
-		
+
 		catchClauses = append(catchClauses, catchClause)
 	}
-	
+
 	// Parse optional finally block
 	var finallyBlock *ast.BlockStmt
 	if p.match(lexer.TokenFinally) {
@@ -1558,11 +1558,11 @@ func (p *Parser) parseTryStmt() (ast.Stmt, error) {
 			return nil, err
 		}
 	}
-	
+
 	if len(catchClauses) == 0 && finallyBlock == nil {
 		return nil, p.errorAtCurrent("try statement must have at least one catch or finally block")
 	}
-	
+
 	// Calculate end position
 	endPos := tryBlock.Span().End
 	if len(catchClauses) > 0 {
@@ -1571,10 +1571,10 @@ func (p *Parser) parseTryStmt() (ast.Stmt, error) {
 	if finallyBlock != nil {
 		endPos = finallyBlock.Span().End
 	}
-	
+
 	return &ast.TryStmt{
-		SpanInfo: lexer.Span{Start: startPos, End: endPos},
-		TryBlock: tryBlock,
+		SpanInfo:     lexer.Span{Start: startPos, End: endPos},
+		TryBlock:     tryBlock,
 		CatchClauses: catchClauses,
 		FinallyBlock: finallyBlock,
 	}, nil
@@ -1583,16 +1583,16 @@ func (p *Parser) parseTryStmt() (ast.Stmt, error) {
 // parseThrowStmt parses a throw statement
 func (p *Parser) parseThrowStmt() (ast.Stmt, error) {
 	startPos := p.expect(lexer.TokenThrow).Span.Start
-	
+
 	// Parse the expression to throw
 	expr, err := p.parseExpr()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &ast.ThrowStmt{
 		SpanInfo: lexer.Span{Start: startPos, End: expr.Span().End},
-		Expr: expr,
+		Expr:     expr,
 	}, nil
 }
 

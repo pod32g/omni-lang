@@ -241,8 +241,8 @@ func (s *ContinueStmt) stmt()            {}
 
 // TryStmt represents a try-catch-finally block.
 type TryStmt struct {
-	SpanInfo lexer.Span
-	TryBlock *BlockStmt
+	SpanInfo     lexer.Span
+	TryBlock     *BlockStmt
 	CatchClauses []*CatchClause
 	FinallyBlock *BlockStmt
 }
@@ -253,10 +253,10 @@ func (s *TryStmt) stmt()            {}
 
 // CatchClause represents a catch block with optional exception variable.
 type CatchClause struct {
-	SpanInfo lexer.Span
-	ExceptionVar string // optional exception variable name
+	SpanInfo      lexer.Span
+	ExceptionVar  string // optional exception variable name
 	ExceptionType string // optional exception type
-	Block *BlockStmt
+	Block         *BlockStmt
 }
 
 func (c *CatchClause) Span() lexer.Span { return c.SpanInfo }
@@ -266,7 +266,7 @@ func (c *CatchClause) stmt()            {}
 // ThrowStmt represents a throw statement.
 type ThrowStmt struct {
 	SpanInfo lexer.Span
-	Expr Expr
+	Expr     Expr
 }
 
 func (s *ThrowStmt) Span() lexer.Span { return s.SpanInfo }

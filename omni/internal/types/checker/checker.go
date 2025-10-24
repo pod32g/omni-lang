@@ -390,7 +390,7 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 	case *ast.TryStmt:
 		// Check try block
 		c.checkBlock(s.TryBlock)
-		
+
 		// Check catch clauses
 		for _, catchClause := range s.CatchClauses {
 			c.enterScope()
@@ -405,7 +405,7 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 			c.checkBlock(catchClause.Block)
 			c.leaveScope()
 		}
-		
+
 		// Check finally block
 		if s.FinallyBlock != nil {
 			c.checkBlock(s.FinallyBlock)

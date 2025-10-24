@@ -521,6 +521,14 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_strcat(%s, %s);\n",
 				varName, leftStr, rightStr))
 		}
+	case "throw":
+		// Handle throw statement - for now, just print the exception and continue
+		// In a full implementation, this would set a global exception state
+		if len(inst.Operands) >= 1 {
+			exceptionValue := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  // Throwing exception: %s\n", exceptionValue))
+			g.output.WriteString(fmt.Sprintf("  printf(\"Exception: %%s\\n\", %s);\n", exceptionValue))
+		}
 	case "neg":
 		// Handle negation
 		if len(inst.Operands) >= 1 {

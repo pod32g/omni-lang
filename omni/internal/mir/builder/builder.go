@@ -1874,17 +1874,69 @@ func (fb *functionBuilder) emitStringConcatenation(left, right mirValue) (mirVal
 
 // lowerTryStmt handles try-catch-finally statements
 func (fb *functionBuilder) lowerTryStmt(stmt *ast.TryStmt) error {
-	// For now, implement a simplified version that just executes the try block
-	// TODO: Implement proper exception handling with catch/finally blocks
+	// Create a new exception handling context
+	exceptionContext := &exceptionContext{
+		tryBlock:     stmt.TryBlock,
+		catchClauses: stmt.CatchClauses,
+		finallyBlock: stmt.FinallyBlock,
+	}
 	
-	// Lower the try block
-	return fb.lowerBlock(stmt.TryBlock)
+	return fb.emitExceptionHandling(exceptionContext)
 }
 
 // lowerThrowStmt handles throw statements
 func (fb *functionBuilder) lowerThrowStmt(stmt *ast.ThrowStmt) error {
-	// For now, just evaluate the expression and ignore the throw
-	// TODO: Implement proper exception throwing mechanism
-	_, err := fb.lowerExpr(stmt.Expr)
-	return err
+	// Evaluate the expression to throw
+	exprValue, err := fb.lowerExpr(stmt.Expr)
+	if err != nil {
+		return err
+	}
+	
+	// Emit a throw instruction
+	id := fb.fn.NextValue()
+	inst := mir.Instruction{
+		ID:   id,
+		Op:   "throw",
+		Type: "void",
+		Operands: []mir.Operand{
+			valueOperand(exprValue.ID, exprValue.Type),
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, inst)
+	
+	return nil
+}
+
+// exceptionContext holds information about a try-catch-finally block
+type exceptionContext struct {
+	tryBlock     *ast.BlockStmt
+	catchClauses []*ast.CatchClause
+	finallyBlock *ast.BlockStmt
+}
+
+// emitExceptionHandling generates MIR for exception handling
+func (fb *functionBuilder) emitExceptionHandling(ctx *exceptionContext) error {
+	// For now, implement a simplified version that just executes the blocks sequentially
+	// This is a placeholder for proper exception handling implementation
+	
+	// Execute try block
+	if err := fb.lowerBlock(ctx.tryBlock); err != nil {
+		return err
+	}
+	
+	// Execute catch blocks (simplified - no actual exception catching yet)
+	for _, catchClause := range ctx.catchClauses {
+		// For now, we'll skip catch blocks since we don't have proper exception handling
+		// In a full implementation, these would only execute when an exception is thrown
+		_ = catchClause
+	}
+	
+	// Execute finally block
+	if ctx.finallyBlock != nil {
+		if err := fb.lowerBlock(ctx.finallyBlock); err != nil {
+			return err
+		}
+	}
+	
+	return nil
 }
