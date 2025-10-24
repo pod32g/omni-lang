@@ -10,9 +10,13 @@ This directory contains comprehensive API documentation for the OmniLang program
 - [Exception Handling](exception-handling.md) - Try-catch-finally exception handling
 - [Standard Library](stdlib/) - Complete standard library documentation
   - [std.io](stdlib/io.md) - Input/Output functions
-  - [std.math](stdlib/math.md) - Mathematical functions
-  - [std.string](stdlib/string.md) - String manipulation functions
-  - [std.array](stdlib/array.md) - Array operations
+  - [std.math](stdlib/math.md) - Advanced mathematical functions (trigonometric, logarithmic, statistical)
+  - [std.string](stdlib/string.md) - Comprehensive string manipulation (50+ functions)
+  - [std.array](stdlib/array.md) - Array operations and manipulation
+  - [std.collections](stdlib/collections.md) - Advanced data structures (sets, queues, stacks, trees)
+  - [std.algorithms](stdlib/algorithms.md) - Sorting, searching, and utility algorithms
+  - [std.time](stdlib/time.md) - Time and date utilities
+  - [std.network](stdlib/network.md) - Networking and HTTP client functions
   - [std.os](stdlib/os.md) - Operating system interface
 - [Compiler API](compiler-api.md) - Compiler internals and extension points
 - [VM API](vm-api.md) - Virtual Machine internals

@@ -55,8 +55,14 @@ If you're new to OmniLang, start here:
 
 - **Standard Library:**
   - `std.io` - Input/output functions
-  - `std.math` - Mathematical functions
-  - `std.string` - String manipulation
+  - `std.math` - Advanced mathematical functions (trigonometric, logarithmic, statistical)
+  - `std.string` - Comprehensive string manipulation (50+ functions)
+  - `std.array` - Array operations and manipulation
+  - `std.collections` - Advanced data structures (sets, queues, stacks, trees)
+  - `std.algorithms` - Sorting, searching, and utility algorithms
+  - `std.time` - Time and date utilities
+  - `std.network` - Basic networking and HTTP client functions
+  - `std.os` - Operating system interface
 
 - **Compiler:**
   - Lexer with detailed error reporting
@@ -91,9 +97,9 @@ If you're new to OmniLang, start here:
   - Arrays work with C backend only (VM support pending)
 
 - **Standard Library:**
-  - Limited function set
-  - No file I/O
-  - No OS interface
+  - ~~Limited function set~~ ✅ **RESOLVED** - Comprehensive standard library with 100+ functions
+  - ~~No file I/O~~ ✅ **RESOLVED** - Complete file I/O operations
+  - ~~No OS interface~~ ✅ **RESOLVED** - Full OS interface with process, file, and system operations
 
 ### 🔄 In Development
 
@@ -112,8 +118,14 @@ If you're new to OmniLang, start here:
 - **[Language Reference](api/language-reference.md)** - Core language features
 - **[Standard Library](api/stdlib/)** - Complete stdlib documentation
   - [std.io](api/stdlib/io.md) - Input/Output functions
-  - [std.math](api/stdlib/math.md) - Mathematical functions
-  - [std.string](api/stdlib/string.md) - String manipulation
+  - [std.math](api/stdlib/math.md) - Advanced mathematical functions
+  - [std.string](api/stdlib/string.md) - Comprehensive string manipulation (50+ functions)
+  - [std.array](api/stdlib/array.md) - Array operations
+  - [std.collections](api/stdlib/collections.md) - Advanced data structures
+  - [std.algorithms](api/stdlib/algorithms.md) - Sorting, searching, and utility algorithms
+  - [std.time](api/stdlib/time.md) - Time and date utilities
+  - [std.network](api/stdlib/network.md) - Networking and HTTP client functions
+  - [std.os](api/stdlib/os.md) - Operating system interface
 - **[Examples](api/examples/)** - Code examples and tutorials
 
 ### Project Information

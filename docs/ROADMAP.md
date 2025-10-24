@@ -8,7 +8,7 @@
 - **Multiple Backends**: C (default), VM, and Cranelift (experimental)
 - **Data Structures**: Complete array, map, and struct support
 - **Import System**: Both std and local file imports with aliases
-- **Standard Library**: Complete std library with comprehensive testing (math, io, string, array, collections, os, file)
+- **Standard Library**: Complete std library with comprehensive testing (math, io, string, array, collections, algorithms, time, network, os, file) - **100+ functions across 8 modules**
 - **CLI Tools**: `omnic` compiler, `omnir` runner, and `omnipkg` packager
 - **Testing**: Comprehensive test suite with 100% passing tests including std library integration tests
 - **Performance**: Optimized compilation and execution
