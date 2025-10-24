@@ -171,20 +171,20 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool) er
 		if len(imp.Path) == 0 {
 			continue
 		}
-		// Load all imports, including std imports
+		// Skip std imports - they are handled as intrinsic functions by the runtime
+		if len(imp.Path) > 0 && imp.Path[0] == "std" {
+			if debugModules {
+				fmt.Fprintf(os.Stderr, "Skipping std import: %s (handled as intrinsic)\n", strings.Join(imp.Path, "."))
+			}
+			continue
+		}
+		// Load only local imports
 		if debugModules {
 			fmt.Fprintf(os.Stderr, "Loading module: %s\n", strings.Join(imp.Path, "."))
 		}
 		imported, err := loader.LoadModule(imp.Path)
 		if err != nil {
 			return fmt.Errorf("load import %s: %w", strings.Join(imp.Path, "."), err)
-		}
-
-		// Process nested imports recursively for std modules
-		if len(imp.Path) > 0 && imp.Path[0] == "std" {
-			if err := mergeNestedImports(imported, loader, mod, debugModules); err != nil {
-				return fmt.Errorf("merge nested imports for %s: %w", strings.Join(imp.Path, "."), err)
-			}
 		}
 
 		local := imp.Alias
