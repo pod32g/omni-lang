@@ -12,6 +12,7 @@ import (
 
 	"github.com/omni-lang/omni/internal/ast"
 	cbackend "github.com/omni-lang/omni/internal/backend/c"
+	"github.com/omni-lang/omni/internal/backend/cranelift"
 	"github.com/omni-lang/omni/internal/mir"
 	"github.com/omni-lang/omni/internal/mir/builder"
 	"github.com/omni-lang/omni/internal/mir/printer"
@@ -127,6 +128,7 @@ func Compile(cfg Config) error {
 	case "vm":
 		return compileVM(cfg, emit, mirMod)
 	case "clift":
+		fmt.Fprintf(os.Stderr, "Using Cranelift backend for emit: %s\n", emit)
 		return compileCraneliftBackend(cfg, emit, mirMod)
 	case "c":
 		return compileCBackend(cfg, emit, mirMod)
@@ -409,21 +411,13 @@ func compileCraneliftBackend(cfg Config, emit string, mod *mir.Module) error {
 }
 
 func compileToObject(mod *mir.Module, outputPath string) error {
-	// Convert MIR module to JSON
-	jsonData, err := mod.ToJSON()
-	if err != nil {
-		return fmt.Errorf("failed to convert MIR to JSON: %w", err)
-	}
+	// Use the Cranelift backend to compile MIR to object file
+	return cranelift.CompileModuleToObject(mod, outputPath)
+}
 
-	// For now, create a placeholder object file with the JSON content
-	// TODO: Implement actual Cranelift compilation when the Rust library is available
-	content := fmt.Sprintf("# OmniLang Object File Placeholder\n# MIR JSON:\n%s\n", string(jsonData))
-
-	if err := os.WriteFile(outputPath, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("write object output: %w", err)
-	}
-
-	return nil
+func compileToObjectWithOpt(mod *mir.Module, outputPath string, optLevel string) error {
+	// Use the Cranelift backend to compile MIR to object file with optimization
+	return cranelift.CompileModuleToObjectWithOpt(mod, outputPath, optLevel)
 }
 
 func compileToExecutable(mod *mir.Module, outputPath string) error {
@@ -452,9 +446,9 @@ func compileToExecutable(mod *mir.Module, outputPath string) error {
 }
 
 func compileToExecutableWithOpt(mod *mir.Module, outputPath string, optLevel string) error {
-	// First compile to object file
+	// First compile to object file with optimization
 	objPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".o"
-	if err := compileToObject(mod, objPath); err != nil {
+	if err := compileToObjectWithOpt(mod, objPath, optLevel); err != nil {
 		return fmt.Errorf("failed to compile to object: %w", err)
 	}
 

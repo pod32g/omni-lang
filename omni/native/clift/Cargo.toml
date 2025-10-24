@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 cranelift-codegen = "0.103"
+cranelift-entity = "0.103"
 cranelift-frontend = "0.103"
 cranelift-module = "0.103"
 cranelift-object = "0.103"
