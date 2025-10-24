@@ -468,6 +468,7 @@ func (l *Lexer) emitTokenWithLexeme(kind Kind, start Position, startOffset int, 
 	return Token{Kind: kind, Lexeme: lexeme, Span: Span{Start: start, End: l.position()}}
 }
 
+
 func (l *Lexer) peek() rune {
 	if l.offset >= len(l.input) {
 		return eofRune

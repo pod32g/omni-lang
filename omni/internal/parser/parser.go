@@ -9,15 +9,54 @@ import (
 	"github.com/omni-lang/omni/internal/lexer"
 )
 
+// transformTokensForNestedGenerics converts >> tokens to two > tokens in generic contexts
+func transformTokensForNestedGenerics(tokens []lexer.Token) []lexer.Token {
+	var result []lexer.Token
+	genericDepth := 0
+	
+	for _, token := range tokens {
+		// Track generic depth
+		if token.Kind == lexer.TokenLess {
+			genericDepth++
+		} else if token.Kind == lexer.TokenGreater {
+			if genericDepth > 0 {
+				genericDepth--
+			}
+		}
+		
+		// Transform >> to two > tokens when in generic context
+		if token.Kind == lexer.TokenRShift && genericDepth > 0 {
+			// Create two separate > tokens
+			firstGreater := lexer.Token{
+				Kind:   lexer.TokenGreater,
+				Lexeme: ">",
+				Span:   lexer.Span{Start: token.Span.Start, End: token.Span.Start},
+			}
+			secondGreater := lexer.Token{
+				Kind:   lexer.TokenGreater,
+				Lexeme: ">",
+				Span:   lexer.Span{Start: token.Span.Start, End: token.Span.End},
+			}
+			result = append(result, firstGreater, secondGreater)
+		} else {
+			result = append(result, token)
+		}
+	}
+	
+	return result
+}
+
 // Parse consumes the provided source and returns an abstract syntax tree.
 func Parse(filename, input string) (*ast.Module, error) {
 	tokens, err := lexer.LexAll(filename, input)
 	if err != nil {
 		return nil, err
 	}
+	// Transform >> tokens to two > tokens in generic contexts
+	transformedTokens := transformTokensForNestedGenerics(tokens)
 	p := &Parser{
 		filename: filename,
-		tokens:   tokens,
+		tokens:   transformedTokens,
 		lines:    splitLines(input),
 	}
 	mod, err := p.parseModule()
@@ -1077,7 +1116,7 @@ func (p *Parser) parseGenericTypeArgs() ([]*ast.TypeExpr, error) {
 	args := []*ast.TypeExpr{}
 	if !p.match(lexer.TokenGreater) {
 		for {
-			arg, err := p.parseTypeExpr()
+			arg, err := p.parseTypeExprWithNestedGenerics()
 			if err != nil {
 				return nil, err
 			}
@@ -1098,6 +1137,158 @@ func (p *Parser) parseGenericTypeArgs() ([]*ast.TypeExpr, error) {
 		}
 	}
 	return args, nil
+}
+
+// parseTypeExprWithNestedGenerics is a specialized version that handles >> in generic contexts
+func (p *Parser) parseTypeExprWithNestedGenerics() (*ast.TypeExpr, error) {
+	// Parse the first type
+	firstType, err := p.parseSingleTypeWithNestedGenerics()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if this is a union type (has | after it)
+	if p.match(lexer.TokenPipe) {
+		// This is a union type
+		unionType := &ast.TypeExpr{
+			SpanInfo: firstType.SpanInfo,
+			IsUnion:  true,
+			Members:  []*ast.TypeExpr{firstType},
+		}
+
+		// Parse additional union members
+		for {
+			member, err := p.parseSingleTypeWithNestedGenerics()
+			if err != nil {
+				return nil, err
+			}
+			unionType.Members = append(unionType.Members, member)
+			unionType.SpanInfo.End = member.SpanInfo.End
+
+			if !p.match(lexer.TokenPipe) {
+				break
+			}
+		}
+		return unionType, nil
+	}
+
+	return firstType, nil
+}
+
+// parseSingleTypeWithNestedGenerics handles >> tokens in generic contexts
+func (p *Parser) parseSingleTypeWithNestedGenerics() (*ast.TypeExpr, error) {
+	// Handle array types: []Type
+	if p.match(lexer.TokenLBracket) {
+		start := p.previous().Span.Start
+		p.expect(lexer.TokenRBracket)
+		elementType, err := p.parseSingleTypeWithNestedGenerics()
+		if err != nil {
+			return nil, err
+		}
+		span := lexer.Span{Start: start, End: elementType.SpanInfo.End}
+		return &ast.TypeExpr{SpanInfo: span, Name: "[]", Args: []*ast.TypeExpr{elementType}}, nil
+	}
+
+	// Handle pointer types: *Type or *(Type)
+	if p.match(lexer.TokenStar) {
+		var baseType *ast.TypeExpr
+		var err error
+
+		if p.match(lexer.TokenLParen) {
+			// Parse *(Type) - parentheses around type
+			baseType, err = p.parseTypeExprWithNestedGenerics()
+			if err != nil {
+				return nil, err
+			}
+			p.expect(lexer.TokenRParen)
+		} else {
+			// Parse *Type - direct type
+			baseType, err = p.parseSingleTypeWithNestedGenerics()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		span := lexer.Span{Start: p.previous().Span.Start, End: baseType.SpanInfo.End}
+		// For union types, store the base type in Args
+		if baseType.IsUnion {
+			return &ast.TypeExpr{SpanInfo: span, Name: "*", Args: baseType.Members}, nil
+		}
+		return &ast.TypeExpr{SpanInfo: span, Name: "*" + baseType.Name}, nil
+	}
+
+	// Handle parentheses around types: (Type) or function types: (int, string) -> bool
+	if p.match(lexer.TokenLParen) {
+		start := p.previous().Span.Start
+
+		// Try to parse as function type first
+		paramTypes := []*ast.TypeExpr{}
+
+		// Parse parameter types
+		if !p.match(lexer.TokenRParen) {
+			for {
+				paramType, err := p.parseSingleTypeWithNestedGenerics()
+				if err != nil {
+					return nil, err
+				}
+				paramTypes = append(paramTypes, paramType)
+
+				if p.match(lexer.TokenRParen) {
+					break
+				}
+				if !p.match(lexer.TokenComma) {
+					return nil, p.errorAtCurrent("expected ',' or ')' in function type")
+				}
+			}
+		}
+
+		// Check if this is a function type: (params) -> returnType
+		if p.match(lexer.TokenArrow) {
+			returnType, err := p.parseTypeExprWithNestedGenerics()
+			if err != nil {
+				return nil, err
+			}
+			span := lexer.Span{Start: start, End: returnType.SpanInfo.End}
+			return &ast.TypeExpr{
+				SpanInfo:   span,
+				IsFunction: true,
+				ParamTypes: paramTypes,
+				ReturnType: returnType,
+			}, nil
+		}
+
+		// If no -> found, this is just a parenthesized type
+		if len(paramTypes) == 1 {
+			return paramTypes[0], nil
+		}
+
+		// Multiple types without -> is an error
+		return nil, p.errorAtCurrent("multiple types in parentheses must be followed by '->' for function type")
+	}
+
+	// Handle simple identifier types
+	nameTok := p.expect(lexer.TokenIdentifier)
+	typeExpr := &ast.TypeExpr{SpanInfo: nameTok.Span, Name: nameTok.Lexeme}
+	if p.match(lexer.TokenLess) {
+		args, err := p.parseGenericTypeArgs()
+		if err != nil {
+			return nil, err
+		}
+		typeExpr.Args = args
+		typeExpr.SpanInfo.End = p.previous().Span.End
+	}
+
+	// Check for optional type syntax: T?
+	if p.match(lexer.TokenQuestion) {
+		span := lexer.Span{Start: typeExpr.SpanInfo.Start, End: p.previous().Span.End}
+		return &ast.TypeExpr{
+			SpanInfo:     span,
+			IsOptional:   true,
+			OptionalType: typeExpr,
+		}, nil
+	}
+
+	return typeExpr, nil
 }
 
 // parseSingleType parses a single type (not a union)
