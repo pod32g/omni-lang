@@ -79,23 +79,104 @@ Mathematical functions and utilities.
 - `rad_to_deg(radians:float):float` - Convert radians to degrees
 
 ### std.string
-String manipulation functions.
+Comprehensive string manipulation functions.
 
-**Functions:**
+**Basic Operations:**
 - `length(s:string):int` - String length
 - `concat(a:string, b:string):string` - Concatenate strings
 - `substring(s:string, start:int, end:int):string` - Extract substring
 - `char_at(s:string, index:int):char` - Get character at index
+
+**Searching and Matching:**
 - `starts_with(s:string, prefix:string):bool` - Check prefix
 - `ends_with(s:string, suffix:string):bool` - Check suffix
 - `contains(s:string, substr:string):bool` - Check substring
 - `index_of(s:string, substr:string):int` - Find substring index
 - `last_index_of(s:string, substr:string):int` - Find last substring index
-- `trim(s:string):string` - Remove whitespace
+- `find_all(s:string, substr:string):array<int>` - Find all indices
+- `matches(s:string, pattern:string):bool` - Regex pattern matching
+- `find_match(s:string, pattern:string):string` - Find first regex match
+- `find_all_matches(s:string, pattern:string):array<string>` - Find all regex matches
+
+**String Transformation:**
+- `trim(s:string):string` - Remove leading/trailing whitespace
+- `trim_left(s:string):string` - Remove leading whitespace
+- `trim_right(s:string):string` - Remove trailing whitespace
+- `trim_all(s:string):string` - Remove all whitespace
 - `to_upper(s:string):string` - Convert to uppercase
 - `to_lower(s:string):string` - Convert to lowercase
+- `to_title(s:string):string` - Convert to title case
+- `capitalize(s:string):string` - Capitalize first character
+- `reverse(s:string):string` - Reverse string
+
+**String Comparison:**
 - `equals(a:string, b:string):bool` - String equality
-- `compare(a:string, b:string):int` - String comparison
+- `equals_ignore_case(a:string, b:string):bool` - Case-insensitive equality
+- `compare(a:string, b:string):int` - Lexicographic comparison
+- `compare_ignore_case(a:string, b:string):int` - Case-insensitive comparison
+
+**Splitting and Joining:**
+- `split(s:string, delimiter:string):array<string>` - Split by delimiter
+- `split_lines(s:string):array<string>` - Split by newlines
+- `split_words(s:string):array<string>` - Split by whitespace
+- `join(strings:array<string>, delimiter:string):string` - Join with delimiter
+- `join_lines(strings:array<string>):string` - Join with newlines
+
+**String Replacement:**
+- `replace(s:string, old:string, new:string):string` - Replace all occurrences
+- `replace_first(s:string, old:string, new:string):string` - Replace first occurrence
+- `replace_last(s:string, old:string, new:string):string` - Replace last occurrence
+- `replace_regex(s:string, pattern:string, replacement:string):string` - Regex replacement
+
+**String Padding and Alignment:**
+- `pad_left(s:string, length:int, pad_char:char):string` - Left padding
+- `pad_right(s:string, length:int, pad_char:char):string` - Right padding
+- `pad_center(s:string, length:int, pad_char:char):string` - Center padding
+
+**String Validation:**
+- `is_empty(s:string):bool` - Check if empty
+- `is_blank(s:string):bool` - Check if blank (empty or whitespace)
+- `is_alpha(s:string):bool` - Check if alphabetic only
+- `is_digit(s:string):bool` - Check if digits only
+- `is_alnum(s:string):bool` - Check if alphanumeric only
+- `is_ascii(s:string):bool` - Check if ASCII only
+- `is_upper(s:string):bool` - Check if uppercase
+- `is_lower(s:string):bool` - Check if lowercase
+
+**String Formatting:**
+- `format(template:string, args:array<string>):string` - Format with placeholders
+- `format_int(value:int, width:int, pad_char:char):string` - Format integer
+- `format_float(value:float, precision:int):string` - Format float
+
+**String Encoding and Decoding:**
+- `encode_base64(s:string):string` - Base64 encoding
+- `decode_base64(s:string):string` - Base64 decoding
+- `encode_url(s:string):string` - URL encoding
+- `decode_url(s:string):string` - URL decoding
+
+**String Escaping:**
+- `escape_html(s:string):string` - Escape HTML characters
+- `unescape_html(s:string):string` - Unescape HTML entities
+- `escape_json(s:string):string` - Escape JSON characters
+- `escape_shell(s:string):string` - Escape shell characters
+
+**String Statistics:**
+- `count_occurrences(s:string, substr:string):int` - Count substring occurrences
+- `count_lines(s:string):int` - Count lines
+- `count_words(s:string):int` - Count words
+- `count_chars(s:string):int` - Count characters
+
+**String Utilities:**
+- `repeat(s:string, count:int):string` - Repeat string
+- `truncate(s:string, max_length:int):string` - Truncate string
+- `truncate_with_ellipsis(s:string, max_length:int):string` - Truncate with ellipsis
+- `remove(s:string, substr:string):string` - Remove all occurrences
+- `remove_first(s:string, substr:string):string` - Remove first occurrence
+- `remove_last(s:string, substr:string):string` - Remove last occurrence
+
+**String Interpolation:**
+- `interpolate(template:string, variables:map<string, string>):string` - Variable interpolation
+- `template(template:string, values:array<string>):string` - Template processing
 
 ### std.array
 Array manipulation functions.

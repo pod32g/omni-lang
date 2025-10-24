@@ -1,5 +1,9 @@
 // std.string - String manipulation functions for OmniLang
 
+// ============================================================================
+// Basic String Operations
+// ============================================================================
+
 // length returns the length of a string
 func length(s:string):int {
     // This is an intrinsic function that will be wired to the runtime
@@ -27,6 +31,10 @@ func char_at(s:string, index:int):char {
     // during compilation. The actual implementation is in the backend.
     return ' '
 }
+
+// ============================================================================
+// String Searching and Matching
+// ============================================================================
 
 // starts_with checks if a string starts with a prefix
 func starts_with(s:string, prefix:string):bool {
@@ -63,8 +71,61 @@ func last_index_of(s:string, substr:string):int {
     return -1
 }
 
+// find_all returns all indices where a substring occurs
+func find_all(s:string, substr:string):array<int> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return []
+}
+
+// matches checks if a string matches a regular expression pattern
+func matches(s:string, pattern:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// find_match returns the first match of a regular expression pattern
+func find_match(s:string, pattern:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// find_all_matches returns all matches of a regular expression pattern
+func find_all_matches(s:string, pattern:string):array<string> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return []
+}
+
+// ============================================================================
+// String Transformation
+// ============================================================================
+
 // trim removes leading and trailing whitespace
 func trim(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// trim_left removes leading whitespace
+func trim_left(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// trim_right removes trailing whitespace
+func trim_right(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// trim_all removes all whitespace characters
+func trim_all(s:string):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
     return ""
@@ -84,8 +145,40 @@ func to_lower(s:string):string {
     return ""
 }
 
+// to_title converts a string to title case
+func to_title(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// capitalize capitalizes the first character of a string
+func capitalize(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// reverse reverses a string
+func reverse(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// String Comparison
+// ============================================================================
+
 // equals checks if two strings are equal
 func equals(a:string, b:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// equals_ignore_case checks if two strings are equal ignoring case
+func equals_ignore_case(a:string, b:string):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
     return false
@@ -96,4 +189,342 @@ func compare(a:string, b:string):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
     return 0
+}
+
+// compare_ignore_case compares two strings lexicographically ignoring case
+func compare_ignore_case(a:string, b:string):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// ============================================================================
+// String Splitting and Joining
+// ============================================================================
+
+// split splits a string by a delimiter
+func split(s:string, delimiter:string):array<string> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return []
+}
+
+// split_lines splits a string by newlines
+func split_lines(s:string):array<string> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return []
+}
+
+// split_words splits a string by whitespace
+func split_words(s:string):array<string> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return []
+}
+
+// join joins an array of strings with a delimiter
+func join(strings:array<string>, delimiter:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// join_lines joins an array of strings with newlines
+func join_lines(strings:array<string>):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// String Replacement
+// ============================================================================
+
+// replace replaces all occurrences of a substring
+func replace(s:string, old:string, new:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// replace_first replaces the first occurrence of a substring
+func replace_first(s:string, old:string, new:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// replace_last replaces the last occurrence of a substring
+func replace_last(s:string, old:string, new:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// replace_regex replaces all matches of a regular expression
+func replace_regex(s:string, pattern:string, replacement:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// String Padding and Alignment
+// ============================================================================
+
+// pad_left pads a string to the left with a character
+func pad_left(s:string, length:int, pad_char:char):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// pad_right pads a string to the right with a character
+func pad_right(s:string, length:int, pad_char:char):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// pad_center pads a string to the center with a character
+func pad_center(s:string, length:int, pad_char:char):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// String Validation
+// ============================================================================
+
+// is_empty checks if a string is empty
+func is_empty(s:string):bool {
+    return length(s) == 0
+}
+
+// is_blank checks if a string is blank (empty or only whitespace)
+func is_blank(s:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// is_alpha checks if a string contains only alphabetic characters
+func is_alpha(s:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// is_digit checks if a string contains only digits
+func is_digit(s:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// is_alnum checks if a string contains only alphanumeric characters
+func is_alnum(s:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// is_ascii checks if a string contains only ASCII characters
+func is_ascii(s:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// is_upper checks if a string is in uppercase
+func is_upper(s:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// is_lower checks if a string is in lowercase
+func is_lower(s:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// ============================================================================
+// String Formatting
+// ============================================================================
+
+// format formats a string with placeholders
+func format(template:string, args:array<string>):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// format_int formats an integer as a string
+func format_int(value:int, width:int, pad_char:char):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// format_float formats a float as a string
+func format_float(value:float, precision:int):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// String Encoding and Decoding
+// ============================================================================
+
+// encode_base64 encodes a string to base64
+func encode_base64(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// decode_base64 decodes a base64 string
+func decode_base64(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// encode_url encodes a string for URL usage
+func encode_url(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// decode_url decodes a URL-encoded string
+func decode_url(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// String Escaping
+// ============================================================================
+
+// escape_html escapes HTML special characters
+func escape_html(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// unescape_html unescapes HTML entities
+func unescape_html(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// escape_json escapes JSON special characters
+func escape_json(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// escape_shell escapes shell special characters
+func escape_shell(s:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// String Statistics
+// ============================================================================
+
+// count_occurrences counts occurrences of a substring
+func count_occurrences(s:string, substr:string):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// count_lines counts the number of lines in a string
+func count_lines(s:string):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// count_words counts the number of words in a string
+func count_words(s:string):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// count_chars counts the number of characters in a string
+func count_chars(s:string):int {
+    return length(s)
+}
+
+// ============================================================================
+// String Utility Functions
+// ============================================================================
+
+// repeat repeats a string a specified number of times
+func repeat(s:string, count:int):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// truncate truncates a string to a specified length
+func truncate(s:string, max_length:int):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// truncate_with_ellipsis truncates a string with ellipsis
+func truncate_with_ellipsis(s:string, max_length:int):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// remove removes all occurrences of a substring
+func remove(s:string, substr:string):string {
+    return replace(s, substr, "")
+}
+
+// remove_first removes the first occurrence of a substring
+func remove_first(s:string, substr:string):string {
+    return replace_first(s, substr, "")
+}
+
+// remove_last removes the last occurrence of a substring
+func remove_last(s:string, substr:string):string {
+    return replace_last(s, substr, "")
+}
+
+// ============================================================================
+// String Interpolation
+// ============================================================================
+
+// interpolate performs string interpolation with variables
+func interpolate(template:string, variables:map<string, string>):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// template processes a template string with placeholders
+func template(template:string, values:array<string>):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
 }
