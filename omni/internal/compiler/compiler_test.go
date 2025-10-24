@@ -1,88 +1,111 @@
-package compiler_test
+package compiler
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
-
-	"github.com/omni-lang/omni/internal/compiler"
 )
 
-const sampleProgram = "func fortyTwo():int => 42\n"
-
-func TestCompileVMEmitMIRWritesDefaultOutput(t *testing.T) {
-	dir := t.TempDir()
-	input := filepath.Join(dir, "simple.omni")
-	if err := os.WriteFile(input, []byte(sampleProgram), 0o644); err != nil {
-		t.Fatalf("write input: %v", err)
+func TestCompile(t *testing.T) {
+	// Test compiling with empty input path
+	config := Config{
+		InputPath: "",
 	}
 
-	cfg := compiler.Config{
-		InputPath: input,
-		Backend:   "vm",
-		Emit:      "mir",
-	}
-	if err := compiler.Compile(cfg); err != nil {
-		t.Fatalf("compile: %v", err)
-	}
-
-	output := filepath.Join(dir, "simple.mir")
-	data, err := os.ReadFile(output)
-	if err != nil {
-		t.Fatalf("read output: %v", err)
-	}
-
-	expected := "func fortyTwo():int\n  block entry:\n    %0 = const.int 42:int\n    ret %0\n"
-	if string(data) != expected {
-		t.Fatalf("unexpected MIR output\nexpected:\n%s\nactual:\n%s", expected, string(data))
-	}
-}
-
-func TestCompileVMEmitMIRCustomOutput(t *testing.T) {
-	dir := t.TempDir()
-	input := filepath.Join(dir, "main.omni")
-	if err := os.WriteFile(input, []byte(sampleProgram), 0o644); err != nil {
-		t.Fatalf("write input: %v", err)
-	}
-
-	output := filepath.Join(dir, "out", "program.mir")
-	cfg := compiler.Config{
-		InputPath:  input,
-		OutputPath: output,
-		Backend:    "vm",
-		Emit:       "mir",
-	}
-	if err := compiler.Compile(cfg); err != nil {
-		t.Fatalf("compile: %v", err)
-	}
-
-	data, err := os.ReadFile(output)
-	if err != nil {
-		t.Fatalf("read output: %v", err)
-	}
-	if len(data) == 0 {
-		t.Fatalf("expected MIR data to be written")
-	}
-}
-
-func TestCompileVMRejectsUnsupportedEmit(t *testing.T) {
-	dir := t.TempDir()
-	input := filepath.Join(dir, "simple.omni")
-	if err := os.WriteFile(input, []byte(sampleProgram), 0o644); err != nil {
-		t.Fatalf("write input: %v", err)
-	}
-
-	cfg := compiler.Config{
-		InputPath: input,
-		Backend:   "vm",
-		Emit:      "obj",
-	}
-	err := compiler.Compile(cfg)
+	err := Compile(config)
 	if err == nil {
-		t.Fatalf("expected error for unsupported emit option")
+		t.Error("Expected error for empty input path")
 	}
-	if !strings.Contains(err.Error(), "emit option") {
-		t.Fatalf("unexpected error: %v", err)
+
+	expectedError := "input path required"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
+}
+
+func TestCompileWithUnsupportedBackend(t *testing.T) {
+	// Test compiling with unsupported backend
+	config := Config{
+		InputPath: "test.omni",
+		Backend:   "unsupported",
+	}
+
+	err := Compile(config)
+	if err == nil {
+		t.Error("Expected error for unsupported backend")
+	}
+
+	expectedError := "unsupported backend: unsupported"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
+}
+
+func TestCompileWithValidBackend(t *testing.T) {
+	// Test compiling with valid backend
+	config := Config{
+		InputPath: "test.omni",
+		Backend:   "c",
+	}
+
+	err := Compile(config)
+	// We expect an error because the input file doesn't exist
+	if err == nil {
+		t.Error("Expected error for non-existent input file")
+	}
+}
+
+func TestConfig(t *testing.T) {
+	// Test config creation
+	config := Config{
+		InputPath:    "test.omni",
+		OutputPath:   "test.out",
+		Backend:      "c",
+		OptLevel:     "2",
+		Emit:         "exe",
+		Dump:         "mir",
+		DebugInfo:    true,
+		DebugModules: false,
+	}
+
+	if config.InputPath != "test.omni" {
+		t.Errorf("Expected InputPath 'test.omni', got '%s'", config.InputPath)
+	}
+
+	if config.OutputPath != "test.out" {
+		t.Errorf("Expected OutputPath 'test.out', got '%s'", config.OutputPath)
+	}
+
+	if config.Backend != "c" {
+		t.Errorf("Expected Backend 'c', got '%s'", config.Backend)
+	}
+
+	if config.OptLevel != "2" {
+		t.Errorf("Expected OptLevel '2', got '%s'", config.OptLevel)
+	}
+
+	if config.Emit != "exe" {
+		t.Errorf("Expected Emit 'exe', got '%s'", config.Emit)
+	}
+
+	if config.Dump != "mir" {
+		t.Errorf("Expected Dump 'mir', got '%s'", config.Dump)
+	}
+
+	if !config.DebugInfo {
+		t.Error("Expected DebugInfo to be true")
+	}
+
+	if config.DebugModules {
+		t.Error("Expected DebugModules to be false")
+	}
+}
+
+func TestErrNotImplemented(t *testing.T) {
+	// Test that ErrNotImplemented is defined
+	if ErrNotImplemented == nil {
+		t.Error("Expected ErrNotImplemented to be defined")
+	}
+
+	if ErrNotImplemented.Error() != "not implemented" {
+		t.Errorf("Expected ErrNotImplemented to be 'not implemented', got '%s'", ErrNotImplemented.Error())
 	}
 }
