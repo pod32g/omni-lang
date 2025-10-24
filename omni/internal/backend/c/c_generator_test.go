@@ -226,7 +226,7 @@ func TestCGenerator(t *testing.T) {
 		}
 
 		generator := NewCGenerator(module)
-		generator.generateBlock(block)
+		generator.generateBlock(block, "main")
 
 		result := generator.output.String()
 		if result == "" {
@@ -282,7 +282,7 @@ func TestCGenerator(t *testing.T) {
 		}
 
 		generator := NewCGenerator(module)
-		generator.generateTerminator(terminator)
+		generator.generateTerminator(terminator, "main")
 
 		result := generator.output.String()
 		if result == "" {

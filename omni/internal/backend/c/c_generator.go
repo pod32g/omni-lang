@@ -214,6 +214,7 @@ func (g *CGenerator) writeFunctionDeclarations() {
 		funcName := g.mapFunctionName(fn.Name)
 		if fn.Name == "main" {
 			funcName = "omni_main"
+			returnType = "int32_t" // Always use int32_t for omni_main to match runtime
 		}
 
 		// Handle function pointer return types
@@ -273,6 +274,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	funcName := g.mapFunctionName(fn.Name)
 	if fn.Name == "main" {
 		funcName = "omni_main"
+		returnType = "int32_t" // Always use int32_t for omni_main to match runtime
 	}
 
 	// Handle function pointer return types
@@ -364,7 +366,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 
 	// Generate function body
 	for _, block := range fn.Blocks {
-		if err := g.generateBlock(block); err != nil {
+		if err := g.generateBlock(block, fn.Name); err != nil {
 			return err
 		}
 	}
@@ -374,7 +376,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 }
 
 // generateBlock generates C code for a basic block
-func (g *CGenerator) generateBlock(block *mir.BasicBlock) error {
+func (g *CGenerator) generateBlock(block *mir.BasicBlock, funcName string) error {
 	// Generate block label if it's not the entry block
 	if block.Name != "entry" {
 		g.output.WriteString(fmt.Sprintf("  %s:\n", block.Name))
@@ -388,7 +390,7 @@ func (g *CGenerator) generateBlock(block *mir.BasicBlock) error {
 	}
 
 	// Generate terminator
-	if err := g.generateTerminator(&block.Terminator); err != nil {
+	if err := g.generateTerminator(&block.Terminator, funcName); err != nil {
 		return err
 	}
 
@@ -1117,7 +1119,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 }
 
 // generateTerminator generates C code for a terminator
-func (g *CGenerator) generateTerminator(term *mir.Terminator) error {
+func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string) error {
 	switch term.Op {
 	case "ret":
 		// Handle return statement
@@ -1125,7 +1127,12 @@ func (g *CGenerator) generateTerminator(term *mir.Terminator) error {
 			value := g.getOperandValue(term.Operands[0])
 			g.output.WriteString(fmt.Sprintf("  return %s;\n", value))
 		} else {
-			g.output.WriteString("  return;\n")
+			// For main function, return 0 instead of void return
+			if funcName == "main" {
+				g.output.WriteString("  return 0;\n")
+			} else {
+				g.output.WriteString("  return;\n")
+			}
 		}
 	case "jmp":
 		// Handle unconditional jump
@@ -1883,6 +1890,7 @@ func (g *CGenerator) isPrimitiveType(omniType string) bool {
 		return false
 	}
 }
+
 
 // convertLiteralToDecimal converts hex and binary literals to decimal
 func (g *CGenerator) convertLiteralToDecimal(literal string) string {

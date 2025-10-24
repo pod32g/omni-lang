@@ -507,8 +507,8 @@ func compileToAssembly(mod *mir.Module, outputPath string) error {
 		return fmt.Errorf("failed to compile C to assembly: %w", err)
 	}
 
-	// Clean up temporary C file
-	os.Remove(cPath)
+	// Keep C file for debugging
+	// os.Remove(cPath)
 
 	return nil
 }

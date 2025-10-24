@@ -1,4 +1,0 @@
-func main():int
-  block entry:
-    %0 = const.int 42:int
-    ret %0
