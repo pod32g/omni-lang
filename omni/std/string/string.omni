@@ -242,21 +242,21 @@ func join_lines(strings:array<string>):string {
 // ============================================================================
 
 // replace replaces all occurrences of a substring
-func replace(s:string, old:string, new:string):string {
+func replace(s:string, old:string, replacement:string):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
     return ""
 }
 
 // replace_first replaces the first occurrence of a substring
-func replace_first(s:string, old:string, new:string):string {
+func replace_first(s:string, old:string, replacement:string):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
     return ""
 }
 
 // replace_last replaces the last occurrence of a substring
-func replace_last(s:string, old:string, new:string):string {
+func replace_last(s:string, old:string, replacement:string):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
     return ""
