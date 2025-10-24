@@ -1152,14 +1152,54 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				return Result{Type: "string", Value: "false"}, true
 			}
 		}
-	case "std.string.length":
+	case "std.float_to_string":
 		if len(operands) == 1 {
-			arg := operandValue(fr, operands[0])
-			if arg.Type == "string" {
-				str := arg.Value.(string)
-				return Result{Type: "int", Value: len(str)}, true
+			f := operandValue(fr, operands[0])
+			if f.Type == "float" || f.Type == "double" {
+				fVal := f.Value.(float64)
+				return Result{Type: "string", Value: fmt.Sprintf("%g", fVal)}, true
 			}
 		}
+	case "std.string_to_int":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if s.Type == "string" {
+				sVal := s.Value.(string)
+				if i, err := strconv.Atoi(sVal); err == nil {
+					return Result{Type: "int", Value: int32(i)}, true
+				}
+			}
+		}
+	case "std.string_to_float":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if s.Type == "string" {
+				sVal := s.Value.(string)
+				if f, err := strconv.ParseFloat(sVal, 64); err == nil {
+					return Result{Type: "float", Value: f}, true
+				}
+			}
+		}
+	case "std.string_to_bool":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if s.Type == "string" {
+				sVal := s.Value.(string)
+				if sVal == "true" {
+					return Result{Type: "bool", Value: true}, true
+				} else if sVal == "false" {
+					return Result{Type: "bool", Value: false}, true
+				}
+			}
+		}
+	case "std.string.length":
+			if len(operands) == 1 {
+				arg := operandValue(fr, operands[0])
+				if arg.Type == "string" {
+					str := arg.Value.(string)
+					return Result{Type: "int", Value: len(str)}, true
+				}
+			}
 	case "std.string.concat":
 		if len(operands) == 2 {
 			left := operandValue(fr, operands[0])
