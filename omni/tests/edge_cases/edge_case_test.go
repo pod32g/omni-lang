@@ -210,7 +210,7 @@ func main(): int {
 			}
 
 			// Merge imported modules
-			if err := compiler.MergeImportedModules(mod, tempDir); err != nil {
+			if err := compiler.MergeImportedModules(mod, tempDir, false); err != nil {
 				if tt.expectError {
 					if tt.errorContains != "" && !contains(err.Error(), tt.errorContains) {
 						t.Errorf("Expected error to contain %q, got %q", tt.errorContains, err.Error())
