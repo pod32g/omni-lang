@@ -36,16 +36,17 @@ func (f *stringFlag) Set(v string) error {
 
 func main() {
 	var (
-		backend  = flag.String("backend", "c", "code generation backend (vm|clift|c)")
-		optLevel = flag.String("O", "O0", "optimization level (O0-O3)")
-		emitFlag = newStringFlag("exe")
-		dump     = flag.String("dump", "", "dump intermediate representation (mir)")
-		output   = flag.String("o", "", "output binary path")
-		debug    = flag.Bool("debug", false, "generate debug symbols and debug information")
-		version  = flag.Bool("version", false, "print version and exit")
-		verbose  = flag.Bool("verbose", false, "enable verbose output")
-		help     = flag.Bool("help", false, "show help and exit")
-		showHelp = flag.Bool("h", false, "show help and exit")
+		backend      = flag.String("backend", "c", "code generation backend (vm|clift|c)")
+		optLevel     = flag.String("O", "O0", "optimization level (O0-O3)")
+		emitFlag     = newStringFlag("exe")
+		dump         = flag.String("dump", "", "dump intermediate representation (mir)")
+		output       = flag.String("o", "", "output binary path")
+		debug        = flag.Bool("debug", false, "generate debug symbols and debug information")
+		debugModules = flag.Bool("debug-modules", false, "show module loading debug information")
+		version      = flag.Bool("version", false, "print version and exit")
+		verbose      = flag.Bool("verbose", false, "enable verbose output")
+		help         = flag.Bool("help", false, "show help and exit")
+		showHelp     = flag.Bool("h", false, "show help and exit")
 	)
 	flag.Var(emitFlag, "emit", "emission format (mir|obj|exe|binary|asm)")
 
@@ -81,7 +82,7 @@ func main() {
 		}
 	}
 
-	if err := run(input, *output, *backend, *optLevel, emit, *dump, *verbose, *debug); err != nil {
+	if err := run(input, *output, *backend, *optLevel, emit, *dump, *verbose, *debug, *debugModules); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -118,7 +119,7 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  omnic -dump mir hello.omni          # Dump MIR to file\n")
 }
 
-func run(input, output, backend, optLevel, emit, dump string, verbose, debug bool) error {
+func run(input, output, backend, optLevel, emit, dump string, verbose, debug, debugModules bool) error {
 	if filepath.Ext(input) != ".omni" {
 		return fmt.Errorf("%s: unsupported input (expected .omni)", input)
 	}
@@ -138,13 +139,14 @@ func run(input, output, backend, optLevel, emit, dump string, verbose, debug boo
 	}
 
 	cfg := compiler.Config{
-		InputPath:  input,
-		OutputPath: output,
-		Backend:    backend,
-		OptLevel:   optLevel,
-		Emit:       emit,
-		Dump:       dump,
-		DebugInfo:  debug,
+		InputPath:    input,
+		OutputPath:   output,
+		Backend:      backend,
+		OptLevel:     optLevel,
+		Emit:         emit,
+		Dump:         dump,
+		DebugInfo:    debug,
+		DebugModules: debugModules,
 	}
 
 	if verbose {

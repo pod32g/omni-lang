@@ -22,13 +22,14 @@ import (
 
 // Config captures the minimal inputs needed to drive the compilation pipeline.
 type Config struct {
-	InputPath  string
-	OutputPath string
-	Backend    string
-	OptLevel   string
-	Emit       string
-	Dump       string
-	DebugInfo  bool
+	InputPath    string
+	OutputPath   string
+	Backend      string
+	OptLevel     string
+	Emit         string
+	Dump         string
+	DebugInfo    bool
+	DebugModules bool
 }
 
 // ErrNotImplemented indicates that a requested stage has not yet been implemented.
@@ -95,7 +96,7 @@ func Compile(cfg Config) error {
 	}
 
 	// Merge locally imported modules' functions into the main module so the VM can resolve them
-	if err := MergeImportedModules(mod, filepath.Dir(cfg.InputPath)); err != nil {
+	if err := MergeImportedModules(mod, filepath.Dir(cfg.InputPath), cfg.DebugModules); err != nil {
 		return err
 	}
 
@@ -137,9 +138,10 @@ func Compile(cfg Config) error {
 // MergeImportedModules loads imported local modules and appends their function declarations
 // into the root module with namespaced names (aliasOrSegment.funcName) so that calls like
 // `math_utils.add` resolve at runtime. std imports are ignored here (handled as intrinsics).
-func MergeImportedModules(mod *ast.Module, baseDir string) error {
+func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool) error {
 	loader := NewModuleLoader()
-	// Prefer absolute path of the current file directory first to avoid cwd issues
+
+	// Add the base directory for local modules
 	if baseDir != "" {
 		if abs, err := filepath.Abs(baseDir); err == nil {
 			loader.AddSearchPath(abs)
@@ -148,27 +150,10 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 		}
 	}
 
-	// Add the omni std directory to search paths
-	// Find the omni root directory by looking for the std directory
-	if abs, err := filepath.Abs(baseDir); err == nil {
-		// Walk up the directory tree to find the omni root
-		current := abs
-		for {
-			stdPath := filepath.Join(current, "std")
-			if _, err := os.Stat(stdPath); err == nil {
-				// Check if this is the main std directory (contains std.omni)
-				mainStdPath := filepath.Join(stdPath, "std.omni")
-				if _, err := os.Stat(mainStdPath); err == nil {
-					loader.AddSearchPath(current)
-					break
-				}
-			}
-			parent := filepath.Dir(current)
-			if parent == current {
-				break // Reached root
-			}
-			current = parent
-		}
+	// Show debug information if requested
+	if debugModules {
+		fmt.Fprintf(os.Stderr, "%s\n", loader.DebugInfo())
+		fmt.Fprintf(os.Stderr, "Loading imports...\n")
 	}
 
 	// Collect imports from both Module.Imports and top-level decls
@@ -185,6 +170,9 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 			continue
 		}
 		// Load all imports, including std imports
+		if debugModules {
+			fmt.Fprintf(os.Stderr, "Loading module: %s\n", strings.Join(imp.Path, "."))
+		}
 		imported, err := loader.LoadModule(imp.Path)
 		if err != nil {
 			return fmt.Errorf("load import %s: %w", strings.Join(imp.Path, "."), err)
@@ -192,7 +180,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 
 		// Process nested imports recursively for std modules
 		if len(imp.Path) > 0 && imp.Path[0] == "std" {
-			if err := mergeNestedImports(imported, loader, mod); err != nil {
+			if err := mergeNestedImports(imported, loader, mod, debugModules); err != nil {
 				return fmt.Errorf("merge nested imports for %s: %w", strings.Join(imp.Path, "."), err)
 			}
 		}
@@ -214,7 +202,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string) error {
 }
 
 // mergeNestedImports recursively processes nested imports in std modules
-func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast.Module) error {
+func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast.Module, debugModules bool) error {
 	// Collect imports from both Module.Imports and top-level decls
 	imports := make([]*ast.ImportDecl, 0, len(module.Imports))
 	imports = append(imports, module.Imports...)
@@ -237,7 +225,7 @@ func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast
 			}
 
 			// Recursively process its nested imports
-			if err := mergeNestedImports(imported, loader, targetMod); err != nil {
+			if err := mergeNestedImports(imported, loader, targetMod, debugModules); err != nil {
 				return fmt.Errorf("merge nested imports for %s: %w", strings.Join(imp.Path, "."), err)
 			}
 

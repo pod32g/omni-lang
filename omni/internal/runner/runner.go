@@ -40,7 +40,7 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 		fmt.Fprintf(os.Stderr, "  Merging imported modules...\n")
 	}
 	// Merge locally imported modules' functions into the main module
-	if err := compiler.MergeImportedModules(mod, filepath.Dir(path)); err != nil {
+	if err := compiler.MergeImportedModules(mod, filepath.Dir(path), false); err != nil {
 		return vm.Result{}, err
 	}
 
