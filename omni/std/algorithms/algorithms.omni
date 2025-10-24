@@ -366,24 +366,17 @@ func unique<T>(arr:array<T>):array<T> {
 // Graph Algorithms (Basic)
 // ============================================================================
 
-// is_connected checks if a graph represented as adjacency list is connected
+// is_connected checks if a graph is connected using edge list representation
 // This is a simplified implementation for demonstration
-func is_connected(adjacency_list:array<array<int>>):bool {
-    let num_vertices:int = std.array.length(adjacency_list)
+func is_connected(edges:array<int>, num_vertices:int):bool {
     if num_vertices <= 1 {
         return true
     }
     
     // Simple connectivity check - in a real implementation,
     // we'd use DFS or BFS to traverse the graph
-    var total_edges:int = 0
-    var i:int = 0
-    
-    while i < num_vertices {
-        total_edges = total_edges + std.array.length(std.array.get(adjacency_list, i))
-        i = i + 1
-    }
+    let num_edges:int = std.array.length(edges) / 2  // Each edge is represented by 2 vertices
     
     // A connected graph with n vertices has at least n-1 edges
-    return total_edges >= (num_vertices - 1)
+    return num_edges >= (num_vertices - 1)
 }
