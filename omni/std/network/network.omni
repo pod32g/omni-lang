@@ -25,7 +25,7 @@ struct URL {
 struct HTTPRequest {
     method:string
     url:string
-    headers:map<string, string>
+    headers:map<string, string >
     body:string
 }
 
@@ -33,7 +33,7 @@ struct HTTPRequest {
 struct HTTPResponse {
     status_code:int
     status_text:string
-    headers:map<string, string>
+    headers:map<string, string >
     body:string
 }
 
@@ -150,10 +150,11 @@ func dns_reverse_lookup(ip:IPAddress):string {
 func http_get(url:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
+    let empty_headers: map<string, string > = {}
     return HTTPResponse{
         status_code: 200,
         status_text: "OK",
-        headers: map<string, string>{},
+        headers: empty_headers,
         body: ""
     }
 }
@@ -162,10 +163,11 @@ func http_get(url:string):HTTPResponse {
 func http_post(url:string, body:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
+    let empty_headers: map<string, string > = {}
     return HTTPResponse{
         status_code: 200,
         status_text: "OK",
-        headers: map<string, string>{},
+        headers: empty_headers,
         body: ""
     }
 }
@@ -174,10 +176,11 @@ func http_post(url:string, body:string):HTTPResponse {
 func http_put(url:string, body:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
+    let empty_headers: map<string, string > = {}
     return HTTPResponse{
         status_code: 200,
         status_text: "OK",
-        headers: map<string, string>{},
+        headers: empty_headers,
         body: ""
     }
 }
@@ -186,10 +189,11 @@ func http_put(url:string, body:string):HTTPResponse {
 func http_delete(url:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
+    let empty_headers: map<string, string > = {}
     return HTTPResponse{
         status_code: 200,
         status_text: "OK",
-        headers: map<string, string>{},
+        headers: empty_headers,
         body: ""
     }
 }
@@ -198,10 +202,11 @@ func http_delete(url:string):HTTPResponse {
 func http_request(req:HTTPRequest):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
+    let empty_headers: map<string, string > = {}
     return HTTPResponse{
         status_code: 200,
         status_text: "OK",
-        headers: map<string, string>{},
+        headers: empty_headers,
         body: ""
     }
 }
@@ -242,10 +247,11 @@ func http_response_set_header(resp:HTTPResponse, name:string, value:string):HTTP
 
 // http_request_create creates a new HTTP request
 func http_request_create(method:string, url:string):HTTPRequest {
+    let empty_headers: map<string, string > = {}
     return HTTPRequest{
         method: method,
         url: url,
-        headers: map<string, string>{},
+        headers: empty_headers,
         body: ""
     }
 }
