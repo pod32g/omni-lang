@@ -13,7 +13,7 @@ import (
 func transformTokensForNestedGenerics(tokens []lexer.Token) []lexer.Token {
 	var result []lexer.Token
 	genericDepth := 0
-	
+
 	for _, token := range tokens {
 		// Track generic depth
 		if token.Kind == lexer.TokenLess {
@@ -23,7 +23,7 @@ func transformTokensForNestedGenerics(tokens []lexer.Token) []lexer.Token {
 				genericDepth--
 			}
 		}
-		
+
 		// Transform >> to two > tokens when in generic context
 		if token.Kind == lexer.TokenRShift && genericDepth > 0 {
 			// Create two separate > tokens
@@ -42,7 +42,7 @@ func transformTokensForNestedGenerics(tokens []lexer.Token) []lexer.Token {
 			result = append(result, token)
 		}
 	}
-	
+
 	return result
 }
 
