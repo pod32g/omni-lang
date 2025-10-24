@@ -62,14 +62,14 @@ func values(m:map<string, int>):array<int> {
 func copy(m:map<string, int>):map<string, int> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    return map<string, int>{}
+    return {}
 }
 
 // merge creates a new map by merging two maps
 func merge(a:map<string, int>, b:map<string, int>):map<string, int> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    return map<string, int>{}
+    return {}
 }
 
 // ============================================================================
@@ -78,7 +78,7 @@ func merge(a:map<string, int>, b:map<string, int>):map<string, int> {
 
 // set_create creates a new set
 func set_create():set<int> {
-    return set<int>{}
+    return {}
 }
 
 // set_add adds an element to the set
@@ -145,7 +145,7 @@ func set_difference(a:set<int>, b:set<int>):set<int> {
 
 // queue_create creates a new queue
 func queue_create():queue<int> {
-    return queue<int>{}
+    return {}
 }
 
 // queue_enqueue adds an element to the back of the queue
@@ -194,7 +194,7 @@ func queue_clear(q:queue<int>) {
 
 // stack_create creates a new stack
 func stack_create():stack<int> {
-    return stack<int>{}
+    return {}
 }
 
 // stack_push adds an element to the top of the stack
@@ -243,7 +243,7 @@ func stack_clear(s:stack<int>) {
 
 // priority_queue_create creates a new priority queue
 func priority_queue_create():priority_queue<int> {
-    return priority_queue<int>{}
+    return {}
 }
 
 // priority_queue_insert adds an element with a given priority
@@ -286,7 +286,7 @@ func priority_queue_size(pq:priority_queue<int>):int {
 
 // linked_list_create creates a new linked list
 func linked_list_create():linked_list<int> {
-    return linked_list<int>{}
+    return {}
 }
 
 // linked_list_append adds an element to the end of the linked list
@@ -355,7 +355,7 @@ func linked_list_clear(ll:linked_list<int>) {
 
 // binary_tree_create creates a new binary tree
 func binary_tree_create():binary_tree<int> {
-    return binary_tree<int>{}
+    return {}
 }
 
 // binary_tree_insert inserts an element into the binary tree
