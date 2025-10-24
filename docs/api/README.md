@@ -5,6 +5,9 @@ This directory contains comprehensive API documentation for the OmniLang program
 ## Table of Contents
 
 - [Language Reference](language-reference.md) - Core language features and syntax
+- [Advanced Types](advanced-types.md) - Type aliases, union types, and optional types
+- [String Interpolation](string-interpolation.md) - String interpolation with expressions
+- [Exception Handling](exception-handling.md) - Try-catch-finally exception handling
 - [Standard Library](stdlib/) - Complete standard library documentation
   - [std.io](stdlib/io.md) - Input/Output functions
   - [std.math](stdlib/math.md) - Mathematical functions
@@ -25,7 +28,7 @@ For specific API details, browse the sections above or use the search functional
 
 ## Version Information
 
-This documentation corresponds to OmniLang v0.5.0 (October 2025).
+This documentation corresponds to OmniLang v0.5.1 (October 2025).
 
 ## Contributing
 

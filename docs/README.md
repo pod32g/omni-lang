@@ -5,6 +5,8 @@ Welcome to the OmniLang documentation! This directory contains comprehensive doc
 ## Table of Contents
 
 - [Language Tour](spec/language-tour.md) - Complete language overview and features
+- [Advanced Features](ADVANCED_FEATURES.md) - String interpolation, exception handling, and advanced types
+- [Examples](EXAMPLES.md) - Comprehensive code examples and tutorials
 - [Grammar Specification](spec/grammar.md) - Formal grammar definition
 - [API Documentation](api/) - Complete API reference
 - [Roadmap](ROADMAP.md) - Development roadmap and future plans
@@ -20,8 +22,8 @@ If you're new to OmniLang, start here:
 
 ## Current Status
 
-**Version:** v0.5.0 (October 2025)  
-**Status:** Active Development - Comprehensive Standard Library Testing & Enhanced CI/CD Pipeline
+**Version:** v0.5.1 (October 2025)  
+**Status:** Active Development - Advanced Type System & Enhanced Language Features
 
 ### ✅ Implemented Features
 
@@ -32,7 +34,15 @@ If you're new to OmniLang, start here:
   - Basic types (`int`, `float`, `string`, `bool`)
   - **Arrays** (`[]int`, `[]string`) with indexing and iteration
   - String concatenation with automatic type conversion
+  - **String interpolation** with `${expression}` syntax
   - Unary operators (`-`, `!`)
+
+- **Advanced Features:**
+  - **Exception handling** with try-catch-finally blocks
+  - **Type aliases** (`type UserID = int`)
+  - **Union types** (`string | int | bool`)
+  - **Optional types** (`int?`, `string?`)
+  - **Advanced type system** with full type checking
 
 - **Import System:**
   - Standard library imports (`import std.io as io`)
@@ -70,7 +80,7 @@ If you're new to OmniLang, start here:
   - Limited control flow constructs
 
 - **Type System:**
-  - No generics
+  - No generics (planned)
   - No structs or enums
   - No maps
   - No function overloading

@@ -2,8 +2,8 @@
 
 This document provides a comprehensive tour of the OmniLang programming language, covering all major features and syntax.
 
-**Version:** v0.5.0 (October 2025)  
-**Status:** Complete standard library with comprehensive testing
+**Version:** v0.5.1 (October 2025)  
+**Status:** Complete standard library with comprehensive testing and advanced type system
 
 ## Table of Contents
 
@@ -14,9 +14,10 @@ This document provides a comprehensive tour of the OmniLang programming language
 5. [Functions](#functions)
 6. [Control Flow](#control-flow)
 7. [Data Structures](#data-structures)
-8. [Standard Library](#standard-library)
-9. [Advanced Features](#advanced-features)
-10. [Examples](#examples)
+8. [Import System](#import-system)
+9. [Standard Library](#standard-library)
+10. [Advanced Features](#advanced-features)
+11. [Examples](#examples)
 
 ## Getting Started
 
@@ -605,6 +606,33 @@ func main():int {
 }
 ```
 
+### String Interpolation
+
+OmniLang supports string interpolation with the `${expression}` syntax:
+
+```omni
+import std.io as io
+
+func main():int {
+    let name:string = "Alice"
+    let age:int = 30
+    let pi:float = 3.14159
+    
+    // String interpolation
+    let greeting:string = "Hello, ${name}!"
+    let info:string = "Name: ${name}, Age: ${age}, Pi: ${pi}"
+    
+    // Multiple interpolations
+    let complex:string = "User ${name} is ${age} years old and likes ${pi}"
+    
+    io.println(greeting)    // "Hello, Alice!"
+    io.println(info)        // "Name: Alice, Age: 30, Pi: 3.14159"
+    io.println(complex)     // "User Alice is 30 years old and likes 3.14159"
+    
+    return 0
+}
+```
+
 ### Unary Expressions
 
 OmniLang supports unary negation and logical NOT:
@@ -715,6 +743,63 @@ func array_example():array<int> {
 
 ## Advanced Features
 
+### Exception Handling
+
+OmniLang supports exception handling with try-catch-finally blocks:
+
+```omni
+import std.io as io
+
+func risky_operation(x:int):int {
+    if x < 0 {
+        throw "Negative values not allowed"
+    }
+    return x * 2
+}
+
+func exception_example():int {
+    // Basic try-catch
+    try {
+        let result1:int = risky_operation(10)
+        io.println("Result: " + result1)
+    } catch (e) {
+        io.println("Caught exception: " + e)
+    }
+    
+    // Try-catch with exception variable
+    try {
+        let result2:int = risky_operation(-5)
+        io.println("Result: " + result2)
+    } catch (e: string) {
+        io.println("Caught string exception: " + e)
+    }
+    
+    // Try-catch-finally
+    try {
+        let result3:int = risky_operation(20)
+        io.println("Result: " + result3)
+    } catch (e) {
+        io.println("Caught exception: " + e)
+    } finally {
+        io.println("Finally block executed")
+    }
+    
+    // Multiple catch clauses
+    try {
+        let result4:int = risky_operation(30)
+        io.println("Result: " + result4)
+    } catch (e) {
+        io.println("Caught general exception: " + e)
+    } catch (specific: string) {
+        io.println("Caught specific string exception: " + specific)
+    } finally {
+        io.println("Finally block executed")
+    }
+    
+    return 0
+}
+```
+
 ### Error Handling
 
 ```omni
@@ -757,6 +842,96 @@ func enum_pattern(color:Color):string {
         Color.GREEN => "Green"
         Color.BLUE => "Blue"
     }
+}
+```
+
+### Advanced Type System
+
+OmniLang supports advanced type system features including type aliases, union types, and optional types:
+
+#### Type Aliases
+
+```omni
+// Create type aliases for better code readability
+type UserID = int
+type Name = string
+type Email = string
+
+func create_user(id:UserID, name:Name, email:Email):void {
+    // Type aliases provide semantic meaning
+    io.println("Creating user: " + name + " (ID: " + id + ")")
+}
+
+func type_alias_example():int {
+    let user_id:UserID = 42
+    let user_name:Name = "Alice"
+    let user_email:Email = "alice@example.com"
+    
+    create_user(user_id, user_name, user_email)
+    return 0
+}
+```
+
+#### Union Types
+
+```omni
+// Union types allow values to be one of several types
+type StringOrInt = string | int
+type Number = int | float
+type Status = string | int | bool
+
+func process_value(value:StringOrInt):string {
+    // The value can be either a string or an int
+    return "Value: " + value
+}
+
+func union_type_example():int {
+    let value1:StringOrInt = "Hello"
+    let value2:StringOrInt = 42
+    let num1:Number = 100
+    let num2:Number = 3.14
+    let status1:Status = "active"
+    let status2:Status = 1
+    let status3:Status = true
+    
+    io.println(process_value(value1))  // "Value: Hello"
+    io.println(process_value(value2))  // "Value: 42"
+    io.println("Number: " + num1)      // "Number: 100"
+    io.println("Number: " + num2)      // "Number: 3.14"
+    
+    return 0
+}
+```
+
+#### Optional Types
+
+```omni
+// Optional types represent values that might be null
+type OptionalInt = int?
+type OptionalString = string?
+type OptionalNumber = Number?
+
+func find_user(id:int):OptionalString {
+    if id > 0 {
+        return "User found"
+    }
+    return null  // No user found
+}
+
+func optional_type_example():int {
+    let maybe_int:OptionalInt = 42
+    let maybe_string:OptionalString = "Hello"
+    let maybe_number:OptionalNumber = 3.14
+    
+    // Optional types are compatible with their base types
+    let regular_int:int = maybe_int  // OK: int? is compatible with int
+    let regular_string:string = maybe_string  // OK: string? is compatible with string
+    
+    io.println("Optional int: " + maybe_int)
+    io.println("Optional string: " + maybe_string)
+    io.println("Optional number: " + maybe_number)
+    
+    return 0
 }
 ```
 
