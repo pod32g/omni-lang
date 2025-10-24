@@ -242,7 +242,15 @@ func runCompiler(testFile, backend, emit, output string) error {
 	cmd.Dir = "."
 	// Inherit environment variables (including LD_LIBRARY_PATH for Cranelift backend)
 	cmd.Env = os.Environ()
-	return cmd.Run()
+	
+	// Capture both stdout and stderr for debugging
+	output_bytes, err := cmd.CombinedOutput()
+	if err != nil {
+		// Print the actual error output for debugging
+		fmt.Printf("Compiler error output: %s\n", string(output_bytes))
+		return fmt.Errorf("compiler failed: %v, output: %s", err, string(output_bytes))
+	}
+	return nil
 }
 
 // Array tests (both VM and C backends now supported!)
