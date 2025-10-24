@@ -15,6 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
+## [0.5.1] - 2025-10-24
+
+### Added
+- **Improved Module Loading System**: Binary-relative path resolution for std library
+- **Environment Variable Support**: `OMNI_STD_PATH` environment variable for custom std library locations
+- **Debug Support**: New `-debug-modules` flag for troubleshooting module loading issues
+- **Consistent Behavior**: Module search behavior is now consistent regardless of working directory
+
+### Fixed
+- **Critical Module Loading Bug**: Fixed issue where compiler was looking for std library relative to current working directory instead of binary location
+- **Return Type Issues**: Resolved `std.math.max/min/abs` returning `void` instead of `int`
+- **CI/CD Pipeline**: Fixed failing code-quality, fmt, and lint jobs
+- **Circular Dependencies**: Resolved import cycle between compiler and type checker packages
+
+### Changed
+- **Architecture**: Created separate `moduleloader` package to avoid circular dependencies
+- **Error Messages**: Improved debugging capabilities and error reporting
+- **Module Resolution**: Prioritizes `OMNI_STD_PATH`, binary-relative paths, then current working directory
+
 ## [0.5.0] - 2025-10-23
 
 ### Added
