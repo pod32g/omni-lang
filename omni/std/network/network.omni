@@ -264,8 +264,13 @@ func http_request_set_header(req:HTTPRequest, name:string, value:string):HTTPReq
 
 // http_request_set_body sets the body of an HTTP request
 func http_request_set_body(req:HTTPRequest, body:string):HTTPRequest {
-    req.body = body
-    return req
+    // Create a new request with the updated body
+    return HTTPRequest{
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        body: body
+    }
 }
 
 // http_request_get_header gets a header value from an HTTP request

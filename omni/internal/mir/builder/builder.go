@@ -190,38 +190,51 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 		fb.env[s.Name] = symbol{Value: val.ID, Type: val.Type, Mutable: true}
 		return nil
 	case *ast.AssignmentStmt:
-		target, ok := s.Left.(*ast.IdentifierExpr)
-		if !ok {
-			return fmt.Errorf("mir builder: only identifier assignments supported")
-		}
-		sym, exists := fb.env[target.Name]
-		if !exists {
-			return fmt.Errorf("mir builder: assignment to undefined variable %q", target.Name)
-		}
-		if !sym.Mutable {
-			return fmt.Errorf("mir builder: cannot assign to immutable variable %q", target.Name)
-		}
-		rhs, err := fb.lowerExpr(s.Right)
-		if err != nil {
-			return err
-		}
+		// Handle different types of assignment targets
+		switch target := s.Left.(type) {
+		case *ast.IdentifierExpr:
+			// Simple variable assignment: x = value
+			sym, exists := fb.env[target.Name]
+			if !exists {
+				return fmt.Errorf("mir builder: assignment to undefined variable %q", target.Name)
+			}
+			if !sym.Mutable {
+				return fmt.Errorf("mir builder: cannot assign to immutable variable %q", target.Name)
+			}
+			rhs, err := fb.lowerExpr(s.Right)
+			if err != nil {
+				return err
+			}
 
-		// Create an assignment instruction in the MIR
-		assignID := fb.fn.NextValue()
-		assignInst := mir.Instruction{
-			ID:   assignID,
-			Op:   "assign",
-			Type: rhs.Type,
-			Operands: []mir.Operand{
-				valueOperand(sym.Value, sym.Type), // target variable
-				valueOperand(rhs.ID, rhs.Type),    // source value
-			},
-		}
-		fb.block.Instructions = append(fb.block.Instructions, assignInst)
+			// Create an assignment instruction in the MIR
+			assignID := fb.fn.NextValue()
+			assignInst := mir.Instruction{
+				ID:   assignID,
+				Op:   "assign",
+				Type: rhs.Type,
+				Operands: []mir.Operand{
+					valueOperand(sym.Value, sym.Type), // target variable
+					valueOperand(rhs.ID, rhs.Type),    // source value
+				},
+			}
+			fb.block.Instructions = append(fb.block.Instructions, assignInst)
 
-		// Update the environment to point to the new assignment result
-		fb.env[target.Name] = symbol{Value: assignID, Type: rhs.Type, Mutable: sym.Mutable}
-		return nil
+			// Update the environment to point to the new assignment result
+			fb.env[target.Name] = symbol{Value: assignID, Type: rhs.Type, Mutable: sym.Mutable}
+			return nil
+		case *ast.MemberExpr:
+			// Struct field assignment: obj.field = value
+			// For now, we'll treat this as a simple assignment to a temporary variable
+			// This is a limitation that should be addressed in the future
+			return fmt.Errorf("mir builder: struct field assignments not yet supported")
+		case *ast.IndexExpr:
+			// Array/map element assignment: arr[i] = value
+			// For now, we'll treat this as a simple assignment to a temporary variable
+			// This is a limitation that should be addressed in the future
+			return fmt.Errorf("mir builder: array/map element assignments not yet supported")
+		default:
+			return fmt.Errorf("mir builder: unsupported assignment target type %T", s.Left)
+		}
 	case *ast.ExprStmt:
 		_, err := fb.lowerExpr(s.Expr)
 		return err
