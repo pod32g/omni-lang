@@ -1,0 +1,42 @@
+import std.io as io
+
+// Test union types
+func process_value(value: int | string | bool): string {
+    return "processed"
+}
+
+// Test type aliases
+type UserID = int
+type UserName = string
+
+// Test function types
+type MathOp = (int, int) -> int
+
+func add(a: int, b: int): int {
+    return a + b
+}
+
+func main() {
+    io.println("=== Enhanced Type System Test ===")
+    
+    // Test union types
+    let union_val1: int | string | bool = 42
+    let union_val2: int | string | bool = "hello"
+    let union_val3: int | string | bool = true
+    
+    io.println("Union types work!")
+    
+    // Test type aliases
+    let user_id: UserID = 123
+    let user_name: UserName = "alice"
+    
+    io.println("Type aliases work!")
+    
+    // Test function types
+    let math_op: MathOp = add
+    let result_op: int = math_op(10, 20)
+    
+    io.println("Function types work!")
+    
+    io.println("=== Enhanced Type System Features Working! ===")
+}
