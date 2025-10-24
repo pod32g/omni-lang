@@ -310,12 +310,12 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	g.variables = make(map[mir.ValueID]string)
 	g.phiVars = make(map[mir.ValueID]bool)
 	g.mutableVars = make(map[mir.ValueID]bool)
-	
+
 	// Map parameter SSA values to their names
 	for _, param := range fn.Params {
 		g.variables[param.ID] = param.Name
 	}
-	
+
 	// Collect all variables that need to be declared
 	allVariables := make(map[mir.ValueID]string)
 	for _, block := range fn.Blocks {
@@ -327,18 +327,23 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 		}
 		// Terminators don't produce values, so we don't need to track them
 	}
-	
+
 	// Declare all variables at the beginning of the function
 	for id, varName := range allVariables {
 		// Skip parameters (they're already declared)
 		if _, isParam := g.variables[id]; !isParam {
 			// Determine the type based on the instruction that produces this value
 			var varType string
+			var isArrayInit bool
 			// Find the instruction that produces this value
 			for _, block := range fn.Blocks {
 				for _, inst := range block.Instructions {
 					if inst.ID == id {
 						varType = g.mapType(inst.Type)
+						// Check if this is an array.init instruction
+						if inst.Op == "array.init" {
+							isArrayInit = true
+						}
 						break
 					}
 				}
@@ -350,7 +355,8 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				varType = "int32_t" // default type
 			}
 			// Skip declaring void variables (they don't produce values)
-			if varType != "void" {
+			// Skip declaring array variables (they're declared in array.init)
+			if varType != "void" && !isArrayInit {
 				g.output.WriteString(fmt.Sprintf("  %s %s;\n", varType, varName))
 			}
 		}
@@ -486,7 +492,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					varName, left, right))
 			}
 		}
-		case "mul":
+	case "mul":
 		// Handle multiplication
 		if len(inst.Operands) >= 2 {
 			left := g.getOperandValue(inst.Operands[0])
@@ -721,8 +727,18 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		if len(inst.Operands) > 0 {
 			varName := g.getVariableName(inst.ID)
 			// Extract element type from array type
-			elementType := g.mapType(inst.Type)
-			// For now, create a simple array with the elements
+			// For array<int>, we want int32_t, not int32_t*
+			var elementType string
+			if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
+				elementTypeStr := inst.Type[6 : len(inst.Type)-1] // Extract "int" from "array<int>"
+				elementType = g.mapType(elementTypeStr) // Map "int" to "int32_t"
+			} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
+				elementTypeStr := inst.Type[3 : len(inst.Type)-1] // Extract "int" from "[]<int>"
+				elementType = g.mapType(elementTypeStr) // Map "int" to "int32_t"
+			} else {
+				elementType = g.mapType(inst.Type) // fallback
+			}
+			// Create a simple array with the elements
 			g.output.WriteString(fmt.Sprintf("  %s %s[] = {", elementType, varName))
 			for i, op := range inst.Operands {
 				if i > 0 {
@@ -812,7 +828,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			varName := g.getVariableName(inst.ID)
 
 			// For now, assume all fields are int (can be enhanced later)
-			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+			// Assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
 		}
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
 		// Handle comparison operations
@@ -1254,6 +1271,12 @@ func (g *CGenerator) mapType(omniType string) string {
 
 	// Handle struct types: struct<Field1Type,Field2Type,...>
 	if strings.HasPrefix(omniType, "struct<") && strings.HasSuffix(omniType, ">") {
+		return "omni_struct_t*"
+	}
+	
+	// Handle named struct types (like Point, User, etc.)
+	// For now, assume any unknown type that's not a primitive is a struct
+	if !g.isPrimitiveType(omniType) && !strings.Contains(omniType, "(") && !strings.Contains(omniType, "<") {
 		return "omni_struct_t*"
 	}
 
@@ -1849,6 +1872,16 @@ func (g *CGenerator) declareVariable(varName string) {
 	}
 	// If we get here, the variable is not in the map, which means it's a new variable
 	// We don't need to add it to the map since it will be added when getVariableName is called
+}
+
+// isPrimitiveType checks if a type is a primitive type
+func (g *CGenerator) isPrimitiveType(omniType string) bool {
+	switch omniType {
+	case "int", "float", "double", "string", "void", "void*", "bool", "ptr":
+		return true
+	default:
+		return false
+	}
 }
 
 // convertLiteralToDecimal converts hex and binary literals to decimal
