@@ -306,9 +306,54 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 		g.output.WriteString(") {\n")
 	}
 
+	// Reset maps for this function to avoid conflicts
+	g.variables = make(map[mir.ValueID]string)
+	g.phiVars = make(map[mir.ValueID]bool)
+	g.mutableVars = make(map[mir.ValueID]bool)
+	
 	// Map parameter SSA values to their names
 	for _, param := range fn.Params {
 		g.variables[param.ID] = param.Name
+	}
+	
+	// Collect all variables that need to be declared
+	allVariables := make(map[mir.ValueID]string)
+	for _, block := range fn.Blocks {
+		for _, inst := range block.Instructions {
+			if inst.ID != mir.InvalidValue {
+				varName := fmt.Sprintf("v%d", int(inst.ID))
+				allVariables[inst.ID] = varName
+			}
+		}
+		// Terminators don't produce values, so we don't need to track them
+	}
+	
+	// Declare all variables at the beginning of the function
+	for id, varName := range allVariables {
+		// Skip parameters (they're already declared)
+		if _, isParam := g.variables[id]; !isParam {
+			// Determine the type based on the instruction that produces this value
+			var varType string
+			// Find the instruction that produces this value
+			for _, block := range fn.Blocks {
+				for _, inst := range block.Instructions {
+					if inst.ID == id {
+						varType = g.mapType(inst.Type)
+						break
+					}
+				}
+				if varType != "" {
+					break
+				}
+			}
+			if varType == "" {
+				varType = "int32_t" // default type
+			}
+			// Skip declaring void variables (they don't produce values)
+			if varType != "void" {
+				g.output.WriteString(fmt.Sprintf("  %s %s;\n", varType, varName))
+			}
+		}
 	}
 
 	// Generate function body
@@ -371,30 +416,35 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			case "int":
 				// Convert hex and binary literals to decimal
 				convertedValue := g.convertLiteralToDecimal(literalValue)
-				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s;\n",
+				// Assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
 					varName, convertedValue))
 				// Mark variables that are initialized to 0 as potentially mutable (like sum variables)
 				if convertedValue == "0" {
 					g.mutableVars[inst.ID] = true
 				}
 			case "float", "double":
-				g.output.WriteString(fmt.Sprintf("  double %s = %s;\n",
+				// Assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
 					varName, literalValue))
 			case "string":
-				g.output.WriteString(fmt.Sprintf("  const char* %s = %s;\n",
+				// Assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
 					varName, literalValue))
 			case "bool":
-				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s;\n",
+				// Assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
 					varName, literalValue))
 			case "null":
-				g.output.WriteString(fmt.Sprintf("  void* %s = NULL;\n",
+				// Assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = NULL;\n",
 					varName))
 			default:
 				// Check if this is a function type
 				if strings.Contains(inst.Type, ") -> ") {
-					// Function type - assign function pointer
-					g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n",
-						g.mapType(inst.Type), varName, literalValue))
+					// Function type - assign function pointer to already declared variable
+					g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
+						varName, literalValue))
 				} else {
 					g.output.WriteString(fmt.Sprintf("  // TODO: Handle const type %s\n", inst.Type))
 				}
@@ -413,9 +463,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(fmt.Sprintf("  %s = %s + %s;\n",
 					left, left, right))
 			} else {
-				// Always create new variable for intermediate results
-				g.output.WriteString(fmt.Sprintf("  %s %s = %s + %s;\n",
-					g.mapType(inst.Type), varName, left, right))
+				// Assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = %s + %s;\n",
+					varName, left, right))
 			}
 		}
 	case "sub":
@@ -431,19 +481,19 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(fmt.Sprintf("  %s = %s - %s;\n",
 					left, left, right))
 			} else {
-				// Regular subtraction - create new variable
-				g.output.WriteString(fmt.Sprintf("  %s %s = %s - %s;\n",
-					g.mapType(inst.Type), varName, left, right))
+				// Regular subtraction - assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = %s - %s;\n",
+					varName, left, right))
 			}
 		}
-	case "mul":
+		case "mul":
 		// Handle multiplication
 		if len(inst.Operands) >= 2 {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s * %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			g.output.WriteString(fmt.Sprintf("  %s = %s * %s;\n",
+				varName, left, right))
 		}
 	case "div":
 		// Handle division
@@ -451,8 +501,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s / %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Division - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s / %s;\n",
+				varName, left, right))
 		}
 	case "mod":
 		// Handle modulo
@@ -460,8 +511,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s %% %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Modulo - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s %% %s;\n",
+				varName, left, right))
 		}
 	case "bitand":
 		// Handle bitwise AND
@@ -469,8 +521,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s & %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Bitwise AND - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s & %s;\n",
+				varName, left, right))
 		}
 	case "bitor":
 		// Handle bitwise OR
@@ -478,8 +531,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s | %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Bitwise OR - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s | %s;\n",
+				varName, left, right))
 		}
 	case "bitxor":
 		// Handle bitwise XOR
@@ -487,8 +541,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s ^ %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Bitwise XOR - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s ^ %s;\n",
+				varName, left, right))
 		}
 	case "lshift":
 		// Handle left shift
@@ -496,8 +551,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s << %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Left shift - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s << %s;\n",
+				varName, left, right))
 		}
 	case "rshift":
 		// Handle right shift
@@ -505,8 +561,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s >> %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Right shift - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s >> %s;\n",
+				varName, left, right))
 		}
 	case "strcat":
 		// Handle string concatenation
@@ -534,24 +591,27 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		if len(inst.Operands) >= 1 {
 			operand := g.getOperandValue(inst.Operands[0])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = -%s;\n",
-				g.mapType(inst.Type), varName, operand))
+			// Negation - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = -%s;\n",
+				varName, operand))
 		}
 	case "not":
 		// Handle logical not
 		if len(inst.Operands) >= 1 {
 			operand := g.getOperandValue(inst.Operands[0])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = !%s;\n",
-				g.mapType(inst.Type), varName, operand))
+			// Logical NOT - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = !%s;\n",
+				varName, operand))
 		}
 	case "bitnot":
 		// Handle bitwise not
 		if len(inst.Operands) >= 1 {
 			operand := g.getOperandValue(inst.Operands[0])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = ~%s;\n",
-				g.mapType(inst.Type), varName, operand))
+			// Bitwise NOT - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = ~%s;\n",
+				varName, operand))
 		}
 	case "cast":
 		// Handle type cast
@@ -559,8 +619,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			operand := g.getOperandValue(inst.Operands[0])
 			varName := g.getVariableName(inst.ID)
 			targetType := g.mapType(inst.Type)
-			g.output.WriteString(fmt.Sprintf("  %s %s = (%s)%s;\n",
-				targetType, varName, targetType, operand))
+			// Type cast - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = (%s)%s;\n",
+				varName, targetType, operand))
 		}
 	case "and":
 		// Handle logical and
@@ -568,8 +629,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s && %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Logical AND - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s && %s;\n",
+				varName, left, right))
 		}
 	case "or":
 		// Handle logical or
@@ -577,8 +639,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			left := g.getOperandValue(inst.Operands[0])
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s || %s;\n",
-				g.mapType(inst.Type), varName, left, right))
+			// Logical OR - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s || %s;\n",
+				varName, left, right))
 		}
 	case "call", "call.int", "call.void", "call.string", "call.bool":
 		// Handle function calls
@@ -596,8 +659,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			if funcName == "len" && len(inst.Operands) == 2 {
 				varName := g.getVariableName(inst.ID)
 				arrayVar := g.getOperandValue(inst.Operands[1])
-				g.output.WriteString(fmt.Sprintf("  %s %s = sizeof(%s) / sizeof(%s[0]);\n",
-					g.mapType(inst.Type), varName, arrayVar, arrayVar))
+				// Array length - assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = sizeof(%s) / sizeof(%s[0]);\n",
+					varName, arrayVar, arrayVar))
 				return nil
 			}
 
@@ -622,9 +686,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.output.WriteString(fmt.Sprintf("  %s = %s(",
 						g.mapFunctionTypeWithName(inst.Type, varName), cFuncName))
 				} else {
-					// Regular variable declaration
-					g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
-						g.mapType(inst.Type), varName, cFuncName))
+					// Regular function call - assign to already declared variable
+					g.output.WriteString(fmt.Sprintf("  %s = %s(",
+						varName, cFuncName))
 				}
 				// Add arguments
 				for i, arg := range inst.Operands[1:] {
@@ -645,11 +709,11 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 
 			// Check if target is a map variable
 			if g.isMapVariable(target) {
-				// Map indexing - assume string key for now (can be enhanced later)
-				g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_map_get_string_int(%s, %s);\n", varName, target, index))
+				// Map indexing - assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = omni_map_get_string_int(%s, %s);\n", varName, target, index))
 			} else {
-				// Array indexing
-				g.output.WriteString(fmt.Sprintf("  %s %s = %s[%s];\n", g.mapType(inst.Type), varName, target, index))
+				// Array indexing - assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
 			}
 		}
 	case "array.init":
@@ -671,7 +735,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 	case "map.init":
 		// Handle map initialization
 		varName := g.getVariableName(inst.ID)
-		g.output.WriteString(fmt.Sprintf("  omni_map_t* %s = omni_map_create();\n", varName))
+		// Assign to already declared variable
+		g.output.WriteString(fmt.Sprintf("  %s = omni_map_create();\n", varName))
 
 		// Process key-value pairs from operands
 		for i := 0; i < len(inst.Operands); i += 2 {
@@ -707,7 +772,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 	case "struct.init":
 		// Handle struct initialization
 		varName := g.getVariableName(inst.ID)
-		g.output.WriteString(fmt.Sprintf("  omni_struct_t* %s = omni_struct_create();\n", varName))
+		// Assign to already declared variable
+		g.output.WriteString(fmt.Sprintf("  %s = omni_struct_create();\n", varName))
 
 		// Process field-value pairs from operands
 		// Handle different operand formats: [field1Value, field2Value, ...] or [field1Name, field1Value, field2Name, field2Value, ...]
@@ -771,7 +837,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				op = ">="
 			}
 
-			g.output.WriteString(fmt.Sprintf("  int32_t %s = (%s %s %s) ? 1 : 0;\n",
+			// Comparison - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = (%s %s %s) ? 1 : 0;\n",
 				varName, left, op, right))
 		}
 	case "assign":
@@ -797,8 +864,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 
 			// Create a mutable variable that can be updated in the loop
 			// For PHI nodes, we initialize with the first value and will update it later
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n",
-				g.mapType(inst.Type), varName, firstValue))
+			// Note: This is a special case where we need to initialize the variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
+				varName, firstValue))
 
 			// Track this as a PHI variable that needs special handling
 			g.phiVars[inst.ID] = true
@@ -973,9 +1041,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
 					g.mapFunctionTypeWithName(inst.Type, varName), funcName))
 			} else {
-				// Regular variable assignment
-				g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n",
-					g.mapType(inst.Type), varName, funcName))
+				// Regular variable assignment - assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
+					varName, funcName))
 			}
 		}
 	case "func.call":
@@ -984,9 +1052,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			funcPtr := g.getOperandValue(inst.Operands[0])
 			varName := g.getVariableName(inst.ID)
 
-			// Build function call with arguments
-			g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
-				g.mapType(inst.Type), varName, funcPtr))
+			// Build function call with arguments - assign to already declared variable
+			g.output.WriteString(fmt.Sprintf("  %s = %s(",
+				varName, funcPtr))
 
 			// Add arguments
 			for i, arg := range inst.Operands[1:] {
@@ -1162,12 +1230,14 @@ func (g *CGenerator) mapType(omniType string) string {
 	// Handle array types: []<ElementType>
 	if strings.HasPrefix(omniType, "[]<") && strings.HasSuffix(omniType, ">") {
 		elementType := omniType[3 : len(omniType)-1]
-		return g.mapType(elementType) // Don't add [] here, it's added in the declaration
+		// Arrays in C are represented as pointers to the element type
+		return g.mapType(elementType) + "*"
 	}
 	// Handle old array syntax: array<ElementType>
 	if strings.HasPrefix(omniType, "array<") && strings.HasSuffix(omniType, ">") {
 		elementType := omniType[6 : len(omniType)-1]
-		return g.mapType(elementType) // Don't add [] here, it's added in the declaration
+		// Arrays in C are represented as pointers to the element type
+		return g.mapType(elementType) + "*"
 	}
 
 	// Handle pointer types: *Type
@@ -1755,6 +1825,30 @@ func (g *CGenerator) getVariableName(id mir.ValueID) string {
 	varName := fmt.Sprintf("v%d", int(id))
 	g.variables[id] = varName
 	return varName
+}
+
+// isVariableDeclared checks if a variable has already been declared in the current function
+func (g *CGenerator) isVariableDeclared(varName string) bool {
+	// Check if the variable name exists in the variables map
+	for _, name := range g.variables {
+		if name == varName {
+			return true
+		}
+	}
+	return false
+}
+
+// declareVariable marks a variable as declared
+func (g *CGenerator) declareVariable(varName string) {
+	// Find the ValueID that corresponds to this variable name
+	for _, name := range g.variables {
+		if name == varName {
+			// Variable is already tracked, no need to do anything
+			return
+		}
+	}
+	// If we get here, the variable is not in the map, which means it's a new variable
+	// We don't need to add it to the map since it will be added when getVariableName is called
 }
 
 // convertLiteralToDecimal converts hex and binary literals to decimal
