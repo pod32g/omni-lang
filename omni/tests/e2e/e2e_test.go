@@ -240,6 +240,8 @@ func runCompiler(testFile, backend, emit, output string) error {
 	}
 	cmd := exec.Command("../../bin/omnic", args...)
 	cmd.Dir = "."
+	// Inherit environment variables (including LD_LIBRARY_PATH for Cranelift backend)
+	cmd.Env = os.Environ()
 	return cmd.Run()
 }
 
