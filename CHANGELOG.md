@@ -18,12 +18,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.1] - 2025-10-24
 
 ### Added
+- **String Interpolation**: `${expression}` syntax for dynamic string creation with automatic type conversion
+- **Exception Handling**: Complete try-catch-finally blocks with exception propagation and cleanup
+- **Advanced Type System**: Type aliases, union types, and optional types with full type checking
+- **Type Aliases**: `type UserID = int` syntax for better code readability and semantic meaning
+- **Union Types**: `string | int | bool` syntax for flexible data handling with multiple types
+- **Optional Types**: `int?`, `string?` syntax for nullable values with type safety
 - **Improved Module Loading System**: Binary-relative path resolution for std library
 - **Environment Variable Support**: `OMNI_STD_PATH` environment variable for custom std library locations
 - **Debug Support**: New `-debug-modules` flag for troubleshooting module loading issues
+- **Comprehensive Documentation**: Complete API documentation for all advanced features
+- **Logo Integration**: Professional logo branding throughout documentation
 - **Consistent Behavior**: Module search behavior is now consistent regardless of working directory
 
 ### Fixed
+- **String Concatenation**: Fixed C backend string concatenation with mixed types (int/float to string)
+- **Type Conversion**: Fixed automatic type conversion in string operations
+- **Exception Handling**: Fixed runtime exception throwing and catching mechanism
+- **Type System**: Fixed type alias resolution and union type compatibility checking
 - **Critical Module Loading Bug**: Fixed issue where compiler was looking for std library relative to current working directory instead of binary location
 - **Return Type Issues**: Resolved `std.math.max/min/abs` returning `void` instead of `int`
 - **CI/CD Pipeline**: Fixed failing code-quality, fmt, and lint jobs
@@ -33,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Architecture**: Created separate `moduleloader` package to avoid circular dependencies
 - **Error Messages**: Improved debugging capabilities and error reporting
 - **Module Resolution**: Prioritizes `OMNI_STD_PATH`, binary-relative paths, then current working directory
+- **Documentation**: Updated all documentation with advanced features and logo branding
+- **Type System**: Enhanced type checking with support for advanced type features
 
 ## [0.5.0] - 2025-10-23
 

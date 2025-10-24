@@ -1105,23 +1105,23 @@ func (g *CGenerator) convertOperandToString(op mir.Operand) string {
 			// Already a string, return as is
 			return varName
 		} else if op.Type == "int" {
-			// Convert int to string
-			tempVar := fmt.Sprintf("temp_str_%d", op.Value)
+			// Convert int to string - use unique counter to avoid conflicts
+			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_int_to_string(%s);\n", tempVar, varName))
 			return tempVar
 		} else if op.Type == "float" || op.Type == "double" {
-			// Convert float to string
-			tempVar := fmt.Sprintf("temp_str_%d", op.Value)
+			// Convert float to string - use unique counter to avoid conflicts
+			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_float_to_string(%s);\n", tempVar, varName))
 			return tempVar
 		} else if op.Type == "bool" {
-			// Convert bool to string
-			tempVar := fmt.Sprintf("temp_str_%d", op.Value)
+			// Convert bool to string - use unique counter to avoid conflicts
+			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_bool_to_string(%s);\n", tempVar, varName))
 			return tempVar
 		} else {
-			// Default: assume int
-			tempVar := fmt.Sprintf("temp_str_%d", op.Value)
+			// Default: assume int - use unique counter to avoid conflicts
+			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_int_to_string(%s);\n", tempVar, varName))
 			return tempVar
 		}
