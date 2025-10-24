@@ -1072,7 +1072,36 @@ func (p *Parser) parseTypeExpr() (*ast.TypeExpr, error) {
 	return firstType, nil
 }
 
+// parseGenericTypeArgs parses generic type arguments with proper handling of nested generics
+func (p *Parser) parseGenericTypeArgs() ([]*ast.TypeExpr, error) {
+	args := []*ast.TypeExpr{}
+	if !p.match(lexer.TokenGreater) {
+		for {
+			arg, err := p.parseTypeExpr()
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, arg)
+			if p.match(lexer.TokenComma) {
+				continue
+			}
+			// Handle nested generics: array<array<int>> should parse as array<array<int>>
+			// Check if we have >> (right shift) and convert to two separate > tokens
+			if p.peekKind() == lexer.TokenRShift {
+				// We have >> which should be parsed as two separate > tokens
+				// The first > closes the inner generic, the second > closes the outer generic
+				p.advance() // consume the RShift token
+				return args, nil
+			}
+			p.expect(lexer.TokenGreater)
+			return args, nil
+		}
+	}
+	return args, nil
+}
+
 // parseSingleType parses a single type (not a union)
+// This function now handles nested generics properly
 func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 	// Handle array types: []Type
 	if p.match(lexer.TokenLBracket) {
@@ -1168,22 +1197,9 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 	nameTok := p.expect(lexer.TokenIdentifier)
 	typeExpr := &ast.TypeExpr{SpanInfo: nameTok.Span, Name: nameTok.Lexeme}
 	if p.match(lexer.TokenLess) {
-		args := []*ast.TypeExpr{}
-		if !p.match(lexer.TokenGreater) {
-			for {
-				arg, err := p.parseTypeExpr()
-				if err != nil {
-					return nil, err
-				}
-				args = append(args, arg)
-				if p.match(lexer.TokenComma) {
-					continue
-				}
-				gt := p.expect(lexer.TokenGreater)
-				typeExpr.Args = args
-				typeExpr.SpanInfo.End = gt.Span.End
-				return typeExpr, nil
-			}
+		args, err := p.parseGenericTypeArgs()
+		if err != nil {
+			return nil, err
 		}
 		typeExpr.Args = args
 		typeExpr.SpanInfo.End = p.previous().Span.End

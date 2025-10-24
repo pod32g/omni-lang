@@ -366,17 +366,16 @@ func unique<T>(arr:array<T>):array<T> {
 // Graph Algorithms (Basic)
 // ============================================================================
 
-// is_connected checks if a graph is connected using edge list representation
+// is_connected checks if a graph is connected using edge count
 // This is a simplified implementation for demonstration
-func is_connected(edges:array<int>, num_vertices:int):bool {
+// Note: Uses edge count heuristic rather than full connectivity check
+func is_connected(num_edges:int, num_vertices:int):bool {
     if num_vertices <= 1 {
         return true
     }
     
     // Simple connectivity check - in a real implementation,
     // we'd use DFS or BFS to traverse the graph
-    let num_edges:int = std.array.length(edges) / 2  // Each edge is represented by 2 vertices
-    
     // A connected graph with n vertices has at least n-1 edges
     return num_edges >= (num_vertices - 1)
 }
