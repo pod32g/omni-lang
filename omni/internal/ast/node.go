@@ -239,6 +239,40 @@ func (s *ContinueStmt) Span() lexer.Span { return s.SpanInfo }
 func (s *ContinueStmt) node()            {}
 func (s *ContinueStmt) stmt()            {}
 
+// TryStmt represents a try-catch-finally block.
+type TryStmt struct {
+	SpanInfo lexer.Span
+	TryBlock *BlockStmt
+	CatchClauses []*CatchClause
+	FinallyBlock *BlockStmt
+}
+
+func (s *TryStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *TryStmt) node()            {}
+func (s *TryStmt) stmt()            {}
+
+// CatchClause represents a catch block with optional exception variable.
+type CatchClause struct {
+	SpanInfo lexer.Span
+	ExceptionVar string // optional exception variable name
+	ExceptionType string // optional exception type
+	Block *BlockStmt
+}
+
+func (c *CatchClause) Span() lexer.Span { return c.SpanInfo }
+func (c *CatchClause) node()            {}
+func (c *CatchClause) stmt()            {}
+
+// ThrowStmt represents a throw statement.
+type ThrowStmt struct {
+	SpanInfo lexer.Span
+	Expr Expr
+}
+
+func (s *ThrowStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *ThrowStmt) node()            {}
+func (s *ThrowStmt) stmt()            {}
+
 // Expr categories -----------------------------------------------------------
 
 // Expr represents an expression node.

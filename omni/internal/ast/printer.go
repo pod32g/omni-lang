@@ -240,6 +240,32 @@ func (p *printer) writeStmt(stmt Stmt) {
 	case *IncrementStmt:
 		p.writeLine("IncrementStmt " + s.Op)
 		p.indent(func() { p.writeExpr(s.Target) })
+	case *TryStmt:
+		p.writeLine("TryStmt")
+		p.indent(func() {
+			p.writeLine("TryBlock")
+			p.indent(func() { p.writeBlock(s.TryBlock) })
+			for _, catch := range s.CatchClauses {
+				p.writeLine("CatchClause")
+				p.indent(func() {
+					if catch.ExceptionVar != "" {
+						p.writeLine("ExceptionVar " + catch.ExceptionVar)
+					}
+					if catch.ExceptionType != "" {
+						p.writeLine("ExceptionType " + catch.ExceptionType)
+					}
+					p.writeLine("Block")
+					p.indent(func() { p.writeBlock(catch.Block) })
+				})
+			}
+			if s.FinallyBlock != nil {
+				p.writeLine("FinallyBlock")
+				p.indent(func() { p.writeBlock(s.FinallyBlock) })
+			}
+		})
+	case *ThrowStmt:
+		p.writeLine("ThrowStmt")
+		p.indent(func() { p.writeExpr(s.Expr) })
 	default:
 		p.writeLine("<unknown stmt>")
 	}

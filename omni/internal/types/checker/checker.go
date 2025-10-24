@@ -387,6 +387,32 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 				c.report(s.Target.Span(), fmt.Sprintf("cannot modify immutable variable %q", ident.Name), "declare it with var if mutation is required")
 			}
 		}
+	case *ast.TryStmt:
+		// Check try block
+		c.checkBlock(s.TryBlock)
+		
+		// Check catch clauses
+		for _, catchClause := range s.CatchClauses {
+			c.enterScope()
+			if catchClause.ExceptionVar != "" {
+				// Declare the exception variable in the catch scope
+				exceptionType := "string" // Default exception type
+				if catchClause.ExceptionType != "" {
+					exceptionType = catchClause.ExceptionType
+				}
+				c.declare(catchClause.ExceptionVar, exceptionType, false, catchClause.Span())
+			}
+			c.checkBlock(catchClause.Block)
+			c.leaveScope()
+		}
+		
+		// Check finally block
+		if s.FinallyBlock != nil {
+			c.checkBlock(s.FinallyBlock)
+		}
+	case *ast.ThrowStmt:
+		// Check the expression being thrown
+		c.checkExpr(s.Expr)
 	}
 }
 

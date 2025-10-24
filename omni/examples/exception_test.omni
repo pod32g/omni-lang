@@ -1,0 +1,25 @@
+// Test exception handling syntax
+import std.io as io
+
+func main(): int {
+    // Test basic try-catch syntax
+    try {
+        io.println("In try block")
+    } catch (e) {
+        io.println("Caught exception: " + e)
+    }
+    
+    // Test try-catch-finally syntax
+    try {
+        io.println("In try block")
+    } catch (e: string) {
+        io.println("Caught string exception: " + e)
+    } finally {
+        io.println("In finally block")
+    }
+    
+    // Test throw statement
+    throw "Test exception"
+    
+    return 0
+}

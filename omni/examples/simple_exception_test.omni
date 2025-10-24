@@ -1,0 +1,8 @@
+// Simple exception test
+func main(): int {
+    try {
+        return 0
+    } catch {
+        return 1
+    }
+}

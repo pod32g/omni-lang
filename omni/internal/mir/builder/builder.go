@@ -239,6 +239,10 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 		return fb.lowerContinueStmt(s)
 	case *ast.IncrementStmt:
 		return fb.lowerIncrementStmt(s)
+	case *ast.TryStmt:
+		return fb.lowerTryStmt(s)
+	case *ast.ThrowStmt:
+		return fb.lowerThrowStmt(s)
 	default:
 		return fmt.Errorf("mir builder: unsupported statement %T", s)
 	}
@@ -1807,13 +1811,13 @@ func (fb *functionBuilder) emitStringInterpolation(expr *ast.StringInterpolation
 		})
 		return mirValue{ID: id, Type: "string"}, nil
 	}
-	
+
 	// Start with the first part
 	var result mirValue
 	for i, part := range expr.Parts {
 		var partValue mirValue
 		var err error
-		
+
 		if part.IsLiteral {
 			// Create a string literal
 			partValue, err = fb.emitLiteral(&ast.LiteralExpr{
@@ -1827,16 +1831,16 @@ func (fb *functionBuilder) emitStringInterpolation(expr *ast.StringInterpolation
 			if err != nil {
 				return mirValue{}, err
 			}
-			
+
 			// If the expression is not already a string, we need to convert it
 			// For now, we'll assume the C backend will handle the conversion
 			// In a more sophisticated implementation, we'd add explicit conversion instructions here
 		}
-		
+
 		if err != nil {
 			return mirValue{}, err
 		}
-		
+
 		if i == 0 {
 			// First part - this is our initial result
 			result = partValue
@@ -1848,7 +1852,7 @@ func (fb *functionBuilder) emitStringInterpolation(expr *ast.StringInterpolation
 			}
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -1866,4 +1870,21 @@ func (fb *functionBuilder) emitStringConcatenation(left, right mirValue) (mirVal
 	}
 	fb.block.Instructions = append(fb.block.Instructions, inst)
 	return mirValue{ID: id, Type: "string"}, nil
+}
+
+// lowerTryStmt handles try-catch-finally statements
+func (fb *functionBuilder) lowerTryStmt(stmt *ast.TryStmt) error {
+	// For now, implement a simplified version that just executes the try block
+	// TODO: Implement proper exception handling with catch/finally blocks
+	
+	// Lower the try block
+	return fb.lowerBlock(stmt.TryBlock)
+}
+
+// lowerThrowStmt handles throw statements
+func (fb *functionBuilder) lowerThrowStmt(stmt *ast.ThrowStmt) error {
+	// For now, just evaluate the expression and ignore the throw
+	// TODO: Implement proper exception throwing mechanism
+	_, err := fb.lowerExpr(stmt.Expr)
+	return err
 }

@@ -30,6 +30,10 @@ var keywords = map[string]Kind{
 	"null":     TokenNullLiteral,
 	"new":      TokenNew,
 	"delete":   TokenDelete,
+	"try":      TokenTry,
+	"catch":    TokenCatch,
+	"finally":  TokenFinally,
+	"throw":    TokenThrow,
 }
 
 // Lexer transforms a source buffer into a stream of tokens while tracking
