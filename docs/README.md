@@ -1,6 +1,10 @@
-# OmniLang Documentation
-
-Welcome to the OmniLang documentation! This directory contains comprehensive documentation for the OmniLang programming language and compiler.
+<div align="center">
+  <img src="assets/logo.png" alt="OmniLang Logo" width="150"/>
+  
+  # OmniLang Documentation
+  
+  Welcome to the OmniLang documentation! This directory contains comprehensive documentation for the OmniLang programming language and compiler.
+</div>
 
 ## Table of Contents
 

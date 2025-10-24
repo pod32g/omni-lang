@@ -73,9 +73,9 @@ func Check(filename, src string, mod *ast.Module) error {
 
 // Checker encapsulates the mutable state required to validate an OmniLang AST.
 type Checker struct {
-	filename   string
-	lines      []string
-	knownTypes map[string]struct{}
+	filename    string
+	lines       []string
+	knownTypes  map[string]struct{}
 	typeAliases map[string]string // Maps type alias names to their underlying types
 
 	structFields map[string]map[string]string
@@ -424,7 +424,7 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 func (c *Checker) checkTypeAliasDecl(decl *ast.TypeAliasDecl) {
 	// Check the type expression
 	underlyingType := c.checkTypeExpr(&decl.Type)
-	
+
 	// Store the type alias mapping
 	c.knownTypes[decl.Name] = struct{}{}
 	c.typeAliases[decl.Name] = underlyingType

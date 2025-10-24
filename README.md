@@ -1,6 +1,10 @@
-# OmniLang
-
-A statically typed programming language with a Go frontend, SSA MIR, and multiple backends (C, Cranelift, VM).
+<div align="center">
+  <img src="docs/assets/logo.png" alt="OmniLang Logo" width="200"/>
+  
+  # OmniLang
+  
+  A statically typed programming language with a Go frontend, SSA MIR, and multiple backends (C, Cranelift, VM).
+</div>
 
 ## Overview
 
@@ -26,7 +30,7 @@ OmniLang is a modern programming language designed for **performance, safety, an
 
 ## Quick Start
 
-**Latest Release: v0.5.0** (October 2025) - Comprehensive Standard Library Testing & Enhanced CI/CD Pipeline
+**Latest Release: v0.5.1** (October 2025) - Advanced Type System & Enhanced Language Features
 
 ### Installation
 
@@ -522,6 +526,100 @@ func main():int {
 }
 ```
 
+### Advanced Features
+
+OmniLang v0.5.1 introduces powerful advanced features:
+
+#### String Interpolation
+
+```omni
+import std
+
+func main():int {
+    let name:string = "Alice"
+    let age:int = 30
+    let pi:float = 3.14159
+    
+    // String interpolation with ${expression} syntax
+    let greeting:string = "Hello, ${name}!"
+    let info:string = "Name: ${name}, Age: ${age}, Pi: ${pi}"
+    
+    std.io.println(greeting)    // "Hello, Alice!"
+    std.io.println(info)        // "Name: Alice, Age: 30, Pi: 3.14159"
+    
+    return 0
+}
+```
+
+#### Exception Handling
+
+```omni
+import std
+
+func risky_operation(x:int):int {
+    if x < 0 {
+        throw "Negative values not allowed"
+    }
+    return x * 2
+}
+
+func main():int {
+    try {
+        let result:int = risky_operation(10)
+        std.io.println("Result: " + result)
+    } catch (e) {
+        std.io.println("Caught exception: " + e)
+    } finally {
+        std.io.println("Finally block executed")
+    }
+    
+    return 0
+}
+```
+
+#### Advanced Type System
+
+```omni
+import std
+
+// Type aliases for better code readability
+type UserID = int
+type Name = string
+type Email = string
+
+// Union types for flexible data
+type StringOrInt = string | int
+type Number = int | float
+
+// Optional types for nullable values
+type OptionalInt = int?
+type OptionalString = string?
+
+func main():int {
+    // Type aliases
+    let user_id:UserID = 42
+    let user_name:Name = "Alice"
+    let user_email:Email = "alice@example.com"
+    
+    // Union types
+    let value1:StringOrInt = "Hello"
+    let value2:StringOrInt = 42
+    let num1:Number = 100
+    let num2:Number = 3.14
+    
+    // Optional types
+    let maybe_int:OptionalInt = 42
+    let maybe_string:OptionalString = "Hello"
+    
+    std.io.println("User: " + user_name + " (ID: " + user_id + ")")
+    std.io.println("Values: " + value1 + ", " + value2)
+    std.io.println("Numbers: " + num1 + ", " + num2)
+    std.io.println("Optional: " + maybe_int + ", " + maybe_string)
+    
+    return 0
+}
+```
+
 ### Local File Imports
 
 ```omni
@@ -879,8 +977,14 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - ✅ **Enhanced CI/CD pipeline** with std import testing and warning detection
 - ✅ Fixed library path issues for macOS binaries
 
-### 🚀 **NEW: Complete Basic Language Features (v0.4.4+)**
-- ✅ **String Operations** - length, substring, char_at, starts_with, ends_with, contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
+### 🚀 **NEW: Advanced Language Features (v0.5.1+)**
+- ✅ **String Interpolation** - `${expression}` syntax for dynamic string creation
+- ✅ **Exception Handling** - try-catch-finally blocks with comprehensive error handling
+- ✅ **Advanced Type System** - type aliases, union types, and optional types
+- ✅ **Type Aliases** - `type UserID = int` for better code readability
+- ✅ **Union Types** - `string | int | bool` for flexible data handling
+- ✅ **Optional Types** - `int?`, `string?` for nullable values with type safety
+- ✅ **Complete String Operations** - length, substring, char_at, starts_with, ends_with, contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
 - ✅ **Advanced Math Functions** - pow, sqrt, floor, ceil, round, gcd, lcm, factorial
 - ✅ **File I/O Operations** - open, close, read, write, seek, tell, exists, size
 - ✅ **Bitwise Operators** - &, |, ^, ~, <<, >> with correct precedence
