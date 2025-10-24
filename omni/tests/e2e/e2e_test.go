@@ -641,7 +641,7 @@ func TestBitwiseOperations(t *testing.T) {
 
 func TestTypeCasting(t *testing.T) {
 	testFile := "new_features/test_type_casting_comprehensive.omni"
-	expected := "int to float: 42\nfloat to int: 3\nint to string: 42\nfloat to string: \nbool to string: true\nstring to int: 0\nstring to float: 0\nstring to bool: true\nnested cast (float)(int)3.99: 3\n0"
+	expected := "int to float: 42\nfloat to int: 3\nint to string: 42\nfloat to string: 3.14\nbool to string: true\nstring to int: 123\nstring to float: 3.14\nstring to bool: true\nnested cast (float)(int)3.99: 3\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)
@@ -655,7 +655,7 @@ func TestTypeCasting(t *testing.T) {
 
 func TestLexicalPrimitives(t *testing.T) {
 	testFile := "new_features/test_lexical_primitives.omni"
-	expected := "Null literal test passed\nHex 0xFF: 255\nHex 0x1A: 26\nHex 0x10_00: 4096\nBinary 0b1010: 10\nBinary 0b1111_0000: 240\nBinary 0b1: 1\nScientific 1.0e5: \nScientific 2.5e-3: \nScientific 1.23E+2: \nMixed sum: \n0"
+	expected := "Null literal test passed\nHex 0xFF: 255\nHex 0x1A: 26\nHex 0x10_00: 4096\nBinary 0b1010: 10\nBinary 0b1111_0000: 240\nBinary 0b1: 1\nScientific 1.0e5: 100000\nScientific 2.5e-3: 0.0025\nScientific 1.23E+2: 123\nMixed sum: 100265\n0"
 
 	// Test VM execution
 	result, err := runVM(testFile)

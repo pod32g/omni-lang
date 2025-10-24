@@ -97,7 +97,7 @@ func Compile(cfg Config) error {
 	}
 
 	// Merge locally imported modules' functions into the main module so the VM can resolve them
-	if err := MergeImportedModules(mod, filepath.Dir(cfg.InputPath), cfg.DebugModules); err != nil {
+	if err := MergeImportedModules(mod, filepath.Dir(cfg.InputPath), cfg.DebugModules, backend); err != nil {
 		return err
 	}
 
@@ -139,8 +139,9 @@ func Compile(cfg Config) error {
 
 // MergeImportedModules loads imported local modules and appends their function declarations
 // into the root module with namespaced names (aliasOrSegment.funcName) so that calls like
-// `math_utils.add` resolve at runtime. std imports are ignored here (handled as intrinsics).
-func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool) error {
+// `math_utils.add` resolve at runtime. std imports are ignored for C backend (handled as intrinsics)
+// but loaded for VM backend.
+func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, backend string) error {
 	loader := NewModuleLoader()
 
 	// Add the base directory for local modules
@@ -171,10 +172,35 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool) er
 		if len(imp.Path) == 0 {
 			continue
 		}
-		// Skip std imports - they are handled as intrinsic functions by the runtime
+		// Handle std imports based on backend
 		if len(imp.Path) > 0 && imp.Path[0] == "std" {
-			if debugModules {
-				fmt.Fprintf(os.Stderr, "Skipping std import: %s (handled as intrinsic)\n", strings.Join(imp.Path, "."))
+			if backend == "vm" {
+				// For VM backend, load std modules
+				if debugModules {
+					fmt.Fprintf(os.Stderr, "Loading std import for VM: %s\n", strings.Join(imp.Path, "."))
+				}
+				imported, err := loader.LoadModule(imp.Path)
+				if err != nil {
+					return fmt.Errorf("load std import %s: %w", strings.Join(imp.Path, "."), err)
+				}
+
+				local := imp.Alias
+				if local == "" {
+					local = imp.Path[len(imp.Path)-1]
+				}
+				// Append cloned function decls with namespaced names
+				for _, d := range imported.Decls {
+					if fn, ok := d.(*ast.FuncDecl); ok {
+						cloned := *fn
+						cloned.Name = local + "." + fn.Name
+						mod.Decls = append(mod.Decls, &cloned)
+					}
+				}
+			} else {
+				// For C backend, skip std imports (handled as intrinsics)
+				if debugModules {
+					fmt.Fprintf(os.Stderr, "Skipping std import: %s (handled as intrinsic)\n", strings.Join(imp.Path, "."))
+				}
 			}
 			continue
 		}

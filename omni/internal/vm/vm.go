@@ -1192,14 +1192,58 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				}
 			}
 		}
-	case "std.string.length":
-			if len(operands) == 1 {
-				arg := operandValue(fr, operands[0])
-				if arg.Type == "string" {
-					str := arg.Value.(string)
-					return Result{Type: "int", Value: len(str)}, true
-				}
+	// File operations
+	case "std.file.exists":
+		if len(operands) == 1 {
+			filename := operandValue(fr, operands[0])
+			if filename.Type == "string" {
+				// For now, return 0 (file doesn't exist) for simplicity
+				return Result{Type: "int", Value: 0}, true
 			}
+		}
+	case "std.file.size":
+		if len(operands) == 1 {
+			filename := operandValue(fr, operands[0])
+			if filename.Type == "string" {
+				// For now, return 0 (file size) for simplicity
+				return Result{Type: "int", Value: 0}, true
+			}
+		}
+	case "std.file.open":
+		if len(operands) == 2 {
+			filename := operandValue(fr, operands[0])
+			mode := operandValue(fr, operands[1])
+			if filename.Type == "string" && mode.Type == "string" {
+				// For now, return a dummy file handle (1) for simplicity
+				return Result{Type: "int", Value: 1}, true
+			}
+		}
+	case "std.file.write":
+		if len(operands) == 3 {
+			handle := operandValue(fr, operands[0])
+			data := operandValue(fr, operands[1])
+			size := operandValue(fr, operands[2])
+			if handle.Type == "int" && data.Type == "string" && size.Type == "int" {
+				// For now, return the size written for simplicity
+				return Result{Type: "int", Value: size.Value}, true
+			}
+		}
+	case "std.file.close":
+		if len(operands) == 1 {
+			handle := operandValue(fr, operands[0])
+			if handle.Type == "int" {
+				// For now, return 0 (success) for simplicity
+				return Result{Type: "int", Value: 0}, true
+			}
+		}
+	case "std.string.length":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			if arg.Type == "string" {
+				str := arg.Value.(string)
+				return Result{Type: "int", Value: len(str)}, true
+			}
+		}
 	case "std.string.concat":
 		if len(operands) == 2 {
 			left := operandValue(fr, operands[0])
