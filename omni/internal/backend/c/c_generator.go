@@ -511,13 +511,15 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 	case "strcat":
 		// Handle string concatenation
 		if len(inst.Operands) >= 2 {
-			left := g.getOperandValue(inst.Operands[0])
-			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
+
+			// Convert operands to strings if needed
+			leftStr := g.convertOperandToString(inst.Operands[0])
+			rightStr := g.convertOperandToString(inst.Operands[1])
 
 			// Generate proper string concatenation using runtime function
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_strcat(%s, %s);\n",
-				varName, left, right))
+				varName, leftStr, rightStr))
 		}
 	case "neg":
 		// Handle negation
@@ -1077,6 +1079,61 @@ func (g *CGenerator) getOperandValue(op mir.Operand) string {
 			return "0"
 		}
 		return op.Literal
+	default:
+		return "/* unknown operand */"
+	}
+}
+
+// convertOperandToString converts an operand to a string representation for string concatenation
+// It generates the necessary conversion code and returns the variable name to use
+func (g *CGenerator) convertOperandToString(op mir.Operand) string {
+	switch op.Kind {
+	case mir.OperandValue:
+		// For SSA values, use the type information from the operand
+		varName := g.getVariableName(op.Value)
+
+		// Check the operand type and convert if necessary
+		if op.Type == "string" {
+			// Already a string, return as is
+			return varName
+		} else if op.Type == "int" {
+			// Convert int to string
+			tempVar := fmt.Sprintf("temp_str_%d", op.Value)
+			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_int_to_string(%s);\n", tempVar, varName))
+			return tempVar
+		} else if op.Type == "float" || op.Type == "double" {
+			// Convert float to string
+			tempVar := fmt.Sprintf("temp_str_%d", op.Value)
+			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_float_to_string(%s);\n", tempVar, varName))
+			return tempVar
+		} else if op.Type == "bool" {
+			// Convert bool to string
+			tempVar := fmt.Sprintf("temp_str_%d", op.Value)
+			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_bool_to_string(%s);\n", tempVar, varName))
+			return tempVar
+		} else {
+			// Default: assume int
+			tempVar := fmt.Sprintf("temp_str_%d", op.Value)
+			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_int_to_string(%s);\n", tempVar, varName))
+			return tempVar
+		}
+
+	case mir.OperandLiteral:
+		// For literals, we need to convert based on the literal type
+		if op.Literal == "true" {
+			return "omni_bool_to_string(1)"
+		} else if op.Literal == "false" {
+			return "omni_bool_to_string(0)"
+		} else if strings.HasPrefix(op.Literal, "\"") && strings.HasSuffix(op.Literal, "\"") {
+			// String literal - return as is
+			return op.Literal
+		} else if strings.Contains(op.Literal, ".") {
+			// Float literal - convert to string
+			return fmt.Sprintf("omni_float_to_string(%s)", op.Literal)
+		} else {
+			// Integer literal - convert to string
+			return fmt.Sprintf("omni_int_to_string(%s)", op.Literal)
+		}
 	default:
 		return "/* unknown operand */"
 	}

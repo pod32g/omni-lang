@@ -1,0 +1,19 @@
+// Simple string concatenation test
+import std.io as io
+
+func main(): int {
+    let x: int = 42
+    let y: float = 3.14
+    let z: string = "Hello"
+    
+    // Test string concatenation with different types
+    let result1: string = "Number: " + x
+    let result2: string = "Float: " + y
+    let result3: string = z + " World"
+    
+    io.println(result1)
+    io.println(result2)
+    io.println(result3)
+    
+    return 0
+}
