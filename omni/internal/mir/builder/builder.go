@@ -1880,7 +1880,7 @@ func (fb *functionBuilder) lowerTryStmt(stmt *ast.TryStmt) error {
 		catchClauses: stmt.CatchClauses,
 		finallyBlock: stmt.FinallyBlock,
 	}
-	
+
 	return fb.emitExceptionHandling(exceptionContext)
 }
 
@@ -1891,7 +1891,7 @@ func (fb *functionBuilder) lowerThrowStmt(stmt *ast.ThrowStmt) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// Emit a throw instruction
 	id := fb.fn.NextValue()
 	inst := mir.Instruction{
@@ -1903,7 +1903,7 @@ func (fb *functionBuilder) lowerThrowStmt(stmt *ast.ThrowStmt) error {
 		},
 	}
 	fb.block.Instructions = append(fb.block.Instructions, inst)
-	
+
 	return nil
 }
 
@@ -1918,25 +1918,25 @@ type exceptionContext struct {
 func (fb *functionBuilder) emitExceptionHandling(ctx *exceptionContext) error {
 	// For now, implement a simplified version that just executes the blocks sequentially
 	// This is a placeholder for proper exception handling implementation
-	
+
 	// Execute try block
 	if err := fb.lowerBlock(ctx.tryBlock); err != nil {
 		return err
 	}
-	
+
 	// Execute catch blocks (simplified - no actual exception catching yet)
 	for _, catchClause := range ctx.catchClauses {
 		// For now, we'll skip catch blocks since we don't have proper exception handling
 		// In a full implementation, these would only execute when an exception is thrown
 		_ = catchClause
 	}
-	
+
 	// Execute finally block
 	if ctx.finallyBlock != nil {
 		if err := fb.lowerBlock(ctx.finallyBlock); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }

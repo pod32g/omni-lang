@@ -1,0 +1,66 @@
+// Advanced Types Demo - showcasing working type system features
+import std.io as io
+
+// Type aliases
+type UserID = int
+type Name = string
+type Email = string
+
+// Union types
+type StringOrInt = string | int
+type Number = int | float
+type Status = string | int | bool
+
+// Optional types
+type OptionalInt = int?
+type OptionalString = string?
+type OptionalNumber = Number?
+
+func main(): int {
+    io.println("=== Advanced Types Demo ===")
+    
+    // Type aliases
+    let id: UserID = 42
+    let name: Name = "Alice"
+    let email: Email = "alice@example.com"
+    
+    io.println("User ID: " + id)
+    io.println("Name: " + name)
+    io.println("Email: " + email)
+    
+    // Union types
+    let value1: StringOrInt = "Hello"
+    let value2: StringOrInt = 42
+    let num1: Number = 100
+    let num2: Number = 3.14
+    let status1: Status = "active"
+    let status2: Status = 1
+    let status3: Status = true
+    
+    io.println("String value: " + value1)
+    io.println("Int value: " + value2)
+    io.println("Int number: " + num1)
+    io.println("Float number: " + num2)
+    io.println("String status: " + status1)
+    io.println("Int status: " + status2)
+    io.println("Bool status: " + status3)
+    
+    // Optional types
+    let maybeInt: OptionalInt = 42
+    let maybeString: OptionalString = "Hello"
+    let maybeNumber: OptionalNumber = 3.14
+    
+    io.println("Optional int: " + maybeInt)
+    io.println("Optional string: " + maybeString)
+    io.println("Optional number: " + maybeNumber)
+    
+    // Mixed usage
+    let mixedValue: StringOrInt = 123
+    let optionalMixed: OptionalString = "Mixed types work!"
+    
+    io.println("Mixed value: " + mixedValue)
+    io.println("Optional mixed: " + optionalMixed)
+    
+    io.println("=== Demo Complete ===")
+    return 0
+}

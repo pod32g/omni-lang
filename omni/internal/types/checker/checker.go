@@ -26,6 +26,7 @@ func Check(filename, src string, mod *ast.Module) error {
 		filename:     filename,
 		lines:        splitLines(src),
 		knownTypes:   make(map[string]struct{}),
+		typeAliases:  make(map[string]string),
 		structFields: make(map[string]map[string]string),
 		functions:    make(map[string]FunctionSignature),
 		imports:      make(map[string]bool),
@@ -75,6 +76,7 @@ type Checker struct {
 	filename   string
 	lines      []string
 	knownTypes map[string]struct{}
+	typeAliases map[string]string // Maps type alias names to their underlying types
 
 	structFields map[string]map[string]string
 	functions    map[string]FunctionSignature
@@ -239,6 +241,8 @@ func (c *Checker) checkModule(mod *ast.Module) {
 			if !strings.Contains(d.Name, ".") {
 				c.checkFunc(d)
 			}
+		case *ast.TypeAliasDecl:
+			c.checkTypeAliasDecl(d)
 		}
 	}
 }
@@ -414,6 +418,16 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 		// Check the expression being thrown
 		c.checkExpr(s.Expr)
 	}
+}
+
+// checkTypeAliasDecl checks a type alias declaration
+func (c *Checker) checkTypeAliasDecl(decl *ast.TypeAliasDecl) {
+	// Check the type expression
+	underlyingType := c.checkTypeExpr(&decl.Type)
+	
+	// Store the type alias mapping
+	c.knownTypes[decl.Name] = struct{}{}
+	c.typeAliases[decl.Name] = underlyingType
 }
 
 func (c *Checker) checkBindingStmt(stmt *ast.BindingStmt) {
@@ -1197,6 +1211,12 @@ func (c *Checker) checkTypeExpr(t *ast.TypeExpr) string {
 		return buildUnion(members)
 	}
 
+	// Handle optional types
+	if t.IsOptional {
+		innerType := c.checkTypeExpr(t.OptionalType)
+		return innerType + "?" // For now, just append ? to indicate optional
+	}
+
 	// Handle pointer types
 	if strings.HasPrefix(t.Name, "*") {
 		baseType := t.Name[1:] // Remove the *
@@ -1233,6 +1253,11 @@ func (c *Checker) checkTypeExpr(t *ast.TypeExpr) string {
 	// Check if this is a type parameter
 	if c.isTypeParam(t.Name) {
 		return t.Name
+	}
+
+	// Handle type aliases - resolve to underlying type
+	if underlyingType, isAlias := c.typeAliases[t.Name]; isAlias {
+		return underlyingType
 	}
 
 	// Check if it's a known type
@@ -1389,6 +1414,16 @@ func (c *Checker) typesEqual(a, b string) bool {
 			return true
 		}
 		return c.typesEqual(aElement, bElement)
+	}
+
+	// Handle optional types - int? is compatible with int
+	if strings.HasSuffix(a, "?") && !strings.HasSuffix(b, "?") {
+		baseType := a[:len(a)-1] // Remove the ?
+		return c.typesEqual(baseType, b)
+	}
+	if !strings.HasSuffix(a, "?") && strings.HasSuffix(b, "?") {
+		baseType := b[:len(b)-1] // Remove the ?
+		return c.typesEqual(a, baseType)
 	}
 
 	// Handle union types

@@ -1,0 +1,22 @@
+// Test type alias declarations
+import std.io as io
+
+// Simple type alias
+type UserID = int
+type Name = string
+
+// Generic type alias
+type Container<T> = array<T>
+type Pair<T, U> = struct { first: T, second: U }
+
+func main(): int {
+    let id: UserID = 42
+    let name: Name = "Alice"
+    let numbers: Container<int> = [1, 2, 3, 4, 5]
+    
+    io.println("User ID: " + id)
+    io.println("Name: " + name)
+    io.println("Numbers length: " + numbers.len())
+    
+    return 0
+}

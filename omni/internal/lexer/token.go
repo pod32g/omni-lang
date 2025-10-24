@@ -44,6 +44,8 @@ const (
 	TokenCatch
 	TokenFinally
 	TokenThrow
+	TokenType
+	TokenOptional
 
 	// Delimiters
 	TokenLParen
@@ -121,6 +123,8 @@ var kindNames = map[Kind]string{
 	TokenCatch:               "CATCH",
 	TokenFinally:             "FINALLY",
 	TokenThrow:               "THROW",
+	TokenType:                "TYPE",
+	TokenOptional:            "OPTIONAL",
 	TokenLParen:              "LPAREN",
 	TokenRParen:              "RPAREN",
 	TokenLBrace:              "LBRACE",

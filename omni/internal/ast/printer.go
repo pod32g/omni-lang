@@ -3,6 +3,7 @@ package ast
 import (
 	"bytes"
 	"sort"
+	"strings"
 )
 
 // Print returns a deterministic, human readable string representation of the AST.
@@ -128,6 +129,16 @@ func (p *printer) writeDecl(decl Decl) {
 				p.writeLine("Body")
 				p.indent(func() { p.writeBlock(d.Body) })
 			}
+		})
+		p.writeLine("}")
+	case *TypeAliasDecl:
+		p.writeLine("TypeAliasDecl {")
+		p.indent(func() {
+			p.writeLine("Name " + d.Name)
+			if len(d.TypeParams) > 0 {
+				p.writeLine("TypeParams: " + strings.Join(d.TypeParams, ", "))
+			}
+			p.writeLine("Type " + p.formatType(&d.Type))
 		})
 		p.writeLine("}")
 	default:

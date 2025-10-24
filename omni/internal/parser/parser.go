@@ -160,6 +160,8 @@ func (p *Parser) parseDecl() (ast.Decl, error) {
 		return p.parseStructDecl()
 	case lexer.TokenEnum:
 		return p.parseEnumDecl()
+	case lexer.TokenType:
+		return p.parseTypeAliasDecl()
 	case lexer.TokenFunc:
 		return p.parseFuncDecl()
 	default:
@@ -1593,6 +1595,54 @@ func (p *Parser) parseThrowStmt() (ast.Stmt, error) {
 	return &ast.ThrowStmt{
 		SpanInfo: lexer.Span{Start: startPos, End: expr.Span().End},
 		Expr:     expr,
+	}, nil
+}
+
+// parseTypeAliasDecl parses a type alias declaration: type UserID = int
+func (p *Parser) parseTypeAliasDecl() (ast.Decl, error) {
+	startPos := p.expect(lexer.TokenType).Span.Start
+
+	// Parse the type name
+	nameTok := p.expect(lexer.TokenIdentifier)
+	name := nameTok.Lexeme
+
+	// Parse optional generic type parameters: type Container<T, U> = array<T>
+	var typeParams []string
+	if p.match(lexer.TokenLess) {
+		for {
+			if p.peekKind() == lexer.TokenIdentifier {
+				paramTok := p.advance()
+				typeParams = append(typeParams, paramTok.Lexeme)
+
+				if p.match(lexer.TokenComma) {
+					continue
+				}
+			}
+
+			if p.match(lexer.TokenGreater) {
+				break
+			}
+
+			return nil, p.errorAtCurrent("expected type parameter or closing bracket")
+		}
+	}
+
+	// Parse the equals sign
+	p.expect(lexer.TokenAssign)
+
+	// Parse the type expression (which could be a union type)
+	typeExpr, err := p.parseTypeExpr()
+	if err != nil {
+		return nil, err
+	}
+
+	endPos := typeExpr.Span().End
+
+	return &ast.TypeAliasDecl{
+		SpanInfo:   lexer.Span{Start: startPos, End: endPos},
+		Name:       name,
+		TypeParams: typeParams,
+		Type:       *typeExpr,
 	}, nil
 }
 

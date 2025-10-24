@@ -1,0 +1,16 @@
+// Test optional types
+import std.io as io
+
+// Optional type aliases
+type OptionalInt = int?
+type OptionalString = string?
+
+func main(): int {
+    let maybeInt: OptionalInt = 42
+    let maybeString: OptionalString = "Hello"
+    
+    io.println("Optional int: " + maybeInt)
+    io.println("Optional string: " + maybeString)
+    
+    return 0
+}

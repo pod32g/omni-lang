@@ -1,0 +1,16 @@
+// Simple type alias test
+import std.io as io
+
+// Simple type alias
+type UserID = int
+type Name = string
+
+func main(): int {
+    let id: UserID = 42
+    let name: Name = "Alice"
+    
+    io.println("User ID: " + id)
+    io.println("Name: " + name)
+    
+    return 0
+}

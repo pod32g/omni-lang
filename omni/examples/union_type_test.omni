@@ -1,0 +1,20 @@
+// Test union types
+import std.io as io
+
+// Union type alias
+type StringOrInt = string | int
+type Number = int | float
+
+func main(): int {
+    let value1: StringOrInt = "Hello"
+    let value2: StringOrInt = 42
+    let num1: Number = 100
+    let num2: Number = 3.14
+    
+    io.println("String value: " + value1)
+    io.println("Int value: " + value2)
+    io.println("Int number: " + num1)
+    io.println("Float number: " + num2)
+    
+    return 0
+}

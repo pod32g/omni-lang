@@ -273,6 +273,49 @@ func (s *ThrowStmt) Span() lexer.Span { return s.SpanInfo }
 func (s *ThrowStmt) node()            {}
 func (s *ThrowStmt) stmt()            {}
 
+// TypeAliasDecl represents a type alias declaration: type UserID = int
+type TypeAliasDecl struct {
+	SpanInfo   lexer.Span
+	Name       string
+	TypeParams []string // For generic type aliases
+	Type       TypeExpr
+}
+
+func (d *TypeAliasDecl) Span() lexer.Span { return d.SpanInfo }
+func (d *TypeAliasDecl) node()            {}
+func (d *TypeAliasDecl) decl()            {}
+
+// GenericTypeExpr represents a generic type: T or Container<T>
+type GenericTypeExpr struct {
+	SpanInfo lexer.Span
+	Name     string
+	TypeArgs []TypeExpr
+}
+
+func (e *GenericTypeExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *GenericTypeExpr) node()            {}
+func (e *GenericTypeExpr) typeExpr()        {}
+
+// UnionTypeExpr represents a union type: int | string | bool
+type UnionTypeExpr struct {
+	SpanInfo lexer.Span
+	Types    []TypeExpr
+}
+
+func (e *UnionTypeExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *UnionTypeExpr) node()            {}
+func (e *UnionTypeExpr) typeExpr()        {}
+
+// OptionalTypeExpr represents an optional type: T?
+type OptionalTypeExpr struct {
+	SpanInfo  lexer.Span
+	InnerType TypeExpr
+}
+
+func (e *OptionalTypeExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *OptionalTypeExpr) node()            {}
+func (e *OptionalTypeExpr) typeExpr()        {}
+
 // Expr categories -----------------------------------------------------------
 
 // Expr represents an expression node.
