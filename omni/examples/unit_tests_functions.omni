@@ -1,0 +1,371 @@
+// Unit Tests for Function Definitions and Calls
+// This demonstrates comprehensive unit testing for function functionality
+
+import std
+
+// Test basic function definitions and calls
+func test_basic_functions(): int {
+    std.test.start("Basic Function Definitions and Calls")
+    
+    // Test simple function call
+    let result: int = add(5, 3)
+    std.assert.eq(result, 8, "add(5, 3) should equal 8")
+    
+    // Test function with different parameters
+    let result2: int = multiply(4, 6)
+    std.assert.eq(result2, 24, "multiply(4, 6) should equal 24")
+    
+    // Test function with string parameters
+    let greeting: string = create_greeting("Alice")
+    std.assert.eq(greeting, "Hello, Alice!", "create_greeting should work correctly")
+    
+    // Test function with boolean return
+    let is_even: bool = check_even(8)
+    std.assert.true(is_even, "8 should be even")
+    
+    let is_odd: bool = check_even(7)
+    std.assert.false(is_odd, "7 should not be even")
+    
+    std.test.end("Basic Function Definitions and Calls", true)
+    return 0
+}
+
+// Test function with different parameter types
+func test_function_parameters(): int {
+    std.test.start("Function Parameters")
+    
+    // Test function with multiple parameters
+    let result: int = calculate(10, 5, 2)
+    std.assert.eq(result, 17, "calculate(10, 5, 2) should equal 17")
+    
+    // Test function with string parameters
+    let combined: string = combine_strings("Hello", "World")
+    std.assert.eq(combined, "Hello World", "combine_strings should work correctly")
+    
+    // Test function with array parameters
+    let numbers: array<int> = [1, 2, 3, 4, 5]
+    let sum: int = sum_array(numbers)
+    std.assert.eq(sum, 15, "sum_array should return 15")
+    
+    // Test function with boolean parameters
+    let result_bool: bool = logical_and(true, false)
+    std.assert.false(result_bool, "logical_and(true, false) should be false")
+    
+    std.test.end("Function Parameters", true)
+    return 0
+}
+
+// Test function return values
+func test_function_returns(): int {
+    std.test.start("Function Return Values")
+    
+    // Test function returning int
+    let square_result: int = square(5)
+    std.assert.eq(square_result, 25, "square(5) should equal 25")
+    
+    // Test function returning string
+    let formatted: string = format_number(42)
+    std.assert.eq(formatted, "Number: 42", "format_number should work correctly")
+    
+    // Test function returning bool
+    let is_positive: bool = is_positive(-5)
+    std.assert.false(is_positive, "is_positive(-5) should be false")
+    
+    // Test function returning array
+    let doubled: array<int> = double_array([1, 2, 3])
+    std.assert.eq(doubled[0], 2, "First element should be doubled")
+    std.assert.eq(doubled[1], 4, "Second element should be doubled")
+    std.assert.eq(doubled[2], 6, "Third element should be doubled")
+    
+    std.test.end("Function Return Values", true)
+    return 0
+}
+
+// Test recursive functions
+func test_recursive_functions(): int {
+    std.test.start("Recursive Functions")
+    
+    // Test factorial function
+    let fact_result: int = factorial(5)
+    std.assert.eq(fact_result, 120, "factorial(5) should equal 120")
+    
+    // Test fibonacci function
+    let fib_result: int = fibonacci(8)
+    std.assert.eq(fib_result, 21, "fibonacci(8) should equal 21")
+    
+    // Test recursive sum function
+    let sum_result: int = recursive_sum(5)
+    std.assert.eq(sum_result, 15, "recursive_sum(5) should equal 15")
+    
+    std.test.end("Recursive Functions", true)
+    return 0
+}
+
+// Test function overloading (if supported)
+func test_function_overloading(): int {
+    std.test.start("Function Overloading")
+    
+    // Test function with different parameter counts
+    let result1: int = add_two(5, 3)
+    std.assert.eq(result1, 8, "add_two(5, 3) should equal 8")
+    
+    let result2: int = add_three(1, 2, 3)
+    std.assert.eq(result2, 6, "add_three(1, 2, 3) should equal 6")
+    
+    // Test function with different parameter types
+    let int_result: int = process_number(42)
+    std.assert.eq(int_result, 42, "process_number(42) should equal 42")
+    
+    let str_result: string = process_number("42")
+    std.assert.eq(str_result, "42", "process_number('42') should equal '42'")
+    
+    std.test.end("Function Overloading", true)
+    return 0
+}
+
+// Test function scope and variables
+func test_function_scope(): int {
+    std.test.start("Function Scope and Variables")
+    
+    // Test local variables in functions
+    let result: int = test_local_scope(10)
+    std.assert.eq(result, 20, "test_local_scope should return 20")
+    
+    // Test function with multiple local variables
+    let complex_result: int = complex_calculation(5, 3)
+    std.assert.eq(complex_result, 34, "complex_calculation(5, 3) should equal 34")
+    
+    // Test function with conditional logic
+    let conditional_result: int = conditional_function(8)
+    std.assert.eq(conditional_result, 16, "conditional_function(8) should equal 16")
+    
+    let conditional_result2: int = conditional_function(3)
+    std.assert.eq(conditional_result2, 6, "conditional_function(3) should equal 6")
+    
+    std.test.end("Function Scope and Variables", true)
+    return 0
+}
+
+// Test function with arrays
+func test_function_with_arrays(): int {
+    std.test.start("Functions with Arrays")
+    
+    // Test function that processes arrays
+    let numbers: array<int> = [1, 2, 3, 4, 5]
+    let processed: array<int> = process_array(numbers)
+    std.assert.eq(std.array.length(processed), 5, "Processed array should have length 5")
+    std.assert.eq(processed[0], 2, "First element should be doubled")
+    std.assert.eq(processed[4], 10, "Last element should be doubled")
+    
+    // Test function that finds maximum in array
+    let max_val: int = find_maximum(numbers)
+    std.assert.eq(max_val, 5, "Maximum value should be 5")
+    
+    // Test function that reverses array
+    let reversed: array<int> = reverse_array(numbers)
+    std.assert.eq(reversed[0], 5, "First element of reversed array should be 5")
+    std.assert.eq(reversed[4], 1, "Last element of reversed array should be 1")
+    
+    std.test.end("Functions with Arrays", true)
+    return 0
+}
+
+// Test function error handling
+func test_function_error_handling(): int {
+    std.test.start("Function Error Handling")
+    
+    // Test function with edge cases
+    let result1: int = safe_divide(10, 2)
+    std.assert.eq(result1, 5, "safe_divide(10, 2) should equal 5")
+    
+    let result2: int = safe_divide(10, 0)
+    std.assert.eq(result2, 0, "safe_divide(10, 0) should return 0")
+    
+    // Test function with boundary conditions
+    let result3: int = boundary_function(0)
+    std.assert.eq(result3, 0, "boundary_function(0) should equal 0")
+    
+    let result4: int = boundary_function(100)
+    std.assert.eq(result4, 100, "boundary_function(100) should equal 100")
+    
+    std.test.end("Function Error Handling", true)
+    return 0
+}
+
+// Helper functions for testing
+func add(a: int, b: int): int {
+    return a + b
+}
+
+func multiply(a: int, b: int): int {
+    return a * b
+}
+
+func create_greeting(name: string): string {
+    return "Hello, " + name + "!"
+}
+
+func check_even(num: int): bool {
+    return num % 2 == 0
+}
+
+func calculate(a: int, b: int, c: int): int {
+    return a + b + c
+}
+
+func combine_strings(a: string, b: string): string {
+    return a + " " + b
+}
+
+func sum_array(arr: array<int>): int {
+    let sum: int = 0
+    for i: int = 0; i < std.array.length(arr); i = i + 1 {
+        sum = sum + arr[i]
+    }
+    return sum
+}
+
+func logical_and(a: bool, b: bool): bool {
+    return a && b
+}
+
+func square(num: int): int {
+    return num * num
+}
+
+func format_number(num: int): string {
+    return "Number: " + std.int_to_string(num)
+}
+
+func is_positive(num: int): bool {
+    return num > 0
+}
+
+func double_array(arr: array<int>): array<int> {
+    let result: array<int> = []
+    for i: int = 0; i < std.array.length(arr); i = i + 1 {
+        result = std.array.append(result, arr[i] * 2)
+    }
+    return result
+}
+
+func factorial(n: int): int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+func fibonacci(n: int): int {
+    if n <= 1 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+func recursive_sum(n: int): int {
+    if n <= 0 {
+        return 0
+    }
+    return n + recursive_sum(n - 1)
+}
+
+func add_two(a: int, b: int): int {
+    return a + b
+}
+
+func add_three(a: int, b: int, c: int): int {
+    return a + b + c
+}
+
+func process_number(num: int): int {
+    return num
+}
+
+func process_number(num: string): string {
+    return num
+}
+
+func test_local_scope(x: int): int {
+    let local_var: int = x * 2
+    return local_var
+}
+
+func complex_calculation(a: int, b: int): int {
+    let temp1: int = a * a
+    let temp2: int = b * b
+    let temp3: int = a * b
+    return temp1 + temp2 + temp3
+}
+
+func conditional_function(x: int): int {
+    if x > 5 {
+        return x * 2
+    } else {
+        return x * 2
+    }
+}
+
+func process_array(arr: array<int>): array<int> {
+    let result: array<int> = []
+    for i: int = 0; i < std.array.length(arr); i = i + 1 {
+        result = std.array.append(result, arr[i] * 2)
+    }
+    return result
+}
+
+func find_maximum(arr: array<int>): int {
+    let max_val: int = arr[0]
+    for i: int = 1; i < std.array.length(arr); i = i + 1 {
+        if arr[i] > max_val {
+            max_val = arr[i]
+        }
+    }
+    return max_val
+}
+
+func reverse_array(arr: array<int>): array<int> {
+    let result: array<int> = []
+    for i: int = std.array.length(arr) - 1; i >= 0; i = i - 1 {
+        result = std.array.append(result, arr[i])
+    }
+    return result
+}
+
+func safe_divide(a: int, b: int): int {
+    if b == 0 {
+        return 0
+    }
+    return a / b
+}
+
+func boundary_function(x: int): int {
+    if x < 0 {
+        return 0
+    }
+    if x > 100 {
+        return 100
+    }
+    return x
+}
+
+// Main function to run all function tests
+func main(): int {
+    std.io.println("=== Running Function Unit Tests ===")
+    
+    // Run all test suites
+    test_basic_functions()
+    test_function_parameters()
+    test_function_returns()
+    test_recursive_functions()
+    test_function_overloading()
+    test_function_scope()
+    test_function_with_arrays()
+    test_function_error_handling()
+    
+    // Print test summary
+    std.test.summary()
+    
+    std.io.println("=== Function Unit Tests Complete ===")
+    return 0
+}

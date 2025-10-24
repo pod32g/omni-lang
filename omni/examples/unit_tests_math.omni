@@ -1,0 +1,161 @@
+// Unit Tests for Mathematical Functions
+// This demonstrates comprehensive unit testing using OmniLang's built-in test framework
+
+import std
+
+// Test basic arithmetic operations
+func test_basic_arithmetic():int {
+    std.test.start("Basic Arithmetic Operations")
+    
+    let a: int = 10
+    let b: int = 5
+    
+    // Test addition
+    let sum: int = a + b
+    std.assert.eq(sum, 15, "Addition: 10 + 5 should equal 15")
+    
+    // Test subtraction
+    let diff: int = a - b
+    std.assert.eq(diff, 5, "Subtraction: 10 - 5 should equal 5")
+    
+    // Test multiplication
+    let product: int = a * b
+    std.assert.eq(product, 50, "Multiplication: 10 * 5 should equal 50")
+    
+    // Test division
+    let quotient: int = a / b
+    std.assert.eq(quotient, 2, "Division: 10 / 5 should equal 2")
+    
+    // Test modulo
+    let remainder: int = a % b
+    std.assert.eq(remainder, 0, "Modulo: 10 % 5 should equal 0")
+    
+    std.test.end("Basic Arithmetic Operations", true)
+    return 0
+}
+
+// Test mathematical functions from std library
+func test_std_math_functions():int {
+    std.test.start("Standard Library Math Functions")
+    
+    // Test max function
+    let max_val: int = std.math.max(42, 17)
+    std.assert.eq(max_val, 42, "max(42, 17) should equal 42")
+    
+    // Test min function
+    let min_val: int = std.math.min(42, 17)
+    std.assert.eq(min_val, 17, "min(42, 17) should equal 17")
+    
+    // Test power function
+    let pow_val: int = std.math.pow(2, 3)
+    std.assert.eq(pow_val, 8, "pow(2, 3) should equal 8")
+    
+    // Test GCD function
+    let gcd_val: int = std.math.gcd(24, 36)
+    std.assert.eq(gcd_val, 12, "gcd(24, 36) should equal 12")
+    
+    // Test LCM function
+    let lcm_val: int = std.math.lcm(24, 36)
+    std.assert.eq(lcm_val, 72, "lcm(24, 36) should equal 72")
+    
+    // Test factorial function
+    let fact_val: int = std.math.factorial(5)
+    std.assert.eq(fact_val, 120, "factorial(5) should equal 120")
+    
+    std.test.end("Standard Library Math Functions", true)
+    return 0
+}
+
+// Test edge cases and boundary conditions
+func test_math_edge_cases():int {
+    std.test.start("Mathematical Edge Cases")
+    
+    // Test with zero
+    std.assert.eq(0 + 5, 5, "0 + 5 should equal 5")
+    std.assert.eq(5 * 0, 0, "5 * 0 should equal 0")
+    
+    // Test with negative numbers
+    std.assert.eq(-5 + 3, -2, "-5 + 3 should equal -2")
+    std.assert.eq(-5 * 3, -15, "-5 * 3 should equal -15")
+    
+    // Test absolute value
+    let abs_val: int = std.math.abs(-42)
+    std.assert.eq(abs_val, 42, "abs(-42) should equal 42")
+    
+    // Test prime number detection
+    let is_prime_7: bool = std.math.is_prime(7)
+    std.assert.true(is_prime_7, "7 should be prime")
+    let is_prime_8: bool = std.math.is_prime(8)
+    std.assert.false(is_prime_8, "8 should not be prime")
+    
+    std.test.end("Mathematical Edge Cases", true)
+    return 0
+}
+
+// Test complex mathematical expressions
+func test_complex_expressions():int {
+    std.test.start("Complex Mathematical Expressions")
+    
+    // Test order of operations
+    let result1: int = 2 + 3 * 4
+    std.assert.eq(result1, 14, "2 + 3 * 4 should equal 14 (order of operations)")
+    
+    // Test parentheses
+    let temp: int = 2 + 3
+    let result2: int = temp * 4
+    std.assert.eq(result2, 20, "(2 + 3) * 4 should equal 20")
+    
+    // Test nested function calls
+    let result3: int = std.math.max(std.math.min(10, 5), 3)
+    std.assert.eq(result3, 5, "max(min(10, 5), 3) should equal 5")
+    
+    // Test compound expressions
+    let a: int = 10
+    let b: int = 5
+    let result4: int = (a + b) * (a - b)
+    std.assert.eq(result4, 75, "(10 + 5) * (10 - 5) should equal 75")
+    
+    std.test.end("Complex Mathematical Expressions", true)
+    return 0
+}
+
+// Test mathematical functions with different data types
+func test_mixed_type_math():int {
+    std.test.start("Mixed Type Mathematical Operations")
+    
+    // Test integer to string conversion
+    let num: int = 42
+    let num_str: string = std.int_to_string(num)
+    std.assert.eq(num_str, "42", "int_to_string(42) should equal '42'")
+    
+    // Test string to integer conversion
+    let str_num: string = "123"
+    let str_to_int: int = std.string_to_int(str_num)
+    std.assert.eq(str_to_int, 123, "string_to_int('123') should equal 123")
+    
+    // Test boolean to string conversion
+    let bool_val: bool = true
+    let bool_str: string = std.bool_to_string(bool_val)
+    std.assert.eq(bool_str, "true", "bool_to_string(true) should equal 'true'")
+    
+    std.test.end("Mixed Type Mathematical Operations", true)
+    return 0
+}
+
+// Main function to run all math tests
+func main():int {
+    std.io.println("=== Running Mathematical Unit Tests ===")
+    
+    // Run all test suites
+    test_basic_arithmetic()
+    test_std_math_functions()
+    test_math_edge_cases()
+    test_complex_expressions()
+    test_mixed_type_math()
+    
+    // Print test summary
+    std.test.summary()
+    
+    std.io.println("=== Mathematical Unit Tests Complete ===")
+    return 0
+}

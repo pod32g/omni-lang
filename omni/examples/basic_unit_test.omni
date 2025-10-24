@@ -1,0 +1,85 @@
+// Basic unit test without arrays
+// This demonstrates simple unit testing using manual assertions
+
+import std
+
+func test_basic_math():int {
+    std.io.println("Testing basic math operations...")
+    
+    let a:int = 5
+    let b:int = 3
+    let sum:int = a + b
+    
+    // Manual assertion
+    if sum != 8 {
+        std.io.println("FAIL: 5 + 3 should equal 8, got " + std.int_to_string(sum))
+        return 1
+    }
+    std.io.println("PASS: Basic addition test")
+    
+    let product:int = a * b
+    if product != 15 {
+        std.io.println("FAIL: 5 * 3 should equal 15, got " + std.int_to_string(product))
+        return 1
+    }
+    std.io.println("PASS: Basic multiplication test")
+    
+    return 0
+}
+
+func test_string_operations():int {
+    std.io.println("Testing string operations...")
+    
+    let greeting:string = "Hello"
+    let name:string = "World"
+    let full_greeting:string = greeting + " " + name
+    
+    // Manual assertion
+    if full_greeting != "Hello World" {
+        std.io.println("FAIL: String concatenation should work, got '" + full_greeting + "'")
+        return 1
+    }
+    std.io.println("PASS: String concatenation test")
+    
+    return 0
+}
+
+func test_math_functions():int {
+    std.io.println("Testing math functions...")
+    
+    // Test max function
+    let max_val:int = std.math.max(42, 17)
+    if max_val != 42 {
+        std.io.println("FAIL: max(42, 17) should equal 42, got " + std.int_to_string(max_val))
+        return 1
+    }
+    std.io.println("PASS: max function test")
+    
+    // Test min function
+    let min_val:int = std.math.min(42, 17)
+    if min_val != 17 {
+        std.io.println("FAIL: min(42, 17) should equal 17, got " + std.int_to_string(min_val))
+        return 1
+    }
+    std.io.println("PASS: min function test")
+    
+    return 0
+}
+
+func main():int {
+    std.io.println("=== Running Basic Unit Tests ===")
+    
+    var failed_tests:int = 0
+    
+    failed_tests = failed_tests + test_basic_math()
+    failed_tests = failed_tests + test_string_operations()
+    failed_tests = failed_tests + test_math_functions()
+    
+    if failed_tests == 0 {
+        std.io.println("=== All tests passed! ===")
+    } else {
+        std.io.println("=== " + std.int_to_string(failed_tests) + " test(s) failed ===")
+    }
+    
+    return failed_tests
+}

@@ -1,0 +1,345 @@
+// Unit Tests for Type System Features
+// This demonstrates comprehensive unit testing for type system functionality
+
+import std
+
+// Test basic type declarations
+func test_basic_types(): int {
+    std.test.start("Basic Type Declarations")
+    
+    // Test integer type
+    let int_var: int = 42
+    std.assert.eq(int_var, 42, "Integer variable should store 42")
+    
+    // Test string type
+    let str_var: string = "Hello"
+    std.assert.eq(str_var, "Hello", "String variable should store 'Hello'")
+    
+    // Test boolean type
+    let bool_var: bool = true
+    std.assert.true(bool_var, "Boolean variable should be true")
+    
+    // Test float type
+    let float_var: float = 3.14
+    std.assert.true(float_var > 3.0, "Float variable should be greater than 3.0")
+    
+    // Test char type
+    let char_var: char = 'A'
+    std.assert.eq(char_var, 'A', "Char variable should store 'A'")
+    
+    std.test.end("Basic Type Declarations", true)
+    return 0
+}
+
+// Test type conversions
+func test_type_conversions(): int {
+    std.test.start("Type Conversions")
+    
+    // Test int to string conversion
+    let num: int = 123
+    let num_str: string = std.int_to_string(num)
+    std.assert.eq(num_str, "123", "int_to_string(123) should equal '123'")
+    
+    // Test string to int conversion
+    let str_num: string = "456"
+    let str_to_int: int = std.string_to_int(str_num)
+    std.assert.eq(str_to_int, 456, "string_to_int('456') should equal 456")
+    
+    // Test bool to string conversion
+    let bool_val: bool = true
+    let bool_str: string = std.bool_to_string(bool_val)
+    std.assert.eq(bool_str, "true", "bool_to_string(true) should equal 'true'")
+    
+    // Test string to bool conversion
+    let str_bool: string = "false"
+    let str_to_bool: bool = std.string_to_bool(str_bool)
+    std.assert.false(str_to_bool, "string_to_bool('false') should be false")
+    
+    // Test float to string conversion
+    let float_val: float = 3.14159
+    let float_str: string = std.float_to_string(float_val)
+    std.assert.true(std.string.contains(float_str, "3.14"), "float_to_string should contain '3.14'")
+    
+    std.test.end("Type Conversions", true)
+    return 0
+}
+
+// Test array types
+func test_array_types(): int {
+    std.test.start("Array Types")
+    
+    // Test integer array
+    let int_arr: array<int> = [1, 2, 3, 4, 5]
+    std.assert.eq(std.array.length(int_arr), 5, "Integer array should have length 5")
+    std.assert.eq(int_arr[0], 1, "First element should be 1")
+    
+    // Test string array
+    let str_arr: array<string> = ["hello", "world", "test"]
+    std.assert.eq(std.array.length(str_arr), 3, "String array should have length 3")
+    std.assert.eq(str_arr[0], "hello", "First string should be 'hello'")
+    
+    // Test boolean array
+    let bool_arr: array<bool> = [true, false, true]
+    std.assert.eq(std.array.length(bool_arr), 3, "Boolean array should have length 3")
+    std.assert.true(bool_arr[0], "First boolean should be true")
+    std.assert.false(bool_arr[1], "Second boolean should be false")
+    
+    // Test float array
+    let float_arr: array<float> = [1.1, 2.2, 3.3]
+    std.assert.eq(std.array.length(float_arr), 3, "Float array should have length 3")
+    std.assert.true(float_arr[0] > 1.0, "First float should be greater than 1.0")
+    
+    std.test.end("Array Types", true)
+    return 0
+}
+
+// Test type aliases
+func test_type_aliases(): int {
+    std.test.start("Type Aliases")
+    
+    // Test type alias for int
+    let age: int = 25
+    std.assert.eq(age, 25, "Age should be 25")
+    
+    // Test type alias for string
+    let name: string = "Alice"
+    std.assert.eq(name, "Alice", "Name should be 'Alice'")
+    
+    // Test type alias for array
+    let scores: array<int> = [85, 90, 78]
+    std.assert.eq(std.array.length(scores), 3, "Scores array should have length 3")
+    
+    std.test.end("Type Aliases", true)
+    return 0
+}
+
+// Test generic types (if supported)
+func test_generic_types(): int {
+    std.test.start("Generic Types")
+    
+    // Test generic function with int
+    let int_result: int = generic_add(5, 3)
+    std.assert.eq(int_result, 8, "generic_add(5, 3) should equal 8")
+    
+    // Test generic function with string
+    let str_result: string = generic_add("Hello", "World")
+    std.assert.eq(str_result, "HelloWorld", "generic_add('Hello', 'World') should equal 'HelloWorld'")
+    
+    // Test generic array function
+    let numbers: array<int> = [1, 2, 3, 4, 5]
+    let sum: int = generic_sum(numbers)
+    std.assert.eq(sum, 15, "generic_sum should return 15")
+    
+    std.test.end("Generic Types", true)
+    return 0
+}
+
+// Test optional types (if supported)
+func test_optional_types(): int {
+    std.test.start("Optional Types")
+    
+    // Test optional int
+    let maybe_num: optional<int> = some(42)
+    std.assert.true(is_some(maybe_num), "maybe_num should be some")
+    
+    let num_value: int = get_value(maybe_num)
+    std.assert.eq(num_value, 42, "num_value should be 42")
+    
+    // Test optional string
+    let maybe_str: optional<string> = some("Hello")
+    std.assert.true(is_some(maybe_str), "maybe_str should be some")
+    
+    let str_value: string = get_value(maybe_str)
+    std.assert.eq(str_value, "Hello", "str_value should be 'Hello'")
+    
+    // Test none value
+    let none_val: optional<int> = none()
+    std.assert.false(is_some(none_val), "none_val should be none")
+    
+    std.test.end("Optional Types", true)
+    return 0
+}
+
+// Test union types (if supported)
+func test_union_types(): int {
+    std.test.start("Union Types")
+    
+    // Test union of int and string
+    let int_union: int_or_string = int_value(42)
+    std.assert.true(is_int(int_union), "int_union should be int")
+    
+    let int_val: int = get_int_value(int_union)
+    std.assert.eq(int_val, 42, "int_val should be 42")
+    
+    let str_union: int_or_string = string_value("Hello")
+    std.assert.true(is_string(str_union), "str_union should be string")
+    
+    let str_val: string = get_string_value(str_union)
+    std.assert.eq(str_val, "Hello", "str_val should be 'Hello'")
+    
+    std.test.end("Union Types", true)
+    return 0
+}
+
+// Test type checking and validation
+func test_type_checking(): int {
+    std.test.start("Type Checking and Validation")
+    
+    // Test type validation functions
+    std.assert.true(is_integer(42), "42 should be integer")
+    std.assert.false(is_integer("42"), "'42' should not be integer")
+    
+    std.assert.true(is_string("hello"), "'hello' should be string")
+    std.assert.false(is_string(42), "42 should not be string")
+    
+    std.assert.true(is_boolean(true), "true should be boolean")
+    std.assert.false(is_boolean(42), "42 should not be boolean")
+    
+    // Test type size functions
+    let int_size: int = sizeof(int)
+    std.assert.true(int_size > 0, "int size should be greater than 0")
+    
+    let str_size: int = sizeof(string)
+    std.assert.true(str_size > 0, "string size should be greater than 0")
+    
+    std.test.end("Type Checking and Validation", true)
+    return 0
+}
+
+// Test type constraints and bounds
+func test_type_constraints(): int {
+    std.test.start("Type Constraints and Bounds")
+    
+    // Test bounded integer types
+    let small_int: int = 100
+    std.assert.true(small_int >= 0, "small_int should be non-negative")
+    std.assert.true(small_int <= 1000, "small_int should be <= 1000")
+    
+    // Test string length constraints
+    let short_str: string = "Hello"
+    std.assert.true(std.string.length(short_str) <= 10, "short_str should be <= 10 characters")
+    
+    // Test array size constraints
+    let small_array: array<int> = [1, 2, 3]
+    std.assert.true(std.array.length(small_array) <= 10, "small_array should be <= 10 elements")
+    
+    std.test.end("Type Constraints and Bounds", true)
+    return 0
+}
+
+// Test type inference
+func test_type_inference(): int {
+    std.test.start("Type Inference")
+    
+    // Test automatic type inference
+    let inferred_int = 42
+    std.assert.eq(inferred_int, 42, "Inferred int should be 42")
+    
+    let inferred_str = "Hello"
+    std.assert.eq(inferred_str, "Hello", "Inferred string should be 'Hello'")
+    
+    let inferred_bool = true
+    std.assert.true(inferred_bool, "Inferred boolean should be true")
+    
+    // Test inference in expressions
+    let result = 5 + 3
+    std.assert.eq(result, 8, "Inferred expression result should be 8")
+    
+    let combined = "Hello" + "World"
+    std.assert.eq(combined, "HelloWorld", "Inferred string concatenation should work")
+    
+    std.test.end("Type Inference", true)
+    return 0
+}
+
+// Helper functions for testing
+func generic_add<T>(a: T, b: T): T {
+    return a + b
+}
+
+func generic_sum<T>(arr: array<T>): T {
+    let sum: T = 0
+    for i: int = 0; i < std.array.length(arr); i = i + 1 {
+        sum = sum + arr[i]
+    }
+    return sum
+}
+
+func some<T>(value: T): optional<T> {
+    return value
+}
+
+func none<T>(): optional<T> {
+    return null
+}
+
+func is_some<T>(opt: optional<T>): bool {
+    return opt != null
+}
+
+func get_value<T>(opt: optional<T>): T {
+    return opt
+}
+
+func int_value(value: int): int_or_string {
+    return value
+}
+
+func string_value(value: string): int_or_string {
+    return value
+}
+
+func is_int(union: int_or_string): bool {
+    return typeof(union) == int
+}
+
+func is_string(union: int_or_string): bool {
+    return typeof(union) == string
+}
+
+func get_int_value(union: int_or_string): int {
+    return union
+}
+
+func get_string_value(union: int_or_string): string {
+    return union
+}
+
+func is_integer(value: any): bool {
+    return typeof(value) == int
+}
+
+func is_string(value: any): bool {
+    return typeof(value) == string
+}
+
+func is_boolean(value: any): bool {
+    return typeof(value) == bool
+}
+
+func sizeof<T>(type: T): int {
+    return 4  // Placeholder implementation
+}
+
+// Main function to run all type tests
+func main(): int {
+    std.io.println("=== Running Type System Unit Tests ===")
+    
+    // Run all test suites
+    test_basic_types()
+    test_type_conversions()
+    test_array_types()
+    test_type_aliases()
+    test_generic_types()
+    test_optional_types()
+    test_union_types()
+    test_type_checking()
+    test_type_constraints()
+    test_type_inference()
+    
+    // Print test summary
+    std.test.summary()
+    
+    std.io.println("=== Type System Unit Tests Complete ===")
+    return 0
+}

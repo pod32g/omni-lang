@@ -1,0 +1,208 @@
+// Unit Tests for String Operations
+// This demonstrates comprehensive unit testing for string functionality
+
+import std
+
+// Test basic string operations
+func test_basic_string_operations(): int {
+    std.test.start("Basic String Operations")
+    
+    // Test string literals
+    let greeting: string = "Hello"
+    let name: string = "World"
+    
+    // Test string concatenation
+    let full_greeting: string = greeting + " " + name
+    std.assert.eq(full_greeting, "Hello World", "String concatenation should work")
+    
+    // Test string length
+    let length: int = std.string.length(full_greeting)
+    std.assert.eq(length, 11, "String 'Hello World' should have length 11")
+    
+    // Test string equality
+    std.assert.true(greeting == "Hello", "String equality should work")
+    std.assert.false(greeting == name, "Different strings should not be equal")
+    
+    std.test.end("Basic String Operations", true)
+    return 0
+}
+
+// Test string manipulation functions
+func test_string_manipulation(): int {
+    std.test.start("String Manipulation Functions")
+    
+    let text: string = "  Hello World  "
+    
+    // Test trim function
+    let trimmed: string = std.string.trim(text)
+    std.assert.eq(trimmed, "Hello World", "trim should remove leading and trailing whitespace")
+    
+    // Test to_upper function
+    let upper: string = std.string.to_upper("hello")
+    std.assert.eq(upper, "HELLO", "to_upper should convert to uppercase")
+    
+    // Test to_lower function
+    let lower: string = std.string.to_lower("HELLO")
+    std.assert.eq(lower, "hello", "to_lower should convert to lowercase")
+    
+    // Test substring function
+    let substr: string = std.string.substring("Hello World", 0, 5)
+    std.assert.eq(substr, "Hello", "substring(0, 5) should extract 'Hello'")
+    
+    std.test.end("String Manipulation Functions", true)
+    return 0
+}
+
+// Test string search and comparison functions
+func test_string_search(): int {
+    std.test.start("String Search and Comparison")
+    
+    let text: string = "Hello World"
+    
+    // Test starts_with function
+    std.assert.true(std.string.starts_with(text, "Hello"), "Text should start with 'Hello'")
+    std.assert.false(std.string.starts_with(text, "World"), "Text should not start with 'World'")
+    
+    // Test ends_with function
+    std.assert.true(std.string.ends_with(text, "World"), "Text should end with 'World'")
+    std.assert.false(std.string.ends_with(text, "Hello"), "Text should not end with 'Hello'")
+    
+    // Test contains function
+    std.assert.true(std.string.contains(text, "lo Wo"), "Text should contain 'lo Wo'")
+    std.assert.false(std.string.contains(text, "xyz"), "Text should not contain 'xyz'")
+    
+    // Test index_of function
+    let index: int = std.string.index_of(text, "World")
+    std.assert.eq(index, 6, "Index of 'World' should be 6")
+    
+    // Test last_index_of function
+    let last_index: int = std.string.last_index_of(text, "l")
+    std.assert.eq(last_index, 9, "Last index of 'l' should be 9")
+    
+    std.test.end("String Search and Comparison", true)
+    return 0
+}
+
+// Test string interpolation
+func test_string_interpolation(): int {
+    std.test.start("String Interpolation")
+    
+    let name: string = "Alice"
+    let age: int = 30
+    let pi: float = 3.14159
+    
+    // Test basic string interpolation
+    let greeting: string = "Hello, ${name}!"
+    std.assert.eq(greeting, "Hello, Alice!", "String interpolation should work with variables")
+    
+    // Test complex interpolation
+    let info: string = "Name: ${name}, Age: ${age}, Pi: ${pi}"
+    std.assert.eq(info, "Name: Alice, Age: 30, Pi: 3.14159", "Complex interpolation should work")
+    
+    // Test interpolation with expressions
+    let calculation: string = "Result: ${age * 2}"
+    std.assert.eq(calculation, "Result: 60", "Interpolation should work with expressions")
+    
+    std.test.end("String Interpolation", true)
+    return 0
+}
+
+// Test string conversion functions
+func test_string_conversion(): int {
+    std.test.start("String Conversion Functions")
+    
+    // Test int to string conversion
+    let num: int = 42
+    let num_str: string = std.int_to_string(num)
+    std.assert.eq(num_str, "42", "int_to_string(42) should equal '42'")
+    
+    // Test string to int conversion
+    let str_num: string = "123"
+    let str_to_int: int = std.string_to_int(str_num)
+    std.assert.eq(str_to_int, 123, "string_to_int('123') should equal 123")
+    
+    // Test bool to string conversion
+    let bool_val: bool = true
+    let bool_str: string = std.bool_to_string(bool_val)
+    std.assert.eq(bool_str, "true", "bool_to_string(true) should equal 'true'")
+    
+    // Test string to bool conversion
+    let str_bool: string = "true"
+    let str_to_bool: bool = std.string_to_bool(str_bool)
+    std.assert.true(str_to_bool, "string_to_bool('true') should equal true")
+    
+    std.test.end("String Conversion Functions", true)
+    return 0
+}
+
+// Test string edge cases
+func test_string_edge_cases(): int {
+    std.test.start("String Edge Cases")
+    
+    // Test empty string
+    let empty: string = ""
+    std.assert.eq(std.string.length(empty), 0, "Empty string should have length 0")
+    
+    // Test string with special characters
+    let special: string = "Hello\nWorld\t!"
+    std.assert.eq(std.string.length(special), 12, "String with special characters should have correct length")
+    
+    // Test string comparison edge cases
+    std.assert.true("" == "", "Empty strings should be equal")
+    std.assert.false("" == " ", "Empty string should not equal space")
+    
+    // Test substring edge cases
+    let text: string = "Hello"
+    let substr1: string = std.string.substring(text, 0, 0)
+    std.assert.eq(substr1, "", "substring(0, 0) should return empty string")
+    
+    let substr2: string = std.string.substring(text, 0, 5)
+    std.assert.eq(substr2, "Hello", "substring(0, 5) should return full string")
+    
+    std.test.end("String Edge Cases", true)
+    return 0
+}
+
+// Test string performance with longer strings
+func test_string_performance(): int {
+    std.test.start("String Performance Tests")
+    
+    // Test with longer strings
+    let long_text: string = "This is a very long string that contains many characters and should test the performance of string operations"
+    let length: int = std.string.length(long_text)
+    std.assert.true(length > 50, "Long string should have length > 50")
+    
+    // Test concatenation of multiple strings
+    let part1: string = "Hello"
+    let part2: string = " "
+    let part3: string = "World"
+    let combined: string = part1 + part2 + part3
+    std.assert.eq(combined, "Hello World", "Multiple string concatenation should work")
+    
+    // Test string operations on long strings
+    std.assert.true(std.string.contains(long_text, "very long"), "Long string should contain 'very long'")
+    std.assert.true(std.string.starts_with(long_text, "This"), "Long string should start with 'This'")
+    
+    std.test.end("String Performance Tests", true)
+    return 0
+}
+
+// Main function to run all string tests
+func main(): int {
+    std.io.println("=== Running String Unit Tests ===")
+    
+    // Run all test suites
+    test_basic_string_operations()
+    test_string_manipulation()
+    test_string_search()
+    test_string_interpolation()
+    test_string_conversion()
+    test_string_edge_cases()
+    test_string_performance()
+    
+    // Print test summary
+    std.test.summary()
+    
+    std.io.println("=== String Unit Tests Complete ===")
+    return 0
+}

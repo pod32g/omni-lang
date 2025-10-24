@@ -1,0 +1,87 @@
+// Simple working test without the test framework
+// This demonstrates basic unit testing using manual assertions
+
+import std
+
+func test_basic_math():int {
+    std.io.println("Testing basic math operations...")
+    
+    let a:int = 5
+    let b:int = 3
+    let sum:int = a + b
+    
+    // Manual assertion
+    if sum != 8 {
+        std.io.println("FAIL: 5 + 3 should equal 8, got " + std.int_to_string(sum))
+        return 1
+    }
+    std.io.println("PASS: Basic addition test")
+    
+    let product:int = a * b
+    if product != 15 {
+        std.io.println("FAIL: 5 * 3 should equal 15, got " + std.int_to_string(product))
+        return 1
+    }
+    std.io.println("PASS: Basic multiplication test")
+    
+    return 0
+}
+
+func test_string_operations():int {
+    std.io.println("Testing string operations...")
+    
+    let greeting:string = "Hello"
+    let name:string = "World"
+    let full_greeting:string = greeting + " " + name
+    
+    // Manual assertion
+    if full_greeting != "Hello World" {
+        std.io.println("FAIL: String concatenation should work, got '" + full_greeting + "'")
+        return 1
+    }
+    std.io.println("PASS: String concatenation test")
+    
+    return 0
+}
+
+func test_array_operations():int {
+    std.io.println("Testing array operations...")
+    
+    let numbers:array<int> = [1, 2, 3, 4, 5]
+    
+    // Test array length
+    let length:int = std.array.length(numbers)
+    if length != 5 {
+        std.io.println("FAIL: Array should have length 5")
+        return 1
+    }
+    std.io.println("PASS: Array length test")
+    
+    // Test array access
+    let first_element:int = std.array.get(numbers, 0)
+    if first_element != 1 {
+        std.io.println("FAIL: First element should be 1")
+        return 1
+    }
+    std.io.println("PASS: Array access test")
+    
+    return 0
+}
+
+func main():int {
+    std.io.println("=== Running Simple Unit Tests ===")
+    
+    var failed_tests:int = 0
+    
+    failed_tests = failed_tests + test_basic_math()
+    failed_tests = failed_tests + test_string_operations()
+    failed_tests = failed_tests + test_array_operations()
+    
+    if failed_tests == 0 {
+        std.io.println("=== All tests passed! ===")
+    } else {
+        std.io.println("=== " + std.int_to_string(failed_tests) + " test(s) failed ===")
+    }
+    
+    return failed_tests
+}

@@ -1,0 +1,355 @@
+// Unit Tests for Control Flow Constructs
+// This demonstrates comprehensive unit testing for if/else, loops, and other control flow
+
+import std
+
+// Test if/else statements
+func test_if_else_statements(): int {
+    std.test.start("If/Else Statements")
+    
+    let x: int = 10
+    let y: int = 5
+    
+    // Test basic if statement
+    if x > y {
+        std.assert.true(true, "x > y should be true")
+    } else {
+        std.assert.false(true, "This should not execute")
+    }
+    
+    // Test if-else statement
+    if x < y {
+        std.assert.false(true, "This should not execute")
+    } else {
+        std.assert.true(true, "x < y should be false, so else should execute")
+    }
+    
+    // Test nested if statements
+    if x > 0 {
+        if y > 0 {
+            std.assert.true(true, "Both x and y should be positive")
+        } else {
+            std.assert.false(true, "This should not execute")
+        }
+    } else {
+        std.assert.false(true, "This should not execute")
+    }
+    
+    // Test multiple conditions
+    if x > 5 && y > 3 {
+        std.assert.true(true, "Both conditions should be true")
+    } else {
+        std.assert.false(true, "This should not execute")
+    }
+    
+    std.test.end("If/Else Statements", true)
+    return 0
+}
+
+// Test for loops
+func test_for_loops(): int {
+    std.test.start("For Loops")
+    
+    // Test basic for loop
+    let sum: int = 0
+    for i: int = 1; i <= 5; i = i + 1 {
+        sum = sum + i
+    }
+    std.assert.eq(sum, 15, "Sum of 1 to 5 should be 15")
+    
+    // Test for loop with different step
+    let even_sum: int = 0
+    for i: int = 2; i <= 10; i = i + 2 {
+        even_sum = even_sum + i
+    }
+    std.assert.eq(even_sum, 30, "Sum of even numbers 2 to 10 should be 30")
+    
+    // Test for loop with array
+    let numbers: array<int> = [1, 2, 3, 4, 5]
+    let array_sum: int = 0
+    for i: int = 0; i < std.array.length(numbers); i = i + 1 {
+        array_sum = array_sum + numbers[i]
+    }
+    std.assert.eq(array_sum, 15, "Sum of array elements should be 15")
+    
+    // Test nested for loops
+    let nested_sum: int = 0
+    for i: int = 1; i <= 3; i = i + 1 {
+        for j: int = 1; j <= 2; j = j + 1 {
+            nested_sum = nested_sum + i * j
+        }
+    }
+    std.assert.eq(nested_sum, 18, "Nested loop sum should be 18")
+    
+    std.test.end("For Loops", true)
+    return 0
+}
+
+// Test while loops
+func test_while_loops(): int {
+    std.test.start("While Loops")
+    
+    // Test basic while loop
+    let counter: int = 0
+    let sum: int = 0
+    while counter < 5 {
+        sum = sum + counter
+        counter = counter + 1
+    }
+    std.assert.eq(sum, 10, "Sum of 0 to 4 should be 10")
+    
+    // Test while loop with condition
+    let num: int = 10
+    let factorial: int = 1
+    while num > 0 {
+        factorial = factorial * num
+        num = num - 1
+    }
+    std.assert.eq(factorial, 3628800, "Factorial of 10 should be 3628800")
+    
+    // Test while loop with array
+    let numbers: array<int> = [1, 2, 3, 4, 5]
+    let index: int = 0
+    let array_sum: int = 0
+    while index < std.array.length(numbers) {
+        array_sum = array_sum + numbers[index]
+        index = index + 1
+    }
+    std.assert.eq(array_sum, 15, "Sum of array elements should be 15")
+    
+    std.test.end("While Loops", true)
+    return 0
+}
+
+// Test break and continue statements
+func test_break_continue(): int {
+    std.test.start("Break and Continue Statements")
+    
+    // Test break statement
+    let sum: int = 0
+    for i: int = 1; i <= 10; i = i + 1 {
+        if i > 5 {
+            break
+        }
+        sum = sum + i
+    }
+    std.assert.eq(sum, 15, "Sum should be 15 (1+2+3+4+5)")
+    
+    // Test continue statement
+    let odd_sum: int = 0
+    for i: int = 1; i <= 10; i = i + 1 {
+        if i % 2 == 0 {
+            continue
+        }
+        odd_sum = odd_sum + i
+    }
+    std.assert.eq(odd_sum, 25, "Sum of odd numbers 1 to 10 should be 25")
+    
+    // Test break in while loop
+    let counter: int = 0
+    let result: int = 0
+    while counter < 10 {
+        counter = counter + 1
+        if counter > 3 {
+            break
+        }
+        result = result + counter
+    }
+    std.assert.eq(result, 6, "Result should be 6 (1+2+3)")
+    
+    std.test.end("Break and Continue Statements", true)
+    return 0
+}
+
+// Test switch statements (if supported)
+func test_switch_statements(): int {
+    std.test.start("Switch Statements")
+    
+    let value: int = 3
+    let result: string = ""
+    
+    // Test switch with different cases
+    if value == 1 {
+        result = "one"
+    } else if value == 2 {
+        result = "two"
+    } else if value == 3 {
+        result = "three"
+    } else {
+        result = "other"
+    }
+    
+    std.assert.eq(result, "three", "Switch should return 'three' for value 3")
+    
+    // Test switch with default case
+    let other_value: int = 10
+    let other_result: string = ""
+    
+    if other_value == 1 {
+        other_result = "one"
+    } else if other_value == 2 {
+        other_result = "two"
+    } else {
+        other_result = "other"
+    }
+    
+    std.assert.eq(other_result, "other", "Switch should return 'other' for value 10")
+    
+    std.test.end("Switch Statements", true)
+    return 0
+}
+
+// Test logical operators in control flow
+func test_logical_operators(): int {
+    std.test.start("Logical Operators in Control Flow")
+    
+    let a: bool = true
+    let b: bool = false
+    let c: bool = true
+    
+    // Test AND operator
+    if a && c {
+        std.assert.true(true, "a && c should be true")
+    } else {
+        std.assert.false(true, "This should not execute")
+    }
+    
+    if a && b {
+        std.assert.false(true, "This should not execute")
+    } else {
+        std.assert.true(true, "a && b should be false")
+    }
+    
+    // Test OR operator
+    if a || b {
+        std.assert.true(true, "a || b should be true")
+    } else {
+        std.assert.false(true, "This should not execute")
+    }
+    
+    if b || !b {
+        std.assert.true(true, "b || !b should be true")
+    } else {
+        std.assert.false(true, "This should not execute")
+    }
+    
+    // Test NOT operator
+    if !b {
+        std.assert.true(true, "!b should be true")
+    } else {
+        std.assert.false(true, "This should not execute")
+    }
+    
+    std.test.end("Logical Operators in Control Flow", true)
+    return 0
+}
+
+// Test complex control flow scenarios
+func test_complex_control_flow(): int {
+    std.test.start("Complex Control Flow Scenarios")
+    
+    // Test nested loops with conditions
+    let result: int = 0
+    for i: int = 1; i <= 3; i = i + 1 {
+        for j: int = 1; j <= 3; j = j + 1 {
+            if i + j > 4 {
+                break
+            }
+            result = result + i * j
+        }
+    }
+    std.assert.eq(result, 14, "Complex nested loop result should be 14")
+    
+    // Test loop with multiple conditions
+    let sum: int = 0
+    let i: int = 1
+    while i <= 10 && sum < 20 {
+        sum = sum + i
+        i = i + 1
+    }
+    std.assert.eq(sum, 21, "Loop with multiple conditions should sum to 21")
+    
+    // Test conditional loop
+    let num: int = 100
+    let steps: int = 0
+    while num > 1 {
+        if num % 2 == 0 {
+            num = num / 2
+        } else {
+            num = num + 1
+        }
+        steps = steps + 1
+        if steps > 10 {
+            break
+        }
+    }
+    std.assert.true(steps > 0, "Conditional loop should execute at least once")
+    
+    std.test.end("Complex Control Flow Scenarios", true)
+    return 0
+}
+
+// Test control flow with arrays
+func test_control_flow_with_arrays(): int {
+    std.test.start("Control Flow with Arrays")
+    
+    let numbers: array<int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    let even_sum: int = 0
+    let odd_sum: int = 0
+    
+    // Test loop through array with conditions
+    for i: int = 0; i < std.array.length(numbers); i = i + 1 {
+        if numbers[i] % 2 == 0 {
+            even_sum = even_sum + numbers[i]
+        } else {
+            odd_sum = odd_sum + numbers[i]
+        }
+    }
+    
+    std.assert.eq(even_sum, 30, "Sum of even numbers should be 30")
+    std.assert.eq(odd_sum, 25, "Sum of odd numbers should be 25")
+    
+    // Test finding maximum in array
+    let max_val: int = numbers[0]
+    for i: int = 1; i < std.array.length(numbers); i = i + 1 {
+        if numbers[i] > max_val {
+            max_val = numbers[i]
+        }
+    }
+    std.assert.eq(max_val, 10, "Maximum value in array should be 10")
+    
+    // Test finding first occurrence
+    let target: int = 7
+    let found_index: int = -1
+    for i: int = 0; i < std.array.length(numbers); i = i + 1 {
+        if numbers[i] == target {
+            found_index = i
+            break
+        }
+    }
+    std.assert.eq(found_index, 6, "Index of 7 should be 6")
+    
+    std.test.end("Control Flow with Arrays", true)
+    return 0
+}
+
+// Main function to run all control flow tests
+func main(): int {
+    std.io.println("=== Running Control Flow Unit Tests ===")
+    
+    // Run all test suites
+    test_if_else_statements()
+    test_for_loops()
+    test_while_loops()
+    test_break_continue()
+    test_switch_statements()
+    test_logical_operators()
+    test_complex_control_flow()
+    test_control_flow_with_arrays()
+    
+    // Print test summary
+    std.test.summary()
+    
+    std.io.println("=== Control Flow Unit Tests Complete ===")
+    return 0
+}
