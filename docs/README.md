@@ -20,8 +20,8 @@ If you're new to OmniLang, start here:
 
 ## Current Status
 
-**Version:** v0.3.2  
-**Status:** Active Development - Major Bug Fixes Released
+**Version:** v0.5.0 (October 2025)  
+**Status:** Active Development - Comprehensive Standard Library Testing & Enhanced CI/CD Pipeline
 
 ### ✅ Implemented Features
 

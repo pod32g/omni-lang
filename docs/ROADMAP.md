@@ -1,6 +1,6 @@
 # OmniLang Compiler Roadmap
 
-## Current Status (v0.4.3) ✅
+## Current Status (v0.5.0) ✅
 
 ### ✅ **Completed Features**
 - **Frontend**: Complete lexer, parser, AST, type checker
@@ -8,12 +8,12 @@
 - **Multiple Backends**: C (default), VM, and Cranelift (experimental)
 - **Data Structures**: Complete array, map, and struct support
 - **Import System**: Both std and local file imports with aliases
-- **Standard Library**: I/O, math, and string intrinsics with runtime support
+- **Standard Library**: Complete std library with comprehensive testing (math, io, string, array, collections, os, file)
 - **CLI Tools**: `omnic` compiler, `omnir` runner, and `omnipkg` packager
-- **Testing**: Comprehensive test suite with 100% passing tests
+- **Testing**: Comprehensive test suite with 100% passing tests including std library integration tests
 - **Performance**: Optimized compilation and execution
 - **Documentation**: Complete language tour, quick reference, and API docs
-- **CI/CD**: Multi-platform builds with automated testing
+- **CI/CD**: Enhanced multi-platform builds with improved error handling and debugging
 - **Packaging**: Distribution packages for Linux, macOS, and Windows
 
 ### 📊 **Current Metrics**

@@ -25,7 +25,7 @@ For specific API details, browse the sections above or use the search functional
 
 ## Version Information
 
-This documentation corresponds to OmniLang v0.2.0.
+This documentation corresponds to OmniLang v0.5.0 (October 2025).
 
 ## Contributing
 

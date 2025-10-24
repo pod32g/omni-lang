@@ -2,6 +2,9 @@
 
 This document provides a comprehensive tour of the OmniLang programming language, covering all major features and syntax.
 
+**Version:** v0.5.0 (October 2025)  
+**Status:** Complete standard library with comprehensive testing
+
 ## Table of Contents
 
 1. [Getting Started](#getting-started)

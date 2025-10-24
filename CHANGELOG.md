@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Production readiness: performance optimization, security, deployment
 - Ecosystem development: package registry, community building
 
-## [0.5.0] - 2025-01-23
+## [0.5.0] - 2025-10-23
 
 ### Added
 - **Comprehensive Standard Library Testing**: Complete test suite for all std modules (math, io, string, array, collections, os, file)
@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Development Workflow**: Improved CI/CD pipeline with better error handling
 - **Code Quality**: Enhanced code organization and testing framework
 
-## [0.4.3] - 2025-01-21
+## [0.4.3] - 2025-10-21
 
 ### Fixed
 - **Library Path**: Fixed Makefile to use absolute paths with install_name_tool
@@ -44,21 +44,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Binary Usability**: Binaries now work correctly when called from any directory in PATH
 - **Build Process**: Changed from $(PWD) to $$(pwd) for proper shell variable expansion
 
-## [0.4.2] - 2025-01-21
+## [0.4.2] - 2025-10-21
 
 ### Fixed
 - **Negation Test**: Fixed TestNegation to expect -5 instead of 251
 - **Test Expectations**: Corrected test expectation to match improved test runner behavior
 - **CI/CD Tests**: Resolved remaining CI/CD test failure in TestNegation
 
-## [0.4.1] - 2025-01-21
+## [0.4.1] - 2025-10-21
 
 ### Fixed
 - **Test Runner**: Fixed test runner to prioritize stdout parsing over exit code interpretation
 - **CI/CD Tests**: Resolved issue where large positive return values (≥256) were being interpreted as exit codes instead of actual program results
 - **Map Tests**: Fixed CI/CD test failure in TestMapComprehensive
 
-## [0.4.0] - 2025-01-21
+## [0.4.0] - 2025-10-21
 
 ### Added
 - **Array Support**: Complete array implementation with literals, indexing, and length function
