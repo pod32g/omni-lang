@@ -1,0 +1,397 @@
+// std.network - Basic networking utilities for OmniLang
+
+// ============================================================================
+// Network Structures
+// ============================================================================
+
+// IPAddress represents an IP address
+struct IPAddress {
+    address:string
+    is_ipv4:bool
+    is_ipv6:bool
+}
+
+// URL represents a URL
+struct URL {
+    scheme:string
+    host:string
+    port:int
+    path:string
+    query:string
+    fragment:string
+}
+
+// HTTPRequest represents an HTTP request
+struct HTTPRequest {
+    method:string
+    url:string
+    headers:map<string, string>
+    body:string
+}
+
+// HTTPResponse represents an HTTP response
+struct HTTPResponse {
+    status_code:int
+    status_text:string
+    headers:map<string, string>
+    body:string
+}
+
+// ============================================================================
+// IP Address Functions
+// ============================================================================
+
+// ip_parse parses an IP address string
+func ip_parse(ip_str:string):IPAddress {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return IPAddress{
+        address: ip_str,
+        is_ipv4: true,
+        is_ipv6: false
+    }
+}
+
+// ip_is_valid checks if an IP address string is valid
+func ip_is_valid(ip_str:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// ip_is_private checks if an IP address is private
+func ip_is_private(ip:IPAddress):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// ip_is_loopback checks if an IP address is loopback
+func ip_is_loopback(ip:IPAddress):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// ip_to_string converts an IP address to a string
+func ip_to_string(ip:IPAddress):string {
+    return ip.address
+}
+
+// ============================================================================
+// URL Functions
+// ============================================================================
+
+// url_parse parses a URL string
+func url_parse(url_str:string):URL {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return URL{
+        scheme: "http",
+        host: "localhost",
+        port: 80,
+        path: "/",
+        query: "",
+        fragment: ""
+    }
+}
+
+// url_to_string converts a URL to a string
+func url_to_string(url:URL):string {
+    var result:string = url.scheme + "://" + url.host
+    
+    if url.port > 0 && url.port != 80 && url.port != 443 {
+        result = result + ":" + std.int_to_string(url.port)
+    }
+    
+    result = result + url.path
+    
+    if url.query != "" {
+        result = result + "?" + url.query
+    }
+    
+    if url.fragment != "" {
+        result = result + "#" + url.fragment
+    }
+    
+    return result
+}
+
+// url_is_valid checks if a URL string is valid
+func url_is_valid(url_str:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// ============================================================================
+// DNS Functions
+// ============================================================================
+
+// dns_lookup performs a DNS lookup for a hostname
+func dns_lookup(hostname:string):array<IPAddress> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return []
+}
+
+// dns_reverse_lookup performs a reverse DNS lookup for an IP address
+func dns_reverse_lookup(ip:IPAddress):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// HTTP Client Functions
+// ============================================================================
+
+// http_get performs an HTTP GET request
+func http_get(url:string):HTTPResponse {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return HTTPResponse{
+        status_code: 200,
+        status_text: "OK",
+        headers: map<string, string>{},
+        body: ""
+    }
+}
+
+// http_post performs an HTTP POST request
+func http_post(url:string, body:string):HTTPResponse {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return HTTPResponse{
+        status_code: 200,
+        status_text: "OK",
+        headers: map<string, string>{},
+        body: ""
+    }
+}
+
+// http_put performs an HTTP PUT request
+func http_put(url:string, body:string):HTTPResponse {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return HTTPResponse{
+        status_code: 200,
+        status_text: "OK",
+        headers: map<string, string>{},
+        body: ""
+    }
+}
+
+// http_delete performs an HTTP DELETE request
+func http_delete(url:string):HTTPResponse {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return HTTPResponse{
+        status_code: 200,
+        status_text: "OK",
+        headers: map<string, string>{},
+        body: ""
+    }
+}
+
+// http_request performs a custom HTTP request
+func http_request(req:HTTPRequest):HTTPResponse {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return HTTPResponse{
+        status_code: 200,
+        status_text: "OK",
+        headers: map<string, string>{},
+        body: ""
+    }
+}
+
+// ============================================================================
+// HTTP Response Functions
+// ============================================================================
+
+// http_response_is_success checks if an HTTP response indicates success
+func http_response_is_success(resp:HTTPResponse):bool {
+    return resp.status_code >= 200 && resp.status_code < 300
+}
+
+// http_response_is_client_error checks if an HTTP response indicates a client error
+func http_response_is_client_error(resp:HTTPResponse):bool {
+    return resp.status_code >= 400 && resp.status_code < 500
+}
+
+// http_response_is_server_error checks if an HTTP response indicates a server error
+func http_response_is_server_error(resp:HTTPResponse):bool {
+    return resp.status_code >= 500 && resp.status_code < 600
+}
+
+// http_response_get_header gets a header value from an HTTP response
+func http_response_get_header(resp:HTTPResponse, name:string):string {
+    return std.collections.get(resp.headers, name)
+}
+
+// http_response_set_header sets a header value in an HTTP response
+func http_response_set_header(resp:HTTPResponse, name:string, value:string):HTTPResponse {
+    std.collections.set(resp.headers, name, value)
+    return resp
+}
+
+// ============================================================================
+// HTTP Request Functions
+// ============================================================================
+
+// http_request_create creates a new HTTP request
+func http_request_create(method:string, url:string):HTTPRequest {
+    return HTTPRequest{
+        method: method,
+        url: url,
+        headers: map<string, string>{},
+        body: ""
+    }
+}
+
+// http_request_set_header sets a header in an HTTP request
+func http_request_set_header(req:HTTPRequest, name:string, value:string):HTTPRequest {
+    std.collections.set(req.headers, name, value)
+    return req
+}
+
+// http_request_set_body sets the body of an HTTP request
+func http_request_set_body(req:HTTPRequest, body:string):HTTPRequest {
+    req.body = body
+    return req
+}
+
+// http_request_get_header gets a header value from an HTTP request
+func http_request_get_header(req:HTTPRequest, name:string):string {
+    return std.collections.get(req.headers, name)
+}
+
+// ============================================================================
+// Socket Functions (Basic)
+// ============================================================================
+
+// socket_create creates a new socket
+func socket_create():int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return -1
+}
+
+// socket_connect connects a socket to an address
+func socket_connect(socket:int, address:string, port:int):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// socket_bind binds a socket to an address and port
+func socket_bind(socket:int, address:string, port:int):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// socket_listen starts listening on a socket
+func socket_listen(socket:int, backlog:int):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// socket_accept accepts a connection on a socket
+func socket_accept(socket:int):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return -1
+}
+
+// socket_send sends data on a socket
+func socket_send(socket:int, data:string):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return -1
+}
+
+// socket_receive receives data from a socket
+func socket_receive(socket:int, buffer_size:int):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// socket_close closes a socket
+func socket_close(socket:int):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+// network_is_connected checks if the network is connected
+func network_is_connected():bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// network_get_local_ip returns the local IP address
+func network_get_local_ip():IPAddress {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return IPAddress{
+        address: "127.0.0.1",
+        is_ipv4: true,
+        is_ipv6: false
+    }
+}
+
+// network_ping pings a host
+func network_ping(host:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+// Common HTTP status codes
+let HTTP_OK:int = 200
+let HTTP_CREATED:int = 201
+let HTTP_ACCEPTED:int = 202
+let HTTP_NO_CONTENT:int = 204
+let HTTP_BAD_REQUEST:int = 400
+let HTTP_UNAUTHORIZED:int = 401
+let HTTP_FORBIDDEN:int = 403
+let HTTP_NOT_FOUND:int = 404
+let HTTP_METHOD_NOT_ALLOWED:int = 405
+let HTTP_INTERNAL_SERVER_ERROR:int = 500
+let HTTP_NOT_IMPLEMENTED:int = 501
+let HTTP_BAD_GATEWAY:int = 502
+let HTTP_SERVICE_UNAVAILABLE:int = 503
+
+// Common HTTP methods
+let HTTP_GET:string = "GET"
+let HTTP_POST:string = "POST"
+let HTTP_PUT:string = "PUT"
+let HTTP_DELETE:string = "DELETE"
+let HTTP_HEAD:string = "HEAD"
+let HTTP_OPTIONS:string = "OPTIONS"
+let HTTP_PATCH:string = "PATCH"
+
+// Common ports
+let PORT_HTTP:int = 80
+let PORT_HTTPS:int = 443
+let PORT_FTP:int = 21
+let PORT_SSH:int = 22
+let PORT_TELNET:int = 23
+let PORT_SMTP:int = 25
+let PORT_DNS:int = 53
+let PORT_POP3:int = 110
+let PORT_IMAP:int = 143
+let PORT_HTTPS_ALT:int = 8080

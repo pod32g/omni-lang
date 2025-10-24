@@ -1,0 +1,369 @@
+// Comprehensive test suite for the OmniLang standard library
+// This demonstrates the usage of all major standard library modules
+
+import std
+
+func test_math_functions():int {
+    std.io.println("=== Testing Math Functions ===")
+    
+    // Basic arithmetic
+    let abs_result:int = std.math.abs(-42)
+    if abs_result != 42 {
+        std.io.println("FAIL: abs(-42) should equal 42, got " + std.int_to_string(abs_result))
+        return 1
+    }
+    std.io.println("PASS: abs function")
+    
+    let max_result:int = std.math.max(10, 20)
+    if max_result != 20 {
+        std.io.println("FAIL: max(10, 20) should equal 20, got " + std.int_to_string(max_result))
+        return 1
+    }
+    std.io.println("PASS: max function")
+    
+    let min_result:int = std.math.min(10, 20)
+    if min_result != 10 {
+        std.io.println("FAIL: min(10, 20) should equal 10, got " + std.int_to_string(min_result))
+        return 1
+    }
+    std.io.println("PASS: min function")
+    
+    // Number theory
+    let is_prime_result:bool = std.math.is_prime(17)
+    if !is_prime_result {
+        std.io.println("FAIL: is_prime(17) should be true")
+        return 1
+    }
+    std.io.println("PASS: is_prime function")
+    
+    let fibonacci_result:int = std.math.fibonacci(10)
+    if fibonacci_result != 55 {
+        std.io.println("FAIL: fibonacci(10) should equal 55, got " + std.int_to_string(fibonacci_result))
+        return 1
+    }
+    std.io.println("PASS: fibonacci function")
+    
+    // Utility functions
+    let clamp_result:int = std.math.clamp(15, 10, 20)
+    if clamp_result != 15 {
+        std.io.println("FAIL: clamp(15, 10, 20) should equal 15, got " + std.int_to_string(clamp_result))
+        return 1
+    }
+    std.io.println("PASS: clamp function")
+    
+    return 0
+}
+
+func test_string_operations():int {
+    std.io.println("=== Testing String Operations ===")
+    
+    let test_string:string = "Hello, World!"
+    let length_result:int = std.string.length(test_string)
+    if length_result != 13 {
+        std.io.println("FAIL: length('Hello, World!') should equal 13, got " + std.int_to_string(length_result))
+        return 1
+    }
+    std.io.println("PASS: string length")
+    
+    let concat_result:string = std.string.concat("Hello", "World")
+    if concat_result != "HelloWorld" {
+        std.io.println("FAIL: concat('Hello', 'World') should equal 'HelloWorld', got '" + concat_result + "'")
+        return 1
+    }
+    std.io.println("PASS: string concatenation")
+    
+    let starts_with_result:bool = std.string.starts_with(test_string, "Hello")
+    if !starts_with_result {
+        std.io.println("FAIL: starts_with('Hello, World!', 'Hello') should be true")
+        return 1
+    }
+    std.io.println("PASS: starts_with function")
+    
+    let ends_with_result:bool = std.string.ends_with(test_string, "World!")
+    if !ends_with_result {
+        std.io.println("FAIL: ends_with('Hello, World!', 'World!') should be true")
+        return 1
+    }
+    std.io.println("PASS: ends_with function")
+    
+    let contains_result:bool = std.string.contains(test_string, "World")
+    if !contains_result {
+        std.io.println("FAIL: contains('Hello, World!', 'World') should be true")
+        return 1
+    }
+    std.io.println("PASS: contains function")
+    
+    return 0
+}
+
+func test_array_operations():int {
+    std.io.println("=== Testing Array Operations ===")
+    
+    let test_array:array<int> = [1, 2, 3, 4, 5]
+    let length_result:int = std.array.length(test_array)
+    if length_result != 5 {
+        std.io.println("FAIL: array length should equal 5, got " + std.int_to_string(length_result))
+        return 1
+    }
+    std.io.println("PASS: array length")
+    
+    let get_result:int = std.array.get(test_array, 2)
+    if get_result != 3 {
+        std.io.println("FAIL: array[2] should equal 3, got " + std.int_to_string(get_result))
+        return 1
+    }
+    std.io.println("PASS: array get")
+    
+    let append_result:array<int> = std.array.append(test_array, 6)
+    let new_length:int = std.array.length(append_result)
+    if new_length != 6 {
+        std.io.println("FAIL: appended array length should equal 6, got " + std.int_to_string(new_length))
+        return 1
+    }
+    std.io.println("PASS: array append")
+    
+    let contains_result:bool = std.array.contains(test_array, 3)
+    if !contains_result {
+        std.io.println("FAIL: array should contain 3")
+        return 1
+    }
+    std.io.println("PASS: array contains")
+    
+    return 0
+}
+
+func test_algorithms():int {
+    std.io.println("=== Testing Algorithms ===")
+    
+    let unsorted_array:array<int> = [5, 2, 8, 1, 9]
+    
+    // Test bubble sort
+    let bubble_sorted:array<int> = std.algorithms.bubble_sort(unsorted_array)
+    let first_element:int = std.array.get(bubble_sorted, 0)
+    if first_element != 1 {
+        std.io.println("FAIL: bubble sort first element should be 1, got " + std.int_to_string(first_element))
+        return 1
+    }
+    std.io.println("PASS: bubble sort")
+    
+    // Test linear search
+    let search_result:int = std.algorithms.linear_search(unsorted_array, 8)
+    if search_result != 2 {
+        std.io.println("FAIL: linear search for 8 should return index 2, got " + std.int_to_string(search_result))
+        return 1
+    }
+    std.io.println("PASS: linear search")
+    
+    // Test binary search (on sorted array)
+    let binary_search_result:int = std.algorithms.binary_search(bubble_sorted, 5)
+    if binary_search_result < 0 {
+        std.io.println("FAIL: binary search for 5 should find the element")
+        return 1
+    }
+    std.io.println("PASS: binary search")
+    
+    // Test find max
+    let max_result:int = std.algorithms.find_max(unsorted_array)
+    if max_result != 9 {
+        std.io.println("FAIL: find_max should return 9, got " + std.int_to_string(max_result))
+        return 1
+    }
+    std.io.println("PASS: find max")
+    
+    // Test find min
+    let min_result:int = std.algorithms.find_min(unsorted_array)
+    if min_result != 1 {
+        std.io.println("FAIL: find_min should return 1, got " + std.int_to_string(min_result))
+        return 1
+    }
+    std.io.println("PASS: find min")
+    
+    return 0
+}
+
+func test_collections():int {
+    std.io.println("=== Testing Collections ===")
+    
+    // Test map operations
+    let test_map:map<string, int> = map<string, int>{}
+    std.collections.set(test_map, "key1", 42)
+    std.collections.set(test_map, "key2", 24)
+    
+    let map_size:int = std.collections.size(test_map)
+    if map_size != 2 {
+        std.io.println("FAIL: map size should equal 2, got " + std.int_to_string(map_size))
+        return 1
+    }
+    std.io.println("PASS: map size")
+    
+    let get_value:int = std.collections.get(test_map, "key1")
+    if get_value != 42 {
+        std.io.println("FAIL: map['key1'] should equal 42, got " + std.int_to_string(get_value))
+        return 1
+    }
+    std.io.println("PASS: map get")
+    
+    let has_key:bool = std.collections.has(test_map, "key1")
+    if !has_key {
+        std.io.println("FAIL: map should contain 'key1'")
+        return 1
+    }
+    std.io.println("PASS: map has")
+    
+    // Test set operations
+    let test_set:set<int> = std.collections.set_create<int>()
+    let add_result1:bool = std.collections.set_add(test_set, 1)
+    let add_result2:bool = std.collections.set_add(test_set, 2)
+    let add_result3:bool = std.collections.set_add(test_set, 1)  // Duplicate
+    
+    if !add_result1 || !add_result2 || add_result3 {
+        std.io.println("FAIL: set add operations failed")
+        return 1
+    }
+    std.io.println("PASS: set add")
+    
+    let set_size:int = std.collections.set_size(test_set)
+    if set_size != 2 {
+        std.io.println("FAIL: set size should equal 2, got " + std.int_to_string(set_size))
+        return 1
+    }
+    std.io.println("PASS: set size")
+    
+    let contains_result:bool = std.collections.set_contains(test_set, 1)
+    if !contains_result {
+        std.io.println("FAIL: set should contain 1")
+        return 1
+    }
+    std.io.println("PASS: set contains")
+    
+    return 0
+}
+
+func test_time_operations():int {
+    std.io.println("=== Testing Time Operations ===")
+    
+    // Test time creation
+    let test_time:std.time.Time = std.time.time_create(2024, 1, 15, 12, 30, 45)
+    if test_time.year != 2024 || test_time.month != 1 || test_time.day != 15 {
+        std.io.println("FAIL: time creation failed")
+        return 1
+    }
+    std.io.println("PASS: time creation")
+    
+    // Test time comparison
+    let time1:std.time.Time = std.time.time_create(2024, 1, 15, 12, 30, 45)
+    let time2:std.time.Time = std.time.time_create(2024, 1, 15, 12, 30, 45)
+    let time3:std.time.Time = std.time.time_create(2024, 1, 15, 12, 30, 46)
+    
+    let equal_result:bool = std.time.time_equal(time1, time2)
+    if !equal_result {
+        std.io.println("FAIL: time_equal should return true for identical times")
+        return 1
+    }
+    std.io.println("PASS: time equal")
+    
+    let before_result:bool = std.time.time_before(time1, time3)
+    if !before_result {
+        std.io.println("FAIL: time_before should return true")
+        return 1
+    }
+    std.io.println("PASS: time before")
+    
+    // Test duration creation
+    let duration:std.time.Duration = std.time.duration_from_seconds(120.5)
+    let duration_seconds:float = std.time.duration_to_seconds(duration)
+    if duration_seconds != 120.5 {
+        std.io.println("FAIL: duration conversion failed")
+        return 1
+    }
+    std.io.println("PASS: duration operations")
+    
+    return 0
+}
+
+func test_network_operations():int {
+    std.io.println("=== Testing Network Operations ===")
+    
+    // Test IP address parsing
+    let test_ip:std.network.IPAddress = std.network.ip_parse("192.168.1.1")
+    if test_ip.address != "192.168.1.1" {
+        std.io.println("FAIL: IP parsing failed")
+        return 1
+    }
+    std.io.println("PASS: IP parsing")
+    
+    // Test URL parsing
+    let test_url:std.network.URL = std.network.url_parse("https://example.com:8080/path?query=value#fragment")
+    if test_url.scheme != "https" || test_url.host != "example.com" {
+        std.io.println("FAIL: URL parsing failed")
+        return 1
+    }
+    std.io.println("PASS: URL parsing")
+    
+    // Test HTTP request creation
+    let http_req:std.network.HTTPRequest = std.network.http_request_create("GET", "https://example.com")
+    if http_req.method != "GET" || http_req.url != "https://example.com" {
+        std.io.println("FAIL: HTTP request creation failed")
+        return 1
+    }
+    std.io.println("PASS: HTTP request creation")
+    
+    return 0
+}
+
+func test_utility_functions():int {
+    std.io.println("=== Testing Utility Functions ===")
+    
+    // Test type conversions
+    let int_str:string = std.int_to_string(42)
+    if int_str != "42" {
+        std.io.println("FAIL: int_to_string(42) should equal '42', got '" + int_str + "'")
+        return 1
+    }
+    std.io.println("PASS: int to string conversion")
+    
+    let str_int:int = std.string_to_int("123")
+    if str_int != 123 {
+        std.io.println("FAIL: string_to_int('123') should equal 123, got " + std.int_to_string(str_int))
+        return 1
+    }
+    std.io.println("PASS: string to int conversion")
+    
+    // Test assertions
+    let test_condition:bool = true
+    if !test_condition {
+        std.io.println("FAIL: test condition should be true")
+        return 1
+    }
+    std.io.println("PASS: boolean operations")
+    
+    return 0
+}
+
+func main():int {
+    std.io.println("=== OmniLang Standard Library Comprehensive Test Suite ===")
+    std.io.println("")
+    
+    var total_failures:int = 0
+    
+    // Run all test suites
+    total_failures = total_failures + test_math_functions()
+    total_failures = total_failures + test_string_operations()
+    total_failures = total_failures + test_array_operations()
+    total_failures = total_failures + test_algorithms()
+    total_failures = total_failures + test_collections()
+    total_failures = total_failures + test_time_operations()
+    total_failures = total_failures + test_network_operations()
+    total_failures = total_failures + test_utility_functions()
+    
+    std.io.println("")
+    std.io.println("=== Test Summary ===")
+    
+    if total_failures == 0 {
+        std.io.println("✓ All tests passed! The standard library is working correctly.")
+        return 0
+    } else {
+        std.io.println("✗ " + std.int_to_string(total_failures) + " test(s) failed.")
+        return 1
+    }
+}

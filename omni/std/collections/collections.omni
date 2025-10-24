@@ -1,41 +1,40 @@
 // std.collections - Collection data structures for OmniLang
 
-// Map operations
-// size returns the number of key-value pairs in a map
+// ============================================================================
+// Map Functions
+// ============================================================================
+
+// size returns the number of key-value pairs in the map
 func size<K,V>(m:map<K,V>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
     return 0
 }
 
-// get returns the value associated with a key
+// get returns the value associated with the given key
 func get<K,V>(m:map<K,V>, key:K):V {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
-    return m[key]
+    return V{}
 }
 
-// set associates a value with a key
+// set associates a value with the given key
 func set<K,V>(m:map<K,V>, key:K, value:V) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
 }
 
-// has checks if a key exists in the map
+// has checks if the map contains the given key
 func has<K,V>(m:map<K,V>, key:K):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
     return false
 }
 
-// remove removes a key-value pair from the map
+// remove removes the key-value pair with the given key
 func remove<K,V>(m:map<K,V>, key:K):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
     return false
 }
 
@@ -43,14 +42,12 @@ func remove<K,V>(m:map<K,V>, key:K):bool {
 func clear<K,V>(m:map<K,V>) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
 }
 
 // keys returns an array of all keys in the map
 func keys<K,V>(m:map<K,V>):array<K> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
     return []
 }
 
@@ -58,7 +55,6 @@ func keys<K,V>(m:map<K,V>):array<K> {
 func values<K,V>(m:map<K,V>):array<V> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
     return []
 }
 
@@ -66,14 +62,396 @@ func values<K,V>(m:map<K,V>):array<V> {
 func copy<K,V>(m:map<K,V>):map<K,V> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
-    return m
+    return map<K,V>{}
 }
 
-// merge merges two maps, with the second map taking precedence
+// merge creates a new map by merging two maps
 func merge<K,V>(a:map<K,V>, b:map<K,V>):map<K,V> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
-    return a
+    return map<K,V>{}
+}
+
+// ============================================================================
+// Set Functions
+// ============================================================================
+
+// set_create creates a new set
+func set_create<T>():set<T> {
+    return set<T>{}
+}
+
+// set_add adds an element to the set
+func set_add<T>(s:set<T>, element:T):bool {
+    // Returns true if element was added, false if it already existed
+    if set_contains(s, element) {
+        return false
+    }
+    // Add element to set (implementation would depend on set data structure)
+    return true
+}
+
+// set_remove removes an element from the set
+func set_remove<T>(s:set<T>, element:T):bool {
+    // Returns true if element was removed, false if it didn't exist
+    if !set_contains(s, element) {
+        return false
+    }
+    // Remove element from set
+    return true
+}
+
+// set_contains checks if the set contains an element
+func set_contains<T>(s:set<T>, element:T):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// set_size returns the number of elements in the set
+func set_size<T>(s:set<T>):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// set_clear removes all elements from the set
+func set_clear<T>(s:set<T>) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// set_union creates a new set that is the union of two sets
+func set_union<T>(a:set<T>, b:set<T>):set<T> {
+    var result:set<T> = set_create<T>()
+    
+    // Add all elements from set a
+    // In a real implementation, we'd iterate through set a
+    // For now, this is a placeholder
+    
+    // Add all elements from set b
+    // In a real implementation, we'd iterate through set b
+    // For now, this is a placeholder
+    
+    return result
+}
+
+// set_intersection creates a new set that is the intersection of two sets
+func set_intersection<T>(a:set<T>, b:set<T>):set<T> {
+    var result:set<T> = set_create<T>()
+    
+    // Add elements that exist in both sets
+    // In a real implementation, we'd iterate through one set
+    // and check if elements exist in the other set
+    // For now, this is a placeholder
+    
+    return result
+}
+
+// set_difference creates a new set that is the difference of two sets
+func set_difference<T>(a:set<T>, b:set<T>):set<T> {
+    var result:set<T> = set_create<T>()
+    
+    // Add elements that exist in set a but not in set b
+    // In a real implementation, we'd iterate through set a
+    // and check if elements don't exist in set b
+    // For now, this is a placeholder
+    
+    return result
+}
+
+// ============================================================================
+// Queue Functions
+// ============================================================================
+
+// queue_create creates a new queue
+func queue_create<T>():queue<T> {
+    return queue<T>{}
+}
+
+// queue_enqueue adds an element to the back of the queue
+func queue_enqueue<T>(q:queue<T>, element:T) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// queue_dequeue removes and returns the element from the front of the queue
+func queue_dequeue<T>(q:queue<T>):T {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return T{}
+}
+
+// queue_peek returns the element at the front of the queue without removing it
+func queue_peek<T>(q:queue<T>):T {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return T{}
+}
+
+// queue_is_empty checks if the queue is empty
+func queue_is_empty<T>(q:queue<T>):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return true
+}
+
+// queue_size returns the number of elements in the queue
+func queue_size<T>(q:queue<T>):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// queue_clear removes all elements from the queue
+func queue_clear<T>(q:queue<T>) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// ============================================================================
+// Stack Functions
+// ============================================================================
+
+// stack_create creates a new stack
+func stack_create<T>():stack<T> {
+    return stack<T>{}
+}
+
+// stack_push adds an element to the top of the stack
+func stack_push<T>(s:stack<T>, element:T) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// stack_pop removes and returns the element from the top of the stack
+func stack_pop<T>(s:stack<T>):T {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return T{}
+}
+
+// stack_peek returns the element at the top of the stack without removing it
+func stack_peek<T>(s:stack<T>):T {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return T{}
+}
+
+// stack_is_empty checks if the stack is empty
+func stack_is_empty<T>(s:stack<T>):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return true
+}
+
+// stack_size returns the number of elements in the stack
+func stack_size<T>(s:stack<T>):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// stack_clear removes all elements from the stack
+func stack_clear<T>(s:stack<T>) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// ============================================================================
+// Priority Queue Functions
+// ============================================================================
+
+// priority_queue_create creates a new priority queue
+func priority_queue_create<T>():priority_queue<T> {
+    return priority_queue<T>{}
+}
+
+// priority_queue_insert adds an element with a given priority
+func priority_queue_insert<T>(pq:priority_queue<T>, element:T, priority:int) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// priority_queue_extract_max removes and returns the element with highest priority
+func priority_queue_extract_max<T>(pq:priority_queue<T>):T {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return T{}
+}
+
+// priority_queue_peek returns the element with highest priority without removing it
+func priority_queue_peek<T>(pq:priority_queue<T>):T {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return T{}
+}
+
+// priority_queue_is_empty checks if the priority queue is empty
+func priority_queue_is_empty<T>(pq:priority_queue<T>):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return true
+}
+
+// priority_queue_size returns the number of elements in the priority queue
+func priority_queue_size<T>(pq:priority_queue<T>):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// ============================================================================
+// Linked List Functions
+// ============================================================================
+
+// linked_list_create creates a new linked list
+func linked_list_create<T>():linked_list<T> {
+    return linked_list<T>{}
+}
+
+// linked_list_append adds an element to the end of the linked list
+func linked_list_append<T>(ll:linked_list<T>, element:T) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// linked_list_prepend adds an element to the beginning of the linked list
+func linked_list_prepend<T>(ll:linked_list<T>, element:T) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// linked_list_insert adds an element at the given index
+func linked_list_insert<T>(ll:linked_list<T>, index:int, element:T):bool {
+    // Returns true if insertion was successful, false if index is invalid
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// linked_list_remove removes the element at the given index
+func linked_list_remove<T>(ll:linked_list<T>, index:int):bool {
+    // Returns true if removal was successful, false if index is invalid
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// linked_list_get returns the element at the given index
+func linked_list_get<T>(ll:linked_list<T>, index:int):T {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return T{}
+}
+
+// linked_list_set sets the element at the given index
+func linked_list_set<T>(ll:linked_list<T>, index:int, element:T):bool {
+    // Returns true if setting was successful, false if index is invalid
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// linked_list_size returns the number of elements in the linked list
+func linked_list_size<T>(ll:linked_list<T>):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// linked_list_is_empty checks if the linked list is empty
+func linked_list_is_empty<T>(ll:linked_list<T>):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return true
+}
+
+// linked_list_clear removes all elements from the linked list
+func linked_list_clear<T>(ll:linked_list<T>) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// ============================================================================
+// Tree Functions
+// ============================================================================
+
+// binary_tree_create creates a new binary tree
+func binary_tree_create<T>():binary_tree<T> {
+    return binary_tree<T>{}
+}
+
+// binary_tree_insert inserts an element into the binary tree
+func binary_tree_insert<T>(bt:binary_tree<T>, element:T) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// binary_tree_search searches for an element in the binary tree
+func binary_tree_search<T>(bt:binary_tree<T>, element:T):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// binary_tree_remove removes an element from the binary tree
+func binary_tree_remove<T>(bt:binary_tree<T>, element:T):bool {
+    // Returns true if element was removed, false if it didn't exist
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// binary_tree_size returns the number of elements in the binary tree
+func binary_tree_size<T>(bt:binary_tree<T>):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// binary_tree_is_empty checks if the binary tree is empty
+func binary_tree_is_empty<T>(bt:binary_tree<T>):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return true
+}
+
+// binary_tree_clear removes all elements from the binary tree
+func binary_tree_clear<T>(bt:binary_tree<T>) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+// collection_to_array converts a collection to an array
+func collection_to_array<T>(collection:any):array<T> {
+    // This is a generic function that works with any collection type
+    // The actual implementation would depend on the specific collection type
+    return []
+}
+
+// collection_from_array creates a collection from an array
+func collection_from_array<T>(arr:array<T>, collection_type:string):any {
+    // Creates a collection of the specified type from an array
+    // collection_type can be "set", "queue", "stack", "linked_list", etc.
+    // The actual implementation would depend on the collection type
+    return any{}
+}
+
+// collection_equals checks if two collections are equal
+func collection_equals<T>(a:any, b:any):bool {
+    // Compares two collections for equality
+    // The actual implementation would depend on the collection types
+    return false
+}
+
+// collection_copy creates a copy of a collection
+func collection_copy<T>(collection:any):any {
+    // Creates a deep copy of the collection
+    // The actual implementation would depend on the collection type
+    return any{}
 }

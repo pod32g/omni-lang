@@ -1,0 +1,389 @@
+// std.algorithms - Common algorithms for OmniLang
+
+// ============================================================================
+// Sorting Algorithms
+// ============================================================================
+
+// bubble_sort sorts an array of integers using bubble sort
+func bubble_sort(arr:array<int>):array<int> {
+    let len:int = std.array.length(arr)
+    if len <= 1 {
+        return arr
+    }
+    
+    var result:array<int> = arr
+    var i:int = 0
+    while i < len - 1 {
+        var j:int = 0
+        while j < len - i - 1 {
+            if std.array.get(result, j) > std.array.get(result, j + 1) {
+                // Swap elements
+                let temp:int = std.array.get(result, j)
+                result = std.array.set(result, j, std.array.get(result, j + 1))
+                result = std.array.set(result, j + 1, temp)
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    
+    return result
+}
+
+// selection_sort sorts an array of integers using selection sort
+func selection_sort(arr:array<int>):array<int> {
+    let len:int = std.array.length(arr)
+    if len <= 1 {
+        return arr
+    }
+    
+    var result:array<int> = arr
+    var i:int = 0
+    while i < len - 1 {
+        var min_idx:int = i
+        var j:int = i + 1
+        while j < len {
+            if std.array.get(result, j) < std.array.get(result, min_idx) {
+                min_idx = j
+            }
+            j = j + 1
+        }
+        
+        // Swap elements
+        if min_idx != i {
+            let temp:int = std.array.get(result, i)
+            result = std.array.set(result, i, std.array.get(result, min_idx))
+            result = std.array.set(result, min_idx, temp)
+        }
+        
+        i = i + 1
+    }
+    
+    return result
+}
+
+// insertion_sort sorts an array of integers using insertion sort
+func insertion_sort(arr:array<int>):array<int> {
+    let len:int = std.array.length(arr)
+    if len <= 1 {
+        return arr
+    }
+    
+    var result:array<int> = arr
+    var i:int = 1
+    while i < len {
+        let key:int = std.array.get(result, i)
+        var j:int = i - 1
+        
+        while j >= 0 && std.array.get(result, j) > key {
+            result = std.array.set(result, j + 1, std.array.get(result, j))
+            j = j - 1
+        }
+        
+        result = std.array.set(result, j + 1, key)
+        i = i + 1
+    }
+    
+    return result
+}
+
+// ============================================================================
+// Searching Algorithms
+// ============================================================================
+
+// linear_search searches for a value in an array using linear search
+func linear_search(arr:array<int>, target:int):int {
+    let len:int = std.array.length(arr)
+    var i:int = 0
+    
+    while i < len {
+        if std.array.get(arr, i) == target {
+            return i
+        }
+        i = i + 1
+    }
+    
+    return -1  // Not found
+}
+
+// binary_search searches for a value in a sorted array using binary search
+func binary_search(arr:array<int>, target:int):int {
+    let len:int = std.array.length(arr)
+    if len == 0 {
+        return -1
+    }
+    
+    var left:int = 0
+    var right:int = len - 1
+    
+    while left <= right {
+        let mid:int = left + (right - left) / 2
+        let mid_val:int = std.array.get(arr, mid)
+        
+        if mid_val == target {
+            return mid
+        } else if mid_val < target {
+            left = mid + 1
+        } else {
+            right = mid - 1
+        }
+    }
+    
+    return -1  // Not found
+}
+
+// ============================================================================
+// Array Manipulation Algorithms
+// ============================================================================
+
+// reverse reverses an array in place
+func reverse<T>(arr:array<T>):array<T> {
+    let len:int = std.array.length(arr)
+    if len <= 1 {
+        return arr
+    }
+    
+    var result:array<T> = arr
+    var i:int = 0
+    var j:int = len - 1
+    
+    while i < j {
+        let temp:T = std.array.get(result, i)
+        result = std.array.set(result, i, std.array.get(result, j))
+        result = std.array.set(result, j, temp)
+        i = i + 1
+        j = j - 1
+    }
+    
+    return result
+}
+
+// rotate rotates an array by k positions to the right
+func rotate<T>(arr:array<T>, k:int):array<T> {
+    let len:int = std.array.length(arr)
+    if len <= 1 || k == 0 {
+        return arr
+    }
+    
+    // Normalize k to be within array bounds
+    let normalized_k:int = k % len
+    if normalized_k < 0 {
+        return rotate(arr, len + normalized_k)
+    }
+    
+    if normalized_k == 0 {
+        return arr
+    }
+    
+    // Create result array
+    var result:array<T> = arr
+    var i:int = 0
+    while i < len {
+        let new_index:int = (i + normalized_k) % len
+        result = std.array.set(result, new_index, std.array.get(arr, i))
+        i = i + 1
+    }
+    
+    return result
+}
+
+// shuffle shuffles an array using Fisher-Yates algorithm
+func shuffle<T>(arr:array<T>):array<T> {
+    let len:int = std.array.length(arr)
+    if len <= 1 {
+        return arr
+    }
+    
+    var result:array<T> = arr
+    var i:int = len - 1
+    
+    while i > 0 {
+        // Generate random index between 0 and i (inclusive)
+        // For now, we'll use a simple pseudo-random approach
+        let j:int = i % (i + 1)  // This is a placeholder - real implementation would use proper RNG
+        
+        // Swap elements
+        let temp:T = std.array.get(result, i)
+        result = std.array.set(result, i, std.array.get(result, j))
+        result = std.array.set(result, j, temp)
+        
+        i = i - 1
+    }
+    
+    return result
+}
+
+// ============================================================================
+// Mathematical Algorithms
+// ============================================================================
+
+// euclidean_distance calculates the Euclidean distance between two points
+func euclidean_distance(x1:float, y1:float, x2:float, y2:float):float {
+    let dx:float = x2 - x1
+    let dy:float = y2 - y1
+    return std.math.sqrt(dx * dx + dy * dy)
+}
+
+// manhattan_distance calculates the Manhattan distance between two points
+func manhattan_distance(x1:float, y1:float, x2:float, y2:float):float {
+    return std.math.abs_float(x2 - x1) + std.math.abs_float(y2 - y1)
+}
+
+// ============================================================================
+// String Algorithms
+// ============================================================================
+
+// levenshtein_distance calculates the Levenshtein distance between two strings
+func levenshtein_distance(s1:string, s2:string):int {
+    let len1:int = std.string.length(s1)
+    let len2:int = std.string.length(s2)
+    
+    if len1 == 0 {
+        return len2
+    }
+    if len2 == 0 {
+        return len1
+    }
+    
+    // Create a 2D array for dynamic programming
+    // For simplicity, we'll use a basic implementation
+    // In a real implementation, we'd need proper 2D array support
+    
+    var i:int = 0
+    var j:int = 0
+    var cost:int = 0
+    
+    // Simple implementation - not optimal but demonstrates the algorithm
+    if std.string.char_at(s1, 0) == std.string.char_at(s2, 0) {
+        cost = 0
+    } else {
+        cost = 1
+    }
+    
+    // This is a simplified version - full implementation would use proper DP
+    return cost + levenshtein_distance(
+        std.string.substring(s1, 1, len1),
+        std.string.substring(s2, 1, len2)
+    )
+}
+
+// ============================================================================
+// Utility Algorithms
+// ============================================================================
+
+// find_max finds the maximum element in an array
+func find_max(arr:array<int>):int {
+    let len:int = std.array.length(arr)
+    if len == 0 {
+        return 0  // Default value for empty array
+    }
+    
+    var max_val:int = std.array.get(arr, 0)
+    var i:int = 1
+    
+    while i < len {
+        let current:int = std.array.get(arr, i)
+        if current > max_val {
+            max_val = current
+        }
+        i = i + 1
+    }
+    
+    return max_val
+}
+
+// find_min finds the minimum element in an array
+func find_min(arr:array<int>):int {
+    let len:int = std.array.length(arr)
+    if len == 0 {
+        return 0  // Default value for empty array
+    }
+    
+    var min_val:int = std.array.get(arr, 0)
+    var i:int = 1
+    
+    while i < len {
+        let current:int = std.array.get(arr, i)
+        if current < min_val {
+            min_val = current
+        }
+        i = i + 1
+    }
+    
+    return min_val
+}
+
+// count_occurrences counts the number of occurrences of a value in an array
+func count_occurrences<T>(arr:array<T>, value:T):int {
+    let len:int = std.array.length(arr)
+    var count:int = 0
+    var i:int = 0
+    
+    while i < len {
+        if std.array.get(arr, i) == value {
+            count = count + 1
+        }
+        i = i + 1
+    }
+    
+    return count
+}
+
+// unique removes duplicate elements from an array
+func unique<T>(arr:array<T>):array<T> {
+    let len:int = std.array.length(arr)
+    if len <= 1 {
+        return arr
+    }
+    
+    var result:array<T> = []
+    var i:int = 0
+    
+    while i < len {
+        let current:T = std.array.get(arr, i)
+        var found:bool = false
+        var j:int = 0
+        
+        while j < std.array.length(result) {
+            if std.array.get(result, j) == current {
+                found = true
+                break
+            }
+            j = j + 1
+        }
+        
+        if !found {
+            result = std.array.append(result, current)
+        }
+        
+        i = i + 1
+    }
+    
+    return result
+}
+
+// ============================================================================
+// Graph Algorithms (Basic)
+// ============================================================================
+
+// is_connected checks if a graph represented as adjacency list is connected
+// This is a simplified implementation for demonstration
+func is_connected(adjacency_list:array<array<int>>):bool {
+    let num_vertices:int = std.array.length(adjacency_list)
+    if num_vertices <= 1 {
+        return true
+    }
+    
+    // Simple connectivity check - in a real implementation,
+    // we'd use DFS or BFS to traverse the graph
+    var total_edges:int = 0
+    var i:int = 0
+    
+    while i < num_vertices {
+        total_edges = total_edges + std.array.length(std.array.get(adjacency_list, i))
+        i = i + 1
+    }
+    
+    // A connected graph with n vertices has at least n-1 edges
+    return total_edges >= (num_vertices - 1)
+}

@@ -1,0 +1,445 @@
+// std.time - Time and date utilities for OmniLang
+
+// ============================================================================
+// Time Structure
+// ============================================================================
+
+// Time represents a point in time
+struct Time {
+    year:int
+    month:int
+    day:int
+    hour:int
+    minute:int
+    second:int
+    nanosecond:int
+}
+
+// ============================================================================
+// Current Time Functions
+// ============================================================================
+
+// now returns the current time
+func now():Time {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return Time{
+        year: 2024,
+        month: 1,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        nanosecond: 0
+    }
+}
+
+// unix_timestamp returns the current Unix timestamp
+func unix_timestamp():int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// unix_nano returns the current Unix timestamp in nanoseconds
+func unix_nano():int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// ============================================================================
+// Time Creation Functions
+// ============================================================================
+
+// time_create creates a new Time struct
+func time_create(year:int, month:int, day:int, hour:int, minute:int, second:int):Time {
+    return Time{
+        year: year,
+        month: month,
+        day: day,
+        hour: hour,
+        minute: minute,
+        second: second,
+        nanosecond: 0
+    }
+}
+
+// time_from_unix creates a Time from a Unix timestamp
+func time_from_unix(timestamp:int):Time {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return Time{
+        year: 1970,
+        month: 1,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        nanosecond: 0
+    }
+}
+
+// time_from_string parses a time string in RFC3339 format
+func time_from_string(time_str:string):Time {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return Time{
+        year: 2024,
+        month: 1,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        nanosecond: 0
+    }
+}
+
+// ============================================================================
+// Time Conversion Functions
+// ============================================================================
+
+// time_to_unix converts a Time to a Unix timestamp
+func time_to_unix(t:Time):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// time_to_string converts a Time to a string in RFC3339 format
+func time_to_string(t:Time):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// time_to_unix_nano converts a Time to Unix nanoseconds
+func time_to_unix_nano(t:Time):int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// ============================================================================
+// Time Comparison Functions
+// ============================================================================
+
+// time_equal checks if two times are equal
+func time_equal(t1:Time, t2:Time):bool {
+    return t1.year == t2.year &&
+           t1.month == t2.month &&
+           t1.day == t2.day &&
+           t1.hour == t2.hour &&
+           t1.minute == t2.minute &&
+           t1.second == t2.second &&
+           t1.nanosecond == t2.nanosecond
+}
+
+// time_before checks if t1 is before t2
+func time_before(t1:Time, t2:Time):bool {
+    if t1.year != t2.year {
+        return t1.year < t2.year
+    }
+    if t1.month != t2.month {
+        return t1.month < t2.month
+    }
+    if t1.day != t2.day {
+        return t1.day < t2.day
+    }
+    if t1.hour != t2.hour {
+        return t1.hour < t2.hour
+    }
+    if t1.minute != t2.minute {
+        return t1.minute < t2.minute
+    }
+    if t1.second != t2.second {
+        return t1.second < t2.second
+    }
+    return t1.nanosecond < t2.nanosecond
+}
+
+// time_after checks if t1 is after t2
+func time_after(t1:Time, t2:Time):bool {
+    return time_before(t2, t1)
+}
+
+// ============================================================================
+// Time Arithmetic Functions
+// ============================================================================
+
+// time_add_duration adds a duration to a time
+func time_add_duration(t:Time, duration:Duration):Time {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return t
+}
+
+// time_sub_duration subtracts a duration from a time
+func time_sub_duration(t:Time, duration:Duration):Time {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return t
+}
+
+// time_sub_time calculates the duration between two times
+func time_sub_time(t1:Time, t2:Time):Duration {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return Duration{seconds: 0, nanoseconds: 0}
+}
+
+// ============================================================================
+// Duration Structure
+// ============================================================================
+
+// Duration represents a time duration
+struct Duration {
+    seconds:int
+    nanoseconds:int
+}
+
+// ============================================================================
+// Duration Creation Functions
+// ============================================================================
+
+// duration_create creates a new Duration
+func duration_create(seconds:int, nanoseconds:int):Duration {
+    return Duration{
+        seconds: seconds,
+        nanoseconds: nanoseconds
+    }
+}
+
+// duration_from_seconds creates a Duration from seconds
+func duration_from_seconds(seconds:float):Duration {
+    let whole_seconds:int = std.math.floor(seconds)
+    let fractional_seconds:float = seconds - whole_seconds
+    let nanoseconds:int = std.math.floor(fractional_seconds * 1000000000.0)
+    
+    return Duration{
+        seconds: whole_seconds,
+        nanoseconds: nanoseconds
+    }
+}
+
+// duration_from_milliseconds creates a Duration from milliseconds
+func duration_from_milliseconds(milliseconds:int):Duration {
+    let seconds:int = milliseconds / 1000
+    let remaining_ms:int = milliseconds % 1000
+    let nanoseconds:int = remaining_ms * 1000000
+    
+    return Duration{
+        seconds: seconds,
+        nanoseconds: nanoseconds
+    }
+}
+
+// duration_from_minutes creates a Duration from minutes
+func duration_from_minutes(minutes:float):Duration {
+    return duration_from_seconds(minutes * 60.0)
+}
+
+// duration_from_hours creates a Duration from hours
+func duration_from_hours(hours:float):Duration {
+    return duration_from_seconds(hours * 3600.0)
+}
+
+// duration_from_days creates a Duration from days
+func duration_from_days(days:float):Duration {
+    return duration_from_seconds(days * 86400.0)
+}
+
+// ============================================================================
+// Duration Conversion Functions
+// ============================================================================
+
+// duration_to_seconds converts a Duration to seconds
+func duration_to_seconds(d:Duration):float {
+    return d.seconds + (d.nanoseconds / 1000000000.0)
+}
+
+// duration_to_milliseconds converts a Duration to milliseconds
+func duration_to_milliseconds(d:Duration):int {
+    return d.seconds * 1000 + (d.nanoseconds / 1000000)
+}
+
+// duration_to_minutes converts a Duration to minutes
+func duration_to_minutes(d:Duration):float {
+    return duration_to_seconds(d) / 60.0
+}
+
+// duration_to_hours converts a Duration to hours
+func duration_to_hours(d:Duration):float {
+    return duration_to_seconds(d) / 3600.0
+}
+
+// duration_to_days converts a Duration to days
+func duration_to_days(d:Duration):float {
+    return duration_to_seconds(d) / 86400.0
+}
+
+// duration_to_string converts a Duration to a string
+func duration_to_string(d:Duration):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// Duration Arithmetic Functions
+// ============================================================================
+
+// duration_add adds two durations
+func duration_add(d1:Duration, d2:Duration):Duration {
+    let total_seconds:int = d1.seconds + d2.seconds
+    let total_nanoseconds:int = d1.nanoseconds + d2.nanoseconds
+    
+    // Handle overflow
+    if total_nanoseconds >= 1000000000 {
+        return Duration{
+            seconds: total_seconds + 1,
+            nanoseconds: total_nanoseconds - 1000000000
+        }
+    }
+    
+    return Duration{
+        seconds: total_seconds,
+        nanoseconds: total_nanoseconds
+    }
+}
+
+// duration_sub subtracts two durations
+func duration_sub(d1:Duration, d2:Duration):Duration {
+    let total_seconds:int = d1.seconds - d2.seconds
+    let total_nanoseconds:int = d1.nanoseconds - d2.nanoseconds
+    
+    // Handle underflow
+    if total_nanoseconds < 0 {
+        return Duration{
+            seconds: total_seconds - 1,
+            nanoseconds: total_nanoseconds + 1000000000
+        }
+    }
+    
+    return Duration{
+        seconds: total_seconds,
+        nanoseconds: total_nanoseconds
+    }
+}
+
+// duration_mul multiplies a duration by a scalar
+func duration_mul(d:Duration, scalar:float):Duration {
+    let total_seconds:float = duration_to_seconds(d) * scalar
+    return duration_from_seconds(total_seconds)
+}
+
+// duration_div divides a duration by a scalar
+func duration_div(d:Duration, scalar:float):Duration {
+    if scalar == 0.0 {
+        return Duration{seconds: 0, nanoseconds: 0}
+    }
+    let total_seconds:float = duration_to_seconds(d) / scalar
+    return duration_from_seconds(total_seconds)
+}
+
+// ============================================================================
+// Duration Comparison Functions
+// ============================================================================
+
+// duration_equal checks if two durations are equal
+func duration_equal(d1:Duration, d2:Duration):bool {
+    return d1.seconds == d2.seconds && d1.nanoseconds == d2.nanoseconds
+}
+
+// duration_less checks if d1 is less than d2
+func duration_less(d1:Duration, d2:Duration):bool {
+    if d1.seconds != d2.seconds {
+        return d1.seconds < d2.seconds
+    }
+    return d1.nanoseconds < d2.nanoseconds
+}
+
+// duration_greater checks if d1 is greater than d2
+func duration_greater(d1:Duration, d2:Duration):bool {
+    return duration_less(d2, d1)
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+// sleep pauses execution for the specified duration
+func sleep(duration:Duration) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// sleep_seconds pauses execution for the specified number of seconds
+func sleep_seconds(seconds:float) {
+    sleep(duration_from_seconds(seconds))
+}
+
+// sleep_milliseconds pauses execution for the specified number of milliseconds
+func sleep_milliseconds(milliseconds:int) {
+    sleep(duration_from_milliseconds(milliseconds))
+}
+
+// ============================================================================
+// Time Zone Functions
+// ============================================================================
+
+// time_zone_offset returns the time zone offset in seconds
+func time_zone_offset():int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// time_zone_name returns the time zone name
+func time_zone_name():string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// ============================================================================
+// Formatting Functions
+// ============================================================================
+
+// time_format formats a time according to the given layout
+func time_format(t:Time, layout:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// time_parse parses a time string according to the given layout
+func time_parse(time_str:string, layout:string):Time {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return Time{
+        year: 2024,
+        month: 1,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 0,
+        nanosecond: 0
+    }
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+// Common duration constants
+let NANOSECOND:Duration = Duration{seconds: 0, nanoseconds: 1}
+let MICROSECOND:Duration = Duration{seconds: 0, nanoseconds: 1000}
+let MILLISECOND:Duration = Duration{seconds: 0, nanoseconds: 1000000}
+let SECOND:Duration = Duration{seconds: 1, nanoseconds: 0}
+let MINUTE:Duration = Duration{seconds: 60, nanoseconds: 0}
+let HOUR:Duration = Duration{seconds: 3600, nanoseconds: 0}
+let DAY:Duration = Duration{seconds: 86400, nanoseconds: 0}
+let WEEK:Duration = Duration{seconds: 604800, nanoseconds: 0}
+let MONTH:Duration = Duration{seconds: 2629746, nanoseconds: 0}  // Approximate
+let YEAR:Duration = Duration{seconds: 31556952, nanoseconds: 0}  // Approximate
