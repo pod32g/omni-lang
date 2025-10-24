@@ -905,6 +905,9 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 	case *ast.CastExpr:
 		// Type cast expression: (type) expression
 		return fb.emitCast(e)
+	case *ast.StringInterpolationExpr:
+		// String interpolation: "Hello, ${name}!"
+		return fb.emitStringInterpolation(e)
 	default:
 		return mirValue{}, fmt.Errorf("mir builder: unsupported expression %T", e)
 	}
@@ -1787,4 +1790,80 @@ func (fb *functionBuilder) emitCast(expr *ast.CastExpr) (mirValue, error) {
 	fb.block.Instructions = append(fb.block.Instructions, inst)
 
 	return mirValue{ID: id, Type: targetType}, nil
+}
+
+// emitStringInterpolation converts string interpolation to a series of concatenations
+func (fb *functionBuilder) emitStringInterpolation(expr *ast.StringInterpolationExpr) (mirValue, error) {
+	if len(expr.Parts) == 0 {
+		// Empty string
+		id := fb.fn.NextValue()
+		fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+			ID:   id,
+			Op:   "const",
+			Type: "string",
+			Operands: []mir.Operand{
+				{Kind: mir.OperandLiteral, Literal: "\"\"", Type: "string"},
+			},
+		})
+		return mirValue{ID: id, Type: "string"}, nil
+	}
+	
+	// Start with the first part
+	var result mirValue
+	for i, part := range expr.Parts {
+		var partValue mirValue
+		var err error
+		
+		if part.IsLiteral {
+			// Create a string literal
+			partValue, err = fb.emitLiteral(&ast.LiteralExpr{
+				SpanInfo: part.Span,
+				Kind:     ast.LiteralString,
+				Value:    "\"" + part.Literal + "\"",
+			})
+		} else {
+			// Evaluate the expression and convert to string if needed
+			partValue, err = fb.lowerExpr(part.Expr)
+			if err != nil {
+				return mirValue{}, err
+			}
+			
+			// If the expression is not already a string, we need to convert it
+			// For now, we'll assume the C backend will handle the conversion
+			// In a more sophisticated implementation, we'd add explicit conversion instructions here
+		}
+		
+		if err != nil {
+			return mirValue{}, err
+		}
+		
+		if i == 0 {
+			// First part - this is our initial result
+			result = partValue
+		} else {
+			// Concatenate with previous result
+			result, err = fb.emitStringConcatenation(result, partValue)
+			if err != nil {
+				return mirValue{}, err
+			}
+		}
+	}
+	
+	return result, nil
+}
+
+// emitStringConcatenation emits a string concatenation instruction
+func (fb *functionBuilder) emitStringConcatenation(left, right mirValue) (mirValue, error) {
+	id := fb.fn.NextValue()
+	inst := mir.Instruction{
+		ID:   id,
+		Op:   "strcat",
+		Type: "string",
+		Operands: []mir.Operand{
+			valueOperand(left.ID, left.Type),
+			valueOperand(right.ID, right.Type),
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, inst)
+	return mirValue{ID: id, Type: "string"}, nil
 }

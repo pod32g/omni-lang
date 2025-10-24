@@ -251,6 +251,18 @@ func (p *printer) writeExpr(expr Expr) {
 		p.writeLine("Identifier " + e.Name)
 	case *LiteralExpr:
 		p.writeLine("Literal " + string(e.Kind) + " " + e.Value)
+	case *StringInterpolationExpr:
+		p.writeLine("StringInterpolation")
+		p.indent(func() {
+			for _, part := range e.Parts {
+				if part.IsLiteral {
+					p.writeLine("LiteralPart " + part.Literal)
+				} else {
+					p.writeLine("ExprPart")
+					p.indent(func() { p.writeExpr(part.Expr) })
+				}
+			}
+		})
 	case *UnaryExpr:
 		p.writeLine("Unary " + e.Op)
 		p.indent(func() { p.writeExpr(e.Expr) })

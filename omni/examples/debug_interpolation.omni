@@ -1,0 +1,6 @@
+// Debug string interpolation
+func main(): int {
+    let name: string = "World"
+    let greeting: string = "Hello, ${name}!"
+    return 0
+}

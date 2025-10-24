@@ -282,6 +282,24 @@ func (e *LiteralExpr) Span() lexer.Span { return e.SpanInfo }
 func (e *LiteralExpr) node()            {}
 func (e *LiteralExpr) expr()            {}
 
+// StringInterpolationExpr represents string interpolation: "Hello, ${name}!"
+type StringInterpolationExpr struct {
+	SpanInfo lexer.Span
+	Parts    []StringInterpolationPart
+}
+
+func (e *StringInterpolationExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *StringInterpolationExpr) node()            {}
+func (e *StringInterpolationExpr) expr()            {}
+
+// StringInterpolationPart represents either a string literal or an expression in string interpolation
+type StringInterpolationPart struct {
+	IsLiteral bool   // true for string literals, false for expressions
+	Literal   string // the string literal part
+	Expr      Expr   // the expression part (when IsLiteral is false)
+	Span      lexer.Span
+}
+
 // UnaryExpr applies an operator to a sub-expression.
 type UnaryExpr struct {
 	SpanInfo lexer.Span

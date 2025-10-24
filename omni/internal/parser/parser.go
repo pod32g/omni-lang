@@ -882,6 +882,8 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralFloat, Value: tok.Lexeme}, nil
 	case lexer.TokenStringLiteral:
 		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralString, Value: tok.Lexeme}, nil
+	case lexer.TokenStringInterpolation:
+		return p.parseStringInterpolation(tok)
 	case lexer.TokenCharLiteral:
 		return &ast.LiteralExpr{SpanInfo: tok.Span, Kind: ast.LiteralChar, Value: tok.Lexeme}, nil
 	case lexer.TokenTrue, lexer.TokenFalse:
@@ -1406,6 +1408,95 @@ func (p *Parser) parseLambda(startTok lexer.Token) (ast.Expr, error) {
 
 	span := lexer.Span{Start: startTok.Span.Start, End: body.Span().End}
 	return &ast.LambdaExpr{SpanInfo: span, Params: params, Body: body}, nil
+}
+
+// parseStringInterpolation parses a string interpolation token like "Hello, ${name}!"
+func (p *Parser) parseStringInterpolation(tok lexer.Token) (ast.Expr, error) {
+	// The token lexeme contains the full string including quotes
+	// We need to parse the contents to extract literal parts and expressions
+	content := tok.Lexeme
+	if len(content) < 2 || content[0] != '"' || content[len(content)-1] != '"' {
+		return nil, fmt.Errorf("invalid string interpolation token: %s", content)
+	}
+	
+	// Remove the outer quotes
+	content = content[1 : len(content)-1]
+	
+	var parts []ast.StringInterpolationPart
+	current := ""
+	
+	for i := 0; i < len(content); i++ {
+		if content[i] == '$' && i+1 < len(content) && content[i+1] == '{' {
+			// Found an interpolation expression
+			// Add current literal part if not empty
+			if current != "" {
+				parts = append(parts, ast.StringInterpolationPart{
+					IsLiteral: true,
+					Literal:   current,
+					Span:      lexer.Span{Start: tok.Span.Start, End: tok.Span.End}, // TODO: calculate precise span
+				})
+				current = ""
+			}
+			
+			// Find the closing brace
+			i += 2 // skip "${"
+			exprStart := i
+			braceCount := 1
+			for i < len(content) && braceCount > 0 {
+				if content[i] == '{' {
+					braceCount++
+				} else if content[i] == '}' {
+					braceCount--
+				}
+				i++
+			}
+			
+			if braceCount > 0 {
+				return nil, fmt.Errorf("unterminated interpolation expression in string")
+			}
+			
+			// Parse the expression inside the braces
+			exprContent := content[exprStart : i-1] // exclude the closing brace
+			// Create a temporary parser to parse just this expression
+			tempTokens, err := lexer.LexAll("", exprContent)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse interpolation expression: %v", err)
+			}
+			
+			tempParser := &Parser{
+				filename: "interpolation",
+				tokens:   tempTokens,
+				lines:    []string{exprContent},
+			}
+			
+			expr, err := tempParser.parseExpr()
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse interpolation expression: %v", err)
+			}
+			
+			parts = append(parts, ast.StringInterpolationPart{
+				IsLiteral: false,
+				Expr:      expr,
+				Span:      lexer.Span{Start: tok.Span.Start, End: tok.Span.End}, // TODO: calculate precise span
+			})
+		} else {
+			current += string(content[i])
+		}
+	}
+	
+	// Add remaining literal part if any
+	if current != "" {
+		parts = append(parts, ast.StringInterpolationPart{
+			IsLiteral: true,
+			Literal:   current,
+			Span:      lexer.Span{Start: tok.Span.Start, End: tok.Span.End}, // TODO: calculate precise span
+		})
+	}
+	
+	return &ast.StringInterpolationExpr{
+		SpanInfo: tok.Span,
+		Parts:    parts,
+	}, nil
 }
 
 func splitLines(input string) []string {

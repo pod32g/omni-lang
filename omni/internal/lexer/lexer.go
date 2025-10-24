@@ -327,6 +327,36 @@ func (l *Lexer) scanString() (Token, error) {
 				return Token{}, l.errorf(startPos, "unterminated escape sequence")
 			}
 			l.advance()
+		case '$':
+			// Check for string interpolation: ${
+			if l.peekRuneAhead(1) == '{' {
+				// This is a string interpolation, not a regular string literal
+				l.advance() // consume '$'
+				l.advance() // consume '{'
+				// Continue scanning until we find the closing quote
+				for {
+					r := l.peek()
+					switch r {
+					case eofRune, '\n':
+						return Token{}, l.errorf(startPos, "unterminated string interpolation")
+					case '\\':
+						l.advance()
+						esc := l.peek()
+						if esc == eofRune {
+							return Token{}, l.errorf(startPos, "unterminated escape sequence")
+						}
+						l.advance()
+					case '"':
+						l.advance()
+						lexeme := l.slice(startOffset)
+						return l.emitTokenWithLexeme(TokenStringInterpolation, startPos, startOffset, lexeme), nil
+					default:
+						l.advance()
+					}
+				}
+			} else {
+				l.advance()
+			}
 		case '"':
 			l.advance()
 			lexeme := l.slice(startOffset)

@@ -1,0 +1,10 @@
+// Simple string interpolation test
+import std.io as io
+
+func main(): int {
+    let name: string = "World"
+    let greeting: string = "Hello, ${name}!"
+    
+    io.println(greeting)
+    return 0
+}

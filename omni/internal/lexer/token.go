@@ -14,6 +14,7 @@ const (
 	TokenIntLiteral
 	TokenFloatLiteral
 	TokenStringLiteral
+	TokenStringInterpolation
 	TokenCharLiteral
 	TokenNullLiteral
 	TokenHexLiteral
@@ -85,10 +86,11 @@ var kindNames = map[Kind]string{
 	TokenIllegal:       "ILLEGAL",
 	TokenEOF:           "EOF",
 	TokenIdentifier:    "IDENT",
-	TokenIntLiteral:    "INT",
-	TokenFloatLiteral:  "FLOAT",
-	TokenStringLiteral: "STRING",
-	TokenCharLiteral:   "CHAR",
+	TokenIntLiteral:         "INT",
+	TokenFloatLiteral:       "FLOAT",
+	TokenStringLiteral:      "STRING",
+	TokenStringInterpolation: "STRING_INTERP",
+	TokenCharLiteral:        "CHAR",
 	TokenNullLiteral:   "NULL",
 	TokenHexLiteral:    "HEX",
 	TokenBinaryLiteral: "BINARY",

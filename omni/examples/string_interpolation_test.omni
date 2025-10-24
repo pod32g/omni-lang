@@ -1,0 +1,19 @@
+// Test string interpolation
+import std.io as io
+
+func main(): int {
+    let name: string = "World"
+    let age: int = 42
+    let pi: float = 3.14159
+    
+    // Test string interpolation
+    let greeting: string = "Hello, ${name}!"
+    let message: string = "Age: ${age}, Pi: ${pi}"
+    let complex: string = "Hello, ${name}! You are ${age} years old and pi is ${pi}."
+    
+    io.println(greeting)
+    io.println(message)
+    io.println(complex)
+    
+    return 0
+}
