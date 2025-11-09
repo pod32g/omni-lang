@@ -4,11 +4,101 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <math.h>
+#include <time.h>
+#include <ctype.h>
 
 // Test framework state
 static int32_t total_tests = 0;
 static int32_t passed_tests = 0;
 static int32_t current_test_passed = 1;
+
+// Logging state
+enum {
+    OMNI_LOG_LEVEL_DEBUG = 0,
+    OMNI_LOG_LEVEL_INFO = 1,
+    OMNI_LOG_LEVEL_WARN = 2,
+    OMNI_LOG_LEVEL_ERROR = 3,
+};
+
+static int32_t omni_current_log_level = OMNI_LOG_LEVEL_INFO;
+
+static int omni_equals_ignore_case(const char* a, const char* b) {
+    if (!a || !b) {
+        return 0;
+    }
+    while (*a && *b) {
+        unsigned char ca = (unsigned char)(*a);
+        unsigned char cb = (unsigned char)(*b);
+        ca = (unsigned char)tolower(ca);
+        cb = (unsigned char)tolower(cb);
+        if (ca != cb) {
+            return 0;
+        }
+        a++;
+        b++;
+    }
+    return *a == '\0' && *b == '\0';
+}
+
+static void omni_log_write(int32_t level, const char* level_name, const char* message) {
+    if (level < omni_current_log_level) {
+        return;
+    }
+    time_t now = time(NULL);
+    char timebuf[32];
+#if defined(_WIN32)
+    struct tm tm_info;
+    localtime_s(&tm_info, &now);
+#else
+    struct tm tm_info;
+    localtime_r(&now, &tm_info);
+#endif
+    if (strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", &tm_info) == 0) {
+        strncpy(timebuf, "0000-00-00 00:00:00", sizeof(timebuf));
+        timebuf[sizeof(timebuf) - 1] = '\0';
+    }
+    fprintf(stderr, "%s - [%s] %s\n", timebuf, level_name, message ? message : "");
+    fflush(stderr);
+}
+
+void omni_log_debug(const char* message) {
+    omni_log_write(OMNI_LOG_LEVEL_DEBUG, "DEBUG", message);
+}
+
+void omni_log_info(const char* message) {
+    omni_log_write(OMNI_LOG_LEVEL_INFO, "INFO", message);
+}
+
+void omni_log_warn(const char* message) {
+    omni_log_write(OMNI_LOG_LEVEL_WARN, "WARN", message);
+}
+
+void omni_log_error(const char* message) {
+    omni_log_write(OMNI_LOG_LEVEL_ERROR, "ERROR", message);
+}
+
+int32_t omni_log_set_level(const char* level) {
+    if (!level) {
+        return 0;
+    }
+    if (omni_equals_ignore_case(level, "DEBUG")) {
+        omni_current_log_level = OMNI_LOG_LEVEL_DEBUG;
+        return 1;
+    }
+    if (omni_equals_ignore_case(level, "INFO")) {
+        omni_current_log_level = OMNI_LOG_LEVEL_INFO;
+        return 1;
+    }
+    if (omni_equals_ignore_case(level, "WARN") || omni_equals_ignore_case(level, "WARNING")) {
+        omni_current_log_level = OMNI_LOG_LEVEL_WARN;
+        return 1;
+    }
+    if (omni_equals_ignore_case(level, "ERROR") || omni_equals_ignore_case(level, "ERR")) {
+        omni_current_log_level = OMNI_LOG_LEVEL_ERROR;
+        return 1;
+    }
+    return 0;
+}
 
 // Basic I/O functions
 void omni_print_int(int32_t value) {

@@ -31,6 +31,9 @@ import std.time
 // Re-export network functions
 import std.network
 
+// Re-export logging functions
+import std.log
+
 // Common utility functions
 func assert(condition:bool, message:string) {
     if !condition {

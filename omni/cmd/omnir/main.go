@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/runner"
 )
 
@@ -22,6 +23,12 @@ func main() {
 	)
 	flag.Parse()
 
+	logger := logging.Logger()
+	logging.SetLevel(logging.LevelInfo)
+	if *verbose {
+		logging.SetLevel(logging.LevelDebug)
+	}
+
 	if *version {
 		fmt.Printf("omnir %s (built %s)\n", Version, BuildTime)
 		os.Exit(0)
@@ -33,7 +40,7 @@ func main() {
 	}
 
 	if flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "error: no input file specified")
+		logger.ErrorString("no input file specified")
 		fmt.Fprintln(os.Stderr, "")
 		showUsage()
 		os.Exit(2)
@@ -41,7 +48,7 @@ func main() {
 
 	program := flag.Arg(0)
 	if err := runner.Run(program, *verbose); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		logger.ErrorString(err.Error())
 		os.Exit(1)
 	}
 }

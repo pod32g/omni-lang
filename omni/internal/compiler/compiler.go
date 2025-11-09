@@ -13,6 +13,7 @@ import (
 	"github.com/omni-lang/omni/internal/ast"
 	cbackend "github.com/omni-lang/omni/internal/backend/c"
 	"github.com/omni-lang/omni/internal/backend/cranelift"
+	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/mir"
 	"github.com/omni-lang/omni/internal/mir/builder"
 	"github.com/omni-lang/omni/internal/mir/printer"
@@ -128,7 +129,7 @@ func Compile(cfg Config) error {
 	case "vm":
 		return compileVM(cfg, emit, mirMod)
 	case "clift":
-		fmt.Fprintf(os.Stderr, "Using Cranelift backend for emit: %s\n", emit)
+		logging.Logger().InfoFields("Using Cranelift backend", logging.String("emit", emit))
 		return compileCraneliftBackend(cfg, emit, mirMod)
 	case "c":
 		return compileCBackend(cfg, emit, mirMod)
@@ -143,6 +144,7 @@ func Compile(cfg Config) error {
 // but loaded for VM backend.
 func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, backend string) error {
 	loader := NewModuleLoader()
+	logger := logging.Logger()
 
 	// Add the base directory for local modules
 	if baseDir != "" {
@@ -155,8 +157,8 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 
 	// Show debug information if requested
 	if debugModules {
-		fmt.Fprintf(os.Stderr, "%s\n", loader.DebugInfo())
-		fmt.Fprintf(os.Stderr, "Loading imports...\n")
+		logger.DebugString(loader.DebugInfo())
+		logger.DebugString("Loading imports...")
 	}
 
 	// Collect imports from both Module.Imports and top-level decls
@@ -177,7 +179,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 			if backend == "vm" {
 				// For VM backend, load std modules
 				if debugModules {
-					fmt.Fprintf(os.Stderr, "Loading std import for VM: %s\n", strings.Join(imp.Path, "."))
+					logger.DebugFields("Loading std import for VM", logging.String("path", strings.Join(imp.Path, ".")))
 				}
 				imported, err := loader.LoadModule(imp.Path)
 				if err != nil {
@@ -199,14 +201,14 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 			} else {
 				// For C backend, skip std imports (handled as intrinsics)
 				if debugModules {
-					fmt.Fprintf(os.Stderr, "Skipping std import: %s (handled as intrinsic)\n", strings.Join(imp.Path, "."))
+					logger.DebugFields("Skipping std import (handled as intrinsic)", logging.String("path", strings.Join(imp.Path, ".")))
 				}
 			}
 			continue
 		}
 		// Load only local imports
 		if debugModules {
-			fmt.Fprintf(os.Stderr, "Loading module: %s\n", strings.Join(imp.Path, "."))
+			logger.DebugFields("Loading module", logging.String("path", strings.Join(imp.Path, ".")))
 		}
 		imported, err := loader.LoadModule(imp.Path)
 		if err != nil {

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/omni-lang/omni/internal/compiler"
+	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/mir/builder"
 	"github.com/omni-lang/omni/internal/parser"
 	"github.com/omni-lang/omni/internal/passes"
@@ -19,8 +20,10 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 		return vm.Result{}, fmt.Errorf("%s: unsupported input (expected .omni)", path)
 	}
 
+	logger := logging.Logger()
+
 	if verbose {
-		fmt.Fprintf(os.Stderr, "Running %s...\n", path)
+		logger.DebugFields("Running program", logging.String("path", path))
 	}
 
 	src, err := os.ReadFile(path)
@@ -29,7 +32,7 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "  Parsing source...\n")
+		logger.DebugString("Parsing source...")
 	}
 	mod, err := parser.Parse(path, string(src))
 	if err != nil {
@@ -37,7 +40,7 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "  Merging imported modules...\n")
+		logger.DebugString("Merging imported modules...")
 	}
 	// Merge locally imported modules' functions into the main module
 	if err := compiler.MergeImportedModules(mod, filepath.Dir(path), false, "vm"); err != nil {
@@ -45,14 +48,14 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "  Type checking...\n")
+		logger.DebugString("Type checking...")
 	}
 	if err := checker.Check(path, string(src), mod); err != nil {
 		return vm.Result{}, err
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "  Building MIR...\n")
+		logger.DebugString("Building MIR...")
 	}
 	mirModule, err := builder.BuildModule(mod)
 	if err != nil {
@@ -60,7 +63,7 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "  Running optimization passes...\n")
+		logger.DebugString("Running optimization passes...")
 	}
 	pipeline := passes.NewPipeline("runner")
 	if _, err := pipeline.Run(*mirModule); err != nil {
@@ -68,7 +71,7 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "  Executing program...\n")
+		logger.DebugString("Executing program...")
 	}
 	result, err := vm.Execute(mirModule, "main")
 	if err != nil {
@@ -76,7 +79,7 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "  Execution completed!\n")
+		logger.DebugString("Execution completed!")
 	}
 	return result, nil
 }

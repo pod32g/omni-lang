@@ -1,0 +1,26 @@
+// std.log - Structured logging backed by the host runtime
+//
+// These functions are implemented as intrinsics in the backend so that they
+// delegate to the host's logging infrastructure (simple-logger in the Go
+// runtime and formatted stderr output in the C runtime).
+
+func debug(message:string) {
+    // intrinsic
+}
+
+func info(message:string) {
+    // intrinsic
+}
+
+func warn(message:string) {
+    // intrinsic
+}
+
+func error(message:string) {
+    // intrinsic
+}
+
+func set_level(level:string):bool {
+    // intrinsic
+    return false
+}

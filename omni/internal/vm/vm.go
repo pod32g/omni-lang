@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/mir"
 )
 
@@ -938,6 +939,25 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			fmt.Println(arg.Value)
 			return Result{Type: "void", Value: nil}, true
 		}
+	case "std.log.debug":
+		return handleLogIntrinsic("debug", operands, fr)
+	case "std.log.info":
+		return handleLogIntrinsic("info", operands, fr)
+	case "std.log.warn":
+		return handleLogIntrinsic("warn", operands, fr)
+	case "std.log.error":
+		return handleLogIntrinsic("error", operands, fr)
+	case "std.log.set_level":
+		if len(operands) == 1 {
+			levelVal := operandValue(fr, operands[0])
+			levelStr, err := toString(levelVal)
+			if err != nil {
+				levelStr = fmt.Sprint(levelVal.Value)
+			}
+			success := logging.SetLevelByName(strings.TrimSpace(levelStr))
+			return Result{Type: "bool", Value: success}, true
+		}
+		return Result{Type: "bool", Value: false}, true
 	case "std.math.max":
 		if len(operands) == 2 {
 			left := operandValue(fr, operands[0])
@@ -2306,4 +2326,36 @@ func execCast(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (
 		// For other types, just return the operand with the new type
 		return Result{Type: targetType, Value: operand.Value}, nil
 	}
+}
+
+func handleLogIntrinsic(level string, operands []mir.Operand, fr *frame) (Result, bool) {
+	message := buildLogMessage(operands, fr)
+	logger := logging.Logger()
+	switch level {
+	case "debug":
+		logger.DebugString(message)
+	case "warn":
+		logger.WarnString(message)
+	case "error":
+		logger.ErrorString(message)
+	default:
+		logger.InfoString(message)
+	}
+	return Result{Type: "void", Value: nil}, true
+}
+
+func buildLogMessage(operands []mir.Operand, fr *frame) string {
+	if len(operands) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(operands))
+	for _, op := range operands {
+		val := operandValue(fr, op)
+		str, err := toString(val)
+		if err != nil {
+			str = fmt.Sprint(val.Value)
+		}
+		parts = append(parts, str)
+	}
+	return strings.Join(parts, " ")
 }

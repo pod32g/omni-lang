@@ -733,10 +733,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			var elementType string
 			if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
 				elementTypeStr := inst.Type[6 : len(inst.Type)-1] // Extract "int" from "array<int>"
-				elementType = g.mapType(elementTypeStr) // Map "int" to "int32_t"
+				elementType = g.mapType(elementTypeStr)           // Map "int" to "int32_t"
 			} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
 				elementTypeStr := inst.Type[3 : len(inst.Type)-1] // Extract "int" from "[]<int>"
-				elementType = g.mapType(elementTypeStr) // Map "int" to "int32_t"
+				elementType = g.mapType(elementTypeStr)           // Map "int" to "int32_t"
 			} else {
 				elementType = g.mapType(inst.Type) // fallback
 			}
@@ -1110,6 +1110,84 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			g.output.WriteString(fmt.Sprintf("  // TODO: Implement closure binding for %s\n", varName))
 			g.output.WriteString(fmt.Sprintf("  void* %s = %s; // Placeholder for bound closure\n", varName, closure))
 		}
+	case "std.io.print":
+		// Handle print statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_print_string(%s);\n", message))
+		}
+	case "std.io.println":
+		// Handle println statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_println_string(%s);\n", message))
+		}
+	case "std.io.print_int":
+		// Handle print_int statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_print_int(%s);\n", message))
+		}
+	case "std.io.println_int":
+		// Handle println_int statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_println_int(%s);\n", message))
+		}
+	case "std.io.print_float":
+		// Handle print_float statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_print_float(%s);\n", message))
+		}
+	case "std.io.println_float":
+		// Handle println_float statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_println_float(%s);\n", message))
+		}
+	case "std.io.print_bool":
+		// Handle print_bool statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_print_bool(%s);\n", message))
+		}
+	case "std.io.println_bool":
+		// Handle println_bool statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_println_bool(%s);\n", message))
+		}
+	case "std.log.debug":
+		// Handle debug log statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_log_debug(%s);\n", message))
+		}
+	case "std.log.info":
+		// Handle info log statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_log_info(%s);\n", message))
+		}
+	case "std.log.warn":
+		// Handle warn log statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_log_warn(%s);\n", message))
+		}
+	case "std.log.error":
+		// Handle error log statement
+		if len(inst.Operands) >= 1 {
+			message := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_log_error(%s);\n", message))
+		}
+	case "std.log.set_level":
+		// Handle log level setting
+		if len(inst.Operands) >= 1 {
+			level := g.getOperandValue(inst.Operands[0])
+			g.output.WriteString(fmt.Sprintf("  omni_log_set_level(%s);\n", level))
+		}
 	default:
 		// Handle unknown instructions
 		g.output.WriteString(fmt.Sprintf("  // TODO: Implement instruction %s\n", inst.Op))
@@ -1280,7 +1358,7 @@ func (g *CGenerator) mapType(omniType string) string {
 	if strings.HasPrefix(omniType, "struct<") && strings.HasSuffix(omniType, ">") {
 		return "omni_struct_t*"
 	}
-	
+
 	// Handle named struct types (like Point, User, etc.)
 	// For now, assume any unknown type that's not a primitive is a struct
 	if !g.isPrimitiveType(omniType) && !strings.Contains(omniType, "(") && !strings.Contains(omniType, "<") {
@@ -1567,6 +1645,18 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 	case "std.io.println_bool":
 		return "omni_println_bool"
 
+	// Logging functions
+	case "std.log.debug":
+		return "omni_log_debug"
+	case "std.log.info":
+		return "omni_log_info"
+	case "std.log.warn":
+		return "omni_log_warn"
+	case "std.log.error":
+		return "omni_log_error"
+	case "std.log.set_level":
+		return "omni_log_set_level"
+
 	// String functions
 	case "std.string.length":
 		return "omni_strlen"
@@ -1838,9 +1928,14 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.malloc":          true,
 		"std.realloc":         true,
 		// Array operations
-		"std.array.length": true,
-		"std.array.get":    true,
-		"std.array.set":    true,
+		"std.array.length":  true,
+		"std.array.get":     true,
+		"std.array.set":     true,
+		"std.log.debug":     true,
+		"std.log.info":      true,
+		"std.log.warn":      true,
+		"std.log.error":     true,
+		"std.log.set_level": true,
 	}
 
 	return runtimeFunctions[funcName]
@@ -1890,7 +1985,6 @@ func (g *CGenerator) isPrimitiveType(omniType string) bool {
 		return false
 	}
 }
-
 
 // convertLiteralToDecimal converts hex and binary literals to decimal
 func (g *CGenerator) convertLiteralToDecimal(literal string) string {

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/omni-lang/omni/internal/compiler"
+	"github.com/omni-lang/omni/internal/logging"
 )
 
 var (
@@ -52,6 +53,12 @@ func main() {
 
 	flag.Parse()
 
+	logger := logging.Logger()
+	logging.SetLevel(logging.LevelInfo)
+	if *verbose {
+		logging.SetLevel(logging.LevelDebug)
+	}
+
 	if *version {
 		fmt.Printf("omnic %s (built %s)\n", Version, BuildTime)
 		os.Exit(0)
@@ -63,7 +70,7 @@ func main() {
 	}
 
 	if flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "error: no input file specified")
+		logger.ErrorString("no input file specified")
 		fmt.Fprintln(os.Stderr, "")
 		showUsage()
 		os.Exit(2)
@@ -83,7 +90,7 @@ func main() {
 	}
 
 	if err := run(input, *output, *backend, *optLevel, emit, *dump, *verbose, *debug, *debugModules); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		logger.ErrorString(err.Error())
 		os.Exit(1)
 	}
 }
@@ -124,18 +131,21 @@ func run(input, output, backend, optLevel, emit, dump string, verbose, debug, de
 		return fmt.Errorf("%s: unsupported input (expected .omni)", input)
 	}
 
+	logger := logging.Logger()
+
 	if verbose {
-		fmt.Fprintf(os.Stderr, "Compiling %s...\n", input)
-		fmt.Fprintf(os.Stderr, "  Backend: %s\n", backend)
-		fmt.Fprintf(os.Stderr, "  Optimization: %s\n", optLevel)
-		fmt.Fprintf(os.Stderr, "  Emit: %s\n", emit)
+		logger.DebugString("Compiling " + input + "...")
+		logger.DebugFields("Compilation settings",
+			logging.String("backend", backend),
+			logging.String("optimization", optLevel),
+			logging.String("emit", emit),
+		)
 		if dump != "" {
-			fmt.Fprintf(os.Stderr, "  Dump: %s\n", dump)
+			logger.DebugFields("Dump configured", logging.String("path", dump))
 		}
 		if output != "" {
-			fmt.Fprintf(os.Stderr, "  Output: %s\n", output)
+			logger.DebugFields("Output configured", logging.String("path", output))
 		}
-		fmt.Fprintf(os.Stderr, "\n")
 	}
 
 	cfg := compiler.Config{
@@ -150,7 +160,7 @@ func run(input, output, backend, optLevel, emit, dump string, verbose, debug, de
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "Starting compilation...\n")
+		logger.DebugString("Starting compilation...")
 	}
 
 	if err := compiler.Compile(cfg); err != nil {
@@ -161,7 +171,7 @@ func run(input, output, backend, optLevel, emit, dump string, verbose, debug, de
 	}
 
 	if verbose {
-		fmt.Fprintf(os.Stderr, "Compilation completed successfully!\n")
+		logger.DebugString("Compilation completed successfully!")
 	}
 
 	return nil

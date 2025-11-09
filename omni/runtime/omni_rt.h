@@ -17,6 +17,13 @@ void omni_println_float(double value);
 void omni_print_bool(int32_t value);
 void omni_println_bool(int32_t value);
 
+// Logging functions
+void omni_log_debug(const char* message);
+void omni_log_info(const char* message);
+void omni_log_warn(const char* message);
+void omni_log_error(const char* message);
+int32_t omni_log_set_level(const char* level);
+
 // Memory management
 void* omni_alloc(size_t size);
 void omni_free(void* ptr);

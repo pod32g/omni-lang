@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/packaging"
 )
 
@@ -29,6 +30,9 @@ func main() {
 
 	flag.Parse()
 
+	logger := logging.Logger()
+	logging.SetLevel(logging.LevelInfo)
+
 	if *help || *showHelp {
 		showUsage()
 		return
@@ -42,8 +46,10 @@ func main() {
 	case "zip":
 		pkgType = packaging.PackageTypeZip
 	default:
-		fmt.Fprintf(os.Stderr, "Error: unsupported package type: %s\n", *packageType)
-		fmt.Fprintf(os.Stderr, "Supported types: tar.gz, zip\n")
+		logger.ErrorFields("unsupported package type",
+			logging.String("type", *packageType),
+		)
+		fmt.Fprintln(os.Stderr, "Supported types: tar.gz, zip")
 		os.Exit(1)
 	}
 
@@ -64,21 +70,28 @@ func main() {
 		Architecture: *arch,
 	}
 
-	fmt.Printf("Creating package: %s\n", outputPath)
-	fmt.Printf("  Type: %s\n", *packageType)
-	fmt.Printf("  Version: %s\n", *version)
-	fmt.Printf("  Platform: %s-%s\n", *platform, *arch)
-	fmt.Printf("  Include Debug: %t\n", *includeDebug)
-	fmt.Printf("  Include Source: %t\n", *includeSrc)
-	fmt.Println()
+	logger.InfoFields("Creating package",
+		logging.String("output", outputPath),
+		logging.String("type", *packageType),
+		logging.String("version", *version),
+		logging.String("platform", *platform),
+		logging.String("arch", *arch),
+		logging.Bool("include_debug", *includeDebug),
+		logging.Bool("include_src", *includeSrc),
+	)
 
 	// Create the package
 	if err := packaging.CreatePackage(config); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating package: %v\n", err)
+		logger.ErrorFields("failed to create package",
+			logging.Error("error", err),
+			logging.String("output", outputPath),
+		)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Package created successfully: %s\n", outputPath)
+	logger.InfoFields("Package created successfully",
+		logging.String("output", outputPath),
+	)
 }
 
 func showUsage() {
