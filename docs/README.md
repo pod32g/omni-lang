@@ -55,14 +55,9 @@ If you're new to OmniLang, start here:
 
 - **Standard Library:**
   - `std.io` - Input/output functions
-  - `std.math` - Advanced mathematical functions (trigonometric, logarithmic, statistical)
-  - `std.string` - Comprehensive string manipulation (50+ functions)
-  - `std.array` - Array operations and manipulation
-  - `std.collections` - Advanced data structures (sets, queues, stacks, trees)
-  - `std.algorithms` - Sorting, searching, and utility algorithms
-  - `std.time` - Time and date utilities
-  - `std.network` - Basic networking and HTTP client functions
-  - `std.os` - Operating system interface
+  - `std.math` - Mathematical utilities
+  - `std.string` - String manipulation helpers
+  - `std.log` - Structured logging backed by `simple-logger`
 
 - **Compiler:**
   - Lexer with detailed error reporting
@@ -117,15 +112,10 @@ If you're new to OmniLang, start here:
 ### API Reference
 - **[Language Reference](api/language-reference.md)** - Core language features
 - **[Standard Library](api/stdlib/)** - Complete stdlib documentation
-  - [std.io](api/stdlib/io.md) - Input/Output functions
-  - [std.math](api/stdlib/math.md) - Advanced mathematical functions
-  - [std.string](api/stdlib/string.md) - Comprehensive string manipulation (50+ functions)
-  - [std.array](api/stdlib/array.md) - Array operations
-  - [std.collections](api/stdlib/collections.md) - Advanced data structures
-  - [std.algorithms](api/stdlib/algorithms.md) - Sorting, searching, and utility algorithms
-  - [std.time](api/stdlib/time.md) - Time and date utilities
-  - [std.network](api/stdlib/network.md) - Networking and HTTP client functions
-  - [std.os](api/stdlib/os.md) - Operating system interface
+  - [std.io](api/stdlib/io.md) - Input/output utilities
+  - [std.math](api/stdlib/math.md) - Numerical helpers
+  - [std.string](api/stdlib/string.md) - String manipulation
+  - [std.log](api/stdlib/log.md) - Structured logging functions and configuration
 - **[Examples](api/examples/)** - Code examples and tutorials
 
 ### Project Information

@@ -269,7 +269,37 @@ scores["david"] = 88
 
 ## Standard Library
 
-OmniLang comes with a comprehensive standard library:
+OmniLang ships with a comprehensive standard library backed by structured logging via [`simple-logger`](https://github.com/pod32g/simple-logger):
+
+### Logging
+
+```omni
+import std
+
+func main():int {
+    std.log.info("Server starting")
+
+    if std.log.set_level("debug") {
+        std.log.debug("Debug logging enabled")
+    } else {
+        std.log.warn("Unrecognised log level")
+    }
+
+    std.log.error("Something went wrong")
+    return 0
+}
+```
+
+By default OmniLang emits human-friendly text logs to `stderr` at the `INFO` level. Customise behaviour before running any Omni tool with environment variables:
+
+- `LOG_LEVEL` (`debug`, `info`, `warn`, `error`)
+- `LOG_OUTPUT` (`stdout`, `stderr`, or a file path)
+- `LOG_FORMAT` (`text` or `json`)
+- `LOG_COLORIZE` (`true`/`false`)
+- `LOG_ROTATE` (`true`/`false`) with `LOG_ROTATE_MAX_SIZE`, `LOG_ROTATE_MAX_AGE`, `LOG_ROTATE_MAX_BACKUPS`, `LOG_ROTATE_COMPRESS`
+- `LOG_TIME_FORMAT` (Go layout string, e.g. `2006-01-02T15:04:05Z07:00`)
+
+All Omni binaries (`omnic`, `omnir`, `omnipkg`) share this global logger. The `-verbose` flag temporarily raises the active level to `DEBUG`, making it easy to toggle detailed traces without changing environment settings.
 
 ### I/O Functions
 

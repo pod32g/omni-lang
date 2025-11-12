@@ -1,0 +1,15 @@
+import std
+
+func main():int {
+    std.log.info("Application starting")
+
+    if std.log.set_level("debug") {
+        std.log.debug("Debug mode enabled")
+    } else {
+        std.log.warn("Failed to change log level")
+    }
+
+    std.log.error("Simulated failure path")
+    return 0
+}
+

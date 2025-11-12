@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Documented `std.log` structured logging module, including examples and configuration guidance.
+- Added logging quick-start examples and references across the documentation set.
+
+### Changed
+- Updated top-level and API documentation to reflect `simple-logger` as the default runtime logger.
+- Refreshed examples repository to include logging usage patterns.
+
 ### Planned
 - Advanced type system with generics and union types
 - MIR optimization passes and advanced features

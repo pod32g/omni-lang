@@ -5,11 +5,12 @@ This document provides comprehensive examples demonstrating all the features of 
 ## Table of Contents
 
 1. [Basic Examples](#basic-examples)
-2. [String Operations](#string-operations)
-3. [Exception Handling](#exception-handling)
-4. [Advanced Type System](#advanced-type-system)
-5. [Real-World Examples](#real-world-examples)
-6. [Complete Programs](#complete-programs)
+2. [Logging](#logging)
+3. [String Operations](#string-operations)
+4. [Exception Handling](#exception-handling)
+5. [Advanced Type System](#advanced-type-system)
+6. [Real-World Examples](#real-world-examples)
+7. [Complete Programs](#complete-programs)
 
 ## Basic Examples
 
@@ -119,6 +120,35 @@ func control_flow_example(): int {
     return 0
 }
 ```
+
+## Logging
+
+### Structured Logging
+
+```omni
+import std
+
+func main(): int {
+    std.log.info("Application starting")
+
+    if std.log.set_level("debug") {
+        std.log.debug("Debug mode enabled")
+    } else {
+        std.log.warn("Log level could not be changed")
+    }
+
+    std.log.error("Simulated failure path")
+    return 0
+}
+```
+
+**Environment overrides**
+
+```bash
+LOG_LEVEL=debug LOG_FORMAT=json ./bin/omnir logging_example.omni
+```
+
+Produces JSON output with debug statements included.
 
 ## String Operations
 

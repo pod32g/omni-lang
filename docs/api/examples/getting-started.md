@@ -26,6 +26,30 @@ func main():int {
 Hello, World!
 ```
 
+## Logging Basics
+
+Structured logging is available through `std.log` and uses the same `simple-logger` instance as the compiler and runner:
+
+```omni
+// logging.omni
+import std
+
+func main():int {
+    std.log.info("service starting")
+
+    if std.log.set_level("debug") {
+        std.log.debug("debug logging enabled")
+    } else {
+        std.log.warn("invalid level supplied")
+    }
+
+    std.log.error("shutting down")
+    return 0
+}
+```
+
+**Tip:** Set `LOG_LEVEL=debug` or `LOG_FORMAT=json` before running `omnir` to change the output without modifying your code.
+
 ## Variables and Types
 
 Demonstrates variable declaration and type inference:

@@ -178,6 +178,37 @@ Comprehensive string manipulation functions.
 - `interpolate(template:string, variables:map<string, string>):string` - Variable interpolation
 - `template(template:string, values:array<string>):string` - Template processing
 
+### std.log
+Structured logging backed by `simple-logger`. The logging runtime is shared by the compiler, runner, and generated executables.
+
+**Functions:**
+- `debug(message:string)` – Emit a debug-level log (visible when level is `debug`)
+- `info(message:string)` – Emit an info-level log
+- `warn(message:string)` – Emit a warning
+- `error(message:string)` – Emit an error log
+- `set_level(level:string):bool` – Change the active level (`debug`, `info`, `warn`, `error`). Returns `true` on success.
+
+**Configuration:**
+- Default level: `info`
+- Default output: `stderr`
+- Override with environment variables (`LOG_LEVEL`, `LOG_OUTPUT`, `LOG_FORMAT`, `LOG_COLORIZE`, `LOG_TIME_FORMAT`, `LOG_ROTATE_*`) before launching an Omni binary.
+
+**Example:**
+```omni
+import std
+
+func main():int {
+    std.log.info("Service starting")
+    if std.log.set_level("debug") {
+        std.log.debug("verbose logging enabled")
+    } else {
+        std.log.warn("invalid log level supplied")
+    }
+    std.log.error("fatal path encountered")
+    return 0
+}
+```
+
 ### std.array
 Array manipulation functions.
 

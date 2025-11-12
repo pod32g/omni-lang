@@ -245,6 +245,20 @@ let str_to_float:float = std.string_to_float("3.14")
 let str_to_bool:bool = std.string_to_bool("true")
 ```
 
+### Logging
+```omni
+import std.log
+
+std.log.info("Service starting")
+std.log.warn("Retrying request")
+if std.log.set_level("debug") {
+    std.log.debug("Verbose diagnostics enabled")
+}
+std.log.error("Shutting down")
+```
+
+**Environment variables:** `LOG_LEVEL`, `LOG_FORMAT`, `LOG_OUTPUT`, `LOG_COLORIZE`, `LOG_TIME_FORMAT`, `LOG_ROTATE_*`.
+
 ### Bitwise Operations
 ```omni
 let a:int = 0b1010  // 10 in binary
