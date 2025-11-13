@@ -1,13 +1,13 @@
 // std.io - Input/Output functions for OmniLang
 
-// print outputs a string to stdout without a newline
-func print(s:string) { 
+// print outputs a printable value to stdout without a newline
+func print(value:string | int | float | double | bool) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
-// println outputs a string to stdout with a newline
-func println(s:string) {
+// println outputs a printable value to stdout with a newline
+func println(value:string | int | float | double | bool) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }

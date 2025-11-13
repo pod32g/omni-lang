@@ -4,32 +4,35 @@ The `std.io` module provides functions for input and output operations.
 
 ## Functions
 
-### print(value: string): void
+### print(value: string | int | float | double | bool): void
 
-Prints a string to standard output without a newline.
+Prints a primitive value to standard output without a newline. Non-string values are automatically converted.
 
 **Parameters:**
-- `value` (string): The string to print
+- `value` (string \| int \| float \| double \| bool): The value to print
 
 **Example:**
 ```omni
 import std.io as io
 
 func main():int {
-    io.print("Hello")
-    io.print(" ")
-    io.print("World")
-    // Output: Hello World
+    io.print("Result: ")
+    io.print(42)
+    io.print(", ratio = ")
+    io.print(3.14)
+    io.print(", ok = ")
+    io.print(true)
+    io.println("")
     return 0
 }
 ```
 
-### println(value: string): void
+### println(value: string | int | float | double | bool): void
 
-Prints a string to standard output with a newline.
+Prints a primitive value to standard output with a newline. Non-string values are automatically converted.
 
 **Parameters:**
-- `value` (string): The string to print
+- `value` (string \| int \| float \| double \| bool): The value to print
 
 **Example:**
 ```omni
@@ -37,7 +40,9 @@ import std.io as io
 
 func main():int {
     io.println("Hello, World!")
-    io.println("This is a new line")
+    io.println(42)
+    io.println(3.14)
+    io.println(false)
     return 0
 }
 ```
@@ -141,6 +146,8 @@ func main():int {
 ### println_bool(value: bool): void
 
 Prints a boolean to standard output with a newline.
+
+> ℹ️ The specialised `print_*` helpers remain available, but `print` and `println` now handle booleans, integers, and floats directly.
 
 **Parameters:**
 - `value` (bool): The boolean to print

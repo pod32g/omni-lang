@@ -321,13 +321,16 @@ import std
 
 func main():int {
     // Basic output
-    std.io.println("Hello, World!")
+    std.io.println("Hello, OmniLang!")
     std.io.print("Enter your name: ")
     
-    // Typed output
-    std.io.println_int(42)
-    std.io.print_float(3.14)
-    std.io.println_bool(true)
+    // Primitive values print directly
+    let count:int = 42
+    let ratio:float = 3.14
+    let ok:bool = true
+    std.io.println(count)
+    std.io.println(ratio)
+    std.io.println(ok)
     
     return 0
 }

@@ -1111,16 +1111,14 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			g.output.WriteString(fmt.Sprintf("  void* %s = %s; // Placeholder for bound closure\n", varName, closure))
 		}
 	case "std.io.print":
-		// Handle print statement
 		if len(inst.Operands) >= 1 {
-			message := g.getOperandValue(inst.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  omni_print_string(%s);\n", message))
+			g.emitPrint(inst.Operands[0], false)
 		}
 	case "std.io.println":
-		// Handle println statement
 		if len(inst.Operands) >= 1 {
-			message := g.getOperandValue(inst.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  omni_println_string(%s);\n", message))
+			g.emitPrint(inst.Operands[0], true)
+		} else {
+			g.output.WriteString("  omni_println_string(\"\");\n")
 		}
 	case "std.io.print_int":
 		// Handle print_int statement
@@ -1315,6 +1313,53 @@ func (g *CGenerator) convertOperandToString(op mir.Operand) string {
 	default:
 		return "/* unknown operand */"
 	}
+}
+
+// emitPrint handles std.io.print/println for primitive and convertible types.
+func (g *CGenerator) emitPrint(op mir.Operand, newline bool) {
+	funcName := ""
+	arg := ""
+
+	switch op.Type {
+	case "string":
+		arg = g.getOperandValue(op)
+		if newline {
+			funcName = "omni_println_string"
+		} else {
+			funcName = "omni_print_string"
+		}
+	case "int":
+		arg = g.getOperandValue(op)
+		if newline {
+			funcName = "omni_println_int"
+		} else {
+			funcName = "omni_print_int"
+		}
+	case "float", "double":
+		arg = g.getOperandValue(op)
+		if newline {
+			funcName = "omni_println_float"
+		} else {
+			funcName = "omni_print_float"
+		}
+	case "bool":
+		arg = g.getOperandValue(op)
+		if newline {
+			funcName = "omni_println_bool"
+		} else {
+			funcName = "omni_print_bool"
+		}
+	default:
+		// Fallback: convert the operand to a string and print
+		arg = g.convertOperandToString(op)
+		if newline {
+			funcName = "omni_println_string"
+		} else {
+			funcName = "omni_print_string"
+		}
+	}
+
+	g.output.WriteString(fmt.Sprintf("  %s(%s);\n", funcName, arg))
 }
 
 // isMapVariable checks if a variable is a map
