@@ -16,20 +16,22 @@ var (
 
 func main() {
 	var (
-		version  = flag.Bool("version", false, "print version and exit")
-		verbose  = flag.Bool("verbose", false, "enable verbose output")
-		help     = flag.Bool("help", false, "show help and exit")
-		showHelp = flag.Bool("h", false, "show help and exit")
+		version    = flag.Bool("version", false, "print version and exit")
+		versionAlt = flag.Bool("v", false, "alias for -version")
+		verbose    = flag.Bool("verbose", false, "enable verbose output")
+		verboseAlt = flag.Bool("V", false, "alias for -verbose")
+		help       = flag.Bool("help", false, "show help and exit")
+		showHelp   = flag.Bool("h", false, "show help and exit")
 	)
 	flag.Parse()
 
 	logger := logging.Logger()
 	logging.SetLevel(logging.LevelInfo)
-	if *verbose {
+	if *verbose || *verboseAlt {
 		logging.SetLevel(logging.LevelDebug)
 	}
 
-	if *version {
+	if *version || *versionAlt {
 		fmt.Printf("omnir %s (built %s)\n", Version, BuildTime)
 		os.Exit(0)
 	}
@@ -47,7 +49,7 @@ func main() {
 	}
 
 	program := flag.Arg(0)
-	if err := runner.Run(program, *verbose); err != nil {
+	if err := runner.Run(program, *verbose || *verboseAlt); err != nil {
 		logger.ErrorString(err.Error())
 		os.Exit(1)
 	}
@@ -59,9 +61,9 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "USAGE:\n")
 	fmt.Fprintf(os.Stderr, "  omnir [options] <file.omni>\n\n")
 	fmt.Fprintf(os.Stderr, "OPTIONS:\n")
-	fmt.Fprintf(os.Stderr, "  -verbose\n")
+	fmt.Fprintf(os.Stderr, "  -verbose, -V\n")
 	fmt.Fprintf(os.Stderr, "        enable verbose output\n")
-	fmt.Fprintf(os.Stderr, "  -version\n")
+	fmt.Fprintf(os.Stderr, "  -version, -v\n")
 	fmt.Fprintf(os.Stderr, "        print version and exit\n")
 	fmt.Fprintf(os.Stderr, "  -help, -h\n")
 	fmt.Fprintf(os.Stderr, "        show help and exit\n\n")

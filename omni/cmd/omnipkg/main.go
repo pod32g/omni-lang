@@ -17,15 +17,23 @@ var (
 
 func main() {
 	var (
-		output       = flag.String("o", "", "output package path")
-		packageType  = flag.String("type", "tar.gz", "package type (tar.gz|zip)")
-		includeDebug = flag.Bool("debug", false, "include debug symbols")
-		includeSrc   = flag.Bool("src", false, "include source code")
-		version      = flag.String("version", "dev", "package version")
-		platform     = flag.String("platform", runtime.GOOS, "target platform")
-		arch         = flag.String("arch", runtime.GOARCH, "target architecture")
-		help         = flag.Bool("help", false, "show help and exit")
-		showHelp     = flag.Bool("h", false, "show help and exit")
+		output        = flag.String("o", "", "output package path")
+		packageType   = flag.String("type", "tar.gz", "package type (tar.gz|zip)")
+		packageTypeSh = flag.String("t", "", "alias for -type")
+		includeDebug  = flag.Bool("debug", false, "include debug symbols")
+		includeDebugS = flag.Bool("g", false, "alias for -debug")
+		includeSrc    = flag.Bool("src", false, "include source code")
+		includeSrcAlt = flag.Bool("s", false, "alias for -src")
+		version       = flag.String("version", "dev", "package version")
+		versionShort  = flag.String("v", "", "alias for -version")
+		platform      = flag.String("platform", runtime.GOOS, "target platform")
+		platformShort = flag.String("p", "", "alias for -platform")
+		arch          = flag.String("arch", runtime.GOARCH, "target architecture")
+		archShort     = flag.String("a", "", "alias for -arch")
+		listTypes     = flag.Bool("list-types", false, "list supported package types and exit")
+		listTypesAlt  = flag.Bool("T", false, "alias for -list-types")
+		help          = flag.Bool("help", false, "show help and exit")
+		showHelp      = flag.Bool("h", false, "show help and exit")
 	)
 
 	flag.Parse()
@@ -33,9 +41,35 @@ func main() {
 	logger := logging.Logger()
 	logging.SetLevel(logging.LevelInfo)
 
+	if *listTypes || *listTypesAlt {
+		fmt.Println("Supported package types:")
+		fmt.Println("  tar.gz")
+		fmt.Println("  zip")
+		return
+	}
+
 	if *help || *showHelp {
 		showUsage()
 		return
+	}
+
+	if *packageTypeSh != "" {
+		*packageType = *packageTypeSh
+	}
+	if *includeDebugS {
+		*includeDebug = true
+	}
+	if *includeSrcAlt {
+		*includeSrc = true
+	}
+	if *versionShort != "" {
+		*version = *versionShort
+	}
+	if *platformShort != "" {
+		*platform = *platformShort
+	}
+	if *archShort != "" {
+		*arch = *archShort
 	}
 
 	// Determine package type
@@ -100,18 +134,20 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "OPTIONS:\n")
 	fmt.Fprintf(os.Stderr, "  -o string\n")
 	fmt.Fprintf(os.Stderr, "        output package path (default: auto-generated)\n")
-	fmt.Fprintf(os.Stderr, "  -type string\n")
+	fmt.Fprintf(os.Stderr, "  -type, -t string\n")
 	fmt.Fprintf(os.Stderr, "        package type (tar.gz|zip) (default \"tar.gz\")\n")
-	fmt.Fprintf(os.Stderr, "  -debug\n")
+	fmt.Fprintf(os.Stderr, "  -debug, -g\n")
 	fmt.Fprintf(os.Stderr, "        include debug symbols\n")
-	fmt.Fprintf(os.Stderr, "  -src\n")
+	fmt.Fprintf(os.Stderr, "  -src, -s\n")
 	fmt.Fprintf(os.Stderr, "        include source code\n")
-	fmt.Fprintf(os.Stderr, "  -version string\n")
+	fmt.Fprintf(os.Stderr, "  -version, -v string\n")
 	fmt.Fprintf(os.Stderr, "        package version (default \"dev\")\n")
-	fmt.Fprintf(os.Stderr, "  -platform string\n")
+	fmt.Fprintf(os.Stderr, "  -platform, -p string\n")
 	fmt.Fprintf(os.Stderr, "        target platform (default current OS)\n")
-	fmt.Fprintf(os.Stderr, "  -arch string\n")
+	fmt.Fprintf(os.Stderr, "  -arch, -a string\n")
 	fmt.Fprintf(os.Stderr, "        target architecture (default current arch)\n")
+	fmt.Fprintf(os.Stderr, "  -list-types, -T\n")
+	fmt.Fprintf(os.Stderr, "        list supported package types and exit\n")
 	fmt.Fprintf(os.Stderr, "  -help, -h\n")
 	fmt.Fprintf(os.Stderr, "        show help and exit\n\n")
 	fmt.Fprintf(os.Stderr, "EXAMPLES:\n")
