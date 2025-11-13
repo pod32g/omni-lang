@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/omni-lang/omni/internal/compiler"
 	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/runner"
@@ -32,6 +33,8 @@ func main() {
 		backendAlt = flag.String("b", "", "alias for -backend")
 		stats      = flag.Bool("stats", false, "print execution duration summary")
 		stdinSrc   = flag.Bool("stdin", false, "read OmniLang source from stdin")
+		watch      = flag.Bool("watch", false, "watch program file and rerun on changes")
+		watchShort = flag.Bool("w", false, "alias for -watch")
 		help       = flag.Bool("help", false, "show help and exit")
 		showHelp   = flag.Bool("h", false, "show help and exit")
 	)
@@ -63,6 +66,9 @@ func main() {
 
 	if *backendAlt != "" {
 		*backend = *backendAlt
+	}
+	if *watchShort {
+		*watch = true
 	}
 
 	var (
@@ -106,6 +112,18 @@ func main() {
 		defer cleanup()
 	}
 
+	if *watch || *watchShort {
+		if *stdinSrc {
+			logger.ErrorString("watch mode is not supported with --stdin")
+			os.Exit(2)
+		}
+		if err := watchAndRun(program, programArgs, *backend, *verbose || *verboseAlt, *stats); err != nil {
+			logger.ErrorString(err.Error())
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := runProgram(program, programArgs, *backend, *verbose || *verboseAlt, *stats); err != nil {
 		logger.ErrorString(err.Error())
 		os.Exit(1)
@@ -126,11 +144,17 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "        execution backend (vm|c) (default \"vm\")\n")
 	fmt.Fprintf(os.Stderr, "  -stats\n")
 	fmt.Fprintf(os.Stderr, "        print execution duration summary\n")
+	fmt.Fprintf(os.Stderr, "  -stdin\n")
+	fmt.Fprintf(os.Stderr, "        read source code from standard input\n")
+	fmt.Fprintf(os.Stderr, "  -watch, -w\n")
+	fmt.Fprintf(os.Stderr, "        watch program for changes and rerun automatically\n")
 	fmt.Fprintf(os.Stderr, "  -help, -h\n")
 	fmt.Fprintf(os.Stderr, "        show help and exit\n\n")
 	fmt.Fprintf(os.Stderr, "EXAMPLES:\n")
 	fmt.Fprintf(os.Stderr, "  omnir hello.omni                  # Run with VM backend\n")
 	fmt.Fprintf(os.Stderr, "  omnir -backend c hello.omni -- hi # Compile to native exe then run with args\n")
+	fmt.Fprintf(os.Stderr, "  cat hello.omni | omnir --stdin    # Run source from stdin\n")
+	fmt.Fprintf(os.Stderr, "  omnir --watch hello.omni          # Automatically rerun on file changes\n")
 }
 
 func runProgram(program string, args []string, backend string, verbose bool, stats bool) error {
@@ -229,4 +253,65 @@ func writeStdinProgram() (string, func(), error) {
 		_ = os.Remove(path)
 	}
 	return path, cleanup, nil
+}
+
+func watchAndRun(program string, args []string, backend string, verbose bool, stats bool) error {
+	abs, err := filepath.Abs(program)
+	if err != nil {
+		return fmt.Errorf("resolve program path: %w", err)
+	}
+	if filepath.Ext(abs) != ".omni" {
+		return errors.New("watch mode requires an OmniLang source file")
+	}
+
+	dir := filepath.Dir(abs)
+	base := filepath.Base(abs)
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("create watcher: %w", err)
+	}
+	defer watcher.Close()
+
+	if err := watcher.Add(dir); err != nil {
+		return fmt.Errorf("watch directory %s: %w", dir, err)
+	}
+
+	logger := logging.Logger()
+	logger.InfoFields("Watching file for changes", logging.String("file", abs))
+
+	runOnce := func() {
+		if err := runProgram(program, args, backend, verbose, stats); err != nil {
+			logger.ErrorString(err.Error())
+		}
+	}
+
+	runOnce()
+
+	debounce := time.NewTimer(time.Hour)
+	debounce.Stop()
+
+	for {
+		select {
+		case evt := <-watcher.Events:
+			if filepath.Base(evt.Name) != base {
+				continue
+			}
+			if evt.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+				continue
+			}
+			if !debounce.Stop() {
+				select {
+				case <-debounce.C:
+				default:
+				}
+			}
+			debounce.Reset(250 * time.Millisecond)
+		case <-debounce.C:
+			runOnce()
+			debounce.Stop()
+		case err := <-watcher.Errors:
+			logger.ErrorFields("watch error", logging.Error("error", err))
+		}
+	}
 }
