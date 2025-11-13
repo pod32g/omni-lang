@@ -100,37 +100,12 @@ int32_t omni_log_set_level(const char* level) {
     return 0;
 }
 
-// Basic I/O functions
-void omni_print_int(int32_t value) {
-    printf("%d", value);
-}
-
 void omni_print_string(const char* str) {
     printf("%s", str);
 }
 
-void omni_println_int(int32_t value) {
-    printf("%d\n", value);
-}
-
 void omni_println_string(const char* str) {
     printf("%s\n", str);
-}
-
-void omni_print_float(double value) {
-    printf("%f", value);
-}
-
-void omni_println_float(double value) {
-    printf("%f\n", value);
-}
-
-void omni_print_bool(int32_t value) {
-    printf("%s", value ? "true" : "false");
-}
-
-void omni_println_bool(int32_t value) {
-    printf("%s\n", value ? "true" : "false");
 }
 
 // Memory management

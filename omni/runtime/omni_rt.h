@@ -8,14 +8,8 @@
 // This provides the runtime support for OmniLang programs
 
 // Basic I/O functions
-void omni_print_int(int32_t value);
 void omni_print_string(const char* str);
-void omni_println_int(int32_t value);
 void omni_println_string(const char* str);
-void omni_print_float(double value);
-void omni_println_float(double value);
-void omni_print_bool(int32_t value);
-void omni_println_bool(int32_t value);
 
 // Logging functions
 void omni_log_debug(const char* message);

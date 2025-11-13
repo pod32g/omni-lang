@@ -6,21 +6,21 @@ func main(): int {
     // Test array length using built-in method
     let len = arr.len()
     std.io.print("Array length: ")
-    std.io.println_int(len)
+    std.io.println(len)
     
     // Test array indexing
     let first = arr[0]
     std.io.print("First element: ")
-    std.io.println_int(first)
+    std.io.println(first)
     
     let third = arr[2]
     std.io.print("Third element: ")
-    std.io.println_int(third)
+    std.io.println(third)
     
     // Test array indexing
     let second = arr[1]
     std.io.print("Second element: ")
-    std.io.println_int(second)
+    std.io.println(second)
     
     return 0
 }

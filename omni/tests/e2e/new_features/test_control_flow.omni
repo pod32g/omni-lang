@@ -6,7 +6,7 @@ func main(): int {
     var i = 0
     while i < 5 {
         std.io.print("  i = ")
-        std.io.println_int(i)
+        std.io.println(i)
         i = i + 1
     }
     
@@ -18,7 +18,7 @@ func main(): int {
             break
         }
         std.io.print("  j = ")
-        std.io.println_int(j)
+        std.io.println(j)
         j = j + 1
     }
     
@@ -31,7 +31,7 @@ func main(): int {
             continue
         }
         std.io.print("  k = ")
-        std.io.println_int(k)
+        std.io.println(k)
     }
     
     // Test break in for loop
@@ -42,7 +42,7 @@ func main(): int {
             break
         }
         std.io.print("  m = ")
-        std.io.println_int(m)
+        std.io.println(m)
         m = m + 1
     }
     

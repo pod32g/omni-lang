@@ -102,7 +102,7 @@ if x > 0 {
 ```omni
 // Classic
 for i:int = 0; i < 10; i++ {
-    println_int(i)
+println(i)
 }
 
 // Range
@@ -168,9 +168,9 @@ import std.io
 
 std.io.print("Hello")
 std.io.println(" World!")
-std.io.println_int(42)
-std.io.println_float(3.14)
-std.io.println_bool(true)
+std.io.println(42)
+std.io.println(3.14)
+std.io.println(true)
 ```
 
 ### Math
@@ -402,8 +402,8 @@ if map.has("key") {
 ### Print Debugging
 ```omni
 println("Debug: x = " + x)
-println_int(x)
-println_float(y)
+println(x)
+println(y)
 ```
 
 ### Assertions

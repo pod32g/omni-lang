@@ -213,7 +213,7 @@ if x > 0 {
 
 // For loops (classic)
 for i:int = 0; i < 10; i++ {
-    println_int(i)
+    println(i)
 }
 
 // For loops (range)
@@ -381,9 +381,9 @@ func main():int {
     let left_shift:int = a << 2    // 0b101000 = 40
     let right_shift:int = b >> 1   // 0b0110 = 6
     
-    std.io.println_int(and_result)
-    std.io.println_int(or_result)
-    std.io.println_int(xor_result)
+    std.io.println(and_result)
+    std.io.println(or_result)
+    std.io.println(xor_result)
     
     return 0
 }
@@ -474,16 +474,16 @@ func main():int {
             break     // Exit the loop
         }
         
-        std.io.println_int(count)
+        std.io.println(count)
     }
     
     // Block scope and variable shadowing
     let x:int = 10
     {
         let x:int = 20  // Shadows outer x
-        std.io.println_int(x)  // Prints 20
+        std.io.println(x)  // Prints 20
     }
-    std.io.println_int(x)  // Prints 10
+    std.io.println(x)  // Prints 10
     
     return 0
 }
@@ -514,9 +514,9 @@ func main():int {
     // Function calls through variables
     let result3:int = func_var(10, 20)  // 30
     
-    std.io.println_int(result1)
-    std.io.println_int(result2)
-    std.io.println_int(result3)
+    std.io.println(result1)
+    std.io.println(result2)
+    std.io.println(result3)
     
     return 0
 }
@@ -908,9 +908,9 @@ func main():int {
     for i:int = 0; i < 10; i++ {
         let result:int = fibonacci(i)
         std.io.print("fib(")
-        std.io.print_int(i)
+        std.io.print(i)
         std.io.print(") = ")
-        std.io.println_int(result)
+        std.io.println(result)
     }
     return 0
 }
@@ -941,14 +941,14 @@ func main():int {
     let count:int = 0
     for i:int = 2; i < 100; i++ {
         if is_prime(i) {
-            std.io.print_int(i)
+            std.io.print(i)
             std.io.print(" ")
             count = count + 1
         }
     }
     std.io.println("")
     std.io.print("Found ")
-    std.io.print_int(count)
+    std.io.print(count)
     std.io.println(" primes")
     return 0
 }

@@ -664,9 +664,9 @@ func io_example():void {
     std.io.println(" World!")
     
     // Print with types
-    std.io.println_int(42)
-    std.io.println_float(3.14)
-    std.io.println_bool(true)
+    std.io.println(42)
+    std.io.println(3.14)
+    std.io.println(true)
 }
 ```
 
@@ -977,9 +977,9 @@ func main():int {
     for i:int = 0; i < 10; i++ {
         let result:int = fibonacci(i)
         std.io.print("fib(")
-        std.io.print_int(i)
+        std.io.print(i)
         std.io.print(") = ")
-        std.io.println_int(result)
+        std.io.println(result)
     }
     return 0
 }
@@ -1010,14 +1010,14 @@ func main():int {
     let count:int = 0
     for i:int = 2; i < 100; i++ {
         if is_prime(i) {
-            std.io.print_int(i)
+            std.io.print(i)
             std.io.print(" ")
             count = count + 1
         }
     }
     std.io.println("")
     std.io.print("Found ")
-    std.io.print_int(count)
+    std.io.print(count)
     std.io.println(" primes")
     return 0
 }
@@ -1038,7 +1038,7 @@ func process_file(filename:string):int {
     let lines:array<string> = std.string.split(content, "\n")
     
     std.io.print("File has ")
-    std.io.print_int(std.array.length(lines))
+    std.io.print(std.array.length(lines))
     std.io.println(" lines")
     
     return 0
@@ -1077,7 +1077,7 @@ func main():int {
         std.io.print("Name: ")
         std.io.println(person.name)
         std.io.print("Age: ")
-        std.io.println_int(person.age)
+        std.io.println(person.age)
         std.io.print("Email: ")
         std.io.println(person.email)
         std.io.println("---")

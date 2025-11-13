@@ -8,14 +8,8 @@ This directory contains the standard library for OmniLang, providing essential f
 Input/Output functions for console operations.
 
 **Functions:**
-- `print(s:string)` - Print string without newline
-- `println(s:string)` - Print string with newline
-- `print_int(i:int)` - Print integer without newline
-- `println_int(i:int)` - Print integer with newline
-- `print_float(f:float)` - Print float without newline
-- `println_float(f:float)` - Print float with newline
-- `print_bool(b:bool)` - Print boolean without newline
-- `println_bool(b:bool)` - Print boolean with newline
+- `print(value:string | int | float | double | bool)` - Print value without newline
+- `println(value:string | int | float | double | bool)` - Print value with newline
 
 ### std.math
 Mathematical functions and utilities.
@@ -551,7 +545,7 @@ import std
 func main():int {
     std.io.println("Hello, World!")
     let result:int = std.math.max(10, 20)
-    std.io.println_int(result)
+std.io.println(result)
     return 0
 }
 ```
@@ -565,7 +559,7 @@ import std.math
 func main():int {
     io.println("Hello, World!")
     let result:int = math.max(10, 20)
-    io.println_int(result)
+io.println(result)
     return 0
 }
 ```

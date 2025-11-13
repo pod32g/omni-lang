@@ -7,13 +7,13 @@ func main():int {
     let numbers:array<int> = [1, 2, 3, 4, 5]
     
     std.io.print("Array length: ")
-    std.io.println_int(std.array.length(numbers))
+std.io.println(std.array.length(numbers))
     
     std.io.print("First element: ")
-    std.io.println_int(std.array.get(numbers, 0))
+std.io.println(std.array.get(numbers, 0))
     
     std.io.print("Last element: ")
-    std.io.println_int(std.array.get(numbers, 4))
+std.io.println(std.array.get(numbers, 4))
     
     // Note: These operations would need to be implemented in the runtime
     std.io.println("Array operations (runtime implementation needed):")

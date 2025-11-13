@@ -19,21 +19,21 @@ func main(): int {
     // Test 1: Function assignment
     let my_func: (int, int) -> int = add
     let result1 = apply_func(my_func, 5, 10)
-    std.io.println_int(result1) // Expected: 15
+    std.io.println(result1) // Expected: 15
 
     // Test 2: Function returned from function
     let adder_func = get_adder()
     let result2 = adder_func(20, 30)
-    std.io.println_int(result2) // Expected: 50
+    std.io.println(result2) // Expected: 50
 
     // Test 3: Lambda expression
     let lambda: (int, int) -> int = |a, b| a * b
     let result3 = lambda(3, 4)
-    std.io.println_int(result3) // Expected: 12
+    std.io.println(result3) // Expected: 12
 
     // Test 4: Lambda passed as argument
     let result4 = apply_func(|x, y| x - y, 10, 3)
-    std.io.println_int(result4) // Expected: 7
+    std.io.println(result4) // Expected: 7
 
     return 0
 }

@@ -6,28 +6,28 @@ func main():int {
     std.io.print("Hello ")
     std.io.println("World!")
     
-    // Test integer printing functions
+    // Test integer printing
     let num:int = 42
     std.io.print("Number: ")
-    std.io.println_int(num)
+    std.io.println(num)
     
-    // Test float printing functions
+    // Test float printing
     let float_num:float = 3.14159
     std.io.print("Float: ")
-    std.io.println_float(float_num)
+    std.io.println(float_num)
     
-    // Test boolean printing functions
+    // Test boolean printing
     let bool_val:bool = true
     std.io.print("Boolean: ")
-    std.io.println_bool(bool_val)
+    std.io.println(bool_val)
     
     // Test mixed output
     std.io.print("Mixed: ")
-    std.io.print_int(100)
+    std.io.print(100)
     std.io.print(" + ")
-    std.io.print_float(0.5)
+    std.io.print(0.5)
     std.io.print(" = ")
-    std.io.println_int(100)
+    std.io.println(100.5 - 0.5)
     
     // Return 0 to indicate success
     return 0

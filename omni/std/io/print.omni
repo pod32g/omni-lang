@@ -12,38 +12,3 @@ func println(value:string | int | float | double | bool) {
     // during compilation. The actual implementation is in the backend.
 }
 
-// print_int outputs an integer to stdout without a newline
-func print_int(i:int) {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-}
-
-// println_int outputs an integer to stdout with a newline
-func println_int(i:int) {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-}
-
-// print_float outputs a float to stdout without a newline
-func print_float(f:float) {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-}
-
-// println_float outputs a float to stdout with a newline
-func println_float(f:float) {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-}
-
-// print_bool outputs a boolean to stdout without a newline
-func print_bool(b:bool) {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-}
-
-// println_bool outputs a boolean to stdout with a newline
-func println_bool(b:bool) {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-}

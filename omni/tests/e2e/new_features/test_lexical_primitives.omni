@@ -10,22 +10,22 @@ func main(): int {
     let hex2 = 0x1A
     let hex3 = 0x10_00
     std.io.print("Hex 0xFF: ")
-    std.io.println_int(hex1)
+    std.io.println(hex1)
     std.io.print("Hex 0x1A: ")
-    std.io.println_int(hex2)
+    std.io.println(hex2)
     std.io.print("Hex 0x10_00: ")
-    std.io.println_int(hex3)
+    std.io.println(hex3)
     
     // Test binary literals
     let binary1 = 0b1010
     let binary2 = 0b1111_0000
     let binary3 = 0b1
     std.io.print("Binary 0b1010: ")
-    std.io.println_int(binary1)
+    std.io.println(binary1)
     std.io.print("Binary 0b1111_0000: ")
-    std.io.println_int(binary2)
+    std.io.println(binary2)
     std.io.print("Binary 0b1: ")
-    std.io.println_int(binary3)
+    std.io.println(binary3)
     
     // Test scientific notation
     let sci1 = 1.0e5

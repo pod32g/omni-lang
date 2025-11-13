@@ -1120,42 +1120,6 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		} else {
 			g.output.WriteString("  omni_println_string(\"\");\n")
 		}
-	case "std.io.print_int":
-		// Handle print_int statement
-		if len(inst.Operands) >= 1 {
-			message := g.getOperandValue(inst.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  omni_print_int(%s);\n", message))
-		}
-	case "std.io.println_int":
-		// Handle println_int statement
-		if len(inst.Operands) >= 1 {
-			message := g.getOperandValue(inst.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  omni_println_int(%s);\n", message))
-		}
-	case "std.io.print_float":
-		// Handle print_float statement
-		if len(inst.Operands) >= 1 {
-			message := g.getOperandValue(inst.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  omni_print_float(%s);\n", message))
-		}
-	case "std.io.println_float":
-		// Handle println_float statement
-		if len(inst.Operands) >= 1 {
-			message := g.getOperandValue(inst.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  omni_println_float(%s);\n", message))
-		}
-	case "std.io.print_bool":
-		// Handle print_bool statement
-		if len(inst.Operands) >= 1 {
-			message := g.getOperandValue(inst.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  omni_print_bool(%s);\n", message))
-		}
-	case "std.io.println_bool":
-		// Handle println_bool statement
-		if len(inst.Operands) >= 1 {
-			message := g.getOperandValue(inst.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  omni_println_bool(%s);\n", message))
-		}
 	case "std.log.debug":
 		// Handle debug log statement
 		if len(inst.Operands) >= 1 {
@@ -1317,46 +1281,16 @@ func (g *CGenerator) convertOperandToString(op mir.Operand) string {
 
 // emitPrint handles std.io.print/println for primitive and convertible types.
 func (g *CGenerator) emitPrint(op mir.Operand, newline bool) {
-	funcName := ""
-	arg := ""
+	funcName := "omni_print_string"
+	if newline {
+		funcName = "omni_println_string"
+	}
 
-	switch op.Type {
-	case "string":
+	var arg string
+	if op.Type == "string" {
 		arg = g.getOperandValue(op)
-		if newline {
-			funcName = "omni_println_string"
-		} else {
-			funcName = "omni_print_string"
-		}
-	case "int":
-		arg = g.getOperandValue(op)
-		if newline {
-			funcName = "omni_println_int"
-		} else {
-			funcName = "omni_print_int"
-		}
-	case "float", "double":
-		arg = g.getOperandValue(op)
-		if newline {
-			funcName = "omni_println_float"
-		} else {
-			funcName = "omni_print_float"
-		}
-	case "bool":
-		arg = g.getOperandValue(op)
-		if newline {
-			funcName = "omni_println_bool"
-		} else {
-			funcName = "omni_print_bool"
-		}
-	default:
-		// Fallback: convert the operand to a string and print
+	} else {
 		arg = g.convertOperandToString(op)
-		if newline {
-			funcName = "omni_println_string"
-		} else {
-			funcName = "omni_print_string"
-		}
 	}
 
 	g.output.WriteString(fmt.Sprintf("  %s(%s);\n", funcName, arg))
@@ -1677,18 +1611,6 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_print_string"
 	case "std.io.println":
 		return "omni_println_string"
-	case "std.io.print_int":
-		return "omni_print_int"
-	case "std.io.println_int":
-		return "omni_println_int"
-	case "std.io.print_float":
-		return "omni_print_float"
-	case "std.io.println_float":
-		return "omni_println_float"
-	case "std.io.print_bool":
-		return "omni_print_bool"
-	case "std.io.println_bool":
-		return "omni_println_bool"
 
 	// Logging functions
 	case "std.log.debug":
@@ -1842,20 +1764,8 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 	runtimeFunctions := map[string]bool{
 		"std.io.print":             true,
 		"std.io.println":           true,
-		"std.io.print_int":         true,
-		"std.io.println_int":       true,
-		"std.io.print_float":       true,
-		"std.io.println_float":     true,
-		"std.io.print_bool":        true,
-		"std.io.println_bool":      true,
 		"io.print":                 true,
 		"io.println":               true,
-		"io.print_int":             true,
-		"io.println_int":           true,
-		"io.print_float":           true,
-		"io.println_float":         true,
-		"io.print_bool":            true,
-		"io.println_bool":          true,
 		"std.string.length":        true,
 		"std.string.concat":        true,
 		"std.string.substring":     true,

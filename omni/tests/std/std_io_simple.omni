@@ -8,12 +8,12 @@ func main():int {
     
     std.io.print("Hello")
     std.io.println("World")
-    std.io.print_int(42)
-    std.io.println_int(17)
-    std.io.print_float(3.14)
-    std.io.println_float(2.71)
-    std.io.print_bool(true)
-    std.io.println_bool(false)
+    std.io.print(42)
+    std.io.println(17)
+    std.io.print(3.14)
+    std.io.println(2.71)
+    std.io.print(true)
+    std.io.println(false)
     
     // Return 0 to indicate success
     return 0

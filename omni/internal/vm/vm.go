@@ -903,42 +903,6 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			fmt.Println()
 			return Result{Type: "void", Value: nil}, true
 		}
-	case "std.io.print_int":
-		if len(operands) == 1 {
-			arg := operandValue(fr, operands[0])
-			fmt.Print(arg.Value)
-			return Result{Type: "void", Value: nil}, true
-		}
-	case "std.io.println_int":
-		if len(operands) == 1 {
-			arg := operandValue(fr, operands[0])
-			fmt.Println(arg.Value)
-			return Result{Type: "void", Value: nil}, true
-		}
-	case "std.io.print_float":
-		if len(operands) == 1 {
-			arg := operandValue(fr, operands[0])
-			fmt.Print(arg.Value)
-			return Result{Type: "void", Value: nil}, true
-		}
-	case "std.io.println_float":
-		if len(operands) == 1 {
-			arg := operandValue(fr, operands[0])
-			fmt.Println(arg.Value)
-			return Result{Type: "void", Value: nil}, true
-		}
-	case "std.io.print_bool":
-		if len(operands) == 1 {
-			arg := operandValue(fr, operands[0])
-			fmt.Print(arg.Value)
-			return Result{Type: "void", Value: nil}, true
-		}
-	case "std.io.println_bool":
-		if len(operands) == 1 {
-			arg := operandValue(fr, operands[0])
-			fmt.Println(arg.Value)
-			return Result{Type: "void", Value: nil}, true
-		}
 	case "std.log.debug":
 		return handleLogIntrinsic("debug", operands, fr)
 	case "std.log.info":
