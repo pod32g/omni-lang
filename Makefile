@@ -42,7 +42,7 @@ test-coverage:
 bench:
 	cd $(GO_PROJECT_DIR) && $(GO) test ./tests/bench -bench=. -benchmem -count=3
 
-build:
+build: build-rust
 	@mkdir -p $(BIN_DIR)
 	cd $(GO_PROJECT_DIR) && $(GO) build $(LDFLAGS) -o bin/omnic ./cmd/omnic
 	cd $(GO_PROJECT_DIR) && $(GO) build $(LDFLAGS) -o bin/omnir ./cmd/omnir
@@ -53,10 +53,10 @@ build-rust:
 		cd $(GO_PROJECT_DIR)/native/clift && cargo build --release; \
 		echo "Rust components built successfully"; \
 	else \
-		echo "Cargo not found, skipping Rust build"; \
+		echo "Cargo not found, skipping Rust build (Cranelift backend will be unavailable)"; \
 	fi
 
-build-all: build build-rust
+build-all: build
 
 clean:
 	rm -rf $(BIN_DIR)
