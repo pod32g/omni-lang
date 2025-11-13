@@ -18,6 +18,19 @@ OmniLang is a modern programming language designed for **performance, safety, an
 - **📦 Multiple backends** (C, Cranelift, VM) for different use cases
 - **🌍 Cross-platform support** (Linux, macOS, Windows)
 
+### Editor Support
+
+- **VS Code Extension** (experimental): found in `vscode/omni`. Provides:
+  - Syntax highlighting, bracket matching, and snippets for common language constructs.
+  - Basic completion suggestions covering keywords, primitives, `std` modules, and detected structs/enums in the current file.
+  - Hover hints that identify keywords, primitive types, and standard modules.
+  - Inline diagnostics by invoking `omnic -emit mir` (configured via `omniLang.omnicPath`, defaults to `omnic` on `PATH`).
+- **Current limitations**:
+  - Diagnostics depend on a locally built `omnic`; no sandboxing and no partial / incremental analysis.
+  - Completions are file-local only—no cross-file symbol indexing yet.
+  - No formatter, code actions, go-to-definition, or debugging integration (planned for future LSP work).
+  - Publishing flow is manual (run `npm install && npm run compile` inside `vscode/omni`, then `vsce package`).
+
 ### Why Choose OmniLang?
 
 **Perfect for developers who want:**

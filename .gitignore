@@ -32,6 +32,9 @@ Cargo.lock
 # VSCode
 .vscode/
 *.code-workspace
+vscode/omni/node_modules/
+vscode/omni/dist/
+vscode/omni/*.vsix
 
 # GoLand/IntelliJ
 .idea/

@@ -1,0 +1,82 @@
+{
+  "name": "omni-vscode",
+  "displayName": "OmniLang",
+  "description": "VS Code support for the Omni programming language.",
+  "version": "0.1.0",
+  "publisher": "omni-lang",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onLanguage:omni",
+    "onCommand:omni-lang.compileCurrentFile"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "omni",
+        "aliases": [
+          "Omni",
+          "omni"
+        ],
+        "extensions": [
+          ".omni"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "omni",
+        "scopeName": "source.omni",
+        "path": "./syntaxes/omni.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "omni",
+        "path": "./snippets/omni.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "OmniLang",
+      "properties": {
+        "omniLang.omnicPath": {
+          "type": "string",
+          "default": "omnic",
+          "description": "Path to the omnic compiler used for diagnostics."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "omni-lang.compileCurrentFile",
+        "title": "OmniLang: Compile Current File"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.10",
+    "@types/vscode": "^1.85.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.3.3",
+    "vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}
+
