@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,6 +31,7 @@ func main() {
 		backend    = flag.String("backend", "vm", "execution backend (vm|c)")
 		backendAlt = flag.String("b", "", "alias for -backend")
 		stats      = flag.Bool("stats", false, "print execution duration summary")
+		stdinSrc   = flag.Bool("stdin", false, "read OmniLang source from stdin")
 		help       = flag.Bool("help", false, "show help and exit")
 		showHelp   = flag.Bool("h", false, "show help and exit")
 	)
@@ -52,7 +54,7 @@ func main() {
 	}
 
 	args := flag.Args()
-	if len(args) == 0 {
+	if !*stdinSrc && len(args) == 0 {
 		logger.ErrorString("no input file specified")
 		fmt.Fprintln(os.Stderr, "")
 		showUsage()
@@ -62,8 +64,47 @@ func main() {
 	if *backendAlt != "" {
 		*backend = *backendAlt
 	}
-	program := args[0]
-	programArgs := args[1:]
+
+	var (
+		program     string
+		programArgs []string
+		cleanup     func()
+	)
+
+	if *stdinSrc {
+		if len(args) > 0 && args[0] != "--" {
+			logger.ErrorString("cannot specify program path when using --stdin")
+			fmt.Fprintln(os.Stderr, "")
+			showUsage()
+			os.Exit(2)
+		}
+		if len(args) > 0 && args[0] == "--" {
+			args = args[1:]
+		}
+		path, clean, err := writeStdinProgram()
+		if err != nil {
+			logger.ErrorString(fmt.Sprintf("failed to read stdin: %v", err))
+			os.Exit(1)
+		}
+		program = path
+		programArgs = args
+		cleanup = clean
+	} else {
+		if len(args) == 0 {
+			logger.ErrorString("no input file specified")
+			fmt.Fprintln(os.Stderr, "")
+			showUsage()
+			os.Exit(2)
+		}
+		program = args[0]
+		programArgs = args[1:]
+		if len(programArgs) > 0 && programArgs[0] == "--" {
+			programArgs = programArgs[1:]
+		}
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
 
 	if err := runProgram(program, programArgs, *backend, *verbose || *verboseAlt, *stats); err != nil {
 		logger.ErrorString(err.Error())
@@ -168,4 +209,24 @@ func execWithStats(binary string, args []string, stats bool) error {
 		fmt.Fprintf(os.Stderr, "Program finished in %s\n", time.Since(start).Round(time.Millisecond))
 	}
 	return nil
+}
+
+func writeStdinProgram() (string, func(), error) {
+	tempFile, err := os.CreateTemp("", "omnir-stdin-*.omni")
+	if err != nil {
+		return "", nil, err
+	}
+	defer tempFile.Close()
+
+	if _, err := io.Copy(tempFile, os.Stdin); err != nil {
+		path := tempFile.Name()
+		_ = os.Remove(path)
+		return "", nil, err
+	}
+
+	path := tempFile.Name()
+	cleanup := func() {
+		_ = os.Remove(path)
+	}
+	return path, cleanup, nil
 }

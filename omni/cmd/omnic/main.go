@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/omni-lang/omni/internal/compiler"
 	"github.com/omni-lang/omni/internal/logging"
 )
@@ -60,6 +62,9 @@ func main() {
 		quiet          = flag.Bool("quiet", false, "suppress non-error output")
 		quietShort     = flag.Bool("q", false, "alias for -quiet")
 		timeCompile    = flag.Bool("time", false, "print compilation timing summary")
+		watchFlag      = flag.Bool("watch", false, "watch input file and recompile on changes")
+		watchShort     = flag.Bool("w", false, "alias for -watch")
+		jsonOutput     = flag.Bool("json", false, "output machine-readable JSON for listings")
 		version        = flag.Bool("version", false, "print version and exit")
 		versionShort   = flag.Bool("v", false, "alias for -version")
 		verbose        = flag.Bool("verbose", false, "enable verbose output")
@@ -84,6 +89,9 @@ func main() {
 	}
 	if *quietShort {
 		*quiet = true
+	}
+	if *watchShort {
+		*watchFlag = true
 	}
 	if *backendShort != "" {
 		*backend = *backendShort
@@ -114,12 +122,12 @@ func main() {
 	}
 
 	if *listBackends || *listBackendsSh {
-		printBackends()
+		printBackends(*jsonOutput)
 		os.Exit(0)
 	}
 
 	if *listEmits || *listEmitsShort {
-		printEmits()
+		printEmits(*jsonOutput)
 		os.Exit(0)
 	}
 
@@ -155,29 +163,74 @@ func main() {
 
 	finalOutput := *output
 	if finalOutput == "" {
-		if derived := deriveOutputPath(input, emit, *emitDir, *emitPrefix); derived != "" {
-			finalOutput = derived
+		finalOutput = deriveOutputPath(input, emit, *emitDir, *emitPrefix)
+	}
+
+	compileAndReport := func() (string, error) {
+		start := time.Now()
+		outputPath, err := run(input, finalOutput, *backend, *optLevel, emit, *dump, *verbose || *verboseShort, *debug, *debugModules)
+		duration := time.Since(start)
+		if err != nil {
+			logger.ErrorString(err.Error())
+			if *jsonOutput && !*watchFlag {
+				enc := json.NewEncoder(os.Stdout)
+				_ = enc.Encode(map[string]any{
+					"status": "error",
+					"error":  err.Error(),
+				})
+			}
+			return outputPath, err
 		}
-	}
 
-	var start time.Time
-	if *timeCompile {
-		start = time.Now()
-	}
-
-	actualOutput, err := run(input, finalOutput, *backend, *optLevel, emit, *dump, *verbose || *verboseShort, *debug, *debugModules)
-	if err != nil {
-		logger.ErrorString(err.Error())
-		os.Exit(1)
-	}
-
-	if *timeCompile && !*quiet {
-		target := actualOutput
+		target := outputPath
 		if target == "" {
 			target = "(default)"
 		}
-		fmt.Fprintf(os.Stderr, "Compiled %s -> %s in %s (backend=%s emit=%s)\n",
-			input, target, time.Since(start).Round(time.Millisecond), *backend, emit)
+
+		if *timeCompile && !*quiet && !*jsonOutput {
+			fmt.Fprintf(os.Stderr, "Compiled %s -> %s in %s (backend=%s emit=%s)\n",
+				input, target, duration.Round(time.Millisecond), *backend, emit)
+		} else if !*quiet && !*jsonOutput && !*watchFlag {
+			fmt.Fprintf(os.Stderr, "Compiled %s -> %s (backend=%s emit=%s)\n",
+				input, target, *backend, emit)
+		}
+
+		if *jsonOutput && !*watchFlag {
+			enc := json.NewEncoder(os.Stdout)
+			result := map[string]any{
+				"status":  "ok",
+				"backend": *backend,
+				"emit":    emit,
+				"output":  outputPath,
+			}
+			if *timeCompile {
+				result["duration_ms"] = float64(duration) / float64(time.Millisecond)
+			}
+			_ = enc.Encode(result)
+		}
+
+		return outputPath, nil
+	}
+
+	compileOnce := func() error {
+		_, err := compileAndReport()
+		return err
+	}
+
+	if *watchFlag {
+		if *jsonOutput {
+			logger.ErrorString("cannot use --watch together with --json")
+			os.Exit(2)
+		}
+		if err := watchAndCompile(input, compileOnce, *quiet); err != nil {
+			logger.ErrorString(err.Error())
+			os.Exit(1)
+		}
+		return
+	}
+
+	if _, err := compileAndReport(); err != nil {
+		os.Exit(1)
 	}
 }
 
@@ -213,6 +266,10 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "        disable colored log output\n")
 	fmt.Fprintf(os.Stderr, "  -time\n")
 	fmt.Fprintf(os.Stderr, "        print compilation timing summary\n")
+	fmt.Fprintf(os.Stderr, "  -watch, -w\n")
+	fmt.Fprintf(os.Stderr, "        watch input file for changes and recompile\n")
+	fmt.Fprintf(os.Stderr, "  -json\n")
+	fmt.Fprintf(os.Stderr, "        output machine-readable JSON for listings and one-shot builds\n")
 	fmt.Fprintf(os.Stderr, "  -version, -v\n")
 	fmt.Fprintf(os.Stderr, "        print version and exit\n")
 	fmt.Fprintf(os.Stderr, "  -list-backends, -B\n")
@@ -321,18 +378,97 @@ func deriveOutputPath(input, emit, emitDir, emitPrefix string) string {
 	return filepath.Join(dir, base+ext)
 }
 
-func printBackends() {
+func printBackends(jsonOutput bool) {
+	data := []map[string]string{
+		{"name": "c", "description": "C code-generation backend (default)"},
+		{"name": "vm", "description": "Virtual machine interpreter backend"},
+		{"name": "clift", "description": "Cranelift backend (experimental)"},
+	}
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(data)
+		return
+	}
 	fmt.Println("Available backends:")
-	fmt.Println("  c       - C code-generation backend (default)")
-	fmt.Println("  vm      - Execute with virtual machine interpreter")
-	fmt.Println("  clift   - Cranelift backend (experimental)")
+	for _, entry := range data {
+		fmt.Printf("  %-7s- %s\n", entry["name"], entry["description"])
+	}
 }
 
-func printEmits() {
+func printEmits(jsonOutput bool) {
+	data := []map[string]string{
+		{"name": "exe", "description": "Native executable (default for C backend)"},
+		{"name": "mir", "description": "OmniLang MIR (default for VM backend)"},
+		{"name": "obj", "description": "Object file"},
+		{"name": "binary", "description": "Raw binary image"},
+		{"name": "asm", "description": "Assembly listing"},
+	}
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(data)
+		return
+	}
 	fmt.Println("Available emit targets:")
-	fmt.Println("  exe     - native executable (default for c backend)")
-	fmt.Println("  mir     - OmniLang MIR (default for vm backend)")
-	fmt.Println("  obj     - object file")
-	fmt.Println("  binary  - raw binary image")
-	fmt.Println("  asm     - assembly listing")
+	for _, entry := range data {
+		fmt.Printf("  %-7s- %s\n", entry["name"], entry["description"])
+	}
+}
+
+func watchAndCompile(path string, compile func() error, quiet bool) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve path: %w", err)
+	}
+	dir := filepath.Dir(abs)
+	base := filepath.Base(abs)
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return fmt.Errorf("create watcher: %w", err)
+	}
+	defer watcher.Close()
+
+	if err := watcher.Add(dir); err != nil {
+		return fmt.Errorf("watch directory %s: %w", dir, err)
+	}
+
+	if !quiet {
+		logging.Logger().InfoFields("Watching for changes",
+			logging.String("file", abs))
+	}
+
+	if err := compile(); err != nil {
+		// Errors are already logged; continue watching.
+	}
+
+	debounce := time.NewTimer(time.Hour)
+	debounce.Stop()
+
+	for {
+		select {
+		case event := <-watcher.Events:
+			if filepath.Base(event.Name) != base {
+				continue
+			}
+			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+				continue
+			}
+			if !debounce.Stop() {
+				select {
+				case <-debounce.C:
+				default:
+				}
+			}
+			debounce.Reset(200 * time.Millisecond)
+		case <-debounce.C:
+			if err := compile(); err != nil {
+				// already logged
+			}
+			debounce.Stop()
+		case err := <-watcher.Errors:
+			logging.Logger().ErrorFields("watch error", logging.Error("error", err))
+		}
+	}
 }
