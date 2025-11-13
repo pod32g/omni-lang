@@ -57,7 +57,7 @@ bench:
 	@make build-runtime
 	export LD_LIBRARY_PATH=$$PWD/runtime/posix:$$LD_LIBRARY_PATH && $(GO) test ./internal/compiler -bench=. -benchmem -count=3
 
-build:
+build: build-rust
 	@mkdir -p bin
 	$(GO) build $(LDFLAGS) -o bin/omnic ./cmd/omnic
 	$(GO) build $(LDFLAGS) -o bin/omnir ./cmd/omnir
@@ -85,7 +85,7 @@ build-runtime:
 		echo "GCC not found, skipping runtime build"; \
 	fi
 
-build-all: build build-rust
+build-all: build
 
 clean:
 	rm -rf bin
