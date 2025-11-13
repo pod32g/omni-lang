@@ -56,7 +56,7 @@ cache:
 # Format and lint checks
 fmt:
   stage: lint
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   script:
     - cd omni
     - make fmt
@@ -66,7 +66,7 @@ fmt:
 
 lint:
   stage: lint
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   script:
     - cd omni
     - make lint
@@ -77,7 +77,7 @@ lint:
 # Rust linting
 rust-lint:
   stage: lint
-  image: rust:1.70
+  image: 192.168.68.15:5050/pod32g/docker-mirror/rust:1.70
   script:
     - cd omni/native/clift
     - cargo fmt --check
@@ -89,7 +89,7 @@ rust-lint:
 # Security scanning (basic checks)
 security-scan:
   stage: lint
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   script:
     - cd omni
     - echo "Running comprehensive security checks..."
@@ -107,7 +107,7 @@ security-scan:
 # Code quality checks (basic)
 code-quality:
   stage: lint
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   script:
     - cd omni
     - echo "Running comprehensive code quality checks..."
@@ -128,7 +128,7 @@ code-quality:
 # Dependency update check (runs weekly)
 dependency-check:
   stage: lint
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   script:
     - cd omni
     - echo "Checking for dependency updates..."
@@ -144,7 +144,7 @@ dependency-check:
 # Run all tests
 test:
   stage: test
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   before_script:
     - apt-get update && apt-get install -y gcc curl
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -170,7 +170,7 @@ test:
 # Test Rust components
 rust-test:
   stage: test
-  image: rust:1.70
+  image: 192.168.68.15:5050/pod32g/docker-mirror/rust:1.70
   script:
     - cd omni/native/clift
     - cargo test --verbose
@@ -181,7 +181,7 @@ rust-test:
 # Integration testing with real OmniLang programs
 integration-test:
   stage: test
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   before_script:
     - apt-get update && apt-get install -y gcc curl
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -231,7 +231,7 @@ integration-test:
 # Comprehensive test suite (runs in parallel with other test jobs)
 comprehensive-test:
   stage: test
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   before_script:
     - apt-get update && apt-get install -y gcc curl
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -281,7 +281,7 @@ comprehensive-test:
 # Performance benchmarking
 benchmark:
   stage: test
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   timeout: 30m
   before_script:
     - apt-get update && apt-get install -y gcc curl
@@ -307,7 +307,7 @@ benchmark:
 # Build for Linux x86_64
 build-linux:
   stage: build
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   timeout: 20m
   <<: *retry_template
   before_script:
@@ -336,7 +336,7 @@ build-linux:
 # Build for macOS (using Linux with cross-compilation)
 build-macos:
   stage: build
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   <<: *retry_template
   before_script:
     - apt-get update && apt-get install -y gcc curl
@@ -360,7 +360,7 @@ build-macos:
 # Build for Windows
 build-windows:
   stage: build
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   <<: *retry_template
   before_script:
     - apt-get update && apt-get install -y gcc curl
@@ -383,7 +383,7 @@ build-windows:
 # Create distribution package
 package:
   stage: package
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   dependencies:
     - build-linux
     - build-macos
@@ -411,7 +411,7 @@ package:
 # Create release
 release:
   stage: release
-  image: golang:1.22
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.22
   dependencies:
     - package
   script:

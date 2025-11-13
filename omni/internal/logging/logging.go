@@ -21,6 +21,9 @@ func Logger() *slogger.Logger {
 		if _, ok := os.LookupEnv("LOG_OUTPUT"); !ok {
 			cfg.Output = "stderr"
 		}
+		if _, ok := os.LookupEnv("LOG_COLORIZE"); !ok {
+			cfg.Colorize = true
+		}
 		cfg.EnableCaller = false
 		cfg.SyncWrites = true
 		global = slogger.ApplyConfig(cfg)
