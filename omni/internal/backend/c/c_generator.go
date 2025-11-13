@@ -8,6 +8,8 @@ import (
 	"github.com/omni-lang/omni/internal/mir"
 )
 
+const inferTypePlaceholder = "<infer>"
+
 // CGenerator handles the translation from MIR to C code
 type CGenerator struct {
 	module     *mir.Module
@@ -26,6 +28,8 @@ type CGenerator struct {
 	// Debug symbol tracking
 	sourceMap map[string]int // Maps source locations to line numbers
 	lineMap   map[int]string // Maps line numbers to source locations
+	// Track discovered value types to help with conversions
+	valueTypes map[mir.ValueID]string
 }
 
 // NewCGenerator creates a new C code generator
@@ -41,6 +45,7 @@ func NewCGenerator(module *mir.Module) *CGenerator {
 		mapVars:     make(map[string]bool),
 		sourceMap:   make(map[string]int),
 		lineMap:     make(map[int]string),
+		valueTypes:  make(map[mir.ValueID]string),
 	}
 }
 
@@ -57,6 +62,7 @@ func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator 
 		mapVars:     make(map[string]bool),
 		sourceMap:   make(map[string]int),
 		lineMap:     make(map[int]string),
+		valueTypes:  make(map[mir.ValueID]string),
 	}
 }
 
@@ -73,6 +79,7 @@ func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool,
 		mapVars:     make(map[string]bool),
 		sourceMap:   make(map[string]int),
 		lineMap:     make(map[int]string),
+		valueTypes:  make(map[mir.ValueID]string),
 	}
 }
 
@@ -399,6 +406,10 @@ func (g *CGenerator) generateBlock(block *mir.BasicBlock, funcName string) error
 
 // generateInstruction generates C code for a single instruction
 func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
+	if inst.ID != mir.InvalidValue && inst.Type != "" && inst.Type != inferTypePlaceholder {
+		g.valueTypes[inst.ID] = inst.Type
+	}
+
 	// Add debug information if enabled
 	if g.debugInfo {
 		g.output.WriteString(fmt.Sprintf("  // Debug: %s instruction (ID: %s, Type: %s)\n",
@@ -670,6 +681,20 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				// Array length - assign to already declared variable
 				g.output.WriteString(fmt.Sprintf("  %s = sizeof(%s) / sizeof(%s[0]);\n",
 					varName, arrayVar, arrayVar))
+				return nil
+			}
+
+			// Special-case std.io print helpers so we can perform type conversion.
+			if (funcName == "std.io.print" || funcName == "io.print") && len(inst.Operands) >= 2 {
+				g.emitPrint(inst.Operands[1], false)
+				return nil
+			}
+			if funcName == "std.io.println" || funcName == "io.println" {
+				if len(inst.Operands) >= 2 {
+					g.emitPrint(inst.Operands[1], true)
+				} else {
+					g.output.WriteString("  omni_println_string(\"\");\n")
+				}
 				return nil
 			}
 
@@ -1232,21 +1257,28 @@ func (g *CGenerator) convertOperandToString(op mir.Operand) string {
 		// For SSA values, use the type information from the operand
 		varName := g.getVariableName(op.Value)
 
+		operandType := op.Type
+		if operandType == "" || operandType == inferTypePlaceholder {
+			if recorded, exists := g.valueTypes[op.Value]; exists && recorded != "" {
+				operandType = recorded
+			}
+		}
+
 		// Check the operand type and convert if necessary
-		if op.Type == "string" {
+		if operandType == "string" {
 			// Already a string, return as is
 			return varName
-		} else if op.Type == "int" {
+		} else if operandType == "int" {
 			// Convert int to string - use unique counter to avoid conflicts
 			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_int_to_string(%s);\n", tempVar, varName))
 			return tempVar
-		} else if op.Type == "float" || op.Type == "double" {
+		} else if operandType == "float" || operandType == "double" {
 			// Convert float to string - use unique counter to avoid conflicts
 			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_float_to_string(%s);\n", tempVar, varName))
 			return tempVar
-		} else if op.Type == "bool" {
+		} else if operandType == "bool" {
 			// Convert bool to string - use unique counter to avoid conflicts
 			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_bool_to_string(%s);\n", tempVar, varName))
