@@ -1,9 +1,16 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"net"
+	urlpkg "net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/mir"
@@ -14,6 +21,25 @@ type instructionHandler func(map[string]*mir.Function, *frame, mir.Instruction) 
 
 // instructionHandlers maps instruction names to their execution functions
 var instructionHandlers map[string]instructionHandler
+
+var (
+	fileHandleMu      sync.Mutex
+	fileHandleCounter = 3
+	fileHandleTable   = make(map[int]*os.File)
+)
+
+type exitSignal struct {
+	code int
+}
+
+// ExitError represents a VM-triggered process exit (e.g. std.os.exit).
+type ExitError struct {
+	Code int
+}
+
+func (e ExitError) Error() string {
+	return fmt.Sprintf("vm exit with code %d", e.Code)
+}
 
 func init() {
 	instructionHandlers = map[string]instructionHandler{
@@ -88,7 +114,21 @@ type Result struct {
 }
 
 // Execute interprets the MIR module starting from the named entry function.
-func Execute(mod *mir.Module, entry string) (Result, error) {
+func Execute(mod *mir.Module, entry string) (res Result, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			switch v := r.(type) {
+			case exitSignal:
+				res = Result{Type: "void"}
+				err = ExitError{Code: v.code}
+			case error:
+				err = v
+			default:
+				panic(r)
+			}
+		}
+	}()
+
 	if mod == nil {
 		return Result{}, fmt.Errorf("vm: nil module")
 	}
@@ -100,9 +140,9 @@ func Execute(mod *mir.Module, entry string) (Result, error) {
 	if !ok {
 		return Result{}, fmt.Errorf("vm: entry function %q not found", entry)
 	}
-	value, err := execFunction(funcs, fn, nil)
-	if err != nil {
-		return Result{}, err
+	value, execErr := execFunction(funcs, fn, nil)
+	if execErr != nil {
+		return Result{}, execErr
 	}
 	return value, nil
 }
@@ -1179,47 +1219,66 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	// File operations
 	case "std.file.exists":
 		if len(operands) == 1 {
-			filename := operandValue(fr, operands[0])
-			if filename.Type == "string" {
-				// For now, return 0 (file doesn't exist) for simplicity
-				return Result{Type: "int", Value: 0}, true
+			if name, err := toString(operandValue(fr, operands[0])); err == nil {
+				exists, _ := vmFileExists(name)
+				return Result{Type: "int", Value: boolToInt(exists)}, true
 			}
 		}
+		return Result{Type: "int", Value: 0}, true
 	case "std.file.size":
 		if len(operands) == 1 {
-			filename := operandValue(fr, operands[0])
-			if filename.Type == "string" {
-				// For now, return 0 (file size) for simplicity
-				return Result{Type: "int", Value: 0}, true
+			if name, err := toString(operandValue(fr, operands[0])); err == nil {
+				statSize, sizeErr := vmFileSize(name)
+				if sizeErr != nil {
+					return Result{Type: "int", Value: -1}, true
+				}
+				return Result{Type: "int", Value: statSize}, true
 			}
 		}
+		return Result{Type: "int", Value: -1}, true
 	case "std.file.open":
 		if len(operands) == 2 {
-			filename := operandValue(fr, operands[0])
-			mode := operandValue(fr, operands[1])
-			if filename.Type == "string" && mode.Type == "string" {
-				// For now, return a dummy file handle (1) for simplicity
-				return Result{Type: "int", Value: 1}, true
+			name, err1 := toString(operandValue(fr, operands[0]))
+			mode, err2 := toString(operandValue(fr, operands[1]))
+			if err1 != nil || err2 != nil {
+				return Result{Type: "int", Value: -1}, true
 			}
+			handle, err := vmFileOpen(name, mode)
+			if err != nil {
+				return Result{Type: "int", Value: -1}, true
+			}
+			return Result{Type: "int", Value: handle}, true
 		}
+		return Result{Type: "int", Value: -1}, true
 	case "std.file.write":
 		if len(operands) == 3 {
-			handle := operandValue(fr, operands[0])
-			data := operandValue(fr, operands[1])
-			size := operandValue(fr, operands[2])
-			if handle.Type == "int" && data.Type == "string" && size.Type == "int" {
-				// For now, return the size written for simplicity
-				return Result{Type: "int", Value: size.Value}, true
+			handleVal := operandValue(fr, operands[0])
+			data, errData := toString(operandValue(fr, operands[1]))
+			sizeVal, errSize := toInt(operandValue(fr, operands[2]))
+			if errData == nil && errSize == nil {
+				handle, errHandle := toInt(handleVal)
+				if errHandle == nil {
+					written, writeErr := vmFileWrite(handle, data, sizeVal)
+					if writeErr != nil {
+						return Result{Type: "int", Value: -1}, true
+					}
+					return Result{Type: "int", Value: written}, true
+				}
 			}
 		}
+		return Result{Type: "int", Value: -1}, true
 	case "std.file.close":
 		if len(operands) == 1 {
-			handle := operandValue(fr, operands[0])
-			if handle.Type == "int" {
-				// For now, return 0 (success) for simplicity
-				return Result{Type: "int", Value: 0}, true
+			fileHandle, err := toInt(operandValue(fr, operands[0]))
+			if err != nil {
+				return Result{Type: "int", Value: -1}, true
 			}
+			if err := vmFileClose(fileHandle); err != nil {
+				return Result{Type: "int", Value: -1}, true
+			}
+			return Result{Type: "int", Value: 0}, true
 		}
+		return Result{Type: "int", Value: -1}, true
 	case "std.string.length":
 		if len(operands) == 1 {
 			arg := operandValue(fr, operands[0])
@@ -1380,93 +1439,393 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 		if len(operands) == 2 {
 			testName := operandValue(fr, operands[0])
 			passed := operandValue(fr, operands[1])
-			if testName.Type == "string" && passed.Type == "bool" {
-				passedVal, _ := toBool(passed)
-				if passedVal {
-					fmt.Printf("✓ %s PASSED\n", testName.Value)
-				} else {
-					fmt.Printf("✗ %s FAILED\n", testName.Value)
-				}
+			if testName.Type != "string" || passed.Type != "bool" {
 				return Result{Type: "void", Value: nil}, true
 			}
+
+			passedVal, _ := toBool(passed)
+			if passedVal {
+				fmt.Printf("✓ %s PASSED\n", testName.Value)
+			} else {
+				fmt.Printf("✗ %s FAILED\n", testName.Value)
+			}
+			return Result{Type: "void", Value: nil}, true
 		}
 	case "std.assert":
 		if len(operands) == 2 {
 			condition := operandValue(fr, operands[0])
 			message := operandValue(fr, operands[1])
-			if condition.Type == "bool" && message.Type == "string" {
-				conditionVal, _ := toBool(condition)
-				if !conditionVal {
-					fmt.Printf("  ASSERTION FAILED: %s\n", message.Value)
-					return Result{Type: "void", Value: nil}, true
-				}
+			if condition.Type != "bool" || message.Type != "string" {
 				return Result{Type: "void", Value: nil}, true
 			}
+
+			conditionVal, _ := toBool(condition)
+			if !conditionVal {
+				fmt.Printf("  ASSERTION FAILED: %s\n", message.Value)
+			}
+
+			return Result{Type: "void", Value: nil}, true
 		}
 	case "std.assert.eq":
 		if len(operands) == 3 {
 			expected := operandValue(fr, operands[0])
 			actual := operandValue(fr, operands[1])
 			message := operandValue(fr, operands[2])
-			if message.Type == "string" {
-				var equal bool
-				if expected.Type == actual.Type {
-					switch expected.Type {
-					case "int":
-						expectedVal, _ := toInt(expected)
-						actualVal, _ := toInt(actual)
-						equal = expectedVal == actualVal
-					case "string":
-						expectedStr, _ := toString(expected)
-						actualStr, _ := toString(actual)
-						equal = expectedStr == actualStr
-					case "bool":
-						expectedBool, _ := toBool(expected)
-						actualBool, _ := toBool(actual)
-						equal = expectedBool == actualBool
-					case "float", "double":
-						expectedFloat, _ := toFloat(expected)
-						actualFloat, _ := toFloat(actual)
-						equal = expectedFloat == actualFloat
-					default:
-						equal = expected.Value == actual.Value
-					}
-				}
-				if !equal {
-					fmt.Printf("  ASSERTION FAILED: %s (expected: %v, actual: %v)\n", message.Value, expected.Value, actual.Value)
-				}
+			if message.Type != "string" {
 				return Result{Type: "void", Value: nil}, true
 			}
+
+			var equal bool
+			if expected.Type == actual.Type {
+				switch expected.Type {
+				case "int":
+					expectedVal, _ := toInt(expected)
+					actualVal, _ := toInt(actual)
+					equal = expectedVal == actualVal
+				case "string":
+					expectedStr, _ := toString(expected)
+					actualStr, _ := toString(actual)
+					equal = expectedStr == actualStr
+				case "bool":
+					expectedBool, _ := toBool(expected)
+					actualBool, _ := toBool(actual)
+					equal = expectedBool == actualBool
+				case "float", "double":
+					expectedFloat, _ := toFloat(expected)
+					actualFloat, _ := toFloat(actual)
+					equal = expectedFloat == actualFloat
+				default:
+					equal = expected.Value == actual.Value
+				}
+			}
+
+			if !equal {
+				fmt.Printf("  ASSERTION FAILED: %s (expected: %v, actual: %v)\n", message.Value, expected.Value, actual.Value)
+			}
+
+			return Result{Type: "void", Value: nil}, true
 		}
 	case "std.assert.true":
 		if len(operands) == 2 {
 			condition := operandValue(fr, operands[0])
 			message := operandValue(fr, operands[1])
-			if condition.Type == "bool" && message.Type == "string" {
-				conditionVal, _ := toBool(condition)
-				if !conditionVal {
-					fmt.Printf("  ASSERTION FAILED: %s (expected: true, actual: false)\n", message.Value)
-				}
+			if condition.Type != "bool" || message.Type != "string" {
 				return Result{Type: "void", Value: nil}, true
 			}
+
+			conditionVal, _ := toBool(condition)
+			if !conditionVal {
+				fmt.Printf("  ASSERTION FAILED: %s (expected: true, actual: false)\n", message.Value)
+			}
 		}
+
+		return Result{Type: "void", Value: nil}, true
 	case "std.assert.false":
 		if len(operands) == 2 {
 			condition := operandValue(fr, operands[0])
 			message := operandValue(fr, operands[1])
-			if condition.Type == "bool" && message.Type == "string" {
-				conditionVal, _ := toBool(condition)
-				if conditionVal {
-					fmt.Printf("  ASSERTION FAILED: %s (expected: false, actual: true)\n", message.Value)
-				}
+			if condition.Type != "bool" || message.Type != "string" {
 				return Result{Type: "void", Value: nil}, true
 			}
+
+			conditionVal, _ := toBool(condition)
+			if conditionVal {
+				fmt.Printf("  ASSERTION FAILED: %s (expected: false, actual: true)\n", message.Value)
+			}
 		}
+
+		return Result{Type: "void", Value: nil}, true
 	case "std.test.summary":
 		if len(operands) == 0 {
 			fmt.Printf("\nTest Summary: All tests completed\n")
 			return Result{Type: "int", Value: 0}, true
 		}
+	case "std.os.exit":
+		code := 0
+		if len(operands) >= 1 {
+			if val, err := toInt(operandValue(fr, operands[0])); err == nil {
+				code = val
+			}
+		}
+		panic(exitSignal{code: code})
+	case "std.os.getenv":
+		if len(operands) == 1 {
+			name, err := toString(operandValue(fr, operands[0]))
+			if err != nil {
+				return Result{Type: "string", Value: ""}, true
+			}
+			return Result{Type: "string", Value: os.Getenv(name)}, true
+		}
+		return Result{Type: "string", Value: ""}, true
+	case "std.os.setenv":
+		if len(operands) == 2 {
+			name, err1 := toString(operandValue(fr, operands[0]))
+			value, err2 := toString(operandValue(fr, operands[1]))
+			if err1 == nil && err2 == nil {
+				return Result{Type: "bool", Value: os.Setenv(name, value) == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.unsetenv":
+		if len(operands) == 1 {
+			name, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				return Result{Type: "bool", Value: os.Unsetenv(name) == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.getpid":
+		return Result{Type: "int", Value: os.Getpid()}, true
+	case "std.os.getppid":
+		return Result{Type: "int", Value: os.Getppid()}, true
+	case "std.os.getcwd":
+		cwd, err := os.Getwd()
+		if err != nil {
+			return Result{Type: "string", Value: ""}, true
+		}
+		return Result{Type: "string", Value: cwd}, true
+	case "std.os.chdir":
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				return Result{Type: "bool", Value: os.Chdir(path) == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.mkdir":
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				if path == "" {
+					return Result{Type: "bool", Value: false}, true
+				}
+				if err := os.MkdirAll(path, 0o755); err == nil {
+					return Result{Type: "bool", Value: true}, true
+				}
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.rmdir":
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				if path == "" {
+					return Result{Type: "bool", Value: false}, true
+				}
+				return Result{Type: "bool", Value: os.Remove(path) == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.exists":
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				exists, _ := vmPathExists(path)
+				return Result{Type: "bool", Value: exists}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.is_file":
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				isFile, _ := vmIsFile(path)
+				return Result{Type: "bool", Value: isFile}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.is_dir":
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				isDir, _ := vmIsDir(path)
+				return Result{Type: "bool", Value: isDir}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.remove":
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				return Result{Type: "bool", Value: os.Remove(path) == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.rename":
+		if len(operands) == 2 {
+			src, err1 := toString(operandValue(fr, operands[0]))
+			dst, err2 := toString(operandValue(fr, operands[1]))
+			if err1 == nil && err2 == nil {
+				return Result{Type: "bool", Value: os.Rename(src, dst) == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.copy":
+		if len(operands) == 2 {
+			src, err1 := toString(operandValue(fr, operands[0]))
+			dst, err2 := toString(operandValue(fr, operands[1]))
+			if err1 == nil && err2 == nil {
+				return Result{Type: "bool", Value: vmCopyFile(src, dst) == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.read_file":
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				data, readErr := os.ReadFile(path)
+				if readErr != nil {
+					return Result{Type: "string", Value: ""}, true
+				}
+				return Result{Type: "string", Value: string(data)}, true
+			}
+		}
+		return Result{Type: "string", Value: ""}, true
+	case "std.os.write_file":
+		if len(operands) == 2 {
+			path, err1 := toString(operandValue(fr, operands[0]))
+			content, err2 := toString(operandValue(fr, operands[1]))
+			if err1 == nil && err2 == nil {
+				return Result{Type: "bool", Value: os.WriteFile(path, []byte(content), 0o644) == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.append_file":
+		if len(operands) == 2 {
+			path, err1 := toString(operandValue(fr, operands[0]))
+			content, err2 := toString(operandValue(fr, operands[1]))
+			if err1 == nil && err2 == nil {
+				f, openErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+				if openErr != nil {
+					return Result{Type: "bool", Value: false}, true
+				}
+				_, writeErr := io.WriteString(f, content)
+				closeErr := f.Close()
+				return Result{Type: "bool", Value: writeErr == nil && closeErr == nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.file.read":
+		if len(operands) == 3 {
+			handle, errHandle := toInt(operandValue(fr, operands[0]))
+			// buffer operand ignored in VM; present for parity
+			_ = operandValue(fr, operands[1])
+			size, errSize := toInt(operandValue(fr, operands[2]))
+			if errHandle == nil && errSize == nil {
+				read, readErr := vmFileRead(handle, size)
+				if readErr != nil {
+					return Result{Type: "int", Value: -1}, true
+				}
+				return Result{Type: "int", Value: read}, true
+			}
+		}
+		return Result{Type: "int", Value: -1}, true
+	case "std.file.seek":
+		if len(operands) == 3 {
+			handle, errHandle := toInt(operandValue(fr, operands[0]))
+			offset, errOffset := toInt(operandValue(fr, operands[1]))
+			whence, errWhence := toInt(operandValue(fr, operands[2]))
+			if errHandle == nil && errOffset == nil && errWhence == nil {
+				result, seekErr := vmFileSeek(handle, offset, whence)
+				if seekErr != nil {
+					return Result{Type: "int", Value: -1}, true
+				}
+				return Result{Type: "int", Value: result}, true
+			}
+		}
+		return Result{Type: "int", Value: -1}, true
+	case "std.file.tell":
+		if len(operands) == 1 {
+			handle, err := toInt(operandValue(fr, operands[0]))
+			if err == nil {
+				pos, tellErr := vmFileTell(handle)
+				if tellErr != nil {
+					return Result{Type: "int", Value: -1}, true
+				}
+				return Result{Type: "int", Value: pos}, true
+			}
+		}
+		return Result{Type: "int", Value: -1}, true
+	case "std.network.ip_parse":
+		if len(operands) == 1 {
+			if ipStr, err := toString(operandValue(fr, operands[0])); err == nil {
+				return Result{Type: "std.network.IPAddress", Value: buildIPAddressStruct(ipStr)}, true
+			}
+		}
+		return Result{Type: "std.network.IPAddress", Value: buildIPAddressStruct("")}, true
+	case "std.network.ip_is_valid":
+		if len(operands) == 1 {
+			if ipStr, err := toString(operandValue(fr, operands[0])); err == nil {
+				return Result{Type: "bool", Value: net.ParseIP(ipStr) != nil}, true
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.network.ip_is_private":
+		if len(operands) == 1 {
+			if ipStr, ok := ipValueToString(operandValue(fr, operands[0])); ok {
+				if ip := net.ParseIP(ipStr); ip != nil {
+					return Result{Type: "bool", Value: ip.IsPrivate()}, true
+				}
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.network.ip_is_loopback":
+		if len(operands) == 1 {
+			if ipStr, ok := ipValueToString(operandValue(fr, operands[0])); ok {
+				if ip := net.ParseIP(ipStr); ip != nil {
+					return Result{Type: "bool", Value: ip.IsLoopback()}, true
+				}
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.network.ip_to_string":
+		if len(operands) == 1 {
+			if ipStr, ok := ipValueToString(operandValue(fr, operands[0])); ok {
+				return Result{Type: "string", Value: ipStr}, true
+			}
+		}
+		return Result{Type: "string", Value: ""}, true
+	case "std.network.url_parse":
+		if len(operands) == 1 {
+			if urlStr, err := toString(operandValue(fr, operands[0])); err == nil {
+				if parsed, urlErr := urlpkg.Parse(urlStr); urlErr == nil {
+					return Result{Type: "std.network.URL", Value: buildURLStruct(parsed)}, true
+				}
+			}
+		}
+		return Result{Type: "std.network.URL", Value: buildURLStruct(nil)}, true
+	case "std.network.url_to_string":
+		if len(operands) == 1 {
+			val := operandValue(fr, operands[0])
+			if val.Type == "string" {
+				return val, true
+			}
+			if urlStr, ok := urlFromStruct(val); ok {
+				return Result{Type: "string", Value: urlStr}, true
+			}
+		}
+		return Result{Type: "string", Value: ""}, true
+	case "std.network.url_is_valid":
+		if len(operands) == 1 {
+			if urlStr, err := toString(operandValue(fr, operands[0])); err == nil {
+				if parsed, parseErr := urlpkg.Parse(urlStr); parseErr == nil && parsed.Scheme != "" && parsed.Host != "" {
+					return Result{Type: "bool", Value: true}, true
+				}
+			}
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.network.dns_lookup":
+		return Result{Type: "array<std.network.IPAddress>", Value: []map[string]interface{}{}}, true
+	case "std.network.dns_reverse_lookup":
+		return Result{Type: "string", Value: ""}, true
+	case "std.network.http_get":
+		return Result{Type: "std.network.HTTPResponse", Value: buildHTTPPlaceholderResponse()}, true
+	case "std.network.http_post":
+		return Result{Type: "std.network.HTTPResponse", Value: buildHTTPPlaceholderResponse()}, true
+	case "std.network.http_put":
+		return Result{Type: "std.network.HTTPResponse", Value: buildHTTPPlaceholderResponse()}, true
+	case "std.network.http_delete":
+		return Result{Type: "std.network.HTTPResponse", Value: buildHTTPPlaceholderResponse()}, true
 	}
 
 	return Result{}, false
@@ -1724,17 +2083,16 @@ func execFileOpen(funcs map[string]*mir.Function, fr *frame, inst mir.Instructio
 		return Result{}, fmt.Errorf("file.open: expected 2 operands (filename, mode), got %d", len(inst.Operands))
 	}
 
-	filename := operandValue(fr, inst.Operands[0])
-	mode := operandValue(fr, inst.Operands[1])
-
-	if filename.Type != "string" || mode.Type != "string" {
+	name, err1 := toString(operandValue(fr, inst.Operands[0]))
+	mode, err2 := toString(operandValue(fr, inst.Operands[1]))
+	if err1 != nil || err2 != nil {
 		return Result{}, fmt.Errorf("file.open: filename and mode must be strings")
 	}
-
-	// In the VM, we simulate file operations by returning a file handle
-	// In a real implementation, this would open an actual file
-	fileHandle := 1 // Simulated file handle
-	return Result{Type: "int", Value: fileHandle}, nil
+	handle, err := vmFileOpen(name, mode)
+	if err != nil {
+		return Result{Type: "int", Value: -1}, nil
+	}
+	return Result{Type: "int", Value: handle}, nil
 }
 
 // execFileClose handles file closing
@@ -1743,13 +2101,14 @@ func execFileClose(funcs map[string]*mir.Function, fr *frame, inst mir.Instructi
 		return Result{}, fmt.Errorf("file.close: expected 1 operand (file_handle), got %d", len(inst.Operands))
 	}
 
-	fileHandle := operandValue(fr, inst.Operands[0])
-	if fileHandle.Type != "int" {
+	fileHandle, err := toInt(operandValue(fr, inst.Operands[0]))
+	if err != nil {
 		return Result{}, fmt.Errorf("file.close: file_handle must be int")
 	}
-
-	// In the VM, we simulate file closing
-	return Result{Type: "int", Value: 0}, nil // Success
+	if err := vmFileClose(fileHandle); err != nil {
+		return Result{Type: "int", Value: -1}, nil
+	}
+	return Result{Type: "int", Value: 0}, nil
 }
 
 // execFileRead handles file reading
@@ -1758,18 +2117,20 @@ func execFileRead(funcs map[string]*mir.Function, fr *frame, inst mir.Instructio
 		return Result{}, fmt.Errorf("file.read: expected 3 operands (file_handle, buffer, size), got %d", len(inst.Operands))
 	}
 
-	fileHandle := operandValue(fr, inst.Operands[0])
-	_ = operandValue(fr, inst.Operands[1]) // buffer - not used in VM simulation
-	size := operandValue(fr, inst.Operands[2])
-
-	if fileHandle.Type != "int" || size.Type != "int" {
-		return Result{}, fmt.Errorf("file.read: file_handle and size must be int")
+	fileHandle, err := toInt(operandValue(fr, inst.Operands[0]))
+	if err != nil {
+		return Result{}, fmt.Errorf("file.read: file_handle must be int")
 	}
-
-	// In the VM, we simulate file reading
-	// Return the number of bytes "read"
-	sizeVal, _ := toInt(size)
-	return Result{Type: "int", Value: sizeVal}, nil
+	_ = operandValue(fr, inst.Operands[1])
+	size, errSize := toInt(operandValue(fr, inst.Operands[2]))
+	if errSize != nil {
+		return Result{}, fmt.Errorf("file.read: size must be int")
+	}
+	read, readErr := vmFileRead(fileHandle, size)
+	if readErr != nil {
+		return Result{Type: "int", Value: -1}, nil
+	}
+	return Result{Type: "int", Value: read}, nil
 }
 
 // execFileWrite handles file writing
@@ -1778,18 +2139,23 @@ func execFileWrite(funcs map[string]*mir.Function, fr *frame, inst mir.Instructi
 		return Result{}, fmt.Errorf("file.write: expected 3 operands (file_handle, buffer, size), got %d", len(inst.Operands))
 	}
 
-	fileHandle := operandValue(fr, inst.Operands[0])
-	_ = operandValue(fr, inst.Operands[1]) // buffer - not used in VM simulation
-	size := operandValue(fr, inst.Operands[2])
-
-	if fileHandle.Type != "int" || size.Type != "int" {
-		return Result{}, fmt.Errorf("file.write: file_handle and size must be int")
+	fileHandle, err := toInt(operandValue(fr, inst.Operands[0]))
+	if err != nil {
+		return Result{}, fmt.Errorf("file.write: file_handle must be int")
 	}
-
-	// In the VM, we simulate file writing
-	// Return the number of bytes "written"
-	sizeVal, _ := toInt(size)
-	return Result{Type: "int", Value: sizeVal}, nil
+	data, errData := toString(operandValue(fr, inst.Operands[1]))
+	if errData != nil {
+		return Result{}, fmt.Errorf("file.write: buffer must be string")
+	}
+	size, errSize := toInt(operandValue(fr, inst.Operands[2]))
+	if errSize != nil {
+		return Result{}, fmt.Errorf("file.write: size must be int")
+	}
+	written, writeErr := vmFileWrite(fileHandle, data, size)
+	if writeErr != nil {
+		return Result{Type: "int", Value: -1}, nil
+	}
+	return Result{Type: "int", Value: written}, nil
 }
 
 // execFileSeek handles file seeking
@@ -1798,16 +2164,23 @@ func execFileSeek(funcs map[string]*mir.Function, fr *frame, inst mir.Instructio
 		return Result{}, fmt.Errorf("file.seek: expected 3 operands (file_handle, offset, whence), got %d", len(inst.Operands))
 	}
 
-	fileHandle := operandValue(fr, inst.Operands[0])
-	offset := operandValue(fr, inst.Operands[1])
-	whence := operandValue(fr, inst.Operands[2])
-
-	if fileHandle.Type != "int" || offset.Type != "int" || whence.Type != "int" {
-		return Result{}, fmt.Errorf("file.seek: file_handle, offset, and whence must be int")
+	fileHandle, err := toInt(operandValue(fr, inst.Operands[0]))
+	if err != nil {
+		return Result{}, fmt.Errorf("file.seek: file_handle must be int")
 	}
-
-	// In the VM, we simulate file seeking
-	return Result{Type: "int", Value: 0}, nil // Success
+	offset, errOff := toInt(operandValue(fr, inst.Operands[1]))
+	if errOff != nil {
+		return Result{}, fmt.Errorf("file.seek: offset must be int")
+	}
+	whence, errWhence := toInt(operandValue(fr, inst.Operands[2]))
+	if errWhence != nil {
+		return Result{}, fmt.Errorf("file.seek: whence must be int")
+	}
+	result, seekErr := vmFileSeek(fileHandle, offset, whence)
+	if seekErr != nil {
+		return Result{Type: "int", Value: -1}, nil
+	}
+	return Result{Type: "int", Value: result}, nil
 }
 
 // execFileTell handles file position querying
@@ -1816,13 +2189,15 @@ func execFileTell(funcs map[string]*mir.Function, fr *frame, inst mir.Instructio
 		return Result{}, fmt.Errorf("file.tell: expected 1 operand (file_handle), got %d", len(inst.Operands))
 	}
 
-	fileHandle := operandValue(fr, inst.Operands[0])
-	if fileHandle.Type != "int" {
+	fileHandle, err := toInt(operandValue(fr, inst.Operands[0]))
+	if err != nil {
 		return Result{}, fmt.Errorf("file.tell: file_handle must be int")
 	}
-
-	// In the VM, we simulate file position
-	return Result{Type: "int", Value: 0}, nil // Current position
+	pos, tellErr := vmFileTell(fileHandle)
+	if tellErr != nil {
+		return Result{Type: "int", Value: -1}, nil
+	}
+	return Result{Type: "int", Value: pos}, nil
 }
 
 // execFileExists handles file existence checking
@@ -1831,14 +2206,15 @@ func execFileExists(funcs map[string]*mir.Function, fr *frame, inst mir.Instruct
 		return Result{}, fmt.Errorf("file.exists: expected 1 operand (filename), got %d", len(inst.Operands))
 	}
 
-	filename := operandValue(fr, inst.Operands[0])
-	if filename.Type != "string" {
+	filename, err := toString(operandValue(fr, inst.Operands[0]))
+	if err != nil {
 		return Result{}, fmt.Errorf("file.exists: filename must be string")
 	}
-
-	// In the VM, we simulate file existence check
-	// For now, always return true (file exists)
-	return Result{Type: "bool", Value: true}, nil
+	exists, existsErr := vmFileExists(filename)
+	if existsErr != nil {
+		return Result{Type: "bool", Value: false}, nil
+	}
+	return Result{Type: "bool", Value: exists}, nil
 }
 
 // execFileSize handles file size querying
@@ -1847,13 +2223,15 @@ func execFileSize(funcs map[string]*mir.Function, fr *frame, inst mir.Instructio
 		return Result{}, fmt.Errorf("file.size: expected 1 operand (filename), got %d", len(inst.Operands))
 	}
 
-	filename := operandValue(fr, inst.Operands[0])
-	if filename.Type != "string" {
+	filename, err := toString(operandValue(fr, inst.Operands[0]))
+	if err != nil {
 		return Result{}, fmt.Errorf("file.size: filename must be string")
 	}
-
-	// In the VM, we simulate file size
-	return Result{Type: "int", Value: 1024}, nil // Simulated file size
+	statSize, sizeErr := vmFileSize(filename)
+	if sizeErr != nil {
+		return Result{Type: "int", Value: -1}, nil
+	}
+	return Result{Type: "int", Value: statSize}, nil
 }
 
 // execTestStart handles test start
@@ -2322,4 +2700,311 @@ func buildLogMessage(operands []mir.Operand, fr *frame) string {
 		parts = append(parts, str)
 	}
 	return strings.Join(parts, " ")
+}
+
+func vmFileOpen(filename, mode string) (int, error) {
+	flags, perm, err := parseFileMode(mode)
+	if err != nil {
+		return -1, err
+	}
+	if perm == 0 {
+		perm = 0o644
+	}
+	file, err := os.OpenFile(filename, flags, perm)
+	if err != nil {
+		return -1, err
+	}
+	fileHandleMu.Lock()
+	handle := fileHandleCounter
+	fileHandleCounter++
+	fileHandleTable[handle] = file
+	fileHandleMu.Unlock()
+	return handle, nil
+}
+
+func vmFileClose(handle int) error {
+	fileHandleMu.Lock()
+	file := fileHandleTable[handle]
+	if file != nil {
+		delete(fileHandleTable, handle)
+	}
+	fileHandleMu.Unlock()
+	if file == nil {
+		return fmt.Errorf("invalid file handle %d", handle)
+	}
+	return file.Close()
+}
+
+func vmFileRead(handle int, size int) (int, error) {
+	if size <= 0 {
+		return 0, nil
+	}
+	file, err := getFileHandle(handle)
+	if err != nil {
+		return -1, err
+	}
+	buf := make([]byte, size)
+	read, readErr := file.Read(buf)
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		return read, readErr
+	}
+	return read, nil
+}
+
+func vmFileWrite(handle int, data string, size int) (int, error) {
+	file, err := getFileHandle(handle)
+	if err != nil {
+		return -1, err
+	}
+	if size < 0 {
+		size = 0
+	}
+	if size > len(data) {
+		size = len(data)
+	}
+	written, writeErr := file.Write([]byte(data)[:size])
+	return written, writeErr
+}
+
+func vmFileSeek(handle int, offset int, whence int) (int, error) {
+	file, err := getFileHandle(handle)
+	if err != nil {
+		return -1, err
+	}
+	var seekWhence int
+	switch whence {
+	case 0:
+		seekWhence = io.SeekStart
+	case 1:
+		seekWhence = io.SeekCurrent
+	case 2:
+		seekWhence = io.SeekEnd
+	default:
+		return -1, fmt.Errorf("file.seek: invalid whence %d", whence)
+	}
+	if _, err := file.Seek(int64(offset), seekWhence); err != nil {
+		return -1, err
+	}
+	return 0, nil
+}
+
+func vmFileTell(handle int) (int, error) {
+	file, err := getFileHandle(handle)
+	if err != nil {
+		return -1, err
+	}
+	pos, err := file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return -1, err
+	}
+	return int(pos), nil
+}
+
+func vmFileExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+func vmFileSize(path string) (int, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return -1, err
+	}
+	return int(info.Size()), nil
+}
+
+func vmPathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+func vmIsFile(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return info.Mode().IsRegular(), nil
+}
+
+func vmIsDir(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return info.IsDir(), nil
+}
+
+func vmCopyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil && !errors.Is(err, os.ErrExist) {
+		return err
+	}
+	destFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}
+
+func getFileHandle(handle int) (*os.File, error) {
+	fileHandleMu.Lock()
+	file := fileHandleTable[handle]
+	fileHandleMu.Unlock()
+	if file == nil {
+		return nil, fmt.Errorf("invalid file handle %d", handle)
+	}
+	return file, nil
+}
+
+func parseFileMode(mode string) (int, os.FileMode, error) {
+	m := strings.TrimSpace(mode)
+	m = strings.ReplaceAll(m, "b", "")
+	switch m {
+	case "r":
+		return os.O_RDONLY, 0, nil
+	case "r+":
+		return os.O_RDWR, 0, nil
+	case "w":
+		return os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0o644, nil
+	case "w+":
+		return os.O_RDWR | os.O_CREATE | os.O_TRUNC, 0o644, nil
+	case "a":
+		return os.O_APPEND | os.O_CREATE | os.O_WRONLY, 0o644, nil
+	case "a+":
+		return os.O_APPEND | os.O_CREATE | os.O_RDWR, 0o644, nil
+	default:
+		return 0, 0, fmt.Errorf("unsupported file mode %q", mode)
+	}
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func buildIPAddressStruct(address string) map[string]interface{} {
+	info := map[string]interface{}{
+		"address": address,
+		"is_ipv4": false,
+		"is_ipv6": false,
+	}
+	if address == "" {
+		return info
+	}
+	ip := net.ParseIP(address)
+	if ip == nil {
+		return info
+	}
+	if ip.To4() != nil {
+		info["is_ipv4"] = true
+	} else if ip.To16() != nil {
+		info["is_ipv6"] = true
+	}
+	return info
+}
+
+func buildURLStruct(u *urlpkg.URL) map[string]interface{} {
+	result := map[string]interface{}{
+		"scheme":   "",
+		"host":     "",
+		"port":     0,
+		"path":     "",
+		"query":    "",
+		"fragment": "",
+	}
+	if u == nil {
+		return result
+	}
+	result["scheme"] = u.Scheme
+	result["host"] = u.Hostname()
+	if port := u.Port(); port != "" {
+		if p, err := strconv.Atoi(port); err == nil {
+			result["port"] = p
+		}
+	}
+	result["path"] = u.EscapedPath()
+	result["query"] = u.RawQuery
+	result["fragment"] = u.Fragment
+	return result
+}
+
+func urlFromStruct(val Result) (string, bool) {
+	data, ok := val.Value.(map[string]interface{})
+	if !ok {
+		return "", false
+	}
+	scheme, _ := data["scheme"].(string)
+	host, _ := data["host"].(string)
+	var port int
+	switch v := data["port"].(type) {
+	case int:
+		port = v
+	case float64:
+		port = int(v)
+	}
+	path, _ := data["path"].(string)
+	query, _ := data["query"].(string)
+	fragment, _ := data["fragment"].(string)
+	if scheme == "" || host == "" {
+		return "", false
+	}
+	assembled := &urlpkg.URL{
+		Scheme:   scheme,
+		Path:     path,
+		RawQuery: strings.TrimPrefix(query, "?"),
+		Fragment: strings.TrimPrefix(fragment, "#"),
+	}
+	if port > 0 {
+		assembled.Host = fmt.Sprintf("%s:%d", host, port)
+	} else {
+		assembled.Host = host
+	}
+	return assembled.String(), true
+}
+
+func buildHTTPPlaceholderResponse() map[string]interface{} {
+	return map[string]interface{}{
+		"status_code": 501,
+		"status_text": "Not Implemented",
+		"headers":     map[string]string{},
+		"body":        "",
+	}
+}
+
+func ipValueToString(val Result) (string, bool) {
+	if val.Type == "string" {
+		if s, ok := val.Value.(string); ok {
+			return s, true
+		}
+	}
+	if m, ok := val.Value.(map[string]interface{}); ok {
+		if address, ok := m["address"].(string); ok {
+			return address, true
+		}
+	}
+	return "", false
 }

@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -88,6 +89,10 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 func Run(path string, verbose bool) error {
 	result, err := Execute(path, verbose)
 	if err != nil {
+		var exitErr vm.ExitError
+		if errors.As(err, &exitErr) {
+			os.Exit(exitErr.Code)
+		}
 		return err
 	}
 	switch v := result.Value.(type) {

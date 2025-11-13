@@ -1,0 +1,43 @@
+import std
+
+func main():int {
+    let parsed = std.network.ip_parse("127.0.0.1")
+    if !std.network.ip_is_valid("127.0.0.1") {
+        return -1
+    }
+
+    if !std.network.ip_is_loopback(parsed) {
+        return -2
+    }
+
+    let private_addr = std.network.ip_parse("10.1.1.1")
+    if !std.network.ip_is_private(private_addr) {
+        return -3
+    }
+
+    let ip_text:string = std.network.ip_to_string(parsed)
+    if ip_text != "127.0.0.1" {
+        return -4
+    }
+
+    if std.network.ip_is_valid("not-an-ip") {
+        return -5
+    }
+
+    let url = std.network.url_parse("https://example.com:8080/path?x=1#frag")
+
+    let roundtrip:string = std.network.url_to_string(url)
+    if roundtrip != "https://example.com:8080/path?x=1#frag" {
+        return -6
+    }
+
+    if !std.network.url_is_valid(roundtrip) {
+        return -7
+    }
+    if std.network.url_is_valid("bad://") {
+        return -8
+    }
+
+    return 0
+}
+

@@ -124,24 +124,33 @@ func TestAllStdModules(t *testing.T) {
 	})
 
 	t.Run("std.os", func(t *testing.T) {
-		result, err := runVM("std_os_simple.omni")
+		result, err := runVM("std_os_comprehensive.omni")
 		if err != nil {
 			t.Fatalf("VM execution failed: %v", err)
 		}
-		// Expected: 42 (success indicator)
-		expected := "42"
+		expected := "0"
 		if result != expected {
 			t.Errorf("Expected %s, got %s", expected, result)
 		}
 	})
 
 	t.Run("std.file", func(t *testing.T) {
-		result, err := runVM("std_file_simple.omni")
+		result, err := runVM("std_file_comprehensive.omni")
 		if err != nil {
 			t.Fatalf("VM execution failed: %v", err)
 		}
-		// Expected: 42 (success indicator)
-		expected := "42"
+		expected := "0"
+		if result != expected {
+			t.Errorf("Expected %s, got %s", expected, result)
+		}
+	})
+
+	t.Run("std.network", func(t *testing.T) {
+		result, err := runVM("std_network_comprehensive.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		expected := "0"
 		if result != expected {
 			t.Errorf("Expected %s, got %s", expected, result)
 		}
