@@ -594,7 +594,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			rightStr := g.convertOperandToString(inst.Operands[1])
 
 			// Generate proper string concatenation using runtime function
-			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_strcat(%s, %s);\n",
+			g.output.WriteString(fmt.Sprintf("  %s = omni_strcat(%s, %s);\n",
 				varName, leftStr, rightStr))
 		}
 	case "throw":
