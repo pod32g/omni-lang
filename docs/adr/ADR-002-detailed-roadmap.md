@@ -383,3 +383,26 @@ The estimated timeline is 14-19 weeks total, with the first three phases being c
 2. Set up project management tools (GitHub Projects, milestones)
 3. Begin Phase 1.1: Advanced Type Inference
 4. Establish regular progress reviews and adjustments
+
+### Developer Experience
+- Improve error messages and diagnostics across the compiler pipeline.
+- Add tooling support (LSP, editor plugins) to streamline OmniLang development.
+- Surface contextual error snippets and suggestion engine (e.g. import typo hints, highlighted spans).
+- Expand CLI automation: `omnic --watch`, `omnir --watch`, JSON outputs for scripting.
+
+### Standard Library
+- Expand `std` modules to cover networking, filesystems, and concurrency.
+- Ensure parity between the VM and C backends for all `std` functions.
+- Introduce developer-oriented utilities (`std.testing`, watch helpers) to simplify rapid iteration.
+
+### Tooling & Ecosystem
+- Release official OmniLang VS Code extension with syntax highlighting and snippets.
+- Integrate OmniLang tooling into popular CI/CD platforms.
+- Update VS Code extension to expose new CLI features (watch commands, backend listings).
+- Add lightweight JSON API endpoints in CLI tools for editor integrations.
+
+### Releases
+- Automate packaging and checksum generation for OmniLang releases.
+- Provide pre-built binaries for major operating systems.
+- Publish release manifests (`release.json`) with artifact metadata for downstream consumption.
+- Ship official Docker images with Omni toolchain ready-to-use.

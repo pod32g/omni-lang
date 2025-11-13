@@ -1,3 +1,5 @@
 tests/goldens/types/undefined_ident_08.omni:1:19: error: undefined identifier "missing8"
-  let result8:int = missing8
-                    ~~~~~~~~ hint: declare the variable with 'let missing8: <type> = <value>' or 'var missing8: <type> = <value>' before using it
+     1 | let result8:int = missing8
+       |                   ^^^^^^^^
+     2 | 
+  hint: declare the variable with 'let missing8: <type> = <value>' or 'var missing8: <type> = <value>' before using it

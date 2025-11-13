@@ -1,6 +1,11 @@
 tests/goldens/types/unknown_type_22.omni:1:13: error: unknown type "Mystery22"
-  let value22:Mystery22 = 1
-              ~~~~~~~~~ hint: import or declare the type before use
+     1 | let value22:Mystery22 = 1
+       |             ^^^^^^^^^
+     2 | 
+  hint: import or declare the type before use
+
 tests/goldens/types/unknown_type_22.omni:1:1: error: cannot assign int to Mystery22
-  let value22:Mystery22 = 1
-  ~~~~~~~~~~~~~~~~~~~~~~~~~ hint: convert the expression to Mystery22 or change the variable type to int
+     1 | let value22:Mystery22 = 1
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^
+     2 | 
+  hint: convert the expression to Mystery22 or change the variable type to int

@@ -1,3 +1,5 @@
 tests/goldens/types/undefined_ident_06.omni:1:19: error: undefined identifier "missing6"
-  let result6:int = missing6
-                    ~~~~~~~~ hint: declare the variable with 'let missing6: <type> = <value>' or 'var missing6: <type> = <value>' before using it
+     1 | let result6:int = missing6
+       |                   ^^^^^^^^
+     2 | 
+  hint: declare the variable with 'let missing6: <type> = <value>' or 'var missing6: <type> = <value>' before using it

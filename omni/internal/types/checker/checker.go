@@ -128,35 +128,35 @@ func (c *Checker) isFunctionTypeParam(name string, typeParams []ast.TypeParam) b
 // For example, if expected is "array<T>" and argType is "array<int>", it infers T = int
 func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeParams []ast.TypeParam) map[string]string {
 	inferred := make(map[string]string)
-	
+
 	// Handle array types: array<T> vs array<int>
 	if strings.HasPrefix(expected, "array<") && strings.HasSuffix(expected, ">") &&
 		strings.HasPrefix(argType, "array<") && strings.HasSuffix(argType, ">") {
-		expectedInner := expected[6 : len(expected)-1]  // Remove "array<" and ">"
+		expectedInner := expected[6 : len(expected)-1] // Remove "array<" and ">"
 		argInner := argType[6 : len(argType)-1]        // Remove "array<" and ">"
-		
+
 		// If the expected inner type is a type parameter, infer it
 		if c.isFunctionTypeParam(expectedInner, typeParams) {
 			inferred[expectedInner] = argInner
 		}
 	}
-	
+
 	// Handle map types: map<K,V> vs map<string,int>
 	if strings.HasPrefix(expected, "map<") && strings.HasSuffix(expected, ">") &&
 		strings.HasPrefix(argType, "map<") && strings.HasSuffix(argType, ">") {
-		expectedInner := expected[4 : len(expected)-1]  // Remove "map<" and ">"
+		expectedInner := expected[4 : len(expected)-1] // Remove "map<" and ">"
 		argInner := argType[4 : len(argType)-1]        // Remove "map<" and ">"
-		
+
 		// Split by comma to get key and value types
 		expectedParts := strings.Split(expectedInner, ",")
 		argParts := strings.Split(argInner, ",")
-		
+
 		if len(expectedParts) == 2 && len(argParts) == 2 {
 			expectedKey := strings.TrimSpace(expectedParts[0])
 			expectedValue := strings.TrimSpace(expectedParts[1])
 			argKey := strings.TrimSpace(argParts[0])
 			argValue := strings.TrimSpace(argParts[1])
-			
+
 			// Infer key type parameter
 			if c.isFunctionTypeParam(expectedKey, typeParams) {
 				inferred[expectedKey] = argKey
@@ -167,7 +167,7 @@ func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeP
 			}
 		}
 	}
-	
+
 	return inferred
 }
 
@@ -1149,13 +1149,13 @@ func (c *Checker) checkGenericFunctionCall(expr *ast.CallExpr, sig FunctionSigna
 
 	// Infer type parameters from arguments
 	typeSubstitutions := make(map[string]string)
-	
+
 	// Check each argument and infer type parameters
 	for i, arg := range expr.Args {
 		argType := c.checkExpr(arg)
 		if i < len(sig.Params) {
 			expected := sig.Params[i]
-			
+
 			// If the expected type is a type parameter of this function, infer it from the argument
 			if c.isFunctionTypeParam(expected, sig.TypeParams) {
 				if existing, exists := typeSubstitutions[expected]; exists {
@@ -1182,7 +1182,7 @@ func (c *Checker) checkGenericFunctionCall(expr *ast.CallExpr, sig FunctionSigna
 						typeSubstitutions[typeParam] = concreteType
 					}
 				}
-				
+
 				// Check if the expected type contains type parameters that need substitution
 				substitutedExpected := expected
 				for typeParam, concreteType := range typeSubstitutions {
@@ -1726,14 +1726,17 @@ func (c *Checker) reportWithSeverity(span lexer.Span, message, hint string, seve
 	if span.Start.Line-1 >= 0 && span.Start.Line-1 < len(c.lines) {
 		lineText = c.lines[span.Start.Line-1]
 	}
+	contextLines, contextStart := lexer.BuildContext(c.lines, span)
 	diag := lexer.Diagnostic{
-		File:     c.filename,
-		Message:  message,
-		Hint:     hint,
-		Span:     span,
-		Line:     lineText,
-		Severity: severity,
-		Category: category,
+		File:             c.filename,
+		Message:          message,
+		Hint:             hint,
+		Span:             span,
+		Line:             lineText,
+		Context:          contextLines,
+		ContextStartLine: contextStart,
+		Severity:         severity,
+		Category:         category,
 	}
 	c.diagnostics = append(c.diagnostics, diag)
 }

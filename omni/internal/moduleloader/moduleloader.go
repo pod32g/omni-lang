@@ -2,6 +2,7 @@ package moduleloader
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,8 +180,13 @@ func (ml *ModuleLoader) findModuleFile(importPath []string) (string, error) {
 
 	// Create a more helpful error message
 	searchPathsStr := strings.Join(ml.searchPaths, ", ")
-	return "", fmt.Errorf("module %s not found in search paths: [%s]\n  Hint: Make sure the file %s exists in one of these directories",
+	suggestion := ml.suggestImport(importPath)
+	message := fmt.Sprintf("module %s not found in search paths: [%s]\n  Hint: Make sure the file %s exists in one of these directories",
 		strings.Join(importPath, "."), searchPathsStr, fileName)
+	if suggestion != "" {
+		message += "\n  Suggestion: " + suggestion
+	}
+	return "", fmt.Errorf("%s", message)
 }
 
 // AddSearchPath adds a directory to the module search paths.
@@ -222,4 +228,109 @@ func (ml *ModuleLoader) DebugInfo() string {
 	}
 
 	return strings.Join(info, "\n")
+}
+
+func (ml *ModuleLoader) suggestImport(importPath []string) string {
+	if len(importPath) == 0 {
+		return ""
+	}
+	if importPath[0] == "std" {
+		return suggestStdImport(importPath)
+	}
+	return suggestLocalImport(importPath, ml.searchPaths)
+}
+
+func suggestStdImport(importPath []string) string {
+	if len(importPath) < 2 {
+		return ""
+	}
+	moduleName := importPath[1]
+	stdModules := []string{"io", "math", "string", "array", "os", "collections", "file", "algorithms", "time", "network", "log"}
+	best := ""
+	bestDist := math.MaxInt
+	for _, candidate := range stdModules {
+		dist := levenshtein(moduleName, candidate)
+		if dist < bestDist {
+			bestDist = dist
+			best = candidate
+		}
+	}
+	if best != "" && bestDist <= 2 {
+		return fmt.Sprintf("did you mean 'std.%s'?", best)
+	}
+	return ""
+}
+
+func suggestLocalImport(importPath []string, searchPaths []string) string {
+	moduleName := importPath[len(importPath)-1]
+	best := ""
+	bestDist := math.MaxInt
+	for _, root := range searchPaths {
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() {
+				continue
+			}
+			if filepath.Ext(name) != ".omni" {
+				continue
+			}
+			candidate := strings.TrimSuffix(name, ".omni")
+			dist := levenshtein(moduleName, candidate)
+			if dist < bestDist {
+				bestDist = dist
+				best = candidate
+			}
+		}
+	}
+	if best != "" && bestDist <= 2 {
+		return fmt.Sprintf("did you mean '%s'?", best)
+	}
+	return ""
+}
+
+func levenshtein(a, b string) int {
+	if a == b {
+		return 0
+	}
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+	prev := make([]int, len(b)+1)
+	for j := 0; j <= len(b); j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		curr := make([]int, len(b)+1)
+		curr[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 0
+			if a[i-1] != b[j-1] {
+				cost = 1
+			}
+			curr[j] = min3(
+				prev[j]+1,
+				curr[j-1]+1,
+				prev[j-1]+cost,
+			)
+		}
+		prev = curr
+	}
+	return prev[len(b)]
+}
+
+func min3(a, b, c int) int {
+	if a <= b && a <= c {
+		return a
+	}
+	if b <= a && b <= c {
+		return b
+	}
+	return c
 }

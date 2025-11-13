@@ -1468,18 +1468,21 @@ func (p *Parser) errorAt(tok lexer.Token, format string, args ...interface{}) er
 	if tok.Span.Start.Line-1 >= 0 && tok.Span.Start.Line-1 < len(p.lines) {
 		lineText = p.lines[tok.Span.Start.Line-1]
 	}
+	contextLines, contextStart := lexer.BuildContext(p.lines, tok.Span)
 
 	// Provide better hints based on the error message
 	hint := p.generateHint(tok, message)
 
 	return lexer.Diagnostic{
-		File:     p.filename,
-		Message:  message,
-		Hint:     hint,
-		Span:     tok.Span,
-		Line:     lineText,
-		Severity: lexer.Error,
-		Category: "syntax",
+		File:             p.filename,
+		Message:          message,
+		Hint:             hint,
+		Span:             tok.Span,
+		Line:             lineText,
+		Context:          contextLines,
+		ContextStartLine: contextStart,
+		Severity:         lexer.Error,
+		Category:         "syntax",
 	}
 }
 
