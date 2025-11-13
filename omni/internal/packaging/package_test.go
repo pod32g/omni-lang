@@ -35,7 +35,7 @@ func TestCreateTarGzPackage(t *testing.T) {
 		Architecture: "amd64",
 	}
 
-	err := createTarGzPackage(config)
+	err := createTarGzPackage(config, nil)
 	// We expect an error because the required files don't exist
 	if err == nil {
 		t.Error("Expected createTarGzPackage to fail with missing files")
@@ -54,7 +54,7 @@ func TestCreateZipPackage(t *testing.T) {
 		Architecture: "amd64",
 	}
 
-	err := createZipPackage(config)
+	err := createZipPackage(config, nil)
 	// We expect an error because the required files don't exist
 	if err == nil {
 		t.Error("Expected createZipPackage to fail with missing files")

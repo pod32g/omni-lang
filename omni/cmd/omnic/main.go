@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/omni-lang/omni/internal/compiler"
 	"github.com/omni-lang/omni/internal/logging"
@@ -50,6 +52,14 @@ func main() {
 		debugShort     = flag.Bool("g", false, "alias for -debug")
 		debugModules   = flag.Bool("debug-modules", false, "show module loading debug information")
 		debugModulesSh = flag.Bool("G", false, "alias for -debug-modules")
+		emitDir        = flag.String("emit-dir", "", "directory where derived outputs are written")
+		emitDirShort   = flag.String("C", "", "alias for -emit-dir")
+		emitPrefix     = flag.String("emit-prefix", "", "prefix applied to derived output names")
+		emitPrefixSh   = flag.String("P", "", "alias for -emit-prefix")
+		noColor        = flag.Bool("no-color", false, "disable colored log output")
+		quiet          = flag.Bool("quiet", false, "suppress non-error output")
+		quietShort     = flag.Bool("q", false, "alias for -quiet")
+		timeCompile    = flag.Bool("time", false, "print compilation timing summary")
 		version        = flag.Bool("version", false, "print version and exit")
 		versionShort   = flag.Bool("v", false, "alias for -version")
 		verbose        = flag.Bool("verbose", false, "enable verbose output")
@@ -66,9 +76,40 @@ func main() {
 
 	flag.Parse()
 
+	if *emitDirShort != "" {
+		*emitDir = *emitDirShort
+	}
+	if *emitPrefixSh != "" {
+		*emitPrefix = *emitPrefixSh
+	}
+	if *quietShort {
+		*quiet = true
+	}
+	if *backendShort != "" {
+		*backend = *backendShort
+	}
+	if *dumpShort != "" {
+		*dump = *dumpShort
+	}
+	if *debugShort {
+		*debug = true
+	}
+	if *debugModulesSh {
+		*debugModules = true
+	}
+	if emitShort.set {
+		emitFlag.value = emitShort.value
+		emitFlag.set = true
+	}
+	if *noColor {
+		os.Setenv("LOG_COLORIZE", "false")
+	}
+
 	logger := logging.Logger()
 	logging.SetLevel(logging.LevelInfo)
-	if *verbose || *verboseShort {
+	if *quiet {
+		logging.SetLevel(logging.LevelError)
+	} else if *verbose || *verboseShort {
 		logging.SetLevel(logging.LevelDebug)
 	}
 
@@ -100,22 +141,8 @@ func main() {
 	}
 
 	input := flag.Arg(0)
-	if *backendShort != "" {
-		*backend = *backendShort
-	}
-	if *dumpShort != "" {
-		*dump = *dumpShort
-	}
-	if *debugShort {
-		*debug = true
-	}
-	if *debugModulesSh {
-		*debugModules = true
-	}
 	emit := emitFlag.value
-	if emitShort.set {
-		emit = emitShort.value
-	} else if !emitFlag.set {
+	if !emitFlag.set {
 		// Set appropriate defaults based on backend
 		if *backend == "vm" {
 			emit = "mir"
@@ -126,9 +153,31 @@ func main() {
 		}
 	}
 
-	if err := run(input, *output, *backend, *optLevel, emit, *dump, *verbose || *verboseShort, *debug, *debugModules); err != nil {
+	finalOutput := *output
+	if finalOutput == "" {
+		if derived := deriveOutputPath(input, emit, *emitDir, *emitPrefix); derived != "" {
+			finalOutput = derived
+		}
+	}
+
+	var start time.Time
+	if *timeCompile {
+		start = time.Now()
+	}
+
+	actualOutput, err := run(input, finalOutput, *backend, *optLevel, emit, *dump, *verbose || *verboseShort, *debug, *debugModules)
+	if err != nil {
 		logger.ErrorString(err.Error())
 		os.Exit(1)
+	}
+
+	if *timeCompile && !*quiet {
+		target := actualOutput
+		if target == "" {
+			target = "(default)"
+		}
+		fmt.Fprintf(os.Stderr, "Compiled %s -> %s in %s (backend=%s emit=%s)\n",
+			input, target, time.Since(start).Round(time.Millisecond), *backend, emit)
 	}
 }
 
@@ -148,12 +197,22 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "        dump intermediate representation (mir)\n")
 	fmt.Fprintf(os.Stderr, "  -o string\n")
 	fmt.Fprintf(os.Stderr, "        output binary path\n")
+	fmt.Fprintf(os.Stderr, "  -emit-dir, -C string\n")
+	fmt.Fprintf(os.Stderr, "        directory for derived outputs when -o is omitted\n")
+	fmt.Fprintf(os.Stderr, "  -emit-prefix, -P string\n")
+	fmt.Fprintf(os.Stderr, "        prefix applied to derived output names\n")
 	fmt.Fprintf(os.Stderr, "  -debug, -g\n")
 	fmt.Fprintf(os.Stderr, "        generate debug symbols and debug information\n")
 	fmt.Fprintf(os.Stderr, "  -debug-modules, -G\n")
 	fmt.Fprintf(os.Stderr, "        show module loading debug information\n")
 	fmt.Fprintf(os.Stderr, "  -verbose, -V\n")
 	fmt.Fprintf(os.Stderr, "        enable verbose output\n")
+	fmt.Fprintf(os.Stderr, "  -quiet, -q\n")
+	fmt.Fprintf(os.Stderr, "        suppress non-error output\n")
+	fmt.Fprintf(os.Stderr, "  -no-color\n")
+	fmt.Fprintf(os.Stderr, "        disable colored log output\n")
+	fmt.Fprintf(os.Stderr, "  -time\n")
+	fmt.Fprintf(os.Stderr, "        print compilation timing summary\n")
 	fmt.Fprintf(os.Stderr, "  -version, -v\n")
 	fmt.Fprintf(os.Stderr, "        print version and exit\n")
 	fmt.Fprintf(os.Stderr, "  -list-backends, -B\n")
@@ -171,13 +230,15 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  omnic -dump mir hello.omni          # Dump MIR to file\n")
 }
 
-func run(input, output, backend, optLevel, emit, dump string, verbose, debug, debugModules bool) error {
+func run(input, output, backend, optLevel, emit, dump string, verbose, debug, debugModules bool) (string, error) {
 	if filepath.Ext(input) != ".omni" {
-		return fmt.Errorf("%s: unsupported input (expected .omni)", input)
+		return "", fmt.Errorf("%s: unsupported input (expected .omni)", input)
 	}
 
-	if output == "" && emit != "exe" {
-		output = deriveOutputPath(input, emit)
+	if output != "" {
+		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+			return "", fmt.Errorf("create output directory: %w", err)
+		}
 	}
 
 	logger := logging.Logger()
@@ -214,21 +275,32 @@ func run(input, output, backend, optLevel, emit, dump string, verbose, debug, de
 
 	if err := compiler.Compile(cfg); err != nil {
 		if errors.Is(err, compiler.ErrNotImplemented) {
-			return fmt.Errorf("omnic: feature not implemented: %w", err)
+			return "", fmt.Errorf("omnic: feature not implemented: %w", err)
 		}
-		return err
+		return "", err
 	}
 
 	if verbose {
 		logger.DebugString("Compilation completed successfully!")
 	}
 
-	return nil
+	return cfg.OutputPath, nil
 }
 
-func deriveOutputPath(input, emit string) string {
+func deriveOutputPath(input, emit, emitDir, emitPrefix string) string {
+	if emitDir == "" && emitPrefix == "" && emit == "exe" {
+		return ""
+	}
+
 	dir := filepath.Dir(input)
+	if emitDir != "" {
+		dir = emitDir
+	}
 	base := strings.TrimSuffix(filepath.Base(input), filepath.Ext(input))
+	if emitPrefix != "" {
+		base = emitPrefix + base
+	}
+
 	var ext string
 	switch emit {
 	case "mir":
@@ -239,6 +311,10 @@ func deriveOutputPath(input, emit string) string {
 		ext = ".s"
 	case "binary":
 		ext = ".bin"
+	case "exe":
+		if runtime.GOOS == "windows" {
+			ext = ".exe"
+		}
 	default:
 		ext = "." + emit
 	}

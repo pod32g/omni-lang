@@ -30,6 +30,12 @@ func main() {
 		platformShort = flag.String("p", "", "alias for -platform")
 		arch          = flag.String("arch", runtime.GOARCH, "target architecture")
 		archShort     = flag.String("a", "", "alias for -arch")
+		manifest      = flag.String("manifest", "", "write manifest JSON to file")
+		manifestShort = flag.String("m", "", "alias for -manifest")
+		checksum      = flag.Bool("checksum", false, "write SHA256 checksum alongside the package")
+		checksumPath  = flag.String("checksum-path", "", "override checksum file path")
+		checksumShort = flag.String("S", "", "alias for -checksum-path")
+		dryRun        = flag.Bool("dry-run", false, "show package contents without creating an archive")
 		listTypes     = flag.Bool("list-types", false, "list supported package types and exit")
 		listTypesAlt  = flag.Bool("T", false, "alias for -list-types")
 		help          = flag.Bool("help", false, "show help and exit")
@@ -71,6 +77,12 @@ func main() {
 	if *archShort != "" {
 		*arch = *archShort
 	}
+	if *manifestShort != "" {
+		*manifest = *manifestShort
+	}
+	if *checksumShort != "" {
+		*checksumPath = *checksumShort
+	}
 
 	// Determine package type
 	var pkgType packaging.PackageType
@@ -102,9 +114,17 @@ func main() {
 		Version:      *version,
 		Platform:     *platform,
 		Architecture: *arch,
+		DryRun:       *dryRun,
+		ManifestPath: *manifest,
+		Checksum:     *checksum,
+		ChecksumPath: *checksumPath,
 	}
 
-	logger.InfoFields("Creating package",
+	action := "Creating package"
+	if *dryRun {
+		action = "Simulating package contents"
+	}
+	logger.InfoFields(action,
 		logging.String("output", outputPath),
 		logging.String("type", *packageType),
 		logging.String("version", *version),
@@ -112,6 +132,9 @@ func main() {
 		logging.String("arch", *arch),
 		logging.Bool("include_debug", *includeDebug),
 		logging.Bool("include_src", *includeSrc),
+		logging.Bool("dry_run", *dryRun),
+		logging.Bool("checksum", *checksum),
+		logging.String("manifest", *manifest),
 	)
 
 	// Create the package
@@ -123,9 +146,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.InfoFields("Package created successfully",
-		logging.String("output", outputPath),
-	)
+	if *dryRun {
+		logger.InfoFields("Dry run completed", logging.String("output", outputPath))
+	} else {
+		logger.InfoFields("Package created successfully",
+			logging.String("output", outputPath),
+		)
+	}
 }
 
 func showUsage() {
@@ -148,6 +175,14 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "        target architecture (default current arch)\n")
 	fmt.Fprintf(os.Stderr, "  -list-types, -T\n")
 	fmt.Fprintf(os.Stderr, "        list supported package types and exit\n")
+	fmt.Fprintf(os.Stderr, "  -manifest, -m string\n")
+	fmt.Fprintf(os.Stderr, "        write package manifest to the given path\n")
+	fmt.Fprintf(os.Stderr, "  -checksum\n")
+	fmt.Fprintf(os.Stderr, "        generate a SHA256 checksum file\n")
+	fmt.Fprintf(os.Stderr, "  -checksum-path, -S string\n")
+	fmt.Fprintf(os.Stderr, "        override checksum output file path\n")
+	fmt.Fprintf(os.Stderr, "  -dry-run\n")
+	fmt.Fprintf(os.Stderr, "        show package contents without creating an archive\n")
 	fmt.Fprintf(os.Stderr, "  -help, -h\n")
 	fmt.Fprintf(os.Stderr, "        show help and exit\n\n")
 	fmt.Fprintf(os.Stderr, "EXAMPLES:\n")
