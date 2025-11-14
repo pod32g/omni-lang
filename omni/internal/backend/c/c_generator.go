@@ -390,10 +390,77 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 							}
 							break
 						}
+						// Special case for index - check if indexing into struct array
+						if inst.Op == "index" && len(inst.Operands) >= 2 {
+							// Check the target array type
+							targetOp := inst.Operands[0]
+							if targetOp.Kind == mir.OperandValue {
+								// Try to find the array type from the target variable
+								// Look for array.init instruction that created the target
+								for _, block := range fn.Blocks {
+									for _, prevInst := range block.Instructions {
+										if prevInst.ID == targetOp.Value {
+											// Found the instruction that created the array
+											if prevInst.Op == "array.init" {
+												// Extract element type
+												var elementTypeStr string
+												if strings.HasPrefix(prevInst.Type, "array<") && strings.HasSuffix(prevInst.Type, ">") {
+													elementTypeStr = prevInst.Type[6 : len(prevInst.Type)-1]
+												} else if strings.HasPrefix(prevInst.Type, "[]<") && strings.HasSuffix(prevInst.Type, ">") {
+													elementTypeStr = prevInst.Type[3 : len(prevInst.Type)-1]
+												}
+												// Check if element type is a struct
+												if elementTypeStr != "" && !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(") {
+													varType = "omni_struct_t*"
+													break
+												}
+											}
+										}
+									}
+								}
+							}
+							// If we didn't find it, use the instruction type
+							if varType == "" {
+								resultType := inst.Type
+								isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
+								if isStruct {
+									varType = "omni_struct_t*"
+								} else {
+									varType = g.mapType(inst.Type)
+								}
+							}
+							break
+						}
+						// Special case for phi - check if it's a struct type (for struct array iteration)
+						if inst.Op == "phi" {
+							resultType := inst.Type
+							isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
+							if isStruct {
+								varType = "omni_struct_t*"
+								break
+							}
+						}
 						varType = g.mapType(inst.Type)
 						// Check if this is an array.init instruction
 						if inst.Op == "array.init" {
 							isArrayInit = true
+							// For struct arrays, the type should be omni_struct_t*
+							var elementTypeStr string
+							if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
+								elementTypeStr = inst.Type[6 : len(inst.Type)-1]
+							} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
+								elementTypeStr = inst.Type[3 : len(inst.Type)-1]
+							} else {
+								elementTypeStr = inst.Type
+							}
+							// Check if element type is a struct
+							if !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(") {
+								varType = "omni_struct_t*"
+							}
+						}
+						// Check if this is a struct.init instruction
+						if inst.Op == "struct.init" {
+							varType = "omni_struct_t*"
 						}
 						break
 					}
@@ -407,15 +474,72 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 			}
 			// Skip declaring void variables (they don't produce values)
 			// Skip declaring array variables (they're declared in array.init)
+			// For string constants, we'll initialize them in the const instruction
 			if varType != "void" && !isArrayInit {
-				g.output.WriteString(fmt.Sprintf("  %s %s;\n", varType, varName))
+				// Check if this is a const instruction with a string literal
+				isStringConst := false
+				for _, block := range fn.Blocks {
+					for _, inst := range block.Instructions {
+						if inst.ID == id && inst.Op == "const" && len(inst.Operands) > 0 {
+							// Check if it's a string literal (either by type or by literal value)
+							isString := inst.Type == "string" || 
+								(inst.Operands[0].Kind == mir.OperandLiteral && 
+								 strings.HasPrefix(inst.Operands[0].Literal, "\"") && 
+								 strings.HasSuffix(inst.Operands[0].Literal, "\""))
+							if isString && inst.Operands[0].Kind == mir.OperandLiteral {
+								isStringConst = true
+								// Initialize string constant at declaration
+								literalValue := g.getOperandValue(inst.Operands[0])
+								g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n", varType, varName, literalValue))
+								break
+							}
+						}
+					}
+					if isStringConst {
+						break
+					}
+				}
+				if !isStringConst {
+					g.output.WriteString(fmt.Sprintf("  %s %s;\n", varType, varName))
+				}
+			}
+		}
+	}
+
+	// Pre-populate valueTypes for ALL blocks in this function
+	// This ensures type information is available when processing struct.init
+	// Also handle const instructions specially to infer types from literals
+	for _, block := range fn.Blocks {
+		for _, inst := range block.Instructions {
+			if inst.ID != mir.InvalidValue {
+				// Always store the type if it's set, even for const instructions
+				if inst.Type != "" && inst.Type != inferTypePlaceholder {
+					g.valueTypes[inst.ID] = inst.Type
+				} else if inst.Op == "const" && len(inst.Operands) > 0 {
+					// For const instructions, infer type from the literal if Type is not set
+					// This is important because const instructions should have their type set
+					if inst.Operands[0].Type != "" && inst.Operands[0].Type != inferTypePlaceholder {
+						g.valueTypes[inst.ID] = inst.Operands[0].Type
+					} else if inst.Operands[0].Kind == mir.OperandLiteral {
+						lit := inst.Operands[0].Literal
+						if strings.HasPrefix(lit, "\"") && strings.HasSuffix(lit, "\"") {
+							g.valueTypes[inst.ID] = "string"
+						} else if lit == "true" || lit == "false" {
+							g.valueTypes[inst.ID] = "bool"
+						} else if strings.Contains(lit, ".") {
+							g.valueTypes[inst.ID] = "float"
+						} else {
+							g.valueTypes[inst.ID] = "int"
+						}
+					}
+				}
 			}
 		}
 	}
 
 	// Generate function body
 	for _, block := range fn.Blocks {
-		if err := g.generateBlock(block, fn.Name); err != nil {
+		if err := g.generateBlock(block, fn); err != nil {
 			return err
 		}
 	}
@@ -425,10 +549,41 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 }
 
 // generateBlock generates C code for a basic block
-func (g *CGenerator) generateBlock(block *mir.BasicBlock, funcName string) error {
+func (g *CGenerator) generateBlock(block *mir.BasicBlock, fn *mir.Function) error {
+	funcName := fn.Name
+	if funcName == "main" {
+		funcName = "omni_main"
+	}
 	// Generate block label if it's not the entry block
 	if block.Name != "entry" {
 		g.output.WriteString(fmt.Sprintf("  %s:\n", block.Name))
+	}
+
+	// Pre-populate valueTypes for this block's instructions
+	// This ensures type information is available when processing struct.init
+	// Also handle const instructions specially to infer types from literals
+	for _, inst := range block.Instructions {
+		if inst.ID != mir.InvalidValue {
+			if inst.Type != "" && inst.Type != inferTypePlaceholder {
+				g.valueTypes[inst.ID] = inst.Type
+			} else if inst.Op == "const" && len(inst.Operands) > 0 {
+				// For const instructions, infer type from the literal if Type is not set
+				if inst.Operands[0].Type != "" && inst.Operands[0].Type != inferTypePlaceholder {
+					g.valueTypes[inst.ID] = inst.Operands[0].Type
+				} else if inst.Operands[0].Kind == mir.OperandLiteral {
+					lit := inst.Operands[0].Literal
+					if strings.HasPrefix(lit, "\"") && strings.HasSuffix(lit, "\"") {
+						g.valueTypes[inst.ID] = "string"
+					} else if lit == "true" || lit == "false" {
+						g.valueTypes[inst.ID] = "bool"
+					} else if strings.Contains(lit, ".") {
+						g.valueTypes[inst.ID] = "float"
+					} else {
+						g.valueTypes[inst.ID] = "int"
+					}
+				}
+			}
+		}
 	}
 
 	// Generate instructions
@@ -489,9 +644,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
 					varName, literalValue))
 			case "string":
-				// Assign to already declared variable
-				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
-					varName, literalValue))
+				// String constants are initialized at declaration, so skip assignment here
+				// (This avoids duplicate initialization)
 			case "bool":
 				// Assign to already declared variable
 				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
@@ -891,7 +1045,22 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(fmt.Sprintf("  %s = omni_map_get_string_int(%s, %s);\n", varName, target, index))
 			} else {
 				// Array indexing - assign to already declared variable
-				g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
+				// Check if result type is a struct (array of structs)
+				resultType := inst.Type
+				if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" {
+					resultType = storedType
+				}
+				isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
+				
+				if isStruct {
+					// For struct arrays, the element is already a pointer, so just index
+					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
+					// Store the struct type
+					g.valueTypes[inst.ID] = resultType
+				} else {
+					// For primitive arrays, simple indexing
+					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
+				}
 			}
 		}
 	case "array.init":
@@ -899,26 +1068,41 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		if len(inst.Operands) > 0 {
 			varName := g.getVariableName(inst.ID)
 			// Extract element type from array type
-			// For array<int>, we want int32_t, not int32_t*
-			var elementType string
+			var elementTypeStr string
 			if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
-				elementTypeStr := inst.Type[6 : len(inst.Type)-1] // Extract "int" from "array<int>"
-				elementType = g.mapType(elementTypeStr)           // Map "int" to "int32_t"
+				elementTypeStr = inst.Type[6 : len(inst.Type)-1] // Extract "int" from "array<int>"
 			} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
-				elementTypeStr := inst.Type[3 : len(inst.Type)-1] // Extract "int" from "[]<int>"
-				elementType = g.mapType(elementTypeStr)           // Map "int" to "int32_t"
+				elementTypeStr = inst.Type[3 : len(inst.Type)-1] // Extract "int" from "[]<int>"
 			} else {
-				elementType = g.mapType(inst.Type) // fallback
+				elementTypeStr = inst.Type // fallback
 			}
-			// Create a simple array with the elements
-			g.output.WriteString(fmt.Sprintf("  %s %s[] = {", elementType, varName))
-			for i, op := range inst.Operands {
-				if i > 0 {
-					g.output.WriteString(", ")
+			
+			// Check if element type is a struct (not a primitive)
+			isStruct := !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(")
+			
+			if isStruct {
+				// For struct arrays, create array of pointers
+				elementType := "omni_struct_t*"
+				g.output.WriteString(fmt.Sprintf("  %s %s[%d];\n", elementType, varName, len(inst.Operands)))
+				// Initialize each struct element
+				for i, op := range inst.Operands {
+					// Each operand should be a struct.init instruction result
+					// Get the variable name for this struct
+					structVar := g.getOperandValue(op)
+					g.output.WriteString(fmt.Sprintf("  %s[%d] = %s;\n", varName, i, structVar))
 				}
-				g.output.WriteString(g.getOperandValue(op))
+			} else {
+				// For primitive types, create simple array
+				elementType := g.mapType(elementTypeStr) // Map "int" to "int32_t"
+				g.output.WriteString(fmt.Sprintf("  %s %s[] = {", elementType, varName))
+				for i, op := range inst.Operands {
+					if i > 0 {
+						g.output.WriteString(", ")
+					}
+					g.output.WriteString(g.getOperandValue(op))
+				}
+				g.output.WriteString("};\n")
 			}
-			g.output.WriteString("};\n")
 		}
 	case "map.init":
 		// Handle map initialization
@@ -979,11 +1163,201 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				for i := startIndex; i < len(inst.Operands); i += 2 {
 					if i+1 < len(inst.Operands) {
 						fieldName := inst.Operands[i].Literal
-						fieldValue := g.getOperandValue(inst.Operands[i+1])
+						fieldValueOp := inst.Operands[i+1]
+						fieldValue := g.getOperandValue(fieldValueOp)
 
-						// Determine field type from the value operand
-						// For now, assume all values are int (can be enhanced later)
-						g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+						// Determine field type from the value operand type
+						// Priority: 1) operand Type field (set by MIR builder - most reliable), 2) stored valueTypes, 3) lookup from module
+						fieldType := ""
+						
+						// First, check the operand's Type field (set by MIR builder via valueOperand)
+						// This is the most reliable source since it's set directly by the MIR builder
+						// The MIR builder sets this in valueOperand(value.ID, value.Type) where value.Type should be "string"
+						if fieldValueOp.Type != "" && fieldValueOp.Type != inferTypePlaceholder && fieldValueOp.Type != "<infer>" {
+							fieldType = fieldValueOp.Type
+							// Store it for future use
+							if fieldValueOp.Kind == mir.OperandValue {
+								g.valueTypes[fieldValueOp.Value] = fieldType
+							}
+						}
+						
+						// Also check stored types (should have been set when we pre-populated)
+						if fieldType == "" && fieldValueOp.Kind == mir.OperandValue {
+							if storedType, ok := g.valueTypes[fieldValueOp.Value]; ok && storedType != "" && storedType != inferTypePlaceholder {
+								fieldType = storedType
+							}
+						}
+						
+						// If still not found, try to look it up from the module's functions
+						// Search in reverse order (most recent functions first) to find the instruction
+						if fieldType == "" && fieldValueOp.Kind == mir.OperandValue && g.module != nil {
+							// Search all functions and blocks to find the instruction that produces this value
+							for i := len(g.module.Functions) - 1; i >= 0; i-- {
+								fn := g.module.Functions[i]
+								for _, block := range fn.Blocks {
+									for _, inst := range block.Instructions {
+										if inst.ID == fieldValueOp.Value {
+											// Found the instruction - use its type
+											// First check the instruction's Type field (most reliable)
+											if inst.Type != "" && inst.Type != inferTypePlaceholder {
+												fieldType = inst.Type
+												g.valueTypes[fieldValueOp.Value] = inst.Type
+												goto foundTypeInLookup
+											} else if inst.Op == "const" && len(inst.Operands) > 0 {
+												// For const instructions, check the operand type or infer from literal
+												if inst.Operands[0].Type != "" && inst.Operands[0].Type != inferTypePlaceholder {
+													fieldType = inst.Operands[0].Type
+													g.valueTypes[fieldValueOp.Value] = fieldType
+													goto foundTypeInLookup
+												} else if inst.Operands[0].Kind == mir.OperandLiteral {
+													// Infer type from literal value
+													lit := inst.Operands[0].Literal
+													if strings.HasPrefix(lit, "\"") && strings.HasSuffix(lit, "\"") {
+														fieldType = "string"
+														g.valueTypes[fieldValueOp.Value] = "string"
+													} else if lit == "true" || lit == "false" {
+														fieldType = "bool"
+														g.valueTypes[fieldValueOp.Value] = "bool"
+													} else if strings.Contains(lit, ".") {
+														fieldType = "float"
+														g.valueTypes[fieldValueOp.Value] = "float"
+													} else {
+														fieldType = "int"
+														g.valueTypes[fieldValueOp.Value] = "int"
+													}
+													if fieldType != "" {
+														goto foundTypeInLookup
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						foundTypeInLookup:
+						}
+						
+						// Check if it's a literal operand (string literals)
+						if fieldValueOp.Kind == mir.OperandLiteral {
+							// Check if it's a string literal
+							if strings.HasPrefix(fieldValueOp.Literal, "\"") && strings.HasSuffix(fieldValueOp.Literal, "\"") {
+								fieldType = "string"
+							}
+						}
+						
+						// Last resort: if we still don't have a type and it's a value operand,
+						// try to find the const instruction and check its literal or type
+						if (fieldType == "" || fieldType == "<inferred>") && fieldValueOp.Kind == mir.OperandValue && g.module != nil {
+							for _, fn := range g.module.Functions {
+								for _, block := range fn.Blocks {
+									for _, inst := range block.Instructions {
+										if inst.ID == fieldValueOp.Value {
+											// Found the instruction that produces this value
+											// First, always check the instruction's Type field (most reliable)
+											// For const instructions, this should be "string", "int", "bool", etc.
+											// The MIR builder sets inst.Type to "string" for string literals
+											if inst.Type != "" && inst.Type != inferTypePlaceholder {
+												fieldType = inst.Type
+												g.valueTypes[fieldValueOp.Value] = fieldType
+												goto foundType
+											}
+											// If it's a const instruction and Type is not set, check the operand
+											if inst.Op == "const" && len(inst.Operands) > 0 {
+												// Check the operand's type
+												if inst.Operands[0].Type != "" && inst.Operands[0].Type != inferTypePlaceholder {
+													fieldType = inst.Operands[0].Type
+													g.valueTypes[fieldValueOp.Value] = fieldType
+													goto foundType
+												} else if inst.Operands[0].Kind == mir.OperandLiteral {
+													// Infer from literal value - this is the fallback
+													lit := inst.Operands[0].Literal
+													if strings.HasPrefix(lit, "\"") && strings.HasSuffix(lit, "\"") {
+														fieldType = "string"
+														g.valueTypes[fieldValueOp.Value] = "string"
+													} else if lit == "true" || lit == "false" {
+														fieldType = "bool"
+														g.valueTypes[fieldValueOp.Value] = "bool"
+													} else if strings.Contains(lit, ".") {
+														fieldType = "float"
+														g.valueTypes[fieldValueOp.Value] = "float"
+													} else {
+														fieldType = "int"
+														g.valueTypes[fieldValueOp.Value] = "int"
+													}
+													goto foundType
+												}
+											} else if inst.Type != "" && inst.Type != inferTypePlaceholder {
+												// For non-const instructions, use the instruction's type
+												fieldType = inst.Type
+												g.valueTypes[fieldValueOp.Value] = fieldType
+												goto foundType
+											}
+										}
+									}
+								}
+							}
+						foundType:
+						}
+						
+						// Before defaulting to int, do one final check - maybe the type wasn't found
+						// but we can still infer it from the const instruction's literal
+						if (fieldType == "" || fieldType == "<inferred>") && fieldValueOp.Kind == mir.OperandValue && g.module != nil {
+							// Try one more time to find the const instruction and check its literal
+							for _, fn := range g.module.Functions {
+								for _, block := range fn.Blocks {
+									for _, inst := range block.Instructions {
+										if inst.ID == fieldValueOp.Value && inst.Op == "const" && len(inst.Operands) > 0 {
+											if inst.Operands[0].Kind == mir.OperandLiteral {
+												lit := inst.Operands[0].Literal
+												if strings.HasPrefix(lit, "\"") && strings.HasSuffix(lit, "\"") {
+													fieldType = "string"
+													g.valueTypes[fieldValueOp.Value] = "string"
+													goto finalTypeFound
+												} else if lit == "true" || lit == "false" {
+													fieldType = "bool"
+													g.valueTypes[fieldValueOp.Value] = "bool"
+													goto finalTypeFound
+												} else if strings.Contains(lit, ".") {
+													fieldType = "float"
+													g.valueTypes[fieldValueOp.Value] = "float"
+													goto finalTypeFound
+												} else {
+													// For numeric literals, default to int
+													fieldType = "int"
+													g.valueTypes[fieldValueOp.Value] = "int"
+													goto finalTypeFound
+												}
+											}
+										}
+									}
+								}
+							}
+						finalTypeFound:
+						}
+						
+						// Default to int if still no type
+						if fieldType == "" || fieldType == "<inferred>" {
+							fieldType = "int"
+						}
+						
+						// Use appropriate setter based on field type
+						switch fieldType {
+						case "string":
+							// If the field value is a literal string, use it directly
+							// Otherwise, use the variable name
+							actualValue := fieldValue
+							if fieldValueOp.Kind == mir.OperandLiteral && strings.HasPrefix(fieldValueOp.Literal, "\"") && strings.HasSuffix(fieldValueOp.Literal, "\"") {
+								actualValue = fieldValueOp.Literal
+							}
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_string_field(%s, \"%s\", %s);\n", varName, fieldName, actualValue))
+						case "float", "double":
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_float_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+						case "bool":
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_bool_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+						default:
+							// Default to int
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+						}
 					}
 				}
 			} else {
@@ -999,9 +1373,45 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			fieldName := inst.Operands[1].Literal
 			varName := g.getVariableName(inst.ID)
 
-			// For now, assume all fields are int (can be enhanced later)
-			// Assign to already declared variable
-			g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+			// Determine field type from instruction type
+			fieldType := inst.Type
+			if fieldType == "" || fieldType == "<inferred>" {
+				// Try to look up the type from stored valueTypes
+				// This should have been set when the struct field was accessed
+				if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandValue {
+					// Check if we have type information for this struct variable
+					if storedType, ok := g.valueTypes[inst.Operands[0].Value]; ok && storedType != "" && storedType != inferTypePlaceholder {
+						// This is the struct type, not the field type
+						// We need to look up the field type from the struct definition
+						// For now, try to infer from the instruction's type or default
+					}
+				}
+				// If still not found, try to look up from the module to find struct field definitions
+				// For now, we'll try to use the instruction type if it was set by the type checker
+				// The type checker should set inst.Type to the field's type
+				if fieldType == "" || fieldType == "<inferred>" {
+					// Last resort: check if we can infer from context
+					// But we really should have the type from the type checker
+					fieldType = "int" // Default fallback
+				}
+			}
+			
+			// Use appropriate getter based on field type
+			switch fieldType {
+			case "string":
+				g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
+				g.valueTypes[inst.ID] = "string"
+			case "float", "double":
+				g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_float_field(%s, \"%s\");\n", varName, structVar, fieldName))
+				g.valueTypes[inst.ID] = fieldType
+			case "bool":
+				g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_bool_field(%s, \"%s\");\n", varName, structVar, fieldName))
+				g.valueTypes[inst.ID] = "bool"
+			default:
+				// Default to int
+				g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+				g.valueTypes[inst.ID] = "int"
+			}
 		}
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
 		// Handle comparison operations
@@ -1090,6 +1500,18 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			// For PHI nodes in loops, create a mutable variable
 			// The first operand is the initial value (from entry block)
 			firstValue := g.getOperandValue(inst.Operands[0])
+
+			// Check if this is a struct type (for struct array iteration)
+			resultType := inst.Type
+			if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" {
+				resultType = storedType
+			}
+			isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
+			
+			// Store the type for later use
+			if isStruct {
+				g.valueTypes[inst.ID] = resultType
+			}
 
 			// Create a mutable variable that can be updated in the loop
 			// For PHI nodes, we initialize with the first value and will update it later

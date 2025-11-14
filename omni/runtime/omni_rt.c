@@ -913,6 +913,7 @@ void omni_struct_destroy(omni_struct_t* struct_ptr) {
 
 void omni_struct_set_string_field(omni_struct_t* struct_ptr, const char* field_name, const char* value) {
     if (!struct_ptr) return;
+    if (!value) return; // Skip NULL values
     
     // Check if field already exists
     omni_struct_field_t* field = struct_ptr->fields;

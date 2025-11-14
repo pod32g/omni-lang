@@ -13,10 +13,12 @@ const inferTypePlaceholder = "<infer>"
 // BuildModule lowers the parsed AST into MIR suitable for optimisation passes and codegen.
 func BuildModule(mod *ast.Module) (*mir.Module, error) {
 	mb := &moduleBuilder{
-		module:     &mir.Module{},
-		signatures: make(map[string]FunctionSignature),
+		module:       &mir.Module{},
+		signatures:   make(map[string]FunctionSignature),
+		structFields: make(map[string]map[string]string),
 	}
 	mb.collectFunctionSignatures(mod)
+	mb.collectStructDefinitions(mod)
 
 	for _, decl := range mod.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -37,9 +39,10 @@ func BuildModule(mod *ast.Module) (*mir.Module, error) {
 }
 
 type moduleBuilder struct {
-	module     *mir.Module
-	signatures map[string]FunctionSignature
-	lambdas    []*mir.Function // Collect lambda functions
+	module       *mir.Module
+	signatures   map[string]FunctionSignature
+	lambdas      []*mir.Function // Collect lambda functions
+	structFields map[string]map[string]string // struct type name -> field name -> field type
 }
 
 type functionBuilder struct {
@@ -92,6 +95,20 @@ func (mb *moduleBuilder) collectFunctionSignatures(mod *ast.Module) {
 			sig.Params[i] = typeExprToString(param.Type)
 		}
 		mb.signatures[fn.Name] = sig
+	}
+}
+
+func (mb *moduleBuilder) collectStructDefinitions(mod *ast.Module) {
+	for _, decl := range mod.Decls {
+		structDecl, ok := decl.(*ast.StructDecl)
+		if !ok {
+			continue
+		}
+		fields := make(map[string]string)
+		for _, field := range structDecl.Fields {
+			fields[field.Name] = typeExprToString(field.Type)
+		}
+		mb.structFields[structDecl.Name] = fields
 	}
 }
 
@@ -425,7 +442,7 @@ func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
 	// For now, we'll use a hardcoded approach based on the array initialization
 	// TODO: Implement proper array length detection from MIR by analyzing the array initialization
 	var arrayLength string
-	if iterableValue.Type == "array<int>" {
+	if strings.HasPrefix(iterableValue.Type, "array<") || strings.HasPrefix(iterableValue.Type, "[]<") {
 		// Count the number of elements in the array literal
 		// This is a temporary solution - we should analyze the MIR to get the actual length
 		if len(fb.block.Instructions) > 0 {
@@ -440,11 +457,11 @@ func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
 			}
 		}
 		if arrayLength == "" {
-			arrayLength = "5" // Fallback for array<int> with 5 elements
+			arrayLength = "1" // Fallback - assume at least 1 element
 		}
 	} else {
 		// Fallback for other array types
-		arrayLength = "3"
+		arrayLength = "1"
 	}
 
 	lengthInst := mir.Instruction{
@@ -516,18 +533,33 @@ func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
 	}
 
 	// Create the loop variable by indexing into the array
+	// Determine the element type based on the array type
+	var elementType string
+	if strings.HasPrefix(iterableValue.Type, "array<") && strings.HasSuffix(iterableValue.Type, ">") {
+		// Extract element type from array<T>
+		inner := iterableValue.Type[len("array<") : len(iterableValue.Type)-1]
+		elementType = strings.TrimSpace(inner)
+	} else if strings.HasPrefix(iterableValue.Type, "[]<") && strings.HasSuffix(iterableValue.Type, ">") {
+		// Extract element type from []<T>
+		inner := iterableValue.Type[len("[]<") : len(iterableValue.Type)-1]
+		elementType = strings.TrimSpace(inner)
+	} else {
+		// Fallback to int for unknown types
+		elementType = "int"
+	}
+	
 	itemID := fb.fn.NextValue()
 	itemInst := mir.Instruction{
 		ID:   itemID,
 		Op:   "index",
-		Type: "int",
+		Type: elementType,
 		Operands: []mir.Operand{
 			valueOperand(iterableValue.ID, iterableValue.Type),
 			valueOperand(indexID, "int"),
 		},
 	}
 	fb.block.Instructions = append(fb.block.Instructions, itemInst)
-	bodyEnv[stmt.Target.Name] = symbol{Value: itemID, Type: "int", Mutable: false}
+	bodyEnv[stmt.Target.Name] = symbol{Value: itemID, Type: elementType, Mutable: false}
 
 	fb.env = bodyEnv
 
@@ -1392,18 +1424,26 @@ func (fb *functionBuilder) emitMemberAccess(expr *ast.MemberExpr) (mirValue, err
 		// Check if this is a struct field access
 		if sym, exists := fb.env[ident.Name]; exists {
 			// This is a struct field access
+			// Get the field type from the struct definition
+			fieldType := "int" // Default fallback
+			if fields, ok := fb.mb.structFields[sym.Type]; ok {
+				if ft, exists := fields[expr.Member]; exists {
+					fieldType = ft
+				}
+			}
+			
 			id := fb.fn.NextValue()
 			inst := mir.Instruction{
 				ID:   id,
 				Op:   "member",
-				Type: "int", // TODO: Get actual field type from struct definition
+				Type: fieldType,
 				Operands: []mir.Operand{
 					valueOperand(sym.Value, sym.Type),
 					{Kind: mir.OperandLiteral, Literal: expr.Member},
 				},
 			}
 			fb.block.Instructions = append(fb.block.Instructions, inst)
-			return mirValue{ID: id, Type: "int"}, nil
+			return mirValue{ID: id, Type: fieldType}, nil
 		}
 		// Check if it's a function call context (this will be handled by the caller)
 		// For now, just return a placeholder that indicates this is a qualified function
