@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OmniLang</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #05060a;
+        --bg-card: rgba(14, 16, 28, 0.85);
+        --bg-card-hover: rgba(21, 24, 45, 0.9);
+        --bg-chip: rgba(255, 255, 255, 0.06);
+        --text-primary: #f4f6ff;
+        --text-muted: rgba(244, 246, 255, 0.65);
+        --accent: #7c5dff;
+        --accent-2: #45d4ff;
+        --border: rgba(255, 255, 255, 0.08);
+        --shadow: 0 10px 50px rgba(4, 8, 30, 0.55);
+        font-size: 18px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Segoe UI", system-ui, -apple-system,
+          BlinkMacSystemFont, sans-serif;
+        background: radial-gradient(
+            circle at top,
+            rgba(69, 212, 255, 0.12),
+            transparent 50%
+          ),
+          radial-gradient(
+            circle at 20% 20%,
+            rgba(124, 93, 255, 0.4),
+            transparent 40%
+          ),
+          var(--bg);
+        color: var(--text-primary);
+      }
+      img {
+        max-width: 100%;
+      }
+      a {
+        color: var(--accent-2);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .screen {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 3.5rem 1.5rem 4rem;
+      }
+      .hero {
+        text-align: center;
+        padding: 4rem 0 2rem;
+      }
+      .hero-logo {
+        width: 120px;
+        margin-bottom: 1rem;
+        filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.45));
+      }
+      .hero h1 {
+        font-size: clamp(2.6rem, 4vw, 3.8rem);
+        margin: 0 0 1rem;
+        letter-spacing: -0.02em;
+      }
+      .hero p {
+        font-size: 1.1rem;
+        max-width: 650px;
+        margin: 0 auto 2rem;
+        color: var(--text-muted);
+      }
+      .hero-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .hero-actions a {
+        padding: 0.85rem 1.75rem;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: linear-gradient(120deg, var(--accent), var(--accent-2));
+        color: #04050c;
+        font-weight: 600;
+        box-shadow: var(--shadow);
+      }
+      .hero-actions a.secondary {
+        background: transparent;
+        color: var(--text-primary);
+        box-shadow: none;
+      }
+      h2.section-title {
+        font-size: 1.7rem;
+        margin: 0 0 1.5rem;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+      }
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        padding: 1.5rem;
+        transition: background 0.25s ease, transform 0.25s ease;
+        box-shadow: var(--shadow);
+      }
+      .card:hover {
+        background: var(--bg-card-hover);
+        transform: translateY(-4px);
+      }
+      .card h3 {
+        margin-top: 0;
+        font-size: 1.2rem;
+      }
+      .card p,
+      .card ul {
+        color: var(--text-muted);
+        line-height: 1.6;
+        margin-bottom: 0;
+      }
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+      }
+      .chip {
+        padding: 0.35rem 0.9rem;
+        border-radius: 999px;
+        background: var(--bg-chip);
+        border: 1px solid var(--border);
+        font-size: 0.85rem;
+      }
+      pre {
+        background: rgba(5, 6, 10, 0.85);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 1rem;
+        overflow-x: auto;
+        box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.35);
+      }
+      code {
+        font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas,
+          monospace;
+        color: #f0f5ff;
+      }
+      .split {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 2rem;
+        align-items: center;
+      }
+      .footer {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-top: 3rem;
+      }
+      @media (max-width: 600px) {
+        .hero-actions a {
+          width: 100%;
+          text-align: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="screen">
+      <header class="hero">
+        <img
+          src="../docs/assets/logo.png"
+          alt="OmniLang logo"
+          class="hero-logo"
+        />
+        <h1>OmniLang</h1>
+        <p>
+          A statically typed playground for compiler nerds. Build SSA pipelines,
+          target multiple backends (C, VM, Cranelift), and experiment with a
+          batteries-included standard library—all written in Go.
+        </p>
+        <div class="hero-actions">
+          <a href="https://github.com/omni-lang/omni" target="_blank"
+            >View on GitHub</a
+          >
+          <a
+            class="secondary"
+            href="https://192.168.68.15/pod32g/omni-lang"
+            target="_blank"
+            >Primary GitLab Repo</a
+          >
+        </div>
+      </header>
+
+      <section>
+        <h2 class="section-title">Why OmniLang?</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>Modern Pipeline</h3>
+            <p>
+              Go frontend featuring lexer, parser, type checker, and SSA MIR
+              builder. Inspect every stage or emit MIR for custom tooling.
+            </p>
+            <div class="chip-row">
+              <span class="chip">SSA MIR</span>
+              <span class="chip">Go Toolchain</span>
+              <span class="chip">Type System</span>
+            </div>
+          </article>
+          <article class="card">
+            <h3>Multi-backend Runtime</h3>
+            <p>
+              Switch between the C backend, VM interpreter, or experimental
+              Cranelift bridge. Pick the right trade-off for speed vs. iteration
+              time.
+            </p>
+            <div class="chip-row">
+              <span class="chip">C</span>
+              <span class="chip">VM</span>
+              <span class="chip">Cranelift</span>
+            </div>
+          </article>
+          <article class="card">
+            <h3>Standard Library</h3>
+            <p>
+              Batteries-included modules: `std.io`, `std.string`, `std.math`,
+              collections, OS helpers, networking, testing, and dev utilities.
+            </p>
+            <div class="chip-row">
+              <span class="chip">std.io</span>
+              <span class="chip">std.net</span>
+              <span class="chip">std.testing</span>
+            </div>
+          </article>
+          <article class="card">
+            <h3>Dev Experience</h3>
+            <p>
+              VS Code extension, CLI tooling (`omnic`, `omnir`, `omnipkg`), and
+              automated packaging via GitLab CI make hacking pleasant.
+            </p>
+            <div class="chip-row">
+              <span class="chip">VS Code</span>
+              <span class="chip">CLI</span>
+              <span class="chip">CI/CD</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section style="margin-top: 3rem">
+        <div class="split">
+          <div>
+            <h2 class="section-title">Quick Start</h2>
+            <pre><code>git clone https://github.com/omni-lang/omni.git
+cd omni
+make build      # build compiler + tools
+make test       # run language + stdlib tests</code></pre>
+            <pre><code>import std
+
+func main():int {
+    std.io.println("Hello, OmniLang!")
+    return 0
+}</code></pre>
+          </div>
+          <div>
+            <h2 class="section-title">Compile &amp; Run</h2>
+            <pre><code># Native executable (C backend)
+./bin/omnic hello.omni -o hello
+./hello
+
+# Fast VM execution
+./bin/omnir hello.omni
+
+# Inspect MIR
+./bin/omnic hello.omni -emit mir</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section style="margin-top: 3rem">
+        <h2 class="section-title">Language Highlights</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>Type System</h3>
+            <p>
+              Primitives (`int`, `float`, `bool`, `string`, `char`), arrays,
+              maps, user-defined `struct`/`enum`, and type inference with `let`
+              defaults.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Control Flow</h3>
+            <p>
+              `if`, `switch`, `for` (classic + range), `defer`, early `return`,
+              logical ops, and SSA-friendly constructs.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Functions</h3>
+            <p>
+              First-class functions, multiple return values, and explicit
+              mutability via `var`.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Testing</h3>
+            <p>
+              `omnir` drives end-to-end suites in `omni/tests/e2e` plus a
+              dedicated `std.testing` module for assertions and fixtures.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section style="margin-top: 3rem">
+        <h2 class="section-title">Tooling &amp; Docs</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>VS Code Extension</h3>
+            <p>
+              Located in <code>vscode/omni</code>: syntax highlighting, snippets,
+              simple completions, and inline diagnostics powered by `omnic`.
+            </p>
+          </article>
+          <article class="card">
+            <h3>CLI Trio</h3>
+            <p>
+              `omnic` (compiler), `omnir` (runner/test harness), and `omnipkg`
+              (packager) cover the full workflow from prototype to release.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Documentation</h3>
+            <p>
+              Dive deeper via the in-repo
+              <a href="../README.md">README</a> and the reference material under
+              <code>docs/</code>.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Source Guide</h3>
+            <p>
+              Explore standard library modules in <code>omni/std/</code> and
+              examples/tests in <code>omni/tests/</code>.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section style="margin-top: 3rem">
+        <div class="card">
+          <h3>Get Involved</h3>
+          <p>
+            OmniLang lives primarily on GitLab (issues + merge requests) and is
+            mirrored to GitHub for easy browsing. Contributions, experiments, and
+            wild ideas are welcome—this is a playground for compiler explorers.
+          </p>
+          <div class="chip-row">
+            <span class="chip">Open Source</span>
+            <span class="chip">Compiler R&amp;D</span>
+            <span class="chip">Community</span>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p>
+          OmniLang ©
+          <script>
+            document.write(new Date().getFullYear());
+          </script>
+          · Built for curiosity. Dark theme by design.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>
