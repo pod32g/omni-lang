@@ -44,7 +44,9 @@ const STD_NAMESPACES = [
   'std.log',
   'std.os',
   'std.time',
-  'std.network'
+  'std.network',
+  'std.testing',
+  'std.dev'
 ];
 
 const TYPE_KEYWORDS = [
@@ -196,17 +198,21 @@ async function runDiagnostics(document: vscode.TextDocument, force = false) {
     await new Promise<void>((resolve, reject) => {
       execFile(
         omnicPath,
-        ['-emit', 'mir', document.isUntitled ? '-' : filePath],
+        ['--diagnostics-json', '-emit', 'mir', document.isUntitled ? '-' : filePath],
         {
           cwd: vscode.workspace.rootPath ?? undefined,
           timeout: 15000
         },
-        (error, _stdout, stderr) => {
-          if (error && (stderr.length === 0 || !/error/i.test(stderr))) {
+        (error, stdout, stderr) => {
+          if (error && !isDiagnosticError(stdout, stderr)) {
             reject(error);
             return;
           }
-          applyDiagnostics(document, stderr);
+          if (!applyJsonDiagnostics(document, stdout)) {
+            if (!applyTextDiagnostics(document, stderr)) {
+              diagnosticCollection.set(document.uri, []);
+            }
+          }
           resolve();
         }
       );
@@ -224,7 +230,89 @@ async function runDiagnostics(document: vscode.TextDocument, force = false) {
   }
 }
 
-function applyDiagnostics(document: vscode.TextDocument, stderr: string) {
+function normalizePath(path: string): string {
+  return vscode.Uri.file(path).fsPath;
+}
+
+function appliesToDocument(document: vscode.TextDocument, file: string): boolean {
+  const documentPath = document.uri.fsPath;
+  const normalizedFile = normalizePath(file.trim());
+  return documentPath === normalizedFile || documentPath.endsWith(normalizedFile);
+}
+
+function applyJsonDiagnostics(document: vscode.TextDocument, stdout: string): boolean {
+  if (!stdout.trim()) {
+    return false;
+  }
+
+  const jsonLine = stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('{') && line.endsWith('}'));
+
+  if (!jsonLine) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(jsonLine) as {
+      status?: string;
+      diagnostics?: Array<{
+        file: string;
+        message: string;
+        hint?: string;
+        severity?: string;
+        span?: {
+          start_line: number;
+          start_column: number;
+          end_line: number;
+          end_column: number;
+        };
+      }>;
+    };
+
+    if (payload.status !== 'error' || !Array.isArray(payload.diagnostics)) {
+      return false;
+    }
+
+    const diagnostics: vscode.Diagnostic[] = [];
+
+    for (const diag of payload.diagnostics) {
+      if (!diag.file || !diag.span || !appliesToDocument(document, diag.file)) {
+        continue;
+      }
+
+      const startLine = Math.max(0, (diag.span.start_line ?? 1) - 1);
+      const startCol = Math.max(0, (diag.span.start_column ?? 1) - 1);
+      const endLine = Math.max(startLine, (diag.span.end_line ?? diag.span.start_line ?? 1) - 1);
+      const endCol = Math.max(
+        startCol + 1,
+        (diag.span.end_column ?? diag.span.start_column ?? 1) - 1
+      );
+
+      const range = new vscode.Range(startLine, startCol, endLine, endCol);
+      const severityValue = (diag.severity ?? 'error').toLowerCase();
+      const severity =
+        severityValue === 'warning'
+          ? vscode.DiagnosticSeverity.Warning
+          : severityValue === 'info'
+          ? vscode.DiagnosticSeverity.Information
+          : vscode.DiagnosticSeverity.Error;
+
+      const message = diag.hint ? `${diag.message}\nHint: ${diag.hint}` : diag.message;
+      const diagnostic = new vscode.Diagnostic(range, message, severity);
+      diagnostic.source = 'omnic';
+      diagnostics.push(diagnostic);
+    }
+
+    diagnosticCollection.set(document.uri, diagnostics);
+    return diagnostics.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function applyTextDiagnostics(document: vscode.TextDocument, stderr: string): boolean {
   const diagnostics: vscode.Diagnostic[] = [];
   const lines = stderr.split(/\r?\n/);
   const regex = /(.+):(\d+):(\d+):\s*(error|warning):\s*(.+)/;
@@ -236,7 +324,7 @@ function applyDiagnostics(document: vscode.TextDocument, stderr: string) {
     }
     const [, file, lineStr, colStr, severityStr, message] = match;
 
-    if (!document.fileName.endsWith(file.trim()) && file.trim() !== document.fileName) {
+    if (!appliesToDocument(document, file)) {
       continue;
     }
 
@@ -246,12 +334,47 @@ function applyDiagnostics(document: vscode.TextDocument, stderr: string) {
     const severity =
       severityStr === 'warning' ? vscode.DiagnosticSeverity.Warning : vscode.DiagnosticSeverity.Error;
 
-    diagnostics.push(
-      new vscode.Diagnostic(range, message.trim(), severity)
-    );
+    const diagnostic = new vscode.Diagnostic(range, message.trim(), severity);
+    diagnostic.source = 'omnic';
+    diagnostics.push(diagnostic);
   }
 
-  diagnosticCollection.set(document.uri, diagnostics);
+  if (diagnostics.length > 0) {
+    diagnosticCollection.set(document.uri, diagnostics);
+    return true;
+  }
+
+  return false;
+}
+
+function isDiagnosticError(stdout: string, stderr: string): boolean {
+  if (!stdout.trim() && !stderr.trim()) {
+    return false;
+  }
+  if (applyJsonDiagnosticsPlaceholder(stdout)) {
+    return true;
+  }
+  return /error/i.test(stderr);
+}
+
+function applyJsonDiagnosticsPlaceholder(stdout: string): boolean {
+  if (!stdout.trim()) {
+    return false;
+  }
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => {
+      if (!line.startsWith('{') || !line.endsWith('}')) {
+        return false;
+      }
+      try {
+        const payload = JSON.parse(line);
+        return payload && typeof payload === 'object' && payload.status === 'error';
+      } catch {
+        return false;
+      }
+    });
 }
 
 async function writeTempDocument(document: vscode.TextDocument): Promise<string> {

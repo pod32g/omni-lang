@@ -12,8 +12,10 @@ The original ADR-001 provided a high-level roadmap, but we now have a much clear
 - ✅ **VM Backend**: Working interpreter with 65.7% test coverage
 - ✅ **Import System**: Both std and local file imports with aliases
 - ✅ **Basic Stdlib**: I/O, math, and string intrinsics
-- ✅ **CLI Tools**: `omnic` compiler and `omnir` runner
-- ✅ **Testing**: Comprehensive test suite with edge cases
+- ✅ **CLI Tools**: `omnic` compiler, `omnir` runner, and `omnipkg` packager
+- ✅ **Testing**: Comprehensive test suite with edge cases and `std.testing` harness
+- ✅ **Developer Utilities**: `std.testing` assertions, `std.dev` watch helpers, `omnir --test`
+- ✅ **Automation**: Machine-readable CLI endpoints, release manifests, Docker packaging workflow
 
 However, several critical areas need completion to achieve a production-ready compiler.
 
@@ -385,10 +387,10 @@ The estimated timeline is 14-19 weeks total, with the first three phases being c
 4. Establish regular progress reviews and adjustments
 
 ### Developer Experience
-- Improve error messages and diagnostics across the compiler pipeline.
-- Add tooling support (LSP, editor plugins) to streamline OmniLang development.
-- Surface contextual error snippets and suggestion engine (e.g. import typo hints, highlighted spans).
-- Expand CLI automation: `omnic --watch`, `omnir --watch`, JSON outputs for scripting.
+- Continue iterating on diagnostics (multi-span context, cross-file hints).
+- Extend tooling support (LSP, editor plugins) to surface new JSON diagnostics and test runner flows.
+- Maintain contextual error snippets and suggestion engine (import typo hints, highlighted spans).
+- Leverage existing watch/test utilities to improve editor integrations and workflow automation.
 
 ### Standard Library
 - Expand `std` modules to cover networking, filesystems, and concurrency.

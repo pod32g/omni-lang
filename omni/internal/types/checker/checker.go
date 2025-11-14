@@ -23,15 +23,16 @@ const (
 // aggregated diagnostic error if any issues are found.
 func Check(filename, src string, mod *ast.Module) error {
 	c := &Checker{
-		filename:     filename,
-		lines:        splitLines(src),
-		knownTypes:   make(map[string]struct{}),
-		typeAliases:  make(map[string]string),
-		structFields: make(map[string]map[string]string),
-		functions:    make(map[string]FunctionSignature),
-		imports:      make(map[string]bool),
-		moduleLoader: *moduleloader.NewModuleLoader(),
-		typeParams:   make(map[string]bool),
+		filename:         filename,
+		lines:            splitLines(src),
+		knownTypes:       make(map[string]struct{}),
+		typeAliases:      make(map[string]string),
+		structFields:     make(map[string]map[string]string),
+		functions:        make(map[string]FunctionSignature),
+		imports:          make(map[string]bool),
+		moduleLoader:     *moduleloader.NewModuleLoader(),
+		typeParams:       make(map[string]bool),
+		processedImports: make(map[string]bool),
 	}
 
 	// Add the omni std directory to search paths
@@ -93,6 +94,8 @@ type Checker struct {
 
 	// Generic type context
 	typeParams map[string]bool // Currently active type parameters
+
+	processedImports map[string]bool
 }
 
 // enterTypeParams enters a new type parameter scope
@@ -1886,8 +1889,29 @@ func (c *Checker) processImport(imp *ast.ImportDecl) {
 		return
 	}
 
+	pathKey := strings.Join(imp.Path, ".")
+
 	// Handle std imports
 	if imp.Path[0] == "std" {
+		// Bind alias or top-level module name into the current scope first
+		if len(c.scopes) > 0 {
+			scope := c.scopes[len(c.scopes)-1]
+			local := imp.Alias
+			if local == "" {
+				if len(imp.Path) == 1 {
+					local = "std"
+				} else {
+					local = imp.Path[len(imp.Path)-1]
+				}
+			}
+			scope[local] = Symbol{Type: "module", Mutable: false}
+		}
+
+		if c.processedImports[pathKey] {
+			return
+		}
+		c.processedImports[pathKey] = true
+
 		// Load the std module to get its function signatures
 		module, err := c.moduleLoader.LoadModule(imp.Path)
 		if err != nil {
@@ -1916,21 +1940,9 @@ func (c *Checker) processImport(imp *ast.ImportDecl) {
 		c.imports["array"] = true
 		c.imports["os"] = true
 		c.imports["collections"] = true
-
-		// Bind alias or top-level module name
-		if len(c.scopes) > 0 {
-			scope := c.scopes[len(c.scopes)-1]
-			local := imp.Alias
-			if local == "" {
-				// default binding is the last segment (e.g., std.io -> io) or 'std' if just std
-				if len(imp.Path) == 1 {
-					local = "std"
-				} else {
-					local = imp.Path[len(imp.Path)-1]
-				}
-			}
-			scope[local] = Symbol{Type: "module", Mutable: false}
-		}
+		c.imports["testing"] = true
+		c.imports["dev"] = true
+		c.imports["test"] = true
 		return
 	}
 

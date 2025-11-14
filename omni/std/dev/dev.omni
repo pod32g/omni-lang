@@ -1,0 +1,72 @@
+// std.dev - Developer productivity helpers
+
+import std.file
+import std.os
+import std.time
+
+struct WatchSnapshot {
+    exists:bool
+    size:int
+}
+
+// snapshot captures a lightweight fingerprint of a path.
+func snapshot(path:string):WatchSnapshot {
+    let exists:bool = std.os.exists(path)
+    if !exists {
+        return WatchSnapshot{
+            exists: false,
+            size: -1
+        }
+    }
+
+    let size:int = std.file.size(path)
+    return WatchSnapshot{
+        exists: true,
+        size: size
+    }
+}
+
+// wait_for_change blocks until the path changes and returns the new snapshot.
+func wait_for_change(path:string, poll_milliseconds:int):WatchSnapshot {
+    var previous:WatchSnapshot = snapshot(path)
+    if poll_milliseconds < 10 {
+        poll_milliseconds = 10
+    }
+
+    while true {
+        std.time.sleep_milliseconds(poll_milliseconds)
+        let current:WatchSnapshot = snapshot(path)
+        if current.exists != previous.exists {
+            return current
+        }
+        if current.size != previous.size {
+            return current
+        }
+    }
+
+    return previous
+}
+
+// changed returns true when the current snapshot differs from the baseline.
+func changed(current:WatchSnapshot, baseline:WatchSnapshot):bool {
+    if current.exists != baseline.exists {
+        return true
+    }
+    return current.size != baseline.size
+}
+
+// watch_loop polls a path and returns after it changes a requested number of times.
+func watch_loop(path:string, poll_milliseconds:int, iterations:int):WatchSnapshot {
+    var latest:WatchSnapshot = snapshot(path)
+    var remaining:int = iterations
+    if iterations <= 0 {
+        remaining = 1
+    }
+
+    while remaining > 0 {
+        latest = wait_for_change(path, poll_milliseconds)
+        remaining = remaining - 1
+    }
+    return latest
+}
+

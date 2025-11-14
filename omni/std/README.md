@@ -535,6 +535,48 @@ struct HTTPResponse {
 - HTTP methods: `HTTP_GET`, `HTTP_POST`, `HTTP_PUT`, `HTTP_DELETE`, etc.
 - Common ports: `PORT_HTTP`, `PORT_HTTPS`, `PORT_SSH`, etc.
 
+### std.test
+Intrinsic hooks that power the standard test harness.
+
+**Functions:**
+- `start(name:string)` – Begin recording a named test.
+- `end(name:string, passed:bool)` – Complete a test with its success state.
+- `summary()` – Emit an aggregated summary.
+
+### std.testing
+Helpers for structuring small test suites directly in OmniLang.
+
+**Structures:**
+- `Suite` – Backed by `map<string, int>`, tracks total/failed counts for the active run.
+
+**Functions:**
+- `suite():Suite` – Create a new suite.
+- `expect(state:Suite, name:string, condition:bool, message:string):Suite` – Record a boolean check.
+- `pass(state:Suite, name:string):Suite` – Mark a passing test.
+- `fail(state:Suite, name:string, message:string):Suite` – Mark a failing test.
+- `equal_int(state:Suite, name:string, expected:int, actual:int):Suite` – Assert integer equality.
+- `equal_bool(state:Suite, name:string, expected:bool, actual:bool):Suite` – Assert boolean equality.
+- `equal_string(state:Suite, name:string, expected:string, actual:string):Suite` – Assert string equality.
+- `equal_float(state:Suite, name:string, expected:float, actual:float):Suite` – Assert float equality with default precision.
+- `equal_float_precision(state:Suite, name:string, expected:float, actual:float, precision:int):Suite` – Assert float equality with explicit precision.
+- `total(state:Suite):int` – Total number of tests recorded.
+- `failures(state:Suite):int` – Number of failed tests.
+- `summary(state:Suite):int` – Emit a summary/log entry and return the number of failed tests.
+- `passed(state:Suite):bool` – Convenience helper returning `true` when all tests passed.
+- `exit(state:Suite)` – Emit a summary and exit with the number of failed tests.
+
+### std.dev
+Developer-oriented utilities, including watch helpers for simple rebuild loops.
+
+**Structures:**
+- `WatchSnapshot` – Lightweight fingerprint of a path (`exists`, `size`).
+
+**Functions:**
+- `snapshot(path:string):WatchSnapshot` – Capture the current fingerprint.
+- `wait_for_change(path:string, poll_milliseconds:int):WatchSnapshot` – Block until a change is observed.
+- `changed(current:WatchSnapshot, baseline:WatchSnapshot):bool` – Compare snapshots.
+- `watch_loop(path:string, poll_milliseconds:int, iterations:int):WatchSnapshot` – Wait for a number of successive changes.
+
 ## Usage
 
 Import the standard library in your OmniLang programs:

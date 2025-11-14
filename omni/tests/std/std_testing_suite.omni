@@ -1,0 +1,16 @@
+import std.testing
+func main():int {
+    var suite = std.testing.suite()
+    suite = std.testing.pass(suite, "bootstraps")
+    suite = std.testing.expect(suite, "boolean check", true, "")
+    suite = std.testing.equal_int(suite, "math", 4, 2 + 2)
+    suite = std.testing.equal_string(suite, "string equality", "hi", "hi")
+    suite = std.testing.equal_float(suite, "float equality", 1.250000, 1.25)
+
+    let failures:int = std.testing.summary(suite)
+    if failures != 0 {
+        return failures
+    }
+    return 0
+}
+

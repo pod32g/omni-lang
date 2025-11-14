@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	urlpkg "net/url"
 	"os"
@@ -26,7 +27,135 @@ var (
 	fileHandleMu      sync.Mutex
 	fileHandleCounter = 3
 	fileHandleTable   = make(map[int]*os.File)
+
+	testingSuitesMu     sync.Mutex
+	testingSuiteCounter int
+	testingSuites       = make(map[int]*testingSuite)
 )
+
+type testingSuite struct {
+	total  int
+	failed int
+}
+
+func newTestingSuiteID() int {
+	testingSuitesMu.Lock()
+	defer testingSuitesMu.Unlock()
+	testingSuiteCounter++
+	id := testingSuiteCounter
+	testingSuites[id] = &testingSuite{}
+	return id
+}
+
+func ensureTestingSuiteLocked(id int) *testingSuite {
+	suite, ok := testingSuites[id]
+	if !ok {
+		suite = &testingSuite{}
+		testingSuites[id] = suite
+	}
+	return suite
+}
+
+func recordTestingResultLocked(suite *testingSuite, name string, passed bool, message string) {
+	fmt.Printf("Running test: %s\n", name)
+	if passed {
+		fmt.Printf("✓ %s PASSED\n", name)
+	} else {
+		fmt.Printf("✗ %s FAILED\n", name)
+		if message != "" {
+			fmt.Printf("  %s\n", message)
+		}
+		suite.failed++
+	}
+	suite.total++
+}
+
+func suiteIDFromResult(res Result) (int, bool) {
+	if res.Type == "std.testing.Suite" {
+		if data, ok := res.Value.(map[string]interface{}); ok {
+			switch v := data["id"].(type) {
+			case int:
+				return v, true
+			case int64:
+				return int(v), true
+			case int32:
+				return int(v), true
+			case uint64:
+				return int(v), true
+			case uint32:
+				return int(v), true
+			case float64:
+				return int(v), true
+			}
+		}
+	}
+	id, err := toInt(res)
+	if err != nil {
+		return 0, false
+	}
+	return id, true
+}
+
+func stringFromResult(res Result) string {
+	if str, err := toString(res); err == nil {
+		return str
+	}
+	return fmt.Sprint(res.Value)
+}
+
+func boolFromResult(res Result) bool {
+	b, err := toBool(res)
+	return err == nil && b
+}
+
+func buildTestingSuiteStruct(id int) map[string]interface{} {
+	return map[string]interface{}{
+		"id": id,
+	}
+}
+
+func execTestingEqualFloat(fr *frame, operands []mir.Operand, precision int) (Result, bool) {
+	if len(operands) < 4 {
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	}
+	if precision < 0 {
+		precision = 6
+	}
+	suiteIDRes := operandValue(fr, operands[0])
+	id, ok := suiteIDFromResult(suiteIDRes)
+	if !ok {
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	}
+	name := stringFromResult(operandValue(fr, operands[1]))
+	expectedRes := operandValue(fr, operands[2])
+	actualRes := operandValue(fr, operands[3])
+	expectedVal, expErr := toFloat(expectedRes)
+	actualVal, actErr := toFloat(actualRes)
+
+	passed := expErr == nil && actErr == nil
+	if passed {
+		tolerance := math.Pow10(-precision)
+		if tolerance == 0 {
+			tolerance = math.SmallestNonzeroFloat64
+		}
+		passed = math.Abs(expectedVal-actualVal) <= tolerance
+	}
+
+	format := fmt.Sprintf("%%.%df", precision)
+	var message string
+	if expErr != nil || actErr != nil {
+		message = fmt.Sprintf("expected %v, got %v", expectedRes.Value, actualRes.Value)
+	} else {
+		message = fmt.Sprintf("expected "+format+", got "+format, expectedVal, actualVal)
+	}
+
+	testingSuitesMu.Lock()
+	suite := ensureTestingSuiteLocked(id)
+	recordTestingResultLocked(suite, name, passed, message)
+	testingSuitesMu.Unlock()
+
+	return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(id)}, true
+}
 
 type exitSignal struct {
 	code int
@@ -1427,6 +1556,217 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				return Result{Type: "int", Value: strings.Compare(aStr, bStr)}, true
 			}
 		}
+	case "std.testing.suite":
+		if len(operands) == 0 {
+			id := newTestingSuiteID()
+			return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(id)}, true
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.expect":
+		if len(operands) >= 3 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+			}
+			name := stringFromResult(operandValue(fr, operands[1]))
+			passed := boolFromResult(operandValue(fr, operands[2]))
+			message := ""
+			if len(operands) >= 4 {
+				message = stringFromResult(operandValue(fr, operands[3]))
+			}
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			recordTestingResultLocked(suite, name, passed, message)
+			testingSuitesMu.Unlock()
+			return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(id)}, true
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.pass":
+		if len(operands) >= 2 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+			}
+			name := stringFromResult(operandValue(fr, operands[1]))
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			recordTestingResultLocked(suite, name, true, "")
+			testingSuitesMu.Unlock()
+			return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(id)}, true
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.fail":
+		if len(operands) >= 3 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+			}
+			name := stringFromResult(operandValue(fr, operands[1]))
+			message := stringFromResult(operandValue(fr, operands[2]))
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			recordTestingResultLocked(suite, name, false, message)
+			testingSuitesMu.Unlock()
+			return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(id)}, true
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.equal_int":
+		if len(operands) >= 4 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+			}
+			name := stringFromResult(operandValue(fr, operands[1]))
+			expectedRes := operandValue(fr, operands[2])
+			actualRes := operandValue(fr, operands[3])
+			expectedVal, expErr := toInt(expectedRes)
+			actualVal, actErr := toInt(actualRes)
+			passed := expErr == nil && actErr == nil && expectedVal == actualVal
+			message := fmt.Sprintf("expected %v, got %v", expectedRes.Value, actualRes.Value)
+			if expErr == nil && actErr == nil {
+				message = fmt.Sprintf("expected %d, got %d", expectedVal, actualVal)
+			}
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			recordTestingResultLocked(suite, name, passed, message)
+			testingSuitesMu.Unlock()
+			return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(id)}, true
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.equal_bool":
+		if len(operands) >= 4 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+			}
+			name := stringFromResult(operandValue(fr, operands[1]))
+			expectedRes := operandValue(fr, operands[2])
+			actualRes := operandValue(fr, operands[3])
+			expectedVal, expErr := toBool(expectedRes)
+			actualVal, actErr := toBool(actualRes)
+			passed := expErr == nil && actErr == nil && expectedVal == actualVal
+			expStr := stringFromResult(expectedRes)
+			actStr := stringFromResult(actualRes)
+			message := fmt.Sprintf("expected %s, got %s", expStr, actStr)
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			recordTestingResultLocked(suite, name, passed, message)
+			testingSuitesMu.Unlock()
+			return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(id)}, true
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.equal_string":
+		if len(operands) >= 4 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+			}
+			name := stringFromResult(operandValue(fr, operands[1]))
+			expectedStr := stringFromResult(operandValue(fr, operands[2]))
+			actualStr := stringFromResult(operandValue(fr, operands[3]))
+			passed := expectedStr == actualStr
+			message := fmt.Sprintf("expected %q, got %q", expectedStr, actualStr)
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			recordTestingResultLocked(suite, name, passed, message)
+			testingSuitesMu.Unlock()
+			return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(id)}, true
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.equal_float":
+		if len(operands) >= 4 {
+			return execTestingEqualFloat(fr, operands, 6)
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.equal_float_precision":
+		if len(operands) >= 5 {
+			precisionRes := operandValue(fr, operands[4])
+			precision, err := toInt(precisionRes)
+			if err != nil || precision < 0 {
+				precision = 6
+			}
+			return execTestingEqualFloat(fr, operands[:4], precision)
+		}
+		return Result{Type: "std.testing.Suite", Value: buildTestingSuiteStruct(0)}, true
+	case "std.testing.total":
+		if len(operands) >= 1 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "int", Value: 0}, true
+			}
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			total := suite.total
+			testingSuitesMu.Unlock()
+			return Result{Type: "int", Value: total}, true
+		}
+		return Result{Type: "int", Value: 0}, true
+	case "std.testing.failures":
+		if len(operands) >= 1 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "int", Value: 0}, true
+			}
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			failures := suite.failed
+			testingSuitesMu.Unlock()
+			return Result{Type: "int", Value: failures}, true
+		}
+		return Result{Type: "int", Value: 0}, true
+	case "std.testing.summary":
+		if len(operands) >= 1 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "int", Value: 0}, true
+			}
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			total := suite.total
+			failures := suite.failed
+			testingSuitesMu.Unlock()
+			passedCount := total - failures
+			fmt.Printf("\nTest Summary: %d total, %d passed, %d failed\n", total, passedCount, failures)
+			return Result{Type: "int", Value: failures}, true
+		}
+		return Result{Type: "int", Value: 0}, true
+	case "std.testing.passed":
+		if len(operands) >= 1 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				return Result{Type: "bool", Value: false}, true
+			}
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			passed := suite.failed == 0
+			testingSuitesMu.Unlock()
+			return Result{Type: "bool", Value: passed}, true
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.testing.exit":
+		if len(operands) >= 1 {
+			suiteIDRes := operandValue(fr, operands[0])
+			id, ok := suiteIDFromResult(suiteIDRes)
+			if !ok {
+				panic(exitSignal{code: 0})
+			}
+			testingSuitesMu.Lock()
+			suite := ensureTestingSuiteLocked(id)
+			failures := suite.failed
+			testingSuitesMu.Unlock()
+			panic(exitSignal{code: failures})
+		}
+		panic(exitSignal{code: 0})
 	case "std.test.start":
 		if len(operands) == 1 {
 			testName := operandValue(fr, operands[0])

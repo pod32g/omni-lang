@@ -1,0 +1,75 @@
+// std.testing - Lightweight testing helpers for OmniLang
+
+struct Suite {
+    id:int
+}
+
+func suite():Suite {
+    // intrinsic
+    return Suite{ id: 0 }
+}
+
+func expect(state:Suite, name:string, condition:bool, message:string):Suite {
+    // intrinsic
+    return state
+}
+
+func pass(state:Suite, name:string):Suite {
+    // intrinsic
+    return state
+}
+
+func fail(state:Suite, name:string, message:string):Suite {
+    // intrinsic
+    return state
+}
+
+func equal_int(state:Suite, name:string, expected:int, actual:int):Suite {
+    // intrinsic
+    return state
+}
+
+func equal_bool(state:Suite, name:string, expected:bool, actual:bool):Suite {
+    // intrinsic
+    return state
+}
+
+func equal_string(state:Suite, name:string, expected:string, actual:string):Suite {
+    // intrinsic
+    return state
+}
+
+func equal_float(state:Suite, name:string, expected:float, actual:float):Suite {
+    // intrinsic
+    return state
+}
+
+func equal_float_precision(state:Suite, name:string, expected:float, actual:float, precision:int):Suite {
+    // intrinsic
+    return state
+}
+
+func total(state:Suite):int {
+    // intrinsic
+    return 0
+}
+
+func failures(state:Suite):int {
+    // intrinsic
+    return 0
+}
+
+func summary(state:Suite):int {
+    // intrinsic
+    return 0
+}
+
+func passed(state:Suite):bool {
+    // intrinsic
+    return false
+}
+
+func exit(state:Suite) {
+    // intrinsic
+}
+

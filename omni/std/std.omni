@@ -34,6 +34,13 @@ import std.network
 // Re-export logging functions
 import std.log
 
+// Re-export developer helpers
+import std.dev
+
+// Re-export testing harness intrinsics
+import std.test
+import std.testing
+
 // Common utility functions
 func assert(condition:bool, message:string) {
     if !condition {

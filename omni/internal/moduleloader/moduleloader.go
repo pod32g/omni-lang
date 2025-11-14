@@ -245,7 +245,21 @@ func suggestStdImport(importPath []string) string {
 		return ""
 	}
 	moduleName := importPath[1]
-	stdModules := []string{"io", "math", "string", "array", "os", "collections", "file", "algorithms", "time", "network", "log"}
+	stdModules := []string{
+		"io",
+		"math",
+		"string",
+		"array",
+		"os",
+		"collections",
+		"file",
+		"algorithms",
+		"time",
+		"network",
+		"log",
+		"testing",
+		"dev",
+	}
 	best := ""
 	bestDist := math.MaxInt
 	for _, candidate := range stdModules {

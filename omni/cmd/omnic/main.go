@@ -13,6 +13,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/omni-lang/omni/internal/compiler"
+	"github.com/omni-lang/omni/internal/lexer"
 	"github.com/omni-lang/omni/internal/logging"
 )
 
@@ -42,39 +43,40 @@ func (f *stringFlag) Set(v string) error {
 
 func main() {
 	var (
-		backend        = flag.String("backend", "c", "code generation backend (vm|clift|c)")
-		backendShort   = flag.String("b", "", "alias for -backend")
-		optLevel       = flag.String("O", "O0", "optimization level (O0-O3)")
-		emitFlag       = newStringFlag("exe")
-		emitShort      = newStringFlag("")
-		dump           = flag.String("dump", "", "dump intermediate representation (mir)")
-		dumpShort      = flag.String("d", "", "alias for -dump")
-		output         = flag.String("o", "", "output binary path")
-		debug          = flag.Bool("debug", false, "generate debug symbols and debug information")
-		debugShort     = flag.Bool("g", false, "alias for -debug")
-		debugModules   = flag.Bool("debug-modules", false, "show module loading debug information")
-		debugModulesSh = flag.Bool("G", false, "alias for -debug-modules")
-		emitDir        = flag.String("emit-dir", "", "directory where derived outputs are written")
-		emitDirShort   = flag.String("C", "", "alias for -emit-dir")
-		emitPrefix     = flag.String("emit-prefix", "", "prefix applied to derived output names")
-		emitPrefixSh   = flag.String("P", "", "alias for -emit-prefix")
-		noColor        = flag.Bool("no-color", false, "disable colored log output")
-		quiet          = flag.Bool("quiet", false, "suppress non-error output")
-		quietShort     = flag.Bool("q", false, "alias for -quiet")
-		timeCompile    = flag.Bool("time", false, "print compilation timing summary")
-		watchFlag      = flag.Bool("watch", false, "watch input file and recompile on changes")
-		watchShort     = flag.Bool("w", false, "alias for -watch")
-		jsonOutput     = flag.Bool("json", false, "output machine-readable JSON for listings")
-		version        = flag.Bool("version", false, "print version and exit")
-		versionShort   = flag.Bool("v", false, "alias for -version")
-		verbose        = flag.Bool("verbose", false, "enable verbose output")
-		verboseShort   = flag.Bool("V", false, "alias for -verbose")
-		listBackends   = flag.Bool("list-backends", false, "list supported backends and exit")
-		listBackendsSh = flag.Bool("B", false, "alias for -list-backends")
-		listEmits      = flag.Bool("list-emits", false, "list supported emit targets and exit")
-		listEmitsShort = flag.Bool("E", false, "alias for -list-emits")
-		help           = flag.Bool("help", false, "show help and exit")
-		showHelp       = flag.Bool("h", false, "show help and exit")
+		backend         = flag.String("backend", "c", "code generation backend (vm|clift|c)")
+		backendShort    = flag.String("b", "", "alias for -backend")
+		optLevel        = flag.String("O", "O0", "optimization level (O0-O3)")
+		emitFlag        = newStringFlag("exe")
+		emitShort       = newStringFlag("")
+		dump            = flag.String("dump", "", "dump intermediate representation (mir)")
+		dumpShort       = flag.String("d", "", "alias for -dump")
+		output          = flag.String("o", "", "output binary path")
+		debug           = flag.Bool("debug", false, "generate debug symbols and debug information")
+		debugShort      = flag.Bool("g", false, "alias for -debug")
+		debugModules    = flag.Bool("debug-modules", false, "show module loading debug information")
+		debugModulesSh  = flag.Bool("G", false, "alias for -debug-modules")
+		emitDir         = flag.String("emit-dir", "", "directory where derived outputs are written")
+		emitDirShort    = flag.String("C", "", "alias for -emit-dir")
+		emitPrefix      = flag.String("emit-prefix", "", "prefix applied to derived output names")
+		emitPrefixSh    = flag.String("P", "", "alias for -emit-prefix")
+		noColor         = flag.Bool("no-color", false, "disable colored log output")
+		quiet           = flag.Bool("quiet", false, "suppress non-error output")
+		quietShort      = flag.Bool("q", false, "alias for -quiet")
+		timeCompile     = flag.Bool("time", false, "print compilation timing summary")
+		watchFlag       = flag.Bool("watch", false, "watch input file and recompile on changes")
+		watchShort      = flag.Bool("w", false, "alias for -watch")
+		jsonOutput      = flag.Bool("json", false, "output machine-readable JSON for listings")
+		diagnosticsJSON = flag.Bool("diagnostics-json", false, "emit structured JSON diagnostics on failure")
+		version         = flag.Bool("version", false, "print version and exit")
+		versionShort    = flag.Bool("v", false, "alias for -version")
+		verbose         = flag.Bool("verbose", false, "enable verbose output")
+		verboseShort    = flag.Bool("V", false, "alias for -verbose")
+		listBackends    = flag.Bool("list-backends", false, "list supported backends and exit")
+		listBackendsSh  = flag.Bool("B", false, "alias for -list-backends")
+		listEmits       = flag.Bool("list-emits", false, "list supported emit targets and exit")
+		listEmitsShort  = flag.Bool("E", false, "alias for -list-emits")
+		help            = flag.Bool("help", false, "show help and exit")
+		showHelp        = flag.Bool("h", false, "show help and exit")
 	)
 	flag.Var(emitFlag, "emit", "emission format (mir|obj|exe|binary|asm)")
 	flag.Var(emitShort, "e", "alias for -emit")
@@ -111,6 +113,9 @@ func main() {
 	}
 	if *noColor {
 		os.Setenv("LOG_COLORIZE", "false")
+	}
+	if *diagnosticsJSON {
+		*jsonOutput = true
 	}
 
 	logger := logging.Logger()
@@ -172,12 +177,24 @@ func main() {
 		duration := time.Since(start)
 		if err != nil {
 			logger.ErrorString(err.Error())
-			if *jsonOutput && !*watchFlag {
+			if (*jsonOutput || *diagnosticsJSON) && !*watchFlag {
 				enc := json.NewEncoder(os.Stdout)
-				_ = enc.Encode(map[string]any{
-					"status": "error",
-					"error":  err.Error(),
-				})
+				payload := map[string]any{
+					"status":    "error",
+					"error":     err.Error(),
+					"input":     input,
+					"backend":   *backend,
+					"emit":      emit,
+					"output":    outputPath,
+					"timestamp": time.Now().Format(time.RFC3339Nano),
+				}
+				if duration > 0 {
+					payload["duration_ms"] = float64(duration) / float64(time.Millisecond)
+				}
+				if *diagnosticsJSON {
+					payload["diagnostics"] = buildDiagnostics(err)
+				}
+				_ = enc.Encode(payload)
 			}
 			return outputPath, err
 		}
@@ -198,10 +215,12 @@ func main() {
 		if *jsonOutput && !*watchFlag {
 			enc := json.NewEncoder(os.Stdout)
 			result := map[string]any{
-				"status":  "ok",
-				"backend": *backend,
-				"emit":    emit,
-				"output":  outputPath,
+				"status":    "ok",
+				"input":     input,
+				"backend":   *backend,
+				"emit":      emit,
+				"output":    outputPath,
+				"timestamp": time.Now().Format(time.RFC3339Nano),
 			}
 			if *timeCompile {
 				result["duration_ms"] = float64(duration) / float64(time.Millisecond)
@@ -270,6 +289,8 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "        watch input file for changes and recompile\n")
 	fmt.Fprintf(os.Stderr, "  -json\n")
 	fmt.Fprintf(os.Stderr, "        output machine-readable JSON for listings and one-shot builds\n")
+	fmt.Fprintf(os.Stderr, "  -diagnostics-json\n")
+	fmt.Fprintf(os.Stderr, "        include structured diagnostics in JSON output when compilation fails\n")
 	fmt.Fprintf(os.Stderr, "  -version, -v\n")
 	fmt.Fprintf(os.Stderr, "        print version and exit\n")
 	fmt.Fprintf(os.Stderr, "  -list-backends, -B\n")
@@ -378,42 +399,137 @@ func deriveOutputPath(input, emit, emitDir, emitPrefix string) string {
 	return filepath.Join(dir, base+ext)
 }
 
+type backendInfo struct {
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	Default      bool     `json:"default"`
+	Experimental bool     `json:"experimental,omitempty"`
+	Emits        []string `json:"emits,omitempty"`
+	Notes        []string `json:"notes,omitempty"`
+}
+
 func printBackends(jsonOutput bool) {
-	data := []map[string]string{
-		{"name": "c", "description": "C code-generation backend (default)"},
-		{"name": "vm", "description": "Virtual machine interpreter backend"},
-		{"name": "clift", "description": "Cranelift backend (experimental)"},
+	data := []backendInfo{
+		{
+			Name:        "c",
+			Description: "C code-generation backend (default)",
+			Default:     true,
+			Emits:       []string{"exe", "obj", "asm", "binary"},
+		},
+		{
+			Name:        "vm",
+			Description: "Virtual machine interpreter backend",
+			Emits:       []string{"mir"},
+			Notes:       []string{"emits MIR for execution with omnir"},
+		},
+		{
+			Name:         "clift",
+			Description:  "Cranelift backend",
+			Experimental: true,
+			Emits:        []string{"obj"},
+			Notes:        []string{"requires Rust toolchain for native bridge"},
+		},
 	}
 	if jsonOutput {
+		payload := map[string]any{
+			"status":   "ok",
+			"backends": data,
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(data)
+		_ = enc.Encode(payload)
 		return
 	}
 	fmt.Println("Available backends:")
 	for _, entry := range data {
-		fmt.Printf("  %-7s- %s\n", entry["name"], entry["description"])
+		line := fmt.Sprintf("  %-7s- %s", entry.Name, entry.Description)
+		if entry.Experimental {
+			line += " (experimental)"
+		} else if entry.Default {
+			line += " (default)"
+		}
+		fmt.Println(line)
+		if len(entry.Emits) > 0 {
+			fmt.Printf("            emits: %s\n", strings.Join(entry.Emits, ", "))
+		}
+		if len(entry.Notes) > 0 {
+			fmt.Printf("            notes: %s\n", strings.Join(entry.Notes, "; "))
+		}
 	}
 }
 
 func printEmits(jsonOutput bool) {
-	data := []map[string]string{
-		{"name": "exe", "description": "Native executable (default for C backend)"},
-		{"name": "mir", "description": "OmniLang MIR (default for VM backend)"},
-		{"name": "obj", "description": "Object file"},
-		{"name": "binary", "description": "Raw binary image"},
-		{"name": "asm", "description": "Assembly listing"},
+	type emitInfo struct {
+		Name            string `json:"name"`
+		Description     string `json:"description"`
+		DefaultBackend  string `json:"default_backend,omitempty"`
+		FileExtension   string `json:"file_extension,omitempty"`
+		ProducesBinary  bool   `json:"produces_binary,omitempty"`
+		RequiresLinking bool   `json:"requires_linking,omitempty"`
+	}
+	data := []emitInfo{
+		{
+			Name:           "exe",
+			Description:    "Native executable (default for C backend)",
+			DefaultBackend: "c",
+			FileExtension:  runtimeExeExtension(),
+			ProducesBinary: true,
+		},
+		{
+			Name:           "mir",
+			Description:    "OmniLang MIR (default for VM backend)",
+			DefaultBackend: "vm",
+			FileExtension:  ".mir",
+		},
+		{
+			Name:            "obj",
+			Description:     "Object file (used by C/Cranelift backends)",
+			DefaultBackend:  "clift",
+			FileExtension:   ".o",
+			RequiresLinking: true,
+		},
+		{
+			Name:           "binary",
+			Description:    "Raw binary image",
+			FileExtension:  ".bin",
+			ProducesBinary: true,
+		},
+		{
+			Name:          "asm",
+			Description:   "Assembly listing",
+			FileExtension: ".s",
+		},
 	}
 	if jsonOutput {
+		payload := map[string]any{
+			"status": "ok",
+			"emits":  data,
+		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(data)
+		_ = enc.Encode(payload)
 		return
 	}
 	fmt.Println("Available emit targets:")
 	for _, entry := range data {
-		fmt.Printf("  %-7s- %s\n", entry["name"], entry["description"])
+		fmt.Printf("  %-7s- %s\n", entry.Name, entry.Description)
+		if entry.FileExtension != "" {
+			fmt.Printf("            extension: %s\n", entry.FileExtension)
+		}
+		if entry.DefaultBackend != "" {
+			fmt.Printf("            default backend: %s\n", entry.DefaultBackend)
+		}
+		if entry.RequiresLinking {
+			fmt.Printf("            requires external linking\n")
+		}
 	}
+}
+
+func runtimeExeExtension() string {
+	if runtime.GOOS == "windows" {
+		return ".exe"
+	}
+	return ""
 }
 
 func watchAndCompile(path string, compile func() error, quiet bool) error {
@@ -470,5 +586,65 @@ func watchAndCompile(path string, compile func() error, quiet bool) error {
 		case err := <-watcher.Errors:
 			logging.Logger().ErrorFields("watch error", logging.Error("error", err))
 		}
+	}
+}
+
+func buildDiagnostics(err error) []map[string]any {
+	var diags []lexer.Diagnostic
+	collectDiagnostics(err, &diags)
+	if len(diags) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(diags))
+	for _, d := range diags {
+		entry := map[string]any{
+			"file":     d.File,
+			"message":  d.Message,
+			"hint":     d.Hint,
+			"severity": severityString(d.Severity),
+			"category": d.Category,
+			"span": map[string]int{
+				"start_line":   d.Span.Start.Line,
+				"start_column": d.Span.Start.Column,
+				"end_line":     d.Span.End.Line,
+				"end_column":   d.Span.End.Column,
+			},
+		}
+		if len(d.Context) > 0 {
+			entry["context"] = d.Context
+			entry["context_start_line"] = d.ContextStartLine
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func collectDiagnostics(err error, dest *[]lexer.Diagnostic) {
+	var diag lexer.Diagnostic
+	if errors.As(err, &diag) {
+		*dest = append(*dest, diag)
+	}
+	type unwrapper interface {
+		Unwrap() []error
+	}
+	if u, ok := err.(unwrapper); ok {
+		for _, inner := range u.Unwrap() {
+			collectDiagnostics(inner, dest)
+		}
+		return
+	}
+	if inner := errors.Unwrap(err); inner != nil {
+		collectDiagnostics(inner, dest)
+	}
+}
+
+func severityString(level lexer.Severity) string {
+	switch level {
+	case lexer.Warning:
+		return "warning"
+	case lexer.Info:
+		return "info"
+	default:
+		return "error"
 	}
 }

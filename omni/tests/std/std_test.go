@@ -3,6 +3,7 @@ package std
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -155,14 +156,46 @@ func TestAllStdModules(t *testing.T) {
 			t.Errorf("Expected %s, got %s", expected, result)
 		}
 	})
+
+	t.Run("std.testing", func(t *testing.T) {
+		exitCode, err := runVMTestHarness("std_testing_suite.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		if exitCode != 0 {
+			t.Fatalf("Expected exit code 0, got %d", exitCode)
+		}
+	})
+
+	t.Run("std.testing summary reporting", func(t *testing.T) {
+		exitCode, output, err := runVMTestHarnessWithOutput("std_testing_failures.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		if exitCode == 0 {
+			t.Fatalf("expected non-zero exit code when tests fail, got %d", exitCode)
+		}
+		if !strings.Contains(output, "Test Summary: 5 total, 3 passed, 2 failed") {
+			t.Fatalf("expected summary line in output, got:\n%s", output)
+		}
+		if !strings.Contains(output, "2 test(s) failed") {
+			t.Fatalf("expected failure count log in output, got:\n%s", output)
+		}
+	})
 }
 
-func runVM(testFile string) (string, error) {
-	cmd := exec.Command("go", "run", "../../cmd/omnir", testFile)
+func buildVMCommand(args ...string) *exec.Cmd {
+	cmd := exec.Command("go", append([]string{"run", "../../cmd/omnir"}, args...)...)
 	cmd.Dir = "."
 	// Set library path for VM execution
 	cmd.Env = append(os.Environ(), "DYLD_LIBRARY_PATH=../../runtime/posix")
 	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=../../runtime/posix")
+	return cmd
+}
+
+func runVM(testFile string, cliArgs ...string) (string, error) {
+	args := append(cliArgs, testFile)
+	cmd := buildVMCommand(args...)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -173,4 +206,31 @@ func runVM(testFile string) (string, error) {
 		result = result[:len(result)-1]
 	}
 	return result, nil
+}
+
+func runVMTestHarness(testFile string) (int, error) {
+	exitCode, _, err := runVMTestHarnessWithOutput(testFile)
+	return exitCode, err
+}
+
+func runVMTestHarnessWithOutput(testFile string) (int, string, error) {
+	cmd := buildVMCommand("--test", testFile)
+	output, err := cmd.CombinedOutput()
+	normalized := normalizeOutput(output)
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return exitErr.ExitCode(), normalized, nil
+		}
+		return -1, normalized, err
+	}
+	exitCode := 0
+	if ps := cmd.ProcessState; ps != nil {
+		exitCode = ps.ExitCode()
+	}
+	return exitCode, normalized, nil
+}
+
+func normalizeOutput(output []byte) string {
+	out := string(output)
+	return strings.TrimRight(out, "\n")
 }

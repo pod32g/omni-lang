@@ -416,8 +416,43 @@ release:
   dependencies:
     - package
   script:
+    - apt-get update && apt-get install -y jq
     - cd omni
     - make release
+    - RELEASE_DIR="releases"
+    - MANIFEST="${RELEASE_DIR}/release.json"
+    - if [ ! -f "${MANIFEST}" ]; then
+        echo "release.json is missing";
+        exit 1;
+      fi
+    - jq -e '.version and (.artifacts | length > 0)' "${MANIFEST}" >/dev/null
+    - |
+      jq -r '.artifacts[] | "\(.name) \(.sha256)"' "${MANIFEST}" | while IFS=' ' read -r name sha; do
+        if [ -z "${name}" ] || [ -z "${sha}" ]; then
+          echo "skipping empty manifest row"
+          continue
+        fi
+        artifact_path="${RELEASE_DIR}/${name}"
+        if [ ! -f "${artifact_path}" ]; then
+          echo "Artifact listed in manifest not found: ${artifact_path}"
+          exit 1
+        fi
+        computed_sha=$(sha256sum "${artifact_path}" | awk '{print $1}')
+        if [ "${computed_sha}" != "${sha}" ]; then
+          echo "Checksum mismatch for ${name}: manifest=${sha} computed=${computed_sha}"
+          exit 1
+        fi
+      done
+    - DOCKER_ARCHIVE=$(ls "${RELEASE_DIR}"/omni-*-docker.tar 2>/dev/null | head -n 1 || true)
+    - if [ -z "${DOCKER_ARCHIVE}" ]; then
+        echo "Docker archive not found in ${RELEASE_DIR}";
+        exit 1;
+      fi
+    - tar tf "${DOCKER_ARCHIVE}" > /tmp/docker_tar_contents.txt
+    - if ! grep -q 'manifest.json' /tmp/docker_tar_contents.txt; then
+        echo "Docker archive ${DOCKER_ARCHIVE} does not contain manifest.json";
+        exit 1;
+      fi
   rules:
     - if: $CI_COMMIT_TAG
   artifacts:

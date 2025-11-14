@@ -730,6 +730,16 @@ Options:
         target architecture (amd64|arm64)
 ```
 
+#### Machine-readable CLI output
+- `omnic --list-backends --json` and `omnic --list-emits --json` provide structured metadata (defaults, supported emits, notes) for editor integrations.
+- `omnic --diagnostics-json` emits structured diagnostics on failure, including spans, hints, and highlighted context.
+- Successful builds with `--json` return input path, backend, emit target, derived output, duration, and timestamp in a single object.
+
+```bash
+omnic hello.omni --list-backends --json | jq .
+omnic failing.omni --diagnostics-json
+```
+
 ### Backends
 
 **C Backend** (Default):
@@ -775,6 +785,8 @@ make package
 # - Standard library modules
 # - Examples and documentation
 ```
+
+Running `make release` builds on that by copying artifacts into `releases/`, generating `checksums.txt`, templated release notes, a `release.json` manifest summarising every artifact (name, size, sha256), and a Docker image archive (`omni-<version>-docker.tar`) produced from `docker/Dockerfile`.
 
 ## Project Structure
 

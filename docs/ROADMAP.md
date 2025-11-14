@@ -15,6 +15,8 @@
 - **Documentation**: Complete language tour, quick reference, and API docs
 - **CI/CD**: Enhanced multi-platform builds with improved error handling and debugging
 - **Packaging**: Distribution packages for Linux, macOS, and Windows
+- **Developer Helpers**: `std.testing` assertions, `omnir --test`, and `std.dev` watch utilities
+- **Automation**: JSON CLI endpoints (`omnic --diagnostics-json`, listings), release manifest generation, Docker image packaging
 
 ### 📊 **Current Metrics**
 - **VM Coverage**: 32.3% (focused on core functionality)
@@ -308,26 +310,23 @@ test "type checker validates types" {
 *This roadmap is a living document and will be updated as we progress. For the most detailed information, see [ADR-002](docs/adr/ADR-002-detailed-roadmap.md).*
 
 ## Short Term
-- Stabilize the C backend implementation to cover all standard library functions.
-- Complete the VM backend parity for core language features.
-- Improve diagnostic messages and error handling for developers.
-- Add contextual error snippets in diagnostics (line highlights, "did you mean" suggestions for imports).
-- Ship omnirc/omnir watch mode polish (auto-run flows) and surface them in docs/editor integration.
-- Extend VS Code extension with commands for new CLI features (`omnic --watch`, `omnir --watch`).
+- Harden `std.testing` with additional golden tests (import suggestions, failure summaries).
+- Surface JSON diagnostics in editor integrations (VS Code command palette, status bar alerts).
+- Wire `omnir --test` and watch utilities into the VS Code extension command set.
+- Add CLI smoke tests for release automation (manifest validation, Docker image boot checks).
+- Continue refining diagnostics with multi-span context for cross-file errors.
 
 ## Mid Term
 - Implement Cranelift backend support for additional architectures.
 - Optimize MIR generation and introduce additional compiler passes.
 - Expand standard library coverage, including networking and concurrency primitives.
-- Fill in missing VM implementations for `std.os`, `std.file`, and `std.network` to keep backend parity.
 - Build native Cranelift bridge (beyond placeholders) so the third backend is production ready.
-- Expose CLI machine-readable outputs (JSON listings, stats) and wire them into editor tooling.
-- Add `std.testing` helpers and ergonomic test runner support (potential future `omnitest`).
-- Create `std.dev` / `std.io.watch` utilities that wrap CLI watch functionality for scripts.
+- Introduce incremental compilation hooks and cache priming for large workspaces.
+- Define story for package registry metadata (`release.json`, checksums) and automate publishing.
 
 ## Long Term
 - Provide official OmniLang package manager with dependency resolution.
 - Deliver first production-ready release with full documentation and examples.
 - Integrate OmniLang into CI/CD workflows with official plugins.
 - Publish official Docker images containing Omni toolchain and std library snapshots.
-- Generate release manifests (`release.json`) and checksums automatically as part of the pipeline.
+- Automate update notifications via hosted manifest/checksum endpoints.

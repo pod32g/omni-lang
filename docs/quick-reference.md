@@ -257,6 +257,34 @@ if std.log.set_level("debug") {
 std.log.error("Shutting down")
 ```
 
+### Testing
+```omni
+import std.testing
+
+var suite = std.testing.suite()
+suite = std.testing.pass(suite, "initialises")
+suite = std.testing.expect(suite, "math", 2 + 2 == 4, "math is hard")
+suite = std.testing.equal_string(suite, "greeting", "hi", "hi")
+
+let failed = std.testing.summary(suite)
+if failed != 0 {
+    std.testing.exit(suite)
+}
+```
+
+### Developer Utilities
+```omni
+import std.dev
+
+std.io.println("Waiting for change…")
+let snapshot = std.dev.wait_for_change("src/main.omni", 250)
+if snapshot.exists {
+    std.io.println("New size: " + std.int_to_string(snapshot.size))
+} else {
+    std.io.println("File removed")
+}
+```
+
 **Environment variables:** `LOG_LEVEL`, `LOG_FORMAT`, `LOG_OUTPUT`, `LOG_COLORIZE`, `LOG_TIME_FORMAT`, `LOG_ROTATE_*`.
 
 ### Bitwise Operations
@@ -272,17 +300,6 @@ let left_shift:int = a << 2    // 0b101000 = 40
 let right_shift:int = b >> 1   // 0b0110 = 6
 ```
 
-### Testing
-```omni
-import std
-
-test.start("My Tests")
-assert.true(condition, "message")
-assert.false(condition, "message")
-assert.eq(actual, expected, "message")
-test.end()
-```
-
 ## Compiler Usage
 
 ### Basic Commands
@@ -295,6 +312,32 @@ go run ./cmd/omnic program.omni -backend vm -emit mir
 
 # Compile to object
 go run ./cmd/omnic program.omni -backend clift -emit obj -o program.o
+```
+
+### Machine-Readable Output
+- `omnic --list-backends --json` exposes backend metadata (default, supported emits, experimental status).
+- `omnic --list-emits --json` enumerates emit targets, extensions, and whether further linking is needed.
+- `omnic --diagnostics-json` turns failing compilations into structured reports suitable for editors and CI bots.
+
+```json
+{
+  "status": "ok",
+  "backends": [
+    {
+      "name": "c",
+      "description": "C code-generation backend (default)",
+      "default": true,
+      "emits": ["exe", "obj", "asm", "binary"]
+    },
+    {
+      "name": "clift",
+      "description": "Cranelift backend",
+      "experimental": true,
+      "emits": ["obj"],
+      "notes": ["requires Rust toolchain for native bridge"]
+    }
+  ]
+}
 ```
 
 ### Options

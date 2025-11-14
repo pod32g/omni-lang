@@ -1,0 +1,19 @@
+import std.testing
+
+func main():int {
+    var suite = std.testing.suite()
+
+    suite = std.testing.pass(suite, "initialises")
+    suite = std.testing.expect(suite, "truthy", true, "should pass")
+    suite = std.testing.equal_int(suite, "math works", 2, 1 + 1)
+
+    suite = std.testing.expect(suite, "false is failure", false, "expected failure")
+    suite = std.testing.equal_string(suite, "string mismatch", "expected", "actual")
+
+    let failures:int = std.testing.summary(suite)
+    if failures != 0 {
+        return failures
+    }
+    return 0
+}
+

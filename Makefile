@@ -93,14 +93,14 @@ package: build-all
 	@if [ -f $(GO_PROJECT_DIR)/runtime/posix/libomni_rt.so ]; then \
 		cp $(GO_PROJECT_DIR)/runtime/posix/libomni_rt.so $(DIST_PACKAGE_DIR)/lib/; \
 	fi
-	@if [ -f native/clift/target/release/libomni_clift.so ]; then \
-		cp native/clift/target/release/libomni_clift.so $(DIST_PACKAGE_DIR)/lib/; \
+	@if [ -f $(GO_PROJECT_DIR)/native/clift/target/release/libomni_clift.so ]; then \
+		cp $(GO_PROJECT_DIR)/native/clift/target/release/libomni_clift.so $(DIST_PACKAGE_DIR)/lib/; \
 	fi
-	@if [ -f native/clift/target/release/libomni_clift.dylib ]; then \
-		cp native/clift/target/release/libomni_clift.dylib $(DIST_PACKAGE_DIR)/lib/; \
+	@if [ -f $(GO_PROJECT_DIR)/native/clift/target/release/libomni_clift.dylib ]; then \
+		cp $(GO_PROJECT_DIR)/native/clift/target/release/libomni_clift.dylib $(DIST_PACKAGE_DIR)/lib/; \
 	fi
-	@if [ -f native/clift/target/release/omni_clift.dll ]; then \
-		cp native/clift/target/release/omni_clift.dll $(DIST_PACKAGE_DIR)/lib/; \
+	@if [ -f $(GO_PROJECT_DIR)/native/clift/target/release/omni_clift.dll ]; then \
+		cp $(GO_PROJECT_DIR)/native/clift/target/release/omni_clift.dll $(DIST_PACKAGE_DIR)/lib/; \
 	fi
 	
 	# Create installation script
@@ -135,6 +135,21 @@ release: package
 	
 	# Create release notes
 	@sed 's/{{VERSION}}/$(VERSION)/g' $(PACKAGING_DIR)/RELEASE_NOTES.md.tpl > $(RELEASES_DIR)/RELEASE_NOTES.md
+	
+	@if command -v $(GO) >/dev/null 2>&1; then \
+		echo "Generating release manifest..."; \
+		$(GO) run ./tools/release_manifest/main.go --dir $(abspath $(RELEASES_DIR)) --version $(VERSION) --output release.json; \
+	else \
+		echo "Go toolchain not found, skipping release manifest"; \
+	fi
+	
+	@if command -v docker >/dev/null 2>&1; then \
+		echo "Building Docker image omni-lang:$(VERSION)"; \
+		DOCKER_BUILDKIT=1 docker build --build-arg OMNI_VERSION=$(VERSION) -f docker/Dockerfile -t omni-lang:$(VERSION) .; \
+		docker save omni-lang:$(VERSION) -o $(RELEASES_DIR)/omni-$(VERSION)-docker.tar; \
+	else \
+		echo "Docker not found, skipping Docker image packaging"; \
+	fi
 	
 	@echo "Release packages created in $(RELEASES_DIR)/"
 	@ls -la $(RELEASES_DIR)/

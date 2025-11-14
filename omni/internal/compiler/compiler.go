@@ -186,16 +186,42 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 					return fmt.Errorf("load std import %s: %w", strings.Join(imp.Path, "."), err)
 				}
 
-				local := imp.Alias
-				if local == "" {
-					local = imp.Path[len(imp.Path)-1]
+				aliases := make([]string, 0, 2)
+				if imp.Alias != "" {
+					aliases = append(aliases, imp.Alias)
+				} else if len(imp.Path) > 0 {
+					aliases = append(aliases, imp.Path[len(imp.Path)-1])
 				}
-				// Append cloned function decls with namespaced names
-				for _, d := range imported.Decls {
-					if fn, ok := d.(*ast.FuncDecl); ok {
-						cloned := *fn
-						cloned.Name = local + "." + fn.Name
-						mod.Decls = append(mod.Decls, &cloned)
+				qualified := strings.Join(imp.Path, ".")
+				additional := true
+				for _, a := range aliases {
+					if a == qualified {
+						additional = false
+						break
+					}
+				}
+				if qualified != "" && additional {
+					aliases = append(aliases, qualified)
+				}
+
+				// Recursively merge nested std imports used within this module
+				if err := mergeNestedImports(imported, loader, mod, debugModules, map[string]bool{}); err != nil {
+					return fmt.Errorf("merge nested imports for %s: %w", strings.Join(imp.Path, "."), err)
+				}
+
+				// Append cloned function decls with namespaced names for each alias
+				for _, ns := range aliases {
+					for _, d := range imported.Decls {
+						switch decl := d.(type) {
+						case *ast.FuncDecl:
+							cloned := *decl
+							cloned.Name = ns + "." + decl.Name
+							mod.Decls = append(mod.Decls, &cloned)
+						case *ast.StructDecl:
+							cloned := *decl
+							cloned.Name = ns + "." + decl.Name
+							mod.Decls = append(mod.Decls, &cloned)
+						}
 					}
 				}
 			} else {
@@ -232,7 +258,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 }
 
 // mergeNestedImports recursively processes nested imports in std modules
-func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast.Module, debugModules bool) error {
+func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast.Module, debugModules bool, visited map[string]bool) error {
 	// Collect imports from both Module.Imports and top-level decls
 	imports := make([]*ast.ImportDecl, 0, len(module.Imports))
 	imports = append(imports, module.Imports...)
@@ -248,6 +274,12 @@ func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast
 		}
 		// Only process std imports
 		if len(imp.Path) > 0 && imp.Path[0] == "std" {
+			key := strings.Join(imp.Path, ".")
+			if visited[key] {
+				continue
+			}
+			visited[key] = true
+
 			// Load the nested std module
 			imported, err := loader.LoadModule(imp.Path)
 			if err != nil {
@@ -255,20 +287,41 @@ func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast
 			}
 
 			// Recursively process its nested imports
-			if err := mergeNestedImports(imported, loader, targetMod, debugModules); err != nil {
+			if err := mergeNestedImports(imported, loader, targetMod, debugModules, visited); err != nil {
 				return fmt.Errorf("merge nested imports for %s: %w", strings.Join(imp.Path, "."), err)
 			}
 
 			// Merge the functions with the target module
-			local := imp.Alias
-			if local == "" {
-				local = imp.Path[len(imp.Path)-1]
+			aliases := make([]string, 0, 2)
+			if imp.Alias != "" {
+				aliases = append(aliases, imp.Alias)
+			} else if len(imp.Path) > 0 {
+				aliases = append(aliases, imp.Path[len(imp.Path)-1])
 			}
-			for _, d := range imported.Decls {
-				if fn, ok := d.(*ast.FuncDecl); ok {
-					cloned := *fn
-					cloned.Name = local + "." + fn.Name
-					targetMod.Decls = append(targetMod.Decls, &cloned)
+			qualified := strings.Join(imp.Path, ".")
+			additional := true
+			for _, a := range aliases {
+				if a == qualified {
+					additional = false
+					break
+				}
+			}
+			if qualified != "" && additional {
+				aliases = append(aliases, qualified)
+			}
+
+			for _, ns := range aliases {
+				for _, d := range imported.Decls {
+					switch decl := d.(type) {
+					case *ast.FuncDecl:
+						cloned := *decl
+						cloned.Name = ns + "." + decl.Name
+						targetMod.Decls = append(targetMod.Decls, &cloned)
+					case *ast.StructDecl:
+						cloned := *decl
+						cloned.Name = ns + "." + decl.Name
+						targetMod.Decls = append(targetMod.Decls, &cloned)
+					}
 				}
 			}
 		}

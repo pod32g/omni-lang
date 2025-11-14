@@ -11,6 +11,8 @@ The packaging system supports:
 - **Source Code**: Optional inclusion of source code
 - **Standard Library**: Automatic inclusion of standard library
 - **Runtime**: Automatic inclusion of runtime libraries
+- **Release Manifests**: Auto-generated `release.json` with artifact metadata and checksums
+- **Container Images**: Docker image export (`omni-<version>-docker.tar`) produced from the staged distribution payload
 
 ## Package Types
 
@@ -290,6 +292,17 @@ cd omni-lang-test/
 3. **Test Packages**: Verify functionality on target platforms
 4. **Create Release**: Tag and upload packages
 5. **Update Documentation**: Update download links and documentation
+6. **Publish Metadata**: Ship generated `release.json`, `checksums.txt`, and Docker image alongside archives
+
+### Release Artifacts
+
+`make release` produces a structured drop in `releases/` containing:
+
+- Platform archives (`*.tar.gz`, `*.zip`)
+- `checksums.txt` covering every archive and Docker image
+- `RELEASE_NOTES.md` rendered from the template in `packaging/`
+- `release.json` manifest capturing each artifact’s name, size, and SHA256 (consumed by automation/update checkers)
+- `omni-<version>-docker.tar` Docker image export referencing the packaged toolchain
 
 ## Integration Examples
 

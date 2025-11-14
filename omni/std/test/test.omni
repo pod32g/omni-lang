@@ -1,0 +1,15 @@
+// std.test - Intrinsic test harness hooks
+
+func start(name:string) {
+    // intrinsic
+}
+
+func end(name:string, passed:bool) {
+    // intrinsic
+}
+
+func summary():int {
+    // intrinsic
+    return 0
+}
+

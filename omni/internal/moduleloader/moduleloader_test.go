@@ -2,6 +2,7 @@ package moduleloader
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -76,6 +77,18 @@ func TestModuleLoader(t *testing.T) {
 		_, err := loader.findModuleFile([]string{"nonexistent"})
 		if err == nil {
 			t.Error("Expected error when finding non-existent module file")
+		}
+	})
+
+	t.Run("SuggestStdTestingOnTypo", func(t *testing.T) {
+		loader := NewModuleLoader()
+		_, err := loader.findModuleFile([]string{"std", "testng"})
+		if err == nil {
+			t.Fatal("expected error for misspelled std.testing import")
+		}
+		message := err.Error()
+		if !strings.Contains(message, "std.testing") {
+			t.Fatalf("expected suggestion for std.testing, got: %s", message)
 		}
 	})
 

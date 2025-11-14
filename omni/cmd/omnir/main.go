@@ -16,6 +16,7 @@ import (
 	"github.com/omni-lang/omni/internal/compiler"
 	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/runner"
+	"github.com/omni-lang/omni/internal/vm"
 )
 
 var (
@@ -35,6 +36,7 @@ func main() {
 		stdinSrc   = flag.Bool("stdin", false, "read OmniLang source from stdin")
 		watch      = flag.Bool("watch", false, "watch program file and rerun on changes")
 		watchShort = flag.Bool("w", false, "alias for -watch")
+		testMode   = flag.Bool("test", false, "run using the built-in testing harness (vm backend only)")
 		help       = flag.Bool("help", false, "show help and exit")
 		showHelp   = flag.Bool("h", false, "show help and exit")
 	)
@@ -112,6 +114,26 @@ func main() {
 		defer cleanup()
 	}
 
+	if *testMode {
+		if *watch || *watchShort {
+			logger.ErrorString("--test cannot be combined with --watch")
+			os.Exit(2)
+		}
+		if *backend != "vm" {
+			logger.ErrorString("--test mode currently supports only the vm backend")
+			os.Exit(2)
+		}
+		if len(programArgs) > 0 {
+			logger.ErrorString("--test mode does not support forwarding program arguments")
+			os.Exit(2)
+		}
+		code := runTests(program, *verbose || *verboseAlt, *stats)
+		if code != 0 {
+			logger.ErrorString(fmt.Sprintf("%d test(s) failed", code))
+		}
+		os.Exit(code)
+	}
+
 	if *watch || *watchShort {
 		if *stdinSrc {
 			logger.ErrorString("watch mode is not supported with --stdin")
@@ -144,6 +166,8 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "        execution backend (vm|c) (default \"vm\")\n")
 	fmt.Fprintf(os.Stderr, "  -stats\n")
 	fmt.Fprintf(os.Stderr, "        print execution duration summary\n")
+	fmt.Fprintf(os.Stderr, "  -test\n")
+	fmt.Fprintf(os.Stderr, "        execute using the OmniLang test harness (vm backend only)\n")
 	fmt.Fprintf(os.Stderr, "  -stdin\n")
 	fmt.Fprintf(os.Stderr, "        read source code from standard input\n")
 	fmt.Fprintf(os.Stderr, "  -watch, -w\n")
@@ -155,6 +179,31 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  omnir -backend c hello.omni -- hi # Compile to native exe then run with args\n")
 	fmt.Fprintf(os.Stderr, "  cat hello.omni | omnir --stdin    # Run source from stdin\n")
 	fmt.Fprintf(os.Stderr, "  omnir --watch hello.omni          # Automatically rerun on file changes\n")
+}
+
+func runTests(program string, verbose bool, stats bool) int {
+	start := time.Now()
+	result, err := runner.Execute(program, verbose)
+	code := 0
+	if err != nil {
+		var exitErr vm.ExitError
+		if errors.As(err, &exitErr) {
+			code = exitErr.Code
+		} else {
+			fmt.Fprintf(os.Stderr, "failed to execute tests: %v\n", err)
+			return 1
+		}
+	} else if result.Type == "int" {
+		if value, ok := result.Value.(int); ok {
+			code = value
+		}
+	}
+
+	if stats {
+		elapsed := time.Since(start).Round(time.Millisecond)
+		fmt.Fprintf(os.Stderr, "Test run completed in %s (failures=%d)\n", elapsed, code)
+	}
+	return code
 }
 
 func runProgram(program string, args []string, backend string, verbose bool, stats bool) error {
