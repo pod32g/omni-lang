@@ -344,12 +344,10 @@ build-vscode-extension:
   image: docker.io/library/node:20
   needs: []
   before_script:
-    - cd vscode/omni
-    - npm ci
+    - npm ci --prefix vscode/omni
   script:
-    - cd vscode/omni
-    - npm run compile
-    - npx vsce package --no-dependencies
+    - npm run compile --prefix vscode/omni
+    - npx --prefix vscode/omni vsce package --no-dependencies
   artifacts:
     paths:
       - vscode/omni/dist/
