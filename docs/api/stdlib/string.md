@@ -134,7 +134,7 @@ import std.string as str
 func main():int {
     let text:string = "Hello, World!"
     let result1:bool = str.contains(text, "World")  // true
-    let result2:bool = str.contains(text, "Python") // false
+    let result2:bool = str.contains(text, "sample") // false
     return 0
 }
 ```
@@ -157,7 +157,7 @@ import std.string as str
 func main():int {
     let text:string = "Hello, World!"
     let index1:int = str.index_of(text, "World")  // 7
-    let index2:int = str.index_of(text, "Python") // -1
+    let index2:int = str.index_of(text, "sample") // -1
     return 0
 }
 ```

@@ -370,12 +370,12 @@ func advanced_patterns(): int {
 ### 1. Use Specific Exception Messages
 
 ```omni
-// ✅ Good - specific exception message
+//  Good - specific exception message
 if value < 0 {
     throw "Negative values not allowed for age calculation"
 }
 
-// ❌ Avoid - vague exception message
+//  Avoid - vague exception message
 if value < 0 {
     throw "Invalid value"
 }
@@ -384,7 +384,7 @@ if value < 0 {
 ### 2. Handle Exceptions Appropriately
 
 ```omni
-// ✅ Good - meaningful exception handling
+//  Good - meaningful exception handling
 try {
     let result: int = risky_operation(value)
     return result
@@ -393,7 +393,7 @@ try {
     return -1  // Return error code
 }
 
-// ❌ Avoid - ignoring exceptions
+//  Avoid - ignoring exceptions
 try {
     let result: int = risky_operation(value)
     return result
@@ -405,7 +405,7 @@ try {
 ### 3. Use Finally Blocks for Cleanup
 
 ```omni
-// ✅ Good - proper cleanup
+//  Good - proper cleanup
 try {
     io.println("Opening file")
     let result: string = process_file("data.txt")
@@ -417,7 +417,7 @@ try {
     io.println("Closing file")
 }
 
-// ❌ Avoid - missing cleanup
+//  Avoid - missing cleanup
 try {
     io.println("Opening file")
     let result: string = process_file("data.txt")
@@ -432,12 +432,12 @@ try {
 ### 4. Don't Overuse Exceptions
 
 ```omni
-// ✅ Good - use exceptions for exceptional conditions
+//  Good - use exceptions for exceptional conditions
 if value < 0 {
     throw "Negative values not allowed"
 }
 
-// ❌ Avoid - using exceptions for normal flow control
+//  Avoid - using exceptions for normal flow control
 try {
     if value < 0 {
         throw "Negative value"
@@ -450,12 +450,12 @@ try {
 ### 5. Provide Context in Exception Messages
 
 ```omni
-// ✅ Good - provide context
+//  Good - provide context
 if value < 0 {
     throw "Negative values not allowed (received: " + value + ")"
 }
 
-// ❌ Avoid - no context
+//  Avoid - no context
 if value < 0 {
     throw "Invalid value"
 }

@@ -294,40 +294,40 @@ func advanced_patterns(): int {
 ### 1. Keep Expressions Simple
 
 ```omni
-// ✅ Good - simple expressions
+//  Good - simple expressions
 let message: string = "Hello, ${name}!"
 
-// ❌ Avoid - complex expressions
+//  Avoid - complex expressions
 let message: string = "Hello, ${get_user_name() + " " + get_user_surname() + " (" + get_user_id() + ")"}!"
 ```
 
 ### 2. Use for Readability
 
 ```omni
-// ✅ Good - improves readability
+//  Good - improves readability
 let greeting: string = "Welcome, ${user_name}!"
 
-// ❌ Avoid - when simple concatenation is clearer
+//  Avoid - when simple concatenation is clearer
 let greeting: string = "Welcome, " + user_name + "!"
 ```
 
 ### 3. Consider Performance
 
 ```omni
-// ✅ Good - efficient interpolation
+//  Good - efficient interpolation
 let message: string = "User: ${name}, Age: ${age}"
 
-// ❌ Avoid - unnecessary function calls in interpolation
+//  Avoid - unnecessary function calls in interpolation
 let message: string = "User: ${get_user_name()}, Age: ${get_user_age()}"
 ```
 
 ### 4. Use Consistent Patterns
 
 ```omni
-// ✅ Good - consistent interpolation pattern
+//  Good - consistent interpolation pattern
 let user_info: string = "Name: ${name}, Email: ${email}, Age: ${age}"
 
-// ❌ Avoid - mixing interpolation and concatenation
+//  Avoid - mixing interpolation and concatenation
 let user_info: string = "Name: " + name + ", Email: ${email}, Age: " + age
 ```
 

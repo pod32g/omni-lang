@@ -2,7 +2,7 @@
 
 This document outlines the major improvements and fixes made to OmniLang in recent releases.
 
-## 🚀 Major Features Added in v0.5.0
+##  Major Features Added in v0.5.0
 
 ### 1. Comprehensive Standard Library Testing
 - **Complete Test Suite**: Added comprehensive tests for all std modules (math, io, string, array, collections, os, file)
@@ -22,7 +22,7 @@ This document outlines the major improvements and fixes made to OmniLang in rece
 - **Import System**: Verified that all std modules can be imported correctly
 - **Placeholder Functions**: Documented and tested placeholder function behavior
 
-## 🚀 Major Features Added (Previous Releases)
+##  Major Features Added (Previous Releases)
 
 ### 1. Complete Basic Language Features Implementation
 - **String Operations**: length, substring, char_at, starts_with, ends_with, contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
@@ -53,7 +53,7 @@ This document outlines the major improvements and fixes made to OmniLang in rece
 - **Problem**: C backend generated invalid code for namespaced std functions
 - **Solution**: Added function name mapping and runtime function detection
 - **Impact**: Clean C code generation for all std library functions
-- **Example**: `std.io.println` → `omni_println_string`
+- **Example**: `std.io.println`  `omni_println_string`
 
 ### 4. Runtime Warning Fixes
 - **Problem**: Compilation warnings from unused parameters in runtime library
@@ -66,7 +66,7 @@ This document outlines the major improvements and fixes made to OmniLang in rece
 - **Benefit**: No need for separate runtime library files
 - **Impact**: Simplified deployment and distribution
 
-## 🔧 Technical Improvements
+##  Technical Improvements
 
 ### Module Loading System
 ```go
@@ -101,7 +101,7 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 }
 ```
 
-## 📚 Documentation Updates
+##  Documentation Updates
 
 ### Updated Examples
 All example files have been updated to use the new recommended import syntax:
@@ -134,7 +134,7 @@ func main():int {
 - `docs/quick-reference.md` - Added recommended import syntax
 - `docs/examples/*.omni` - All example files updated
 
-## 🧪 Testing Improvements
+##  Testing Improvements
 
 ### Enhanced CI/CD Pipeline
 - **Added**: Std import testing in integration tests
@@ -149,7 +149,7 @@ func main():int {
 - **Integration Tests**: Real-world program compilation and execution
 - **Performance Tests**: Benchmarking and regression detection
 
-## 🐛 Bug Fixes
+##  Bug Fixes
 
 ### Critical Fixes
 1. **Infinite Loop in Constant Folding**: Fixed infinite recursion in optimization passes
@@ -162,7 +162,7 @@ func main():int {
 2. **Function Signature Conflicts**: Resolved C backend function name conflicts
 3. **Generic Type Errors**: Fixed "unknown type T" errors in type checker
 
-## 📊 Performance Improvements
+##  Performance Improvements
 
 ### Compilation Speed
 - **Optimized**: Module loading with better caching
@@ -174,7 +174,7 @@ func main():int {
 - **Optimized**: Runtime function calls with direct mapping
 - **Improved**: Memory usage in VM backend
 
-## 🔄 Migration Guide
+##  Migration Guide
 
 ### For Existing Code
 If you have existing OmniLang code, update your imports:
@@ -196,7 +196,7 @@ No changes needed - all existing build scripts continue to work.
 ### For CI/CD
 The enhanced pipeline will automatically test std imports and detect warnings.
 
-## 🎯 Next Steps
+##  Next Steps
 
 ### Immediate Priorities
 1. **Memory Management**: Implement dynamic allocation (new/delete)
@@ -210,7 +210,7 @@ The enhanced pipeline will automatically test std imports and detect warnings.
 3. **Standard Library**: Complete std library implementation
 4. **Ecosystem**: Package registry and community tools
 
-## 📈 Metrics
+##  Metrics
 
 ### Code Quality
 - **Test Coverage**: >90% for core components

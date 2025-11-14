@@ -35,15 +35,15 @@ func main():int {
 
 Set environment variables before launching an Omni binary (`omnic`, `omnir`, `omnipkg`, or generated executables) to control logging behaviour:
 
-- `LOG_LEVEL` – default `info`. Accepts `debug`, `info`, `warn`, `error`, `fatal`.
-- `LOG_OUTPUT` – `stdout`, `stderr`, or a filesystem path. Defaults to `stderr`.
-- `LOG_FORMAT` – `text` (default) or `json`.
-- `LOG_COLORIZE` – `true`/`false`. Colourise text output when supported.
-- `LOG_ENABLE_CALLER` – include caller information (`true`/`false`).
-- `LOG_SYNC_WRITES` – force synchronous writes (`true`/`false`, default `true`).
-- `LOG_TIME_FORMAT` – Go time layout (e.g. `2006-01-02T15:04:05Z07:00`).
-- `LOG_INCLUDE_STACKTRACE` – append stacktraces on error logs (`true`/`false`).
-- `LOG_ROTATE` – enable file rotation (`true`/`false`) with supporting keys:
+- `LOG_LEVEL` - default `info`. Accepts `debug`, `info`, `warn`, `error`, `fatal`.
+- `LOG_OUTPUT` - `stdout`, `stderr`, or a filesystem path. Defaults to `stderr`.
+- `LOG_FORMAT` - `text` (default) or `json`.
+- `LOG_COLORIZE` - `true`/`false`. Colourise text output when supported.
+- `LOG_ENABLE_CALLER` - include caller information (`true`/`false`).
+- `LOG_SYNC_WRITES` - force synchronous writes (`true`/`false`, default `true`).
+- `LOG_TIME_FORMAT` - Go time layout (e.g. `2006-01-02T15:04:05Z07:00`).
+- `LOG_INCLUDE_STACKTRACE` - append stacktraces on error logs (`true`/`false`).
+- `LOG_ROTATE` - enable file rotation (`true`/`false`) with supporting keys:
   - `LOG_ROTATE_MAX_SIZE` (megabytes, default `100`)
   - `LOG_ROTATE_MAX_AGE` (days, default `30`)
   - `LOG_ROTATE_MAX_BACKUPS` (default `7`)

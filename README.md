@@ -3,20 +3,18 @@
   
   # OmniLang
   
-  A statically typed programming language with a Go frontend, SSA MIR, and multiple backends (C, Cranelift, VM).
+  A toy statically typed programming language with a Go frontend, SSA MIR, and multiple backends (C, Cranelift, VM).
 </div>
 
 ## Overview
 
-OmniLang is a modern programming language designed for **performance, safety, and developer productivity**. It combines the simplicity of Go with the power of Rust, offering:
+OmniLang is built as a hobby language for experimenting with compiler pipelines and tooling. The repository includes:
 
-- **🚀 Lightning-fast compilation** (50ms vs Rust's 8s)
-- **🧠 Simple, readable syntax** (easy to learn and maintain)
-- **⚡ High performance** (near-C performance with zero-cost abstractions)
-- **🛡️ Memory safety** (planned, without complexity)
-- **🔧 Modern tooling** (debugging, packages, hot reload)
-- **📦 Multiple backends** (C, Cranelift, VM) for different use cases
-- **🌍 Cross-platform support** (Linux, macOS, Windows)
+- A Go-based frontend with lexer, parser, type checker, and SSA MIR builder.
+- Backends for C, a VM interpreter, and an experimental Cranelift bridge.
+- A standard library covering I/O, math, strings, collections, networking, OS helpers, testing utilities, and developer watch loops.
+- Command-line tools: `omnic` (compiler), `omnir` (runner/test harness), and `omnipkg` (packager).
+- Documentation, examples, and a VS Code extension used during development.
 
 ### Editor Support
 
@@ -27,23 +25,13 @@ OmniLang is a modern programming language designed for **performance, safety, an
   - Inline diagnostics by invoking `omnic -emit mir` (configured via `omniLang.omnicPath`, defaults to `omnic` on `PATH`).
 - **Current limitations**:
   - Diagnostics depend on a locally built `omnic`; no sandboxing and no partial / incremental analysis.
-  - Completions are file-local only—no cross-file symbol indexing yet.
+  - Completions are file-local only-no cross-file symbol indexing yet.
   - No formatter, code actions, go-to-definition, or debugging integration (planned for future LSP work).
   - Publishing flow is manual (run `npm install && npm run compile` inside `vscode/omni`, then `vsce package`).
 
-### Why Choose OmniLang?
-
-**Perfect for developers who want:**
-- The **power** of systems programming without the complexity
-- **Fast iteration** with sub-second compilation times
-- **Modern development experience** with excellent tooling
-- **High performance** without sacrificing readability
-
-**See our [competitive analysis](docs/COMPETITIVE_ANALYSIS.md) for detailed comparisons with Rust, Go, C++, and other languages.**
-
 ## Quick Start
 
-**Latest Release: v0.5.1** (October 2025) - Advanced Type System & Enhanced Language Features
+**Latest Release: v0.5.1** (October 2025)
 
 ### Installation
 
@@ -792,36 +780,36 @@ Running `make release` builds on that by copying artifacts into `releases/`, gen
 
 ```
 omni/
-├── cmd/
-│   ├── omnic/          # Compiler CLI
-│   ├── omnir/          # Runner CLI
-│   └── omnipkg/        # Packager CLI
-├── internal/
-│   ├── lexer/          # Tokenization
-│   ├── parser/         # Syntax analysis
-│   ├── ast/            # Abstract syntax tree
-│   ├── types/          # Type system
-│   ├── mir/            # SSA intermediate representation
-│   ├── passes/         # Optimization passes
-│   ├── vm/             # Virtual machine
-│   ├── backend/        # Code generation backends
-│   │   ├── c/          # C backend (default)
-│   │   └── cranelift/  # Cranelift backend
-│   ├── compiler/       # Compiler orchestration
-│   └── runner/         # Program execution
-├── runtime/
-│   ├── omni_rt.h       # Runtime library header
-│   ├── omni_rt.c       # Runtime library implementation
-│   └── posix/          # POSIX runtime (libomni_rt.so)
-├── native/
-│   └── clift/          # Rust Cranelift bridge
-├── std/                # Standard library
-├── examples/           # Example programs
-├── tests/              # Test suite
-│   ├── e2e/            # End-to-end tests
-│   ├── std/            # Standard library tests
-│   └── goldens/        # Golden test files
-└── docs/               # Documentation
+ cmd/
+    omnic/          # Compiler CLI
+    omnir/          # Runner CLI
+    omnipkg/        # Packager CLI
+ internal/
+    lexer/          # Tokenization
+    parser/         # Syntax analysis
+    ast/            # Abstract syntax tree
+    types/          # Type system
+    mir/            # SSA intermediate representation
+    passes/         # Optimization passes
+    vm/             # Virtual machine
+    backend/        # Code generation backends
+       c/          # C backend (default)
+       cranelift/  # Cranelift backend
+    compiler/       # Compiler orchestration
+    runner/         # Program execution
+ runtime/
+    omni_rt.h       # Runtime library header
+    omni_rt.c       # Runtime library implementation
+    posix/          # POSIX runtime (libomni_rt.so)
+ native/
+    clift/          # Rust Cranelift bridge
+ std/                # Standard library
+ examples/           # Example programs
+ tests/              # Test suite
+    e2e/            # End-to-end tests
+    std/            # Standard library tests
+    goldens/        # Golden test files
+ docs/               # Documentation
 ```
 
 ## Development
@@ -1011,56 +999,56 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Roadmap
 
-> 📋 **For detailed development roadmap, see [ROADMAP.md](docs/ROADMAP.md)**
+- **For detailed development roadmap, see [ROADMAP.md](docs/ROADMAP.md)**
 
 ### Current Status (v0.4.3+)
-- ✅ Complete frontend (lexer, parser, AST, type checker)
-- ✅ Three backends: C (default), VM, Cranelift (experimental)
-- ✅ C backend with optimization levels (O0-O3, Os) and debug symbols
-- ✅ **Fixed std import system** - now works from any directory
-- ✅ **Generic type support** in type checker for std library
-- ✅ **Complete array support** with literals, indexing, and `len()` function
-- ✅ **Map/dictionary support** with key-value operations
-- ✅ **Struct support** with field access and method syntax
-- ✅ **PHI node support** for proper SSA form and control flow
-- ✅ String, boolean, and float comparisons in VM backend
-- ✅ Complete C backend instruction set (mod, neg, not, and, or, strcat)
-- ✅ Method-style syntax (`x.len()` instead of `len(x)`)
-- ✅ Enhanced error messages with helpful hints
-- ✅ **Static linking support** - no runtime library dependency
-- ✅ **Runtime warning fixes** - clean compilation without warnings
-- ✅ Comprehensive testing and documentation
-- ✅ Packaging system for distribution
-- ✅ Performance optimizations and regression testing
-- ✅ **Enhanced CI/CD pipeline** with std import testing and warning detection
-- ✅ Fixed library path issues for macOS binaries
+-  Complete frontend (lexer, parser, AST, type checker)
+-  Three backends: C (default), VM, Cranelift (experimental)
+-  C backend with optimization levels (O0-O3, Os) and debug symbols
+-  **Fixed std import system** - now works from any directory
+-  **Generic type support** in type checker for std library
+-  **Complete array support** with literals, indexing, and `len()` function
+-  **Map/dictionary support** with key-value operations
+-  **Struct support** with field access and method syntax
+-  **PHI node support** for proper SSA form and control flow
+-  String, boolean, and float comparisons in VM backend
+-  Complete C backend instruction set (mod, neg, not, and, or, strcat)
+-  Method-style syntax (`x.len()` instead of `len(x)`)
+-  Enhanced error messages with helpful hints
+-  **Static linking support** - no runtime library dependency
+-  **Runtime warning fixes** - clean compilation without warnings
+-  Comprehensive testing and documentation
+-  Packaging system for distribution
+-  Performance optimizations and regression testing
+-  **Enhanced CI/CD pipeline** with std import testing and warning detection
+-  Fixed library path issues for macOS binaries
 
-### 🚀 **NEW: Advanced Language Features (v0.5.1+)**
-- ✅ **String Interpolation** - `${expression}` syntax for dynamic string creation
-- ✅ **Exception Handling** - try-catch-finally blocks with comprehensive error handling
-- ✅ **Advanced Type System** - type aliases, union types, and optional types
-- ✅ **Type Aliases** - `type UserID = int` for better code readability
-- ✅ **Union Types** - `string | int | bool` for flexible data handling
-- ✅ **Optional Types** - `int?`, `string?` for nullable values with type safety
-- ✅ **Complete String Operations** - length, substring, char_at, starts_with, ends_with, contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
-- ✅ **Advanced Math Functions** - pow, sqrt, floor, ceil, round, gcd, lcm, factorial
-- ✅ **File I/O Operations** - open, close, read, write, seek, tell, exists, size
-- ✅ **Bitwise Operators** - &, |, ^, ~, <<, >> with correct precedence
-- ✅ **Type Conversion** - explicit casting (type)expr, int_to_string, float_to_string, bool_to_string, string_to_int, string_to_float, string_to_bool
-- ✅ **Lexical Primitives** - null literals, hex literals (0xFF), binary literals (0b1010), scientific notation (1.0e-5)
-- ✅ **Advanced Control Flow** - while loops, break and continue statements
-- ✅ **Advanced Variables & Scope** - block scope with {}, variable shadowing rules
-- ✅ **Collections Operations** - basic array operations (length, get, set) with runtime support
-- ✅ **First-Class Functions** - function types, lambda expressions, closures with variable capture
-- ✅ **Testing Framework** - built-in testing with assertions (test.start, test.end, assert, assert.eq, assert.true, assert.false)
+###  **NEW: Advanced Language Features (v0.5.1+)**
+-  **String Interpolation** - `${expression}` syntax for dynamic string creation
+-  **Exception Handling** - try-catch-finally blocks with comprehensive error handling
+-  **Advanced Type System** - type aliases, union types, and optional types
+-  **Type Aliases** - `type UserID = int` for better code readability
+-  **Union Types** - `string | int | bool` for flexible data handling
+-  **Optional Types** - `int?`, `string?` for nullable values with type safety
+-  **Complete String Operations** - length, substring, char_at, starts_with, ends_with, contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
+-  **Advanced Math Functions** - pow, sqrt, floor, ceil, round, gcd, lcm, factorial
+-  **File I/O Operations** - open, close, read, write, seek, tell, exists, size
+-  **Bitwise Operators** - &, |, ^, ~, <<, >> with correct precedence
+-  **Type Conversion** - explicit casting (type)expr, int_to_string, float_to_string, bool_to_string, string_to_int, string_to_float, string_to_bool
+-  **Lexical Primitives** - null literals, hex literals (0xFF), binary literals (0b1010), scientific notation (1.0e-5)
+-  **Advanced Control Flow** - while loops, break and continue statements
+-  **Advanced Variables & Scope** - block scope with {}, variable shadowing rules
+-  **Collections Operations** - basic array operations (length, get, set) with runtime support
+-  **First-Class Functions** - function types, lambda expressions, closures with variable capture
+-  **Testing Framework** - built-in testing with assertions (test.start, test.end, assert, assert.eq, assert.true, assert.false)
 
 ### Upcoming Phases
-- 🔄 **Phase 1**: Language Features (for loops, memory management, error handling)
-- 📋 **Phase 2**: Type System Completion (generics, union types)
-- 📋 **Phase 3**: MIR Optimization (advanced optimization passes)
-- 📋 **Phase 4**: Complete Stdlib (file I/O, networking, collections)
-- 📋 **Phase 5**: Production Readiness (performance, security, deployment)
-- 📋 **Phase 6**: Ecosystem (package registry, community building)
+-  **Phase 1**: Language Features (for loops, memory management, error handling)
+-  **Phase 2**: Type System Completion (generics, union types)
+-  **Phase 3**: MIR Optimization (advanced optimization passes)
+-  **Phase 4**: Complete Stdlib (file I/O, networking, collections)
+-  **Phase 5**: Production Readiness (performance, security, deployment)
+-  **Phase 6**: Ecosystem (package registry, community building)
 
 ## License
 
@@ -1073,17 +1061,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Rust](https://www.rust-lang.org/) for the backend implementation
 - The programming language community for inspiration and ideas
 
-## Support
-
-- 📖 [Documentation](docs/)
-- 🐛 [Issue Tracker](https://github.com/omni-lang/omni/issues)
-- 💬 [Discussions](https://github.com/omni-lang/omni/discussions)
-- 📧 [Email](mailto:contact@omni-lang.org)
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ---
 
-**OmniLang** - *One language to rule them all* 🚀
+**OmniLang** - *One language to rule them all* 

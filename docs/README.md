@@ -29,7 +29,7 @@ If you're new to OmniLang, start here:
 **Version:** v0.5.1 (October 2025)  
 **Status:** Active Development - Advanced Type System & Enhanced Language Features
 
-### ✅ Implemented Features
+###  Implemented Features
 
 - **Core Language:**
   - Variables (`let`, `var`)
@@ -69,7 +69,7 @@ If you're new to OmniLang, start here:
   - Debug symbol generation and source mapping
   - Package creation and distribution tools
 
-### 🐛 Recent Bug Fixes (v0.3.1)
+###  Recent Bug Fixes (v0.3.1)
 
 - **Critical Infinite Loop Fixes**: Resolved infinite loops in nested for loops and range loops
 - **Assignment Instruction Generation**: Fixed MIR builder to generate proper assignment instructions
@@ -78,7 +78,7 @@ If you're new to OmniLang, start here:
 - **Test Framework**: Resolved e2e test framework timeout issues and environment setup
 - **Performance Tests**: Fixed performance benchmark code generation
 
-### 🚧 Current Limitations
+###  Current Limitations
 
 - **Parser:**
   - No semicolons required (but not supported)
@@ -92,11 +92,11 @@ If you're new to OmniLang, start here:
   - Arrays work with C backend only (VM support pending)
 
 - **Standard Library:**
-  - ~~Limited function set~~ ✅ **RESOLVED** - Comprehensive standard library with 100+ functions
-  - ~~No file I/O~~ ✅ **RESOLVED** - Complete file I/O operations
-  - ~~No OS interface~~ ✅ **RESOLVED** - Full OS interface with process, file, and system operations
+  - ~~Limited function set~~  **RESOLVED** - Comprehensive standard library with 100+ functions
+  - ~~No file I/O~~  **RESOLVED** - Complete file I/O operations
+  - ~~No OS interface~~  **RESOLVED** - Full OS interface with process, file, and system operations
 
-### 🔄 In Development
+###  In Development
 
 - Enhanced error messages and diagnostics
 - Improved testing infrastructure
@@ -144,19 +144,19 @@ If you're new to OmniLang, start here:
 ### Example Fixes
 
 ```omni
-// ❌ Wrong - undefined identifier
+//  Wrong - undefined identifier
 prnt("Hello")
 
-// ✅ Correct - use std.io
+//  Correct - use std.io
 import std.io as io
 io.println("Hello")
 ```
 
 ```omni
-// ❌ Wrong - type error
+//  Wrong - type error
 let message = "Age: " + 25
 
-// ✅ Correct - convert to string
+//  Correct - convert to string
 let message = "Age: " + math.toString(25)
 ```
 
@@ -180,4 +180,4 @@ This documentation is part of the OmniLang project and is licensed under the MIT
 
 ---
 
-**Happy coding with OmniLang!** 🚀
+**Happy coding with OmniLang!** 

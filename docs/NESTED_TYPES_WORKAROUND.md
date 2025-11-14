@@ -1,18 +1,18 @@
-# Nested Generic Types - FULLY SUPPORTED! 🎉
+# Nested Generic Types - FULLY SUPPORTED! 
 
-## ✅ **COMPLETE SUCCESS!**
+##  **COMPLETE SUCCESS!**
 
 OmniLang now has **full support for nested generic types**! The parser correctly handles `>>` tokens in generic contexts.
 
 ## What Works Now
 
 ```omni
-// ✅ All of these work perfectly now!
+//  All of these work perfectly now!
 let matrix:array<array<int>> = [[1, 2], [3, 4]]
 let nested_map:map<string, map<string, int>> = {"user": {"age": 25}}
 let complex:array<map<string, array<int>>> = [{"key": [1, 2, 3]}]
 
-// ✅ Even deeply nested structures work
+//  Even deeply nested structures work
 let cube:array<array<array<int>>> = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
 let deep_map:map<string, map<string, map<string, int>>> = {
     "level1": {
@@ -25,24 +25,24 @@ let deep_map:map<string, map<string, map<string, int>>> = {
 
 ## Implementation Details
 
-### ✅ **Parser Enhancement**
+###  **Parser Enhancement**
 - **Token Transformation**: Implemented `transformTokensForNestedGenerics()` function
 - **Context-Aware Parsing**: Converts `>>` to two `>` tokens in generic contexts
 - **Generic Depth Tracking**: Properly tracks nesting levels
 
-### ✅ **Type System Support**
+###  **Type System Support**
 - **Nested Type Resolution**: Type checker handles arbitrarily nested types
 - **Type Aliases**: Work perfectly with nested types
 - **Complex Combinations**: Supports arrays of maps, maps of arrays, etc.
 
-### ✅ **MIR Support**
+###  **MIR Support**
 - **SSA-Based IR**: Naturally handles nested data structures
 - **Type Propagation**: Correctly propagates nested type information
 
 ## Type Aliases for Readability
 
 ```omni
-// ✅ Use type aliases for complex nested types
+//  Use type aliases for complex nested types
 type IntArray = array<int>
 type Matrix = array<IntArray>
 type Cube = array<Matrix>
@@ -84,13 +84,13 @@ let analytics:array<map<string, array<map<string, int>>>> = [
 ]
 ```
 
-## Status: COMPLETE ✅
+## Status: COMPLETE 
 
-- ✅ Parser enhancement to handle `>>` in generic contexts
-- ✅ Type system updates for nested type resolution  
-- ✅ MIR support for nested data structure operations
-- ✅ Runtime support for nested collections
-- ✅ Comprehensive testing and examples
+-  Parser enhancement to handle `>>` in generic contexts
+-  Type system updates for nested type resolution  
+-  MIR support for nested data structure operations
+-  Runtime support for nested collections
+-  Comprehensive testing and examples
 
 **Nested data structures are now fully functional in OmniLang!**
 
