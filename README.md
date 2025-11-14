@@ -31,8 +31,6 @@ OmniLang is built as a hobby language for experimenting with compiler pipelines 
 
 ## Quick Start
 
-**Latest Release: v0.5.1** (October 2025)
-
 ### Installation
 
 ```bash
