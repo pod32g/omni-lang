@@ -15,6 +15,7 @@ OmniLang is built as a hobby language for experimenting with compiler pipelines 
 - A standard library covering I/O, math, strings, collections, networking, OS helpers, testing utilities, and developer watch loops.
 - Command-line tools: `omnic` (compiler), `omnir` (runner/test harness), and `omnipkg` (packager).
 - Documentation, examples, and a VS Code extension used during development.
+- **Agentic AI-assisted development**: parts of the pipeline configuration, docs, and tooling were authored with the help of agentic AI copilots. All generated changes are reviewed and tested before landing.
 
 ### Editor Support
 
