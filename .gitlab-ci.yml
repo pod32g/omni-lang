@@ -497,13 +497,27 @@ sync-to-github:
         fi
       fi
       git remote remove github 2>/dev/null || true
-      git remote add github "${repo_url}"
       git config credential.helper store
       cat <<EOF > ~/.git-credentials
       https://${sync_http_user}:${GITHUB_TOKEN}@github.com
       EOF
       chmod 600 ~/.git-credentials
-    - git fetch origin "${CI_COMMIT_REF_NAME}"
-    - git push --force-with-lease github "${CI_COMMIT_REF_NAME}"
+      workdir="$(mktemp -d)"
+      trap 'rm -rf "${workdir}" ~/.git-credentials' EXIT
+      git clone --filter=blob:none "${CI_REPOSITORY_URL}" "${workdir}/repo"
+      cd "${workdir}/repo"
+      git remote add github "${repo_url}"
+      git fetch origin "${CI_COMMIT_REF_NAME}"
+      git checkout --detach "${CI_COMMIT_SHA}"
+      rm -f .gitlab-ci.yml
+      git update-index --force-remove .gitlab-ci.yml 2>/dev/null || true
+      git commit --amend --allow-empty --no-edit
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        git tag -f "${CI_COMMIT_TAG}"
+        git push --force github "refs/tags/${CI_COMMIT_TAG}"
+      else
+        git branch -f "${CI_COMMIT_REF_NAME}"
+        git push --force github "HEAD:refs/heads/${CI_COMMIT_REF_NAME}"
+      fi
   variables:
     GIT_DEPTH: "0"
