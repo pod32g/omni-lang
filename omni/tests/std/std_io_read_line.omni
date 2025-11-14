@@ -1,0 +1,13 @@
+import std
+
+func main():int {
+    let first = std.io.read_line()
+    if first != "hello" {
+        return -1
+    }
+    let second = std.io.read_line()
+    if second != "" {
+        return -2
+    }
+    return 0
+}

@@ -348,6 +348,16 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 			for _, block := range fn.Blocks {
 				for _, inst := range block.Instructions {
 					if inst.ID == id {
+						// Special case for read_line() - always returns string
+						if inst.Op == "call" || inst.Op == "call.string" {
+							if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandLiteral {
+								funcName := inst.Operands[0].Literal
+								if funcName == "std.io.read_line" || funcName == "io.read_line" {
+									varType = "const char*"
+									break
+								}
+							}
+						}
 						varType = g.mapType(inst.Type)
 						// Check if this is an array.init instruction
 						if inst.Op == "array.init" {
@@ -694,6 +704,21 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.emitPrint(inst.Operands[1], true)
 				} else {
 					g.output.WriteString("  omni_println_string(\"\");\n")
+				}
+				return nil
+			}
+
+			// Special-case std.io.read_line to ensure result is assigned
+			if funcName == "std.io.read_line" || funcName == "io.read_line" {
+				// read_line() always returns a string, so assign it to a variable
+				if inst.ID != mir.InvalidValue {
+					varName := g.getVariableName(inst.ID)
+					g.output.WriteString(fmt.Sprintf("  %s = omni_read_line();\n", varName))
+					// Record the type for this variable
+					g.valueTypes[inst.ID] = "string"
+				} else {
+					// If no ID, just call it (shouldn't happen, but handle gracefully)
+					g.output.WriteString("  omni_read_line();\n")
 				}
 				return nil
 			}
@@ -1258,10 +1283,13 @@ func (g *CGenerator) convertOperandToString(op mir.Operand) string {
 		varName := g.getVariableName(op.Value)
 
 		operandType := op.Type
+		// Always check g.valueTypes as it may have more accurate type information
+		if recorded, exists := g.valueTypes[op.Value]; exists && recorded != "" {
+			operandType = recorded
+		}
+		// Fallback to op.Type if g.valueTypes doesn't have it
 		if operandType == "" || operandType == inferTypePlaceholder {
-			if recorded, exists := g.valueTypes[op.Value]; exists && recorded != "" {
-				operandType = recorded
-			}
+			operandType = op.Type
 		}
 
 		// Check the operand type and convert if necessary
@@ -1643,6 +1671,8 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_print_string"
 	case "std.io.println":
 		return "omni_println_string"
+	case "std.io.read_line":
+		return "omni_read_line"
 
 	// Logging functions
 	case "std.log.debug":

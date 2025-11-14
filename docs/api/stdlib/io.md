@@ -47,6 +47,22 @@ func main():int {
 }
 ```
 
+### read_line(): string
+
+Reads one line from standard input and returns it without the trailing newline characters. If no data is available (EOF), an empty string is returned.
+
+**Example:**
+```omni
+import std.io as io
+
+func main():int {
+    io.print("Enter value: ")
+    let line = io.read_line()
+    io.println("You typed: " + line)
+    return 0
+}
+```
+
 ## Usage Examples
 
 ### Basic Output

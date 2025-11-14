@@ -1,5 +1,37 @@
 // std.os - Operating system interface functions for OmniLang
 
+// args returns the command-line arguments passed to the program
+func args():array<string> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return []
+}
+
+// args_count returns the number of command-line arguments
+func args_count():int {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return 0
+}
+
+// has_flag checks if --name is present in the argument list
+func has_flag(name:string):bool {
+    // This is an intrinsic wired in the VM/runtime
+    return false
+}
+
+// get_flag returns the value passed as --name=value or --name value
+func get_flag(name:string, default_value:string):string {
+    // This is an intrinsic wired in the VM/runtime
+    return default_value
+}
+
+// positional_arg returns the positional argument at index (0-based)
+func positional_arg(index:int, default_value:string):string {
+    // This is an intrinsic wired in the VM/runtime
+    return default_value
+}
+
 // exit terminates the program with the given exit code
 func exit(code:int) {
     // This is an intrinsic function that will be wired to the runtime

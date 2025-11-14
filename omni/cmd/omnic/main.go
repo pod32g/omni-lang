@@ -205,11 +205,11 @@ func main() {
 		}
 
 		if *timeCompile && !*quiet && !*jsonOutput {
-			fmt.Fprintf(os.Stderr, "Compiled %s -> %s in %s (backend=%s emit=%s)\n",
-				input, target, duration.Round(time.Millisecond), *backend, emit)
+			logging.Logger().InfoString(fmt.Sprintf("Compiled %s -> %s in %s (backend=%s emit=%s)",
+				input, target, duration.Round(time.Millisecond), *backend, emit))
 		} else if !*quiet && !*jsonOutput && !*watchFlag {
-			fmt.Fprintf(os.Stderr, "Compiled %s -> %s (backend=%s emit=%s)\n",
-				input, target, *backend, emit)
+			logging.Logger().InfoString(fmt.Sprintf("Compiled %s -> %s (backend=%s emit=%s)",
+				input, target, *backend, emit))
 		}
 
 		if *jsonOutput && !*watchFlag {

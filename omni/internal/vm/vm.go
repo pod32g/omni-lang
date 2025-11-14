@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -31,6 +32,11 @@ var (
 	testingSuitesMu     sync.Mutex
 	testingSuiteCounter int
 	testingSuites       = make(map[int]*testingSuite)
+
+	cliArgsMu sync.RWMutex
+	cliArgs   []string
+
+	stdinReader = bufio.NewReader(os.Stdin)
 )
 
 type testingSuite struct {
@@ -106,6 +112,102 @@ func stringFromResult(res Result) string {
 func boolFromResult(res Result) bool {
 	b, err := toBool(res)
 	return err == nil && b
+}
+
+func SetCLIArgs(args []string) {
+	cliArgsMu.Lock()
+	defer cliArgsMu.Unlock()
+	if len(args) == 0 {
+		cliArgs = nil
+		return
+	}
+	cliArgs = append([]string(nil), args...)
+}
+
+func cloneCLIArgs() []string {
+	cliArgsMu.RLock()
+	defer cliArgsMu.RUnlock()
+	if len(cliArgs) == 0 {
+		return nil
+	}
+	out := make([]string, len(cliArgs))
+	copy(out, cliArgs)
+	return out
+}
+
+func readLineFromStdin() (string, error) {
+	line, err := stdinReader.ReadString('\n')
+	if errors.Is(err, io.EOF) {
+		if len(line) == 0 {
+			return "", io.EOF
+		}
+	} else if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
+}
+
+func hasFlag(name string) bool {
+	args := cloneCLIArgs()
+	if len(args) == 0 {
+		return false
+	}
+	bare := "--" + name
+	withValue := bare + "="
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if strings.HasPrefix(arg, withValue) || arg == bare {
+			return true
+		}
+	}
+	return false
+}
+
+func getFlagValue(name, defaultValue string) string {
+	args := cloneCLIArgs()
+	if len(args) == 0 {
+		return defaultValue
+	}
+	bare := "--" + name
+	withValue := bare + "="
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if strings.HasPrefix(arg, withValue) {
+			return arg[len(withValue):]
+		}
+		if arg == bare {
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				return args[i+1]
+			}
+			return "true"
+		}
+	}
+	return defaultValue
+}
+
+func positionalArgValue(index int, defaultValue string) string {
+	if index < 0 {
+		return defaultValue
+	}
+	args := cloneCLIArgs()
+	if len(args) == 0 {
+		return defaultValue
+	}
+	positionals := 0
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if strings.HasPrefix(arg, "--") {
+			if !strings.Contains(arg, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				i++
+			}
+			continue
+		}
+		if positionals == index {
+			return arg
+		}
+		positionals++
+	}
+	return defaultValue
 }
 
 func buildTestingSuiteStruct(id int) map[string]interface{} {
@@ -1072,6 +1174,12 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			fmt.Println()
 			return Result{Type: "void", Value: nil}, true
 		}
+	case "std.io.read_line":
+		line, err := readLineFromStdin()
+		if err != nil && !errors.Is(err, io.EOF) {
+			return Result{Type: "string", Value: ""}, true
+		}
+		return Result{Type: "string", Value: line}, true
 	case "std.log.debug":
 		return handleLogIntrinsic("debug", operands, fr)
 	case "std.log.info":
@@ -1880,6 +1988,52 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			fmt.Printf("\nTest Summary: All tests completed\n")
 			return Result{Type: "int", Value: 0}, true
 		}
+	case "std.os.args":
+		args := cloneCLIArgs()
+		if args == nil {
+			args = []string{}
+		}
+		return Result{Type: "array<string>", Value: args}, true
+	case "std.os.has_flag":
+		if len(operands) == 1 {
+			name, err := toString(operandValue(fr, operands[0]))
+			if err != nil {
+				return Result{Type: "bool", Value: false}, true
+			}
+			return Result{Type: "bool", Value: hasFlag(name)}, true
+		}
+		return Result{Type: "bool", Value: false}, true
+	case "std.os.get_flag":
+		if len(operands) == 2 {
+			name, err1 := toString(operandValue(fr, operands[0]))
+			if err1 != nil {
+				return Result{Type: "string", Value: ""}, true
+			}
+			def, err2 := toString(operandValue(fr, operands[1]))
+			if err2 != nil {
+				return Result{Type: "string", Value: ""}, true
+			}
+			return Result{Type: "string", Value: getFlagValue(name, def)}, true
+		}
+		return Result{Type: "string", Value: ""}, true
+	case "std.os.positional_arg":
+		if len(operands) == 2 {
+			index, err1 := toInt(operandValue(fr, operands[0]))
+			if err1 != nil {
+				return Result{Type: "string", Value: ""}, true
+			}
+			def, err2 := toString(operandValue(fr, operands[1]))
+			if err2 != nil {
+				return Result{Type: "string", Value: ""}, true
+			}
+			return Result{Type: "string", Value: positionalArgValue(index, def)}, true
+		}
+		return Result{Type: "string", Value: ""}, true
+	case "std.os.args_count":
+		cliArgsMu.RLock()
+		count := len(cliArgs)
+		cliArgsMu.RUnlock()
+		return Result{Type: "int", Value: count}, true
 	case "std.os.exit":
 		code := 0
 		if len(operands) >= 1 {

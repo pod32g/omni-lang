@@ -1,0 +1,17 @@
+import std
+
+func main():int {
+    let count = std.os.args_count()
+    if count != 2 {
+        return -1
+    }
+
+    let args = std.os.args()
+    if args[0] != "hello" {
+        return -2
+    }
+    if args[1] != "world" {
+        return -3
+    }
+    return 0
+}

@@ -182,6 +182,36 @@ func TestAllStdModules(t *testing.T) {
 			t.Fatalf("expected failure count log in output, got:\n%s", output)
 		}
 	})
+
+	t.Run("std.os.args", func(t *testing.T) {
+		result, err := runVM("std_os_args.omni", "--", "hello", "world")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		if result != "0" {
+			t.Fatalf("expected output 0, got %s", result)
+		}
+	})
+
+	t.Run("std.io.read_line", func(t *testing.T) {
+		result, err := runVMWithInput("hello\n\n", "std_io_read_line.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		if result != "0" {
+			t.Fatalf("expected output 0, got %s", result)
+		}
+	})
+
+	t.Run("std.os flag helpers", func(t *testing.T) {
+		result, err := runVM("std_os_flag_helpers.omni", "--", "--flag", "--name=omni", "hello", "world")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		if result != "0" {
+			t.Fatalf("expected output 0, got %s", result)
+		}
+	})
 }
 
 func buildVMCommand(args ...string) *exec.Cmd {
@@ -194,13 +224,19 @@ func buildVMCommand(args ...string) *exec.Cmd {
 }
 
 func runVM(testFile string, cliArgs ...string) (string, error) {
-	args := append(cliArgs, testFile)
+	return runVMWithInput("", testFile, cliArgs...)
+}
+
+func runVMWithInput(input string, testFile string, cliArgs ...string) (string, error) {
+	args := append([]string{testFile}, cliArgs...)
 	cmd := buildVMCommand(args...)
+	if input != "" {
+		cmd.Stdin = strings.NewReader(input)
+	}
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
-	// Remove trailing newline
 	result := string(output)
 	if len(result) > 0 && result[len(result)-1] == '\n' {
 		result = result[:len(result)-1]

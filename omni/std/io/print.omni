@@ -12,3 +12,10 @@ func println(value:string | int | float | double | bool) {
     // during compilation. The actual implementation is in the backend.
 }
 
+// read_line reads a line from standard input (without trailing newline)
+func read_line():string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+

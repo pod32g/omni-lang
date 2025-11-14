@@ -13,6 +13,7 @@ OmniLang is built as a hobby language for experimenting with compiler pipelines 
 - A Go-based frontend with lexer, parser, type checker, and SSA MIR builder.
 - Backends for C, a VM interpreter, and an experimental Cranelift bridge.
 - A standard library covering I/O, math, strings, collections, networking, OS helpers, testing utilities, and developer watch loops.
+- OS helpers for environment variables, file operations, and command-line arguments.
 - Command-line tools: `omnic` (compiler), `omnir` (runner/test harness), and `omnipkg` (packager).
 - Documentation, examples, and a VS Code extension used during development.
 - **Agentic AI-assisted development**: parts of the pipeline configuration, docs, and tooling were authored with the help of agentic AI copilots. All generated changes are reviewed and tested before landing.
@@ -77,6 +78,31 @@ Compile and run:
 
 # Compile with debug symbols
 ./bin/omnic hello.omni -debug -o hello
+```
+
+### Reading CLI arguments
+```omni
+import std
+
+func main():int {
+    if std.os.args_count() > 0 {
+        let args = std.os.args()
+        std.io.println("first arg: " + args[0])
+    }
+    return 0
+}
+```
+
+### Reading stdin
+```omni
+import std
+
+func main():int {
+    std.io.print("Name: ")
+    let name = std.io.read_line()
+    std.io.println("Hello, " + name)
+    return 0
+}
 ```
 
 ## Language Features

@@ -287,6 +287,47 @@ if snapshot.exists {
 
 **Environment variables:** `LOG_LEVEL`, `LOG_FORMAT`, `LOG_OUTPUT`, `LOG_COLORIZE`, `LOG_TIME_FORMAT`, `LOG_ROTATE_*`.
 
+### OS Utilities
+```omni
+import std
+
+let arg_count = std.os.args_count()
+if arg_count > 0 {
+    let args = std.os.args()
+    std.io.println("first arg: " + args[0])
+}
+
+let token = std.os.getenv("TOKEN")
+if token == "" {
+    std.os.setenv("TOKEN", "demo")
+}
+```
+
+Flag helpers:
+```omni
+import std
+
+func main():int {
+    let env = std.os.get_flag("env", "dev")
+    let verbose = std.os.has_flag("verbose")
+    let first = std.os.positional_arg(0, "")
+    std.io.println(env + " " + first)
+    if verbose {
+        std.io.println("running in verbose mode")
+    }
+    return 0
+}
+```
+
+### Reading Input
+```omni
+import std
+
+std.io.print("Enter value: ")
+let line = std.io.read_line()
+std.io.println("you typed: " + line)
+```
+
 ### Bitwise Operations
 ```omni
 let a:int = 0b1010  // 10 in binary

@@ -183,7 +183,7 @@ func showUsage() {
 
 func runTests(program string, verbose bool, stats bool) int {
 	start := time.Now()
-	result, err := runner.Execute(program, verbose)
+	result, err := runner.Execute(program, nil, verbose)
 	code := 0
 	if err != nil {
 		var exitErr vm.ExitError
@@ -209,10 +209,7 @@ func runTests(program string, verbose bool, stats bool) int {
 func runProgram(program string, args []string, backend string, verbose bool, stats bool) error {
 	switch backend {
 	case "vm":
-		if len(args) > 0 {
-			return errors.New("vm backend: argument forwarding is not supported")
-		}
-		return runner.Run(program, verbose)
+		return runner.Run(program, args, verbose)
 	case "c":
 		return runNative(program, args, verbose, stats)
 	default:

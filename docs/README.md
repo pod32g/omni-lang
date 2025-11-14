@@ -116,6 +116,7 @@ If you're new to OmniLang, start here:
   - [std.math](api/stdlib/math.md) - Numerical helpers
   - [std.string](api/stdlib/string.md) - String manipulation
   - [std.log](api/stdlib/log.md) - Structured logging functions and configuration
+  - [std.os](api/stdlib/os.md) - Process, CLI argument, and environment helpers
 - **[Examples](api/examples/)** - Code examples and tutorials
 
 ### Project Information

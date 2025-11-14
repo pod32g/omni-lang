@@ -108,6 +108,47 @@ void omni_println_string(const char* str) {
     printf("%s\n", str);
 }
 
+char* omni_read_line(void) {
+    size_t capacity = 128;
+    size_t length = 0;
+    char* buffer = malloc(capacity);
+    if (!buffer) {
+        return NULL;
+    }
+
+    int c;
+    while ((c = fgetc(stdin)) != EOF) {
+        if (c == '\r') {
+            int next = fgetc(stdin);
+            if (next != '\n' && next != EOF) {
+                ungetc(next, stdin);
+            }
+            break;
+        }
+        if (c == '\n') {
+            break;
+        }
+        if (length + 1 >= capacity) {
+            capacity *= 2;
+            char* new_buffer = realloc(buffer, capacity);
+            if (!new_buffer) {
+                free(buffer);
+                return NULL;
+            }
+            buffer = new_buffer;
+        }
+        buffer[length++] = (char)c;
+    }
+
+    if (c == EOF && length == 0) {
+        buffer[0] = '\0';
+        return buffer;
+    }
+
+    buffer[length] = '\0';
+    return buffer;
+}
+
 // Memory management
 void* omni_alloc(size_t size) {
     return malloc(size);

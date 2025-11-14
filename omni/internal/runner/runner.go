@@ -16,10 +16,16 @@ import (
 )
 
 // Execute compiles and executes the provided OmniLang source via the VM backend.
-func Execute(path string, verbose bool) (vm.Result, error) {
+func Execute(path string, args []string, verbose bool) (vm.Result, error) {
 	if filepath.Ext(path) != ".omni" {
 		return vm.Result{}, fmt.Errorf("%s: unsupported input (expected .omni)", path)
 	}
+
+	vm.SetCLIArgs(args)
+	defer vm.SetCLIArgs(nil)
+
+	vm.SetCLIArgs(args)
+	defer vm.SetCLIArgs(nil)
 
 	logger := logging.Logger()
 
@@ -86,8 +92,8 @@ func Execute(path string, verbose bool) (vm.Result, error) {
 }
 
 // Run wraps Execute and prints the result to stdout for CLI usage.
-func Run(path string, verbose bool) error {
-	result, err := Execute(path, verbose)
+func Run(path string, args []string, verbose bool) error {
+	result, err := Execute(path, args, verbose)
 	if err != nil {
 		var exitErr vm.ExitError
 		if errors.As(err, &exitErr) {

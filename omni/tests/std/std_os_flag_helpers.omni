@@ -1,0 +1,24 @@
+import std
+
+func main():int {
+    if !std.os.has_flag("flag") {
+        return -1
+    }
+    let value = std.os.get_flag("name", "")
+    if value != "omni" {
+        return -2
+    }
+    let defaulted = std.os.get_flag("missing", "fallback")
+    if defaulted != "fallback" {
+        return -3
+    }
+    let first = std.os.positional_arg(0, "")
+    if first != "hello" {
+        return -4
+    }
+    let second = std.os.positional_arg(1, "")
+    if second != "world" {
+        return -5
+    }
+    return 0
+}

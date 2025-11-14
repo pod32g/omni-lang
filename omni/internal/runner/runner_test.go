@@ -22,7 +22,7 @@ func main():int {
 		t.Fatalf("write temp file: %v", err)
 	}
 
-	res, err := runner.Execute(path, false)
+	res, err := runner.Execute(path, nil, false)
 	if err != nil {
 		t.Fatalf("runner execute failed: %v", err)
 	}

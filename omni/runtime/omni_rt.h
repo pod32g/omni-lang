@@ -10,6 +10,7 @@
 // Basic I/O functions
 void omni_print_string(const char* str);
 void omni_println_string(const char* str);
+char* omni_read_line(void);
 
 // Logging functions
 void omni_log_debug(const char* message);
