@@ -79,14 +79,43 @@ jobs:
           sudo apt-get install -y build-essential clang pkg-config curl zip
 
       - name: Build ${{ matrix.target }}
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: ${{ matrix.cgo }}
+        shell: bash
         run: |
           set -euo pipefail
           cd omni
-          ${matrix.build_script}
+          case "${{ matrix.target }}" in
+            linux-amd64)
+              export GOOS=linux GOARCH=amd64 CGO_ENABLED=1
+              make clean
+              make build-runtime
+              make build-rust
+              make build
+              export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
+              make test
+              ;;
+            macos-amd64)
+              export GOOS=darwin GOARCH=amd64 CGO_ENABLED=0
+              make clean
+              make build-rust
+              CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 make build
+              ;;
+            macos-arm64)
+              export GOOS=darwin GOARCH=arm64 CGO_ENABLED=0
+              make clean
+              make build-rust
+              CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 make build
+              ;;
+            windows-amd64)
+              export GOOS=windows GOARCH=amd64 CGO_ENABLED=0
+              make clean
+              make build-rust
+              CGO_ENABLED=0 GOOS=windows GOARCH=amd64 make build
+              ;;
+            *)
+              echo "Unknown target ${{ matrix.target }}"
+              exit 1
+              ;;
+          esac
 
       - name: Package artifacts
         run: |
