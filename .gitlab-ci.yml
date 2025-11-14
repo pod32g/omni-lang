@@ -574,10 +574,13 @@ sync-to-github:
       git commit --amend --allow-empty --no-edit --reset-author
       if [ -n "${CI_COMMIT_TAG:-}" ]; then
         git tag -f "${CI_COMMIT_TAG}"
-        git push --force github "refs/tags/${CI_COMMIT_TAG}"
+        echo "Pushing tag ${CI_COMMIT_TAG} to GitHub..."
+        GIT_CURL_VERBOSE=1 GIT_TERMINAL_PROMPT=0 git push --force github "refs/tags/${CI_COMMIT_TAG}"
       else
         git branch -f "${CI_COMMIT_REF_NAME}"
-        git push --force github "HEAD:refs/heads/${CI_COMMIT_REF_NAME}"
+        echo "Pushing branch ${CI_COMMIT_REF_NAME} to GitHub..."
+        GIT_CURL_VERBOSE=1 GIT_TERMINAL_PROMPT=0 git push --force github "HEAD:refs/heads/${CI_COMMIT_REF_NAME}"
       fi
+      echo "GitHub sync completed successfully."
   variables:
     GIT_DEPTH: "0"
