@@ -225,8 +225,14 @@ func TestCGenerator(t *testing.T) {
 			},
 		}
 
+		// Create a function to pass to generateBlock
+		function := &mir.Function{
+			Name:       "main",
+			ReturnType: "int",
+		}
+
 		generator := NewCGenerator(module)
-		generator.generateBlock(block, "main")
+		generator.generateBlock(block, function)
 
 		result := generator.output.String()
 		if result == "" {
