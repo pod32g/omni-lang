@@ -165,6 +165,29 @@
         gap: 2rem;
         align-items: center;
       }
+      .examples {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+      }
+      .example-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 1.25rem;
+        box-shadow: var(--shadow);
+      }
+      .example-card h3 {
+        margin-top: 0;
+        margin-bottom: 0.75rem;
+        font-size: 1.1rem;
+        color: var(--text-primary);
+      }
+      .example-card pre {
+        margin: 0;
+        font-size: 0.9rem;
+      }
       .footer {
         text-align: center;
         color: var(--text-muted);
@@ -278,6 +301,68 @@ func main():int {
 # Inspect MIR
 ./bin/omnic hello.omni -emit mir</code></pre>
           </div>
+        </div>
+      </section>
+
+      <section style="margin-top: 3rem">
+        <h2 class="section-title">Example Gallery</h2>
+        <p style="color: var(--text-muted); max-width: 720px">
+          Like Python’s “Beginner’s Guide”, these snippets show what real OmniLang
+          code looks like: interactive I/O, structured data, asynchronous tasks,
+          and testing helpers bundled with the toolchain.
+        </p>
+        <div class="examples">
+          <article class="example-card">
+            <h3>Hello, CLI</h3>
+            <pre><code>import std
+
+func main():int {
+    std.io.print("Name: ")
+    let name = std.io.read_line()
+    std.io.println("hey " + name + " 👋")
+    return 0
+}</code></pre>
+          </article>
+          <article class="example-card">
+            <h3>Data Structures</h3>
+            <pre><code>struct Todo { id:int text:string done:bool }
+
+func main():int {
+    var todos:array<Todo> = []
+    todos.push(Todo{id:1, text:"learn SSA", done:false})
+    for t in todos {
+        if !t.done {
+            std.io.println("TODO #" + t.id.to_string() + ": " + t.text)
+        }
+    }
+    return 0
+}</code></pre>
+          </article>
+          <article class="example-card">
+            <h3>Async-style Tasks</h3>
+            <pre><code>import std.net
+
+func fetch(url:string):string {
+    let res = std.net.http.get(url)
+    return res.body
+}
+
+func main():int {
+    let docs = fetch("https://example.com/docs")
+    std.io.println("downloaded " + docs.len().to_string() + " bytes")
+    return 0
+}</code></pre>
+          </article>
+          <article class="example-card">
+            <h3>Testing Helpers</h3>
+            <pre><code>import std.testing as t
+
+func add(a:int, b:int):int { return a + b }
+
+test "adds numbers" {
+    t.assert_equal(add(2, 2), 4)
+}</code></pre>
+          </article>
         </div>
       </section>
 
