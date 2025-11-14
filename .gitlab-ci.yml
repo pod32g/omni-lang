@@ -512,7 +512,7 @@ sync-to-github:
       git checkout --detach "${CI_COMMIT_SHA}"
       rm -f .gitlab-ci.yml
       git update-index --force-remove .gitlab-ci.yml 2>/dev/null || true
-      git commit --amend --allow-empty --no-edit
+      git commit --amend --allow-empty --no-edit --reset-author
       if [ -n "${CI_COMMIT_TAG:-}" ]; then
         git tag -f "${CI_COMMIT_TAG}"
         git push --force github "refs/tags/${CI_COMMIT_TAG}"
