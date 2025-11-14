@@ -997,56 +997,9 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## Roadmap
 
-- **For detailed development roadmap, see [ROADMAP.md](docs/ROADMAP.md)**
-
-### Current Status (v0.4.3+)
--  Complete frontend (lexer, parser, AST, type checker)
--  Three backends: C (default), VM, Cranelift (experimental)
--  C backend with optimization levels (O0-O3, Os) and debug symbols
--  **Fixed std import system** - now works from any directory
--  **Generic type support** in type checker for std library
--  **Complete array support** with literals, indexing, and `len()` function
--  **Map/dictionary support** with key-value operations
--  **Struct support** with field access and method syntax
--  **PHI node support** for proper SSA form and control flow
--  String, boolean, and float comparisons in VM backend
--  Complete C backend instruction set (mod, neg, not, and, or, strcat)
--  Method-style syntax (`x.len()` instead of `len(x)`)
--  Enhanced error messages with helpful hints
--  **Static linking support** - no runtime library dependency
--  **Runtime warning fixes** - clean compilation without warnings
--  Comprehensive testing and documentation
--  Packaging system for distribution
--  Performance optimizations and regression testing
--  **Enhanced CI/CD pipeline** with std import testing and warning detection
--  Fixed library path issues for macOS binaries
-
-###  **NEW: Advanced Language Features (v0.5.1+)**
--  **String Interpolation** - `${expression}` syntax for dynamic string creation
--  **Exception Handling** - try-catch-finally blocks with comprehensive error handling
--  **Advanced Type System** - type aliases, union types, and optional types
--  **Type Aliases** - `type UserID = int` for better code readability
--  **Union Types** - `string | int | bool` for flexible data handling
--  **Optional Types** - `int?`, `string?` for nullable values with type safety
--  **Complete String Operations** - length, substring, char_at, starts_with, ends_with, contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
--  **Advanced Math Functions** - pow, sqrt, floor, ceil, round, gcd, lcm, factorial
--  **File I/O Operations** - open, close, read, write, seek, tell, exists, size
--  **Bitwise Operators** - &, |, ^, ~, <<, >> with correct precedence
--  **Type Conversion** - explicit casting (type)expr, int_to_string, float_to_string, bool_to_string, string_to_int, string_to_float, string_to_bool
--  **Lexical Primitives** - null literals, hex literals (0xFF), binary literals (0b1010), scientific notation (1.0e-5)
--  **Advanced Control Flow** - while loops, break and continue statements
--  **Advanced Variables & Scope** - block scope with {}, variable shadowing rules
--  **Collections Operations** - basic array operations (length, get, set) with runtime support
--  **First-Class Functions** - function types, lambda expressions, closures with variable capture
--  **Testing Framework** - built-in testing with assertions (test.start, test.end, assert, assert.eq, assert.true, assert.false)
-
-### Upcoming Phases
--  **Phase 1**: Language Features (for loops, memory management, error handling)
--  **Phase 2**: Type System Completion (generics, union types)
--  **Phase 3**: MIR Optimization (advanced optimization passes)
--  **Phase 4**: Complete Stdlib (file I/O, networking, collections)
--  **Phase 5**: Production Readiness (performance, security, deployment)
--  **Phase 6**: Ecosystem (package registry, community building)
+- See [docs/ROADMAP.md](docs/ROADMAP.md) for the full plan.
+- Current focus: hardening backends, refreshing language foundations, improving tooling, and measuring performance.
+- Exploratory items (self-hosting, package experiments, debugging integrations) are tracked as long-term ideas and remain unscheduled.
 
 ## License
 
