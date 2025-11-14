@@ -347,7 +347,7 @@ build-vscode-extension:
     - npm ci --prefix vscode/omni
   script:
     - npm run compile --prefix vscode/omni
-    - npx --prefix vscode/omni vsce package --no-dependencies
+    - cd vscode/omni && npx vsce package --no-dependencies
   artifacts:
     paths:
       - vscode/omni/dist/
