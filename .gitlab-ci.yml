@@ -338,6 +338,28 @@ benchmark:
   rules:
     - if: $CI_COMMIT_BRANCH == "main"
 
+# Build VS Code extension assets
+build-vscode-extension:
+  stage: build
+  image: 192.168.68.15:5050/pod32g/docker-mirror/node:20
+  needs: []
+  before_script:
+    - cd vscode/omni
+    - npm ci
+  script:
+    - cd vscode/omni
+    - npm run compile
+    - npx vsce package --no-dependencies
+  artifacts:
+    paths:
+      - vscode/omni/dist/
+      - vscode/omni/*.vsix
+    when: always
+    expire_in: 1 week
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
 # Build for Linux x86_64
 build-linux:
   stage: build
