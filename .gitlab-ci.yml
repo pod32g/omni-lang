@@ -1,5 +1,6 @@
 stages:
   - lint
+  - security
   - test
   - build
   - package
@@ -122,6 +123,31 @@ code-quality:
     - echo "Checking for race conditions..."
     - go test -race -short ./... || echo "Race condition tests completed with issues (expected in some cases)"
     - echo "Code quality checks completed"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# Repository scanning with Trivy for vulnerabilities/misconfigurations/secrets.
+trivy-scan:
+  stage: security
+  image: docker.io/aquasec/trivy:0.55.0
+  needs: []
+  variables:
+    TRIVY_CACHE_DIR: .trivycache
+  cache:
+    key: "trivy-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .trivycache
+    policy: pull-push
+  script:
+    - trivy --version
+    - trivy fs --scanners vuln,config,secret --severity CRITICAL,HIGH --skip-dirs .git --no-progress --exit-code 1 --format table .
+    - trivy fs --scanners vuln --severity CRITICAL,HIGH,MEDIUM,LOW --skip-dirs .git --no-progress --exit-code 0 --format sarif --output trivy-report.sarif .
+  artifacts:
+    paths:
+      - trivy-report.sarif
+    when: always
+    expire_in: 1 week
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "main"
