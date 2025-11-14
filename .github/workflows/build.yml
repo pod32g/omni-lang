@@ -1,0 +1,105 @@
+name: Build OmniLang
+
+on:
+  push:
+    branches: ["main"]
+    tags:
+      - "v*"
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            goos: linux
+            goarch: amd64
+            cgo: 1
+            build_script: |
+              make clean
+              make build-runtime
+              make build-rust
+              make build
+              export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
+              make test
+          - target: macos-amd64
+            goos: darwin
+            goarch: amd64
+            cgo: 0
+            build_script: |
+              make clean
+              make build-rust
+              CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 make build
+          - target: macos-arm64
+            goos: darwin
+            goarch: arm64
+            cgo: 0
+            build_script: |
+              make clean
+              make build-rust
+              CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 make build
+          - target: windows-amd64
+            goos: windows
+            goarch: amd64
+            cgo: 0
+            build_script: |
+              make clean
+              make build-rust
+              CGO_ENABLED=0 GOOS=windows GOARCH=amd64 make build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang pkg-config curl zip
+
+      - name: Build ${{ matrix.target }}
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: |
+          set -euo pipefail
+          cd omni
+          ${matrix.build_script}
+
+      - name: Package artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/${{ matrix.target }}
+          rsync -a --delete omni/bin/ artifacts/${{ matrix.target }}/bin/
+          if [ -d "omni/target/release" ]; then
+            rsync -a omni/target/release/ artifacts/${{ matrix.target }}/target/
+          fi
+          (cd artifacts && tar -czf omni-${{ matrix.target }}.tar.gz ${{ matrix.target }})
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: omni-${{ matrix.target }}
+          path: artifacts/omni-${{ matrix.target }}.tar.gz
