@@ -136,6 +136,43 @@ enum Color {
 }
 ```
 
+### Async/Await
+
+OmniLang supports asynchronous programming with `async` functions and `await` expressions:
+
+```omni
+import std
+
+// Declare an async function - returns Promise<T>
+async func fetch_data():int {
+    return 42
+}
+
+// Use await to get the result (await can only be used in async functions)
+async func main():int {
+    let result = await fetch_data()
+    std.io.println("Result: " + result)
+    return 0
+}
+```
+
+Async I/O operations are available in the standard library:
+
+```omni
+import std
+
+async func main():int {
+    // Async file operations
+    let content = await std.os.read_file_async("file.txt")
+    let written = await std.os.write_file_async("output.txt", "Hello")
+    
+    // Async input
+    let line = await std.io.read_line_async()
+    
+    return 0
+}
+```
+
 ### Variables
 
 ```omni
@@ -588,6 +625,40 @@ func main():int {
 ### Advanced Features
 
 OmniLang v0.5.1 introduces powerful advanced features:
+
+#### Async/Await
+
+OmniLang supports asynchronous programming with `async` functions and `await` expressions. Async functions return `Promise<T>` and can be executed concurrently.
+
+```omni
+import std
+
+// Declare async functions
+async func fetch_data():int {
+    return 42
+}
+
+async func process_file():string {
+    return await std.os.read_file_async("data.txt")
+}
+
+async func main():int {
+    // Await promises to get values (await can only be used in async functions)
+    let num = await fetch_data()
+    let content = await process_file()
+    
+    std.io.println("Number: " + num)
+    std.io.println("Content: " + content)
+    
+    return 0
+}
+```
+
+Async I/O operations are available:
+- `std.os.read_file_async(path:string):Promise<string>`
+- `std.os.write_file_async(path:string, contents:string):Promise<bool>`
+- `std.os.append_file_async(path:string, contents:string):Promise<bool>`
+- `std.io.read_line_async():Promise<string>`
 
 #### String Interpolation
 

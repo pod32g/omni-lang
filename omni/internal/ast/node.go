@@ -127,6 +127,7 @@ type FuncDecl struct {
 	Return     *TypeExpr
 	Body       *BlockStmt
 	ExprBody   Expr // for fat arrow shorthand
+	IsAsync    bool // async function
 }
 
 // TypeParam represents a generic type parameter.
@@ -541,3 +542,13 @@ type CastExpr struct {
 func (e *CastExpr) Span() lexer.Span { return e.SpanInfo }
 func (e *CastExpr) node()            {}
 func (e *CastExpr) expr()            {}
+
+// AwaitExpr represents an await expression: await expression
+type AwaitExpr struct {
+	SpanInfo lexer.Span
+	Expr     Expr
+}
+
+func (e *AwaitExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *AwaitExpr) node()            {}
+func (e *AwaitExpr) expr()            {}

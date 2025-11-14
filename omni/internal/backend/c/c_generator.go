@@ -223,6 +223,13 @@ func (g *CGenerator) writeFunctionDeclarations() {
 			funcName = "omni_main"
 			returnType = "int32_t" // Always use int32_t for omni_main to match runtime
 		}
+		
+		// For async functions (Promise<T>), the function should return the inner type, not Promise
+		// The Promise wrapper is added when the function is called
+		if strings.HasPrefix(fn.ReturnType, "Promise<") {
+			innerType := fn.ReturnType[8 : len(fn.ReturnType)-1] // Remove "Promise<" and ">"
+			returnType = g.mapType(innerType)
+		}
 
 		// Handle function pointer return types
 		if strings.Contains(fn.ReturnType, ") -> ") {
@@ -282,6 +289,13 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	if fn.Name == "main" {
 		funcName = "omni_main"
 		returnType = "int32_t" // Always use int32_t for omni_main to match runtime
+	}
+	
+	// For async functions (Promise<T>), the function should return the inner type, not Promise
+	// The Promise wrapper is added when the function is called
+	if strings.HasPrefix(fn.ReturnType, "Promise<") {
+		innerType := fn.ReturnType[8 : len(fn.ReturnType)-1] // Remove "Promise<" and ">"
+		returnType = g.mapType(innerType)
 	}
 
 	// Handle function pointer return types
@@ -357,6 +371,24 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 									break
 								}
 							}
+						}
+						// Special case for await - always use string for async I/O operations
+						if inst.Op == "await" {
+							// For async I/O operations, the result is typically a string
+							// Check the actual type from inst.Type, but default to string
+							if inst.Type == "string" {
+								varType = "const char*"
+							} else if inst.Type == "int" {
+								varType = "int32_t"
+							} else if inst.Type == "bool" {
+								varType = "int32_t"
+							} else if inst.Type == "float" || inst.Type == "double" {
+								varType = "double"
+							} else {
+								// Default to string for await (most common case for async I/O)
+								varType = "const char*"
+							}
+							break
 						}
 						varType = g.mapType(inst.Type)
 						// Check if this is an array.init instruction
@@ -722,6 +754,57 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				return nil
 			}
+			
+			// Special-case async I/O functions - they return Promise<T>
+			if funcName == "std.io.read_line_async" || funcName == "io.read_line_async" {
+				if inst.ID != mir.InvalidValue {
+					varName := g.getVariableName(inst.ID)
+					tempVar := fmt.Sprintf("_temp_%d", inst.ID)
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_read_line();\n", tempVar))
+					g.output.WriteString(fmt.Sprintf("  omni_promise_t* %s = omni_promise_create_string(%s);\n", varName, tempVar))
+					g.valueTypes[inst.ID] = "Promise<string>"
+				}
+				return nil
+			}
+			
+			if funcName == "std.os.read_file_async" || funcName == "os.read_file_async" {
+				if inst.ID != mir.InvalidValue && len(inst.Operands) >= 2 {
+					varName := g.getVariableName(inst.ID)
+					pathVar := g.getOperandValue(inst.Operands[1])
+					tempVar := fmt.Sprintf("_temp_%d", inst.ID)
+					// Declare temp variable first
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_read_file(%s);\n", tempVar, pathVar))
+					g.output.WriteString(fmt.Sprintf("  omni_promise_t* %s = omni_promise_create_string(%s);\n", varName, tempVar))
+					g.valueTypes[inst.ID] = "Promise<string>"
+				}
+				return nil
+			}
+			
+			if funcName == "std.os.write_file_async" || funcName == "os.write_file_async" {
+				if inst.ID != mir.InvalidValue && len(inst.Operands) >= 3 {
+					varName := g.getVariableName(inst.ID)
+					pathVar := g.getOperandValue(inst.Operands[1])
+					contentVar := g.getOperandValue(inst.Operands[2])
+					tempVar := fmt.Sprintf("_temp_%d", inst.ID)
+					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_write_file(%s, %s);\n", tempVar, pathVar, contentVar))
+					g.output.WriteString(fmt.Sprintf("  omni_promise_t* %s = omni_promise_create_bool(%s != 0);\n", varName, tempVar))
+					g.valueTypes[inst.ID] = "Promise<bool>"
+				}
+				return nil
+			}
+			
+			if funcName == "std.os.append_file_async" || funcName == "os.append_file_async" {
+				if inst.ID != mir.InvalidValue && len(inst.Operands) >= 3 {
+					varName := g.getVariableName(inst.ID)
+					pathVar := g.getOperandValue(inst.Operands[1])
+					contentVar := g.getOperandValue(inst.Operands[2])
+					tempVar := fmt.Sprintf("_temp_%d", inst.ID)
+					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_append_file(%s, %s);\n", tempVar, pathVar, contentVar))
+					g.output.WriteString(fmt.Sprintf("  omni_promise_t* %s = omni_promise_create_bool(%s != 0);\n", varName, tempVar))
+					g.valueTypes[inst.ID] = "Promise<bool>"
+				}
+				return nil
+			}
 
 			cFuncName := g.mapFunctionName(funcName)
 
@@ -738,24 +821,61 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(");\n")
 			} else {
 				varName := g.getVariableName(inst.ID)
-				// Check if the result type is a function type
-				if strings.Contains(inst.Type, ") -> ") {
+				// Check if the result type is a Promise (async function)
+				if strings.HasPrefix(inst.Type, "Promise<") {
+					// Extract inner type from Promise<T>
+					innerType := inst.Type[8 : len(inst.Type)-1] // Remove "Promise<" and ">"
+					// Call the function and wrap result in Promise
+					tempVar := fmt.Sprintf("_temp_%d", inst.ID)
+					g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
+						g.mapType(innerType), tempVar, cFuncName))
+					// Add arguments
+					for i, arg := range inst.Operands[1:] {
+						if i > 0 {
+							g.output.WriteString(", ")
+						}
+						g.output.WriteString(g.getOperandValue(arg))
+					}
+					g.output.WriteString(");\n")
+					// Wrap the result in a Promise based on inner type
+					switch innerType {
+					case "int":
+						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_int(%s);\n", varName, tempVar))
+					case "string":
+						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_string(%s);\n", varName, tempVar))
+					case "float", "double":
+						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_float(%s);\n", varName, tempVar))
+					case "bool":
+						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_bool(%s);\n", varName, tempVar))
+					default:
+						// Default to int
+						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_int(%s);\n", varName, tempVar))
+					}
+				} else if strings.Contains(inst.Type, ") -> ") {
 					// Generate function pointer variable declaration
 					g.output.WriteString(fmt.Sprintf("  %s = %s(",
 						g.mapFunctionTypeWithName(inst.Type, varName), cFuncName))
+					// Add arguments
+					for i, arg := range inst.Operands[1:] {
+						if i > 0 {
+							g.output.WriteString(", ")
+						}
+						g.output.WriteString(g.getOperandValue(arg))
+					}
+					g.output.WriteString(");\n")
 				} else {
 					// Regular function call - assign to already declared variable
 					g.output.WriteString(fmt.Sprintf("  %s = %s(",
 						varName, cFuncName))
-				}
-				// Add arguments
-				for i, arg := range inst.Operands[1:] {
-					if i > 0 {
-						g.output.WriteString(", ")
+					// Add arguments
+					for i, arg := range inst.Operands[1:] {
+						if i > 0 {
+							g.output.WriteString(", ")
+						}
+						g.output.WriteString(g.getOperandValue(arg))
 					}
-					g.output.WriteString(g.getOperandValue(arg))
+					g.output.WriteString(");\n")
 				}
-				g.output.WriteString(");\n")
 			}
 		}
 	case "index":
@@ -890,25 +1010,65 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			right := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
 
-			var op string
-			switch inst.Op {
-			case "cmp.eq":
-				op = "=="
-			case "cmp.neq":
-				op = "!="
-			case "cmp.lt":
-				op = "<"
-			case "cmp.lte":
-				op = "<="
-			case "cmp.gt":
-				op = ">"
-			case "cmp.gte":
-				op = ">="
+			// Check if we're comparing strings
+			leftType := inst.Operands[0].Type
+			rightType := inst.Operands[1].Type
+			// Also check valueTypes for more accurate type information
+			if inst.Operands[0].Kind == mir.OperandValue {
+				if storedType, ok := g.valueTypes[inst.Operands[0].Value]; ok && storedType != "" {
+					leftType = storedType
+				}
+			}
+			if inst.Operands[1].Kind == mir.OperandValue {
+				if storedType, ok := g.valueTypes[inst.Operands[1].Value]; ok && storedType != "" {
+					rightType = storedType
+				}
 			}
 
-			// Comparison - assign to already declared variable
-			g.output.WriteString(fmt.Sprintf("  %s = (%s %s %s) ? 1 : 0;\n",
-				varName, left, op, right))
+			// If either operand is a string, use string comparison function
+			if leftType == "string" || rightType == "string" {
+				switch inst.Op {
+				case "cmp.eq":
+					g.output.WriteString(fmt.Sprintf("  %s = omni_string_equals(%s, %s) ? 1 : 0;\n",
+						varName, left, right))
+				case "cmp.neq":
+					g.output.WriteString(fmt.Sprintf("  %s = omni_string_equals(%s, %s) ? 0 : 1;\n",
+						varName, left, right))
+				case "cmp.lt":
+					g.output.WriteString(fmt.Sprintf("  %s = (omni_string_compare(%s, %s) < 0) ? 1 : 0;\n",
+						varName, left, right))
+				case "cmp.lte":
+					g.output.WriteString(fmt.Sprintf("  %s = (omni_string_compare(%s, %s) <= 0) ? 1 : 0;\n",
+						varName, left, right))
+				case "cmp.gt":
+					g.output.WriteString(fmt.Sprintf("  %s = (omni_string_compare(%s, %s) > 0) ? 1 : 0;\n",
+						varName, left, right))
+				case "cmp.gte":
+					g.output.WriteString(fmt.Sprintf("  %s = (omni_string_compare(%s, %s) >= 0) ? 1 : 0;\n",
+						varName, left, right))
+				}
+			} else {
+				// For non-string types, use direct comparison
+				var op string
+				switch inst.Op {
+				case "cmp.eq":
+					op = "=="
+				case "cmp.neq":
+					op = "!="
+				case "cmp.lt":
+					op = "<"
+				case "cmp.lte":
+					op = "<="
+				case "cmp.gt":
+					op = ">"
+				case "cmp.gte":
+					op = ">="
+				}
+
+				// Comparison - assign to already declared variable
+				g.output.WriteString(fmt.Sprintf("  %s = (%s %s %s) ? 1 : 0;\n",
+					varName, left, op, right))
+			}
 		}
 	case "assign":
 		// Handle assignment instructions
@@ -1200,6 +1360,47 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			level := g.getOperandValue(inst.Operands[0])
 			g.output.WriteString(fmt.Sprintf("  omni_log_set_level(%s);\n", level))
 		}
+	case "await":
+		// Handle await instruction - unwrap Promise<T> to T
+		if len(inst.Operands) >= 1 {
+			promiseVar := g.getOperandValue(inst.Operands[0])
+			varName := g.getVariableName(inst.ID)
+			
+			// Determine the await function based on result type
+			// The inst.Type should already be the unwrapped type (e.g., "string" not "Promise<string>")
+			resultType := inst.Type
+			
+			// If type is empty or unknown, try to infer from the instruction type
+			if resultType == "" || resultType == "<inferred>" {
+				// Try to get type from operand's promise type
+				if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandValue {
+					operandID := inst.Operands[0].Value
+					if storedType, ok := g.valueTypes[operandID]; ok {
+						// Extract inner type from Promise<T>
+						if strings.HasPrefix(storedType, "Promise<") && strings.HasSuffix(storedType, ">") {
+							resultType = storedType[len("Promise<") : len(storedType)-1]
+						}
+					}
+				}
+			}
+			
+			switch resultType {
+			case "int":
+				g.output.WriteString(fmt.Sprintf("  %s = omni_await_int(%s);\n", varName, promiseVar))
+			case "string":
+				g.output.WriteString(fmt.Sprintf("  %s = omni_await_string(%s);\n", varName, promiseVar))
+			case "float", "double":
+				g.output.WriteString(fmt.Sprintf("  %s = omni_await_float(%s);\n", varName, promiseVar))
+			case "bool":
+				g.output.WriteString(fmt.Sprintf("  %s = omni_await_bool(%s);\n", varName, promiseVar))
+			default:
+				// For unknown types, default to string (most common for I/O)
+				g.output.WriteString(fmt.Sprintf("  %s = omni_await_string(%s);\n", varName, promiseVar))
+				resultType = "string"
+			}
+			// Store the result type
+			g.valueTypes[inst.ID] = resultType
+		}
 	default:
 		// Handle unknown instructions
 		g.output.WriteString(fmt.Sprintf("  // TODO: Implement instruction %s\n", inst.Op))
@@ -1366,6 +1567,11 @@ func (g *CGenerator) mapType(omniType string) string {
 	// Handle function types: (param1, param2) -> returnType
 	if strings.Contains(omniType, ") -> ") {
 		return g.mapFunctionType(omniType)
+	}
+
+	// Handle Promise types: Promise<T>
+	if strings.HasPrefix(omniType, "Promise<") && strings.HasSuffix(omniType, ">") {
+		return "omni_promise_t*"
 	}
 
 	// Handle array types: []<ElementType>

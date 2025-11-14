@@ -1,0 +1,40 @@
+import std
+
+// Example: Async/Await in OmniLang
+
+// Simple async function that returns a number
+async func fetch_number():int {
+    return 42
+}
+
+// Async function that returns a string
+async func fetch_message():string {
+    return "Hello from async!"
+}
+
+async func main():int {
+    std.io.println("=== Async/Await Example ===")
+    
+    // Await a Promise<int>
+    let num = await fetch_number()
+    std.io.println("Number: " + num)
+    
+    // Await a Promise<string>
+    let msg = await fetch_message()
+    std.io.println("Message: " + msg)
+    
+    // Async I/O operations
+    std.io.println("\n=== Async I/O Example ===")
+    
+    // Write file asynchronously
+    let written = await std.os.write_file_async("async_example.txt", "Hello from async write!")
+    if written {
+        std.io.println("File written successfully")
+    }
+    
+    // Read file asynchronously
+    let content = await std.os.read_file_async("async_example.txt")
+    std.io.println("File content: " + content)
+    
+    return 0
+}

@@ -36,6 +36,8 @@ var keywords = map[string]Kind{
 	"throw":    TokenThrow,
 	"type":     TokenType,
 	"optional": TokenOptional,
+	"async":    TokenAsync,
+	"await":    TokenAwait,
 }
 
 // Lexer transforms a source buffer into a stream of tokens while tracking

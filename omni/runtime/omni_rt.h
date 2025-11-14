@@ -41,6 +41,28 @@ char* omni_to_lower(const char* str);
 int32_t omni_string_equals(const char* a, const char* b);
 int32_t omni_string_compare(const char* a, const char* b);
 
+// Promise/Async support (simplified synchronous implementation)
+typedef struct {
+    void* value;
+    int32_t type;  // 0=int, 1=string, 2=float, 3=bool
+    int32_t done;
+} omni_promise_t;
+
+// Create a resolved promise (synchronous implementation)
+omni_promise_t* omni_promise_create_int(int32_t value);
+omni_promise_t* omni_promise_create_string(const char* value);
+omni_promise_t* omni_promise_create_float(double value);
+omni_promise_t* omni_promise_create_bool(int32_t value);
+
+// Await a promise (synchronous - just extracts the value)
+int32_t omni_await_int(omni_promise_t* promise);
+const char* omni_await_string(omni_promise_t* promise);
+double omni_await_float(omni_promise_t* promise);
+int32_t omni_await_bool(omni_promise_t* promise);
+
+// Free a promise
+void omni_promise_free(omni_promise_t* promise);
+
 // Array operations
 int32_t omni_len(void* array, size_t element_size);
 
@@ -107,6 +129,11 @@ int32_t omni_file_seek(int32_t file_handle, int32_t offset, int32_t whence);
 int32_t omni_file_tell(int32_t file_handle);
 int32_t omni_file_exists(const char* filename);
 int32_t omni_file_size(const char* filename);
+
+// File I/O convenience functions (for async operations)
+const char* omni_read_file(const char* path);
+int32_t omni_write_file(const char* path, const char* content);
+int32_t omni_append_file(const char* path, const char* content);
 
 // Testing framework
 void omni_test_start(const char* test_name);

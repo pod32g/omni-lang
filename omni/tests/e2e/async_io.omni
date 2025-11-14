@@ -1,0 +1,25 @@
+import std
+
+func main():int {
+    // Test async file operations
+    let content = await std.os.read_file_async("test.txt")
+    std.io.println("Read: " + content)
+    
+    let written = await std.os.write_file_async("output.txt", "Hello from async!")
+    if written {
+        std.io.println("Write successful")
+    } else {
+        std.io.println("Write failed")
+        return 1
+    }
+    
+    let appended = await std.os.append_file_async("output.txt", "\nAppended line")
+    if appended {
+        std.io.println("Append successful")
+    } else {
+        std.io.println("Append failed")
+        return 1
+    }
+    
+    return 0
+}

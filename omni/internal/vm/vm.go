@@ -37,7 +37,23 @@ var (
 	cliArgs   []string
 
 	stdinReader = bufio.NewReader(os.Stdin)
+
+	// Async/Promise support
+	promiseMu      sync.RWMutex
+	promiseCounter int
+	promises       = make(map[int]*Promise)
+	eventLoop      = make(chan func(), 100) // Event loop channel
 )
+
+// Promise represents an async operation that may complete in the future
+type Promise struct {
+	ID      int
+	Value   Result
+	Error   error
+	Done    bool
+	Waiters []chan Result // Channels waiting for this promise to resolve
+	mu      sync.Mutex
+}
 
 type testingSuite struct {
 	total  int
@@ -145,6 +161,143 @@ func readLineFromStdin() (string, error) {
 		return "", err
 	}
 	return strings.TrimRight(line, "\r\n"), nil
+}
+
+// newPromise creates a new promise and returns its ID
+func newPromise() int {
+	promiseMu.Lock()
+	defer promiseMu.Unlock()
+	promiseCounter++
+	id := promiseCounter
+	promises[id] = &Promise{
+		ID:      id,
+		Waiters: make([]chan Result, 0),
+	}
+	return id
+}
+
+// resolvePromise resolves a promise with a value
+func resolvePromise(id int, value Result) {
+	promiseMu.Lock()
+	promise, ok := promises[id]
+	if !ok {
+		promiseMu.Unlock()
+		return
+	}
+	promiseMu.Unlock()
+
+	promise.mu.Lock()
+	promise.Value = value
+	promise.Done = true
+	waiters := promise.Waiters
+	promise.Waiters = nil
+	promise.mu.Unlock()
+
+	// Notify all waiters
+	for _, ch := range waiters {
+		select {
+		case ch <- value:
+		default:
+		}
+	}
+}
+
+// rejectPromise rejects a promise with an error
+func rejectPromise(id int, err error) {
+	promiseMu.Lock()
+	promise, ok := promises[id]
+	if !ok {
+		promiseMu.Unlock()
+		return
+	}
+	promiseMu.Unlock()
+
+	promise.mu.Lock()
+	promise.Error = err
+	promise.Done = true
+	waiters := promise.Waiters
+	promise.Waiters = nil
+	promise.mu.Unlock()
+
+	// Notify all waiters with error result
+	errorResult := Result{Type: "error", Value: err.Error()}
+	for _, ch := range waiters {
+		select {
+		case ch <- errorResult:
+		default:
+		}
+	}
+}
+
+// awaitPromise waits for a promise to resolve
+func awaitPromise(id int) (Result, error) {
+	promiseMu.RLock()
+	promise, ok := promises[id]
+	promiseMu.RUnlock()
+
+	if !ok {
+		return Result{}, fmt.Errorf("promise %d not found", id)
+	}
+
+	promise.mu.Lock()
+	if promise.Done {
+		value := promise.Value
+		err := promise.Error
+		promise.mu.Unlock()
+		if err != nil {
+			return Result{}, err
+		}
+		return value, nil
+	}
+
+	// Create a channel to wait for resolution
+	ch := make(chan Result, 1)
+	promise.Waiters = append(promise.Waiters, ch)
+	promise.mu.Unlock()
+
+	// Wait for the promise to resolve
+	result := <-ch
+	if result.Type == "error" {
+		return Result{}, fmt.Errorf("%v", result.Value)
+	}
+	return result, nil
+}
+
+// execAwait handles await instructions
+func execAwait(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) == 0 {
+		return Result{}, fmt.Errorf("await instruction requires operand")
+	}
+
+	operand := operandValue(fr, inst.Operands[0])
+
+	// Check if operand is a Promise
+	if operand.Type == "Promise" {
+		// Extract promise ID from value
+		if promiseID, ok := operand.Value.(int); ok {
+			result, err := awaitPromise(promiseID)
+			if err != nil {
+				return Result{}, err
+			}
+			return result, nil
+		}
+		// If value is a map with promise data, extract ID
+		if promiseMap, ok := operand.Value.(map[string]interface{}); ok {
+			if idVal, ok := promiseMap["id"]; ok {
+				if promiseID, ok := idVal.(int); ok {
+					result, err := awaitPromise(promiseID)
+					if err != nil {
+						return Result{}, err
+					}
+					return result, nil
+				}
+			}
+		}
+		return Result{}, fmt.Errorf("await: invalid promise value")
+	}
+
+	// If not a Promise, return as-is (for now - this allows awaiting non-promises for compatibility)
+	return operand, nil
 }
 
 func hasFlag(name string) bool {
@@ -333,6 +486,7 @@ func init() {
 		"closure.create":  execClosureCreate,
 		"closure.capture": execClosureCapture,
 		"closure.bind":    execClosureBind,
+		"await":           execAwait,
 	}
 }
 
@@ -1131,6 +1285,30 @@ func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (
 	for _, op := range inst.Operands[1:] {
 		args = append(args, operandValue(fr, op))
 	}
+
+	// Check if function returns a Promise (async function)
+	if strings.HasPrefix(fn.ReturnType, "Promise<") {
+		// Execute async function and return a Promise
+		promiseID := newPromise()
+
+		// Execute function asynchronously
+		go func() {
+			result, err := execFunction(funcs, fn, args)
+			if err != nil {
+				rejectPromise(promiseID, err)
+			} else {
+				resolvePromise(promiseID, result)
+			}
+		}()
+
+		// Return Promise immediately
+		return Result{
+			Type:  "Promise",
+			Value: promiseID,
+		}, nil
+	}
+
+	// Synchronous execution for non-async functions
 	return execFunction(funcs, fn, args)
 }
 
@@ -1180,6 +1358,18 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			return Result{Type: "string", Value: ""}, true
 		}
 		return Result{Type: "string", Value: line}, true
+	case "std.io.read_line_async":
+		// Async version - execute in goroutine and return Promise
+		promiseID := newPromise()
+		go func() {
+			line, err := readLineFromStdin()
+			if err != nil && !errors.Is(err, io.EOF) {
+				rejectPromise(promiseID, err)
+			} else {
+				resolvePromise(promiseID, Result{Type: "string", Value: line})
+			}
+		}()
+		return Result{Type: "Promise", Value: promiseID}, true
 	case "std.log.debug":
 		return handleLogIntrinsic("debug", operands, fr)
 	case "std.log.info":
@@ -2199,6 +2389,77 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			}
 		}
 		return Result{Type: "bool", Value: false}, true
+	case "std.os.read_file_async":
+		// Async version - execute in goroutine and return Promise
+		if len(operands) == 1 {
+			path, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				promiseID := newPromise()
+				go func() {
+					data, readErr := os.ReadFile(path)
+					if readErr != nil {
+						rejectPromise(promiseID, readErr)
+					} else {
+						resolvePromise(promiseID, Result{Type: "string", Value: string(data)})
+					}
+				}()
+				return Result{Type: "Promise", Value: promiseID}, true
+			}
+		}
+		// Return rejected promise on error
+		promiseID := newPromise()
+		rejectPromise(promiseID, fmt.Errorf("invalid arguments"))
+		return Result{Type: "Promise", Value: promiseID}, true
+	case "std.os.write_file_async":
+		// Async version - execute in goroutine and return Promise
+		if len(operands) == 2 {
+			path, err1 := toString(operandValue(fr, operands[0]))
+			content, err2 := toString(operandValue(fr, operands[1]))
+			if err1 == nil && err2 == nil {
+				promiseID := newPromise()
+				go func() {
+					writeErr := os.WriteFile(path, []byte(content), 0o644)
+					if writeErr != nil {
+						rejectPromise(promiseID, writeErr)
+					} else {
+						resolvePromise(promiseID, Result{Type: "bool", Value: true})
+					}
+				}()
+				return Result{Type: "Promise", Value: promiseID}, true
+			}
+		}
+		// Return rejected promise on error
+		promiseID := newPromise()
+		rejectPromise(promiseID, fmt.Errorf("invalid arguments"))
+		return Result{Type: "Promise", Value: promiseID}, true
+	case "std.os.append_file_async":
+		// Async version - execute in goroutine and return Promise
+		if len(operands) == 2 {
+			path, err1 := toString(operandValue(fr, operands[0]))
+			content, err2 := toString(operandValue(fr, operands[1]))
+			if err1 == nil && err2 == nil {
+				promiseID := newPromise()
+				go func() {
+					f, openErr := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+					if openErr != nil {
+						rejectPromise(promiseID, openErr)
+						return
+					}
+					_, writeErr := io.WriteString(f, content)
+					closeErr := f.Close()
+					if writeErr != nil || closeErr != nil {
+						rejectPromise(promiseID, fmt.Errorf("write error: %v, close error: %v", writeErr, closeErr))
+					} else {
+						resolvePromise(promiseID, Result{Type: "bool", Value: true})
+					}
+				}()
+				return Result{Type: "Promise", Value: promiseID}, true
+			}
+		}
+		// Return rejected promise on error
+		promiseID := newPromise()
+		rejectPromise(promiseID, fmt.Errorf("invalid arguments"))
+		return Result{Type: "Promise", Value: promiseID}, true
 	case "std.file.read":
 		if len(operands) == 3 {
 			handle, errHandle := toInt(operandValue(fr, operands[0]))

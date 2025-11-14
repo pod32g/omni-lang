@@ -25,6 +25,20 @@ func add(a:int, b:int):int {
 func square(x:int):int => x * x
 ```
 
+### Async Functions
+```omni
+// Declare an async function - returns Promise<T>
+async func fetch_data():int {
+    return 42
+}
+
+// Use await to get the result from a Promise
+func main():int {
+    let result = await fetch_data()
+    return result
+}
+```
+
 ### Imports
 ```omni
 import std                    // Import entire standard library (recommended)
@@ -115,6 +129,59 @@ for item in items {
 ```omni
 while condition {
     // do something
+}
+```
+
+## Async/Await
+
+### Async Functions
+Async functions return `Promise<T>` and can be executed asynchronously.
+
+```omni
+// Declare an async function
+async func fetch_number():int {
+    return 42
+}
+
+async func fetch_string():string {
+    return "hello"
+}
+```
+
+### Await Expressions
+Use `await` to wait for a Promise to resolve and get its value. **Note:** `await` can only be used inside `async` functions.
+
+```omni
+async func main():int {
+    // Await a Promise<int> to get int
+    let num = await fetch_number()
+    
+    // Await a Promise<string> to get string
+    let str = await fetch_string()
+    
+    std.io.println("Number: " + num)
+    std.io.println("String: " + str)
+    
+    return 0
+}
+```
+
+### Async I/O Operations
+The standard library provides async versions of I/O operations:
+
+```omni
+import std
+
+async func main():int {
+    // Async file operations
+    let content = await std.os.read_file_async("file.txt")
+    let written = await std.os.write_file_async("output.txt", "Hello")
+    let appended = await std.os.append_file_async("output.txt", "\nWorld")
+    
+    // Async input
+    let line = await std.io.read_line_async()
+    
+    return 0
 }
 ```
 

@@ -46,6 +46,8 @@ const (
 	TokenThrow
 	TokenType
 	TokenOptional
+	TokenAsync
+	TokenAwait
 
 	// Delimiters
 	TokenLParen
@@ -125,6 +127,8 @@ var kindNames = map[Kind]string{
 	TokenThrow:               "THROW",
 	TokenType:                "TYPE",
 	TokenOptional:            "OPTIONAL",
+	TokenAsync:                "ASYNC",
+	TokenAwait:                "AWAIT",
 	TokenLParen:              "LPAREN",
 	TokenRParen:              "RPAREN",
 	TokenLBrace:              "LBRACE",

@@ -201,7 +201,7 @@ func (p *Parser) parseDecl() (ast.Decl, error) {
 		return p.parseEnumDecl()
 	case lexer.TokenType:
 		return p.parseTypeAliasDecl()
-	case lexer.TokenFunc:
+	case lexer.TokenAsync, lexer.TokenFunc:
 		return p.parseFuncDecl()
 	default:
 		return nil, p.errorAtCurrent("unexpected token at top level: %s", p.peekKind())
@@ -284,7 +284,11 @@ func (p *Parser) parseEnumDecl() (ast.Decl, error) {
 }
 
 func (p *Parser) parseFuncDecl() (ast.Decl, error) {
-	kw := p.advance()
+	isAsync := false
+	if p.match(lexer.TokenAsync) {
+		isAsync = true
+	}
+	kw := p.expect(lexer.TokenFunc)
 	nameTok := p.expect(lexer.TokenIdentifier)
 
 	// Parse generic type parameters
@@ -333,14 +337,14 @@ func (p *Parser) parseFuncDecl() (ast.Decl, error) {
 			return nil, err
 		}
 		span := lexer.Span{Start: kw.Span.Start, End: expr.Span().End}
-		return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Params: params, Return: retType, ExprBody: expr}, nil
+		return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Params: params, Return: retType, ExprBody: expr, IsAsync: isAsync}, nil
 	}
 	body, err := p.parseBlock()
 	if err != nil {
 		return nil, err
 	}
 	span := lexer.Span{Start: kw.Span.Start, End: body.Span().End}
-	return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Params: params, Return: retType, Body: body}, nil
+	return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Params: params, Return: retType, Body: body, IsAsync: isAsync}, nil
 }
 
 func (p *Parser) parseBlock() (*ast.BlockStmt, error) {
@@ -800,6 +804,13 @@ func (p *Parser) parseFactor() (ast.Expr, error) {
 
 func (p *Parser) parseUnary() (ast.Expr, error) {
 	switch p.peekKind() {
+	case lexer.TokenAwait:
+		awaitTok := p.advance()
+		expr, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.AwaitExpr{SpanInfo: lexer.Span{Start: awaitTok.Span.Start, End: expr.Span().End}, Expr: expr}, nil
 	case lexer.TokenBang, lexer.TokenMinus, lexer.TokenTilde:
 		op := p.advance()
 		expr, err := p.parseUnary()

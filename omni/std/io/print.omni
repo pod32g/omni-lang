@@ -19,3 +19,10 @@ func read_line():string {
     return ""
 }
 
+// read_line_async reads a line from standard input asynchronously
+async func read_line_async():string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+

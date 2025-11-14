@@ -190,6 +190,7 @@ type FunctionSignature struct {
 type functionContext struct {
 	Name       string
 	ReturnType string
+	IsAsync    bool
 }
 
 func (c *Checker) initBuiltins() {
@@ -209,6 +210,7 @@ func (c *Checker) initBuiltins() {
 	}
 	c.knownTypes["array"] = struct{}{}
 	c.knownTypes["map"] = struct{}{}
+	c.knownTypes["Promise"] = struct{}{}
 
 	// Add builtin functions
 	c.functions["len"] = FunctionSignature{
@@ -281,6 +283,15 @@ func (c *Checker) buildFunctionSignature(decl *ast.FuncDecl) FunctionSignature {
 		}
 	}
 
+	// If function is async, wrap return type in Promise<T>
+	if decl.IsAsync {
+		if ret == typeVoid {
+			ret = "Promise<void>"
+		} else {
+			ret = "Promise<" + ret + ">"
+		}
+	}
+
 	return FunctionSignature{Params: params, Return: ret, TypeParams: decl.TypeParams}
 }
 
@@ -326,11 +337,35 @@ func (c *Checker) checkFunc(decl *ast.FuncDecl) {
 	c.enterTypeParams(sig.TypeParams)
 
 	expectedReturn := sig.Return
-	if decl.Return != nil {
-		expectedReturn = c.checkTypeExpr(decl.Return)
+	// Check if this is an async function (return type is Promise<T>)
+	isAsync := strings.HasPrefix(sig.Return, "Promise<")
+	var innerReturnType string
+	if isAsync {
+		// Extract inner type from Promise<T>
+		if inner, ok := promiseInnerType(sig.Return); ok {
+			innerReturnType = inner
+		}
 	}
 
-	c.pushFunctionContext(decl.Name, expectedReturn)
+	if decl.Return != nil {
+		declaredReturn := c.checkTypeExpr(decl.Return)
+		// For async functions, compare with inner type
+		if isAsync {
+			if !c.typesEqual(declaredReturn, innerReturnType) {
+				c.report(decl.Return.Span(), fmt.Sprintf("async function return type mismatch: declared %s but signature expects %s", declaredReturn, innerReturnType),
+					"align the return type annotation with the inner type of Promise")
+			}
+			// Use inner type for body validation (function body returns int, not Promise<int>)
+			expectedReturn = innerReturnType
+		} else {
+			expectedReturn = declaredReturn
+		}
+	} else if isAsync {
+		// No return type annotation, use inner type for validation
+		expectedReturn = innerReturnType
+	}
+
+	c.pushFunctionContext(decl.Name, expectedReturn, decl.IsAsync)
 	c.enterScope()
 	for i, param := range decl.Params {
 		paramType := c.checkTypeExpr(param.Type)
@@ -672,6 +707,23 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			return "int"
 		}
 		return typeInfer
+	case *ast.AwaitExpr:
+		// Check if we're in an async function
+		ctx := c.currentFunctionContext()
+		if ctx == nil || !ctx.IsAsync {
+			c.report(e.Span(), "await can only be used in async functions", "mark the function with the 'async' keyword")
+			return typeError
+		}
+
+		operandType := c.checkExpr(e.Expr)
+		// await unwraps Promise<T> to T
+		if innerType, ok := promiseInnerType(operandType); ok {
+			return innerType
+		}
+		if operandType != typeError {
+			c.report(e.Expr.Span(), fmt.Sprintf("await can only be used on Promise types, got %s", operandType), "use await on a Promise value or async function call")
+		}
+		return typeError
 	case *ast.UnaryExpr:
 		operand := c.checkExpr(e.Expr)
 		switch e.Op {
@@ -1045,7 +1097,16 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 	}
 
 	// Handle function type calls (e.g., (int, string) -> bool)
-	if strings.Contains(calleeType, ") -> ") {
+	// Only use this path if we didn't find the function in c.functions above
+	// This handles cases where the callee is a function type variable
+	// Check if we already handled this as a direct function call above
+	handledAsDirectCall := false
+	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok {
+		if _, exists := c.functions[ident.Name]; exists {
+			handledAsDirectCall = true
+		}
+	}
+	if strings.Contains(calleeType, ") -> ") && !handledAsDirectCall {
 		// Parse function type: (param1, param2) -> returnType
 		arrowIndex := strings.Index(calleeType, ") -> ")
 		if arrowIndex != -1 {
@@ -1521,6 +1582,14 @@ func mapTypes(typ string) (string, string, bool) {
 	return parts[0], parts[1], true
 }
 
+func promiseInnerType(typ string) (string, bool) {
+	if !strings.HasPrefix(typ, "Promise<") || !strings.HasSuffix(typ, ">") {
+		return "", false
+	}
+	inner := typ[len("Promise<") : len(typ)-1]
+	return strings.TrimSpace(inner), true
+}
+
 func isNumeric(typ string) bool {
 	switch typ {
 	case "int", "long", "byte", "float", "double":
@@ -1675,11 +1744,11 @@ func (c *Checker) leaveScope() {
 	c.scopes = c.scopes[:len(c.scopes)-1]
 }
 
-func (c *Checker) pushFunctionContext(name, ret string) {
+func (c *Checker) pushFunctionContext(name, ret string, isAsync bool) {
 	if ret == "" {
 		ret = typeVoid
 	}
-	c.functionStack = append(c.functionStack, functionContext{Name: name, ReturnType: ret})
+	c.functionStack = append(c.functionStack, functionContext{Name: name, ReturnType: ret, IsAsync: isAsync})
 }
 
 func (c *Checker) popFunctionContext() {
@@ -1688,8 +1757,14 @@ func (c *Checker) popFunctionContext() {
 	}
 	ctx := c.functionStack[len(c.functionStack)-1]
 	if sig, ok := c.functions[ctx.Name]; ok {
-		sig.Return = ctx.ReturnType
-		c.functions[ctx.Name] = sig
+		// Preserve Promise wrapper for async functions
+		if strings.HasPrefix(sig.Return, "Promise<") {
+			// Don't overwrite the Promise wrapper - keep the original signature
+			// The return type validation already happened in checkFunc
+		} else {
+			sig.Return = ctx.ReturnType
+			c.functions[ctx.Name] = sig
+		}
 	}
 	c.functionStack = c.functionStack[:len(c.functionStack)-1]
 }
@@ -2036,6 +2111,14 @@ func (c *Checker) registerMergedFunctionSignatures(mod *ast.Module) {
 				if fn.Return != nil {
 					sig.Return = c.resolveTypeExpr(fn.Return)
 				}
+				// If function is async, wrap return type in Promise<T>
+				if fn.IsAsync {
+					if sig.Return == typeVoid {
+						sig.Return = "Promise<void>"
+					} else {
+						sig.Return = "Promise<" + sig.Return + ">"
+					}
+				}
 				sig.Params = make([]string, len(fn.Params))
 				for i, param := range fn.Params {
 					sig.Params[i] = c.resolveTypeExpr(param.Type)
@@ -2069,6 +2152,14 @@ func (c *Checker) registerModuleFunctionSignatures(mod *ast.Module, importPath [
 			if fn.Return != nil {
 				resolvedType := c.resolveTypeExpr(fn.Return)
 				sig.Return = resolvedType
+			}
+			// If function is async, wrap return type in Promise<T>
+			if fn.IsAsync {
+				if sig.Return == typeVoid {
+					sig.Return = "Promise<void>"
+				} else {
+					sig.Return = "Promise<" + sig.Return + ">"
+				}
 			}
 			sig.Params = make([]string, len(fn.Params))
 			for i, param := range fn.Params {

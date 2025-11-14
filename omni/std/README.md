@@ -10,6 +10,10 @@ Input/Output functions for console operations.
 **Functions:**
 - `print(value:string | int | float | double | bool)` - Print value without newline
 - `println(value:string | int | float | double | bool)` - Print value with newline
+- `read_line():string` - Read a line from standard input
+
+**Async Functions:**
+- `read_line_async():Promise<string>` - Read a line from standard input asynchronously
 
 ### std.math
 Mathematical functions and utilities.
@@ -245,6 +249,11 @@ Operating system interface functions.
 - `read_file(path:string):string` - Read file contents
 - `write_file(path:string, contents:string):bool` - Write file contents
 - `append_file(path:string, contents:string):bool` - Append to file
+
+**Async File Operations:**
+- `read_file_async(path:string):Promise<string>` - Read file contents asynchronously
+- `write_file_async(path:string, contents:string):Promise<bool>` - Write file contents asynchronously
+- `append_file_async(path:string, contents:string):Promise<bool>` - Append to file asynchronously
 
 ### std.collections
 Collection data structures.

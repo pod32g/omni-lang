@@ -163,3 +163,24 @@ func append_file(path:string, contents:string):bool {
     // during compilation. The actual implementation is in the backend.
     return false
 }
+
+// read_file_async reads the contents of a file asynchronously
+async func read_file_async(path:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// write_file_async writes contents to a file asynchronously
+async func write_file_async(path:string, contents:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// append_file_async appends contents to a file asynchronously
+async func append_file_async(path:string, contents:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}

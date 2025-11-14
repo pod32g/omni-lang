@@ -79,6 +79,14 @@ func (mb *moduleBuilder) collectFunctionSignatures(mod *ast.Module) {
 		if fn.Return != nil {
 			sig.Return = typeExprToString(fn.Return)
 		}
+		// If function is async, wrap return type in Promise<T>
+		if fn.IsAsync {
+			if sig.Return == "void" {
+				sig.Return = "Promise<void>"
+			} else {
+				sig.Return = "Promise<" + sig.Return + ">"
+			}
+		}
 		sig.Params = make([]string, len(fn.Params))
 		for i, param := range fn.Params {
 			sig.Params[i] = typeExprToString(param.Type)
@@ -95,6 +103,14 @@ func (mb *moduleBuilder) buildFunction(fn *ast.FuncDecl) (*mir.Function, error) 
 	returnType := "void"
 	if fn.Return != nil {
 		returnType = typeExprToString(fn.Return)
+	}
+	// If function is async, wrap return type in Promise<T>
+	if fn.IsAsync {
+		if returnType == "void" {
+			returnType = "Promise<void>"
+		} else {
+			returnType = "Promise<" + returnType + ">"
+		}
 	}
 
 	mirFunc := mir.NewFunction(fn.Name, returnType, params)
@@ -881,6 +897,8 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		return mirValue{ID: sym.Value, Type: sym.Type}, nil
 	case *ast.BinaryExpr:
 		return fb.emitBinary(e)
+	case *ast.AwaitExpr:
+		return fb.emitAwait(e)
 	case *ast.UnaryExpr:
 		return fb.emitUnary(e)
 	case *ast.CallExpr:
@@ -1055,6 +1073,34 @@ func (fb *functionBuilder) emitBinary(expr *ast.BinaryExpr) (mirValue, error) {
 		Operands: []mir.Operand{
 			valueOperand(left.ID, left.Type),
 			valueOperand(right.ID, right.Type),
+		},
+	}
+	fb.block.Instructions = append(fb.block.Instructions, inst)
+	return mirValue{ID: id, Type: resultType}, nil
+}
+
+func (fb *functionBuilder) emitAwait(expr *ast.AwaitExpr) (mirValue, error) {
+	operand, err := fb.lowerExpr(expr.Expr)
+	if err != nil {
+		return mirValue{}, err
+	}
+
+	// Extract inner type from Promise<T>
+	resultType := operand.Type
+	if strings.HasPrefix(resultType, "Promise<") && strings.HasSuffix(resultType, ">") {
+		resultType = resultType[len("Promise<") : len(resultType)-1]
+	} else {
+		// If not a Promise, this is a type error but we'll let the type checker catch it
+		resultType = inferTypePlaceholder
+	}
+
+	id := fb.fn.NextValue()
+	inst := mir.Instruction{
+		ID:   id,
+		Op:   "await",
+		Type: resultType,
+		Operands: []mir.Operand{
+			valueOperand(operand.ID, operand.Type),
 		},
 	}
 	fb.block.Instructions = append(fb.block.Instructions, inst)

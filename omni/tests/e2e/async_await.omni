@@ -1,0 +1,26 @@
+import std
+
+async func fetch_number():int {
+    return 42
+}
+
+async func fetch_string():string {
+    return "hello"
+}
+
+async func main():int {
+    let num = await fetch_number()
+    let str = await fetch_string()
+    
+    std.io.println("Number: " + num)
+    std.io.println("String: " + str)
+    
+    if num != 42 {
+        return 1
+    }
+    if str != "hello" {
+        return 1
+    }
+    
+    return 0
+}

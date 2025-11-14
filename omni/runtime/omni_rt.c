@@ -6,6 +6,7 @@
 #include <math.h>
 #include <time.h>
 #include <ctype.h>
+#include <stdint.h>
 
 // Test framework state
 static int32_t total_tests = 0;
@@ -1136,4 +1137,152 @@ int32_t omni_struct_get_bool_field(omni_struct_t* struct_ptr, const char* field_
     }
     
     return 0; // Field not found, return default value
+}
+
+// Promise/Async support (simplified synchronous implementation)
+omni_promise_t* omni_promise_create_int(int32_t value) {
+    omni_promise_t* promise = (omni_promise_t*)malloc(sizeof(omni_promise_t));
+    if (!promise) return NULL;
+    promise->type = 0; // int
+    promise->value = malloc(sizeof(int32_t));
+    if (!promise->value) {
+        free(promise);
+        return NULL;
+    }
+    *(int32_t*)promise->value = value;
+    promise->done = 1;
+    return promise;
+}
+
+omni_promise_t* omni_promise_create_string(const char* value) {
+    omni_promise_t* promise = (omni_promise_t*)malloc(sizeof(omni_promise_t));
+    if (!promise) return NULL;
+    promise->type = 1; // string
+    if (value) {
+        promise->value = strdup(value);
+    } else {
+        promise->value = strdup("");
+    }
+    promise->done = 1;
+    return promise;
+}
+
+omni_promise_t* omni_promise_create_float(double value) {
+    omni_promise_t* promise = (omni_promise_t*)malloc(sizeof(omni_promise_t));
+    if (!promise) return NULL;
+    promise->type = 2; // float
+    promise->value = malloc(sizeof(double));
+    if (!promise->value) {
+        free(promise);
+        return NULL;
+    }
+    *(double*)promise->value = value;
+    promise->done = 1;
+    return promise;
+}
+
+omni_promise_t* omni_promise_create_bool(int32_t value) {
+    omni_promise_t* promise = (omni_promise_t*)malloc(sizeof(omni_promise_t));
+    if (!promise) return NULL;
+    promise->type = 3; // bool
+    promise->value = malloc(sizeof(int32_t));
+    if (!promise->value) {
+        free(promise);
+        return NULL;
+    }
+    *(int32_t*)promise->value = value;
+    promise->done = 1;
+    return promise;
+}
+
+int32_t omni_await_int(omni_promise_t* promise) {
+    if (!promise || !promise->done || promise->type != 0) {
+        return 0;
+    }
+    return *(int32_t*)promise->value;
+}
+
+const char* omni_await_string(omni_promise_t* promise) {
+    if (!promise || !promise->done || promise->type != 1) {
+        return "";
+    }
+    return (const char*)promise->value;
+}
+
+double omni_await_float(omni_promise_t* promise) {
+    if (!promise || !promise->done || promise->type != 2) {
+        return 0.0;
+    }
+    return *(double*)promise->value;
+}
+
+int32_t omni_await_bool(omni_promise_t* promise) {
+    if (!promise || !promise->done || promise->type != 3) {
+        return 0;
+    }
+    return *(int32_t*)promise->value;
+}
+
+void omni_promise_free(omni_promise_t* promise) {
+    if (!promise) return;
+    if (promise->value) {
+        if (promise->type == 1) {
+            // String - free the duplicated string
+            free(promise->value);
+        } else {
+            // Other types - free the allocated value
+            free(promise->value);
+        }
+    }
+    free(promise);
+}
+
+// File I/O convenience functions (for async operations)
+const char* omni_read_file(const char* path) {
+    FILE* file = fopen(path, "r");
+    if (!file) {
+        return strdup("");
+    }
+    
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    char* buffer = (char*)malloc(size + 1);
+    if (!buffer) {
+        fclose(file);
+        return strdup("");
+    }
+    
+    size_t read = fread(buffer, 1, size, file);
+    buffer[read] = '\0';
+    fclose(file);
+    
+    return buffer;
+}
+
+int32_t omni_write_file(const char* path, const char* content) {
+    FILE* file = fopen(path, "w");
+    if (!file) {
+        return 0;
+    }
+    
+    size_t len = strlen(content);
+    size_t written = fwrite(content, 1, len, file);
+    fclose(file);
+    
+    return (written == len) ? 1 : 0;
+}
+
+int32_t omni_append_file(const char* path, const char* content) {
+    FILE* file = fopen(path, "a");
+    if (!file) {
+        return 0;
+    }
+    
+    size_t len = strlen(content);
+    size_t written = fwrite(content, 1, len, file);
+    fclose(file);
+    
+    return (written == len) ? 1 : 0;
 }
