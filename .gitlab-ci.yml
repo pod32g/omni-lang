@@ -341,7 +341,7 @@ benchmark:
 # Build VS Code extension assets
 build-vscode-extension:
   stage: build
-  image: 192.168.68.15:5050/pod32g/docker-mirror/node:20
+  image: docker.io/library/node:20
   needs: []
   before_script:
     - cd vscode/omni
