@@ -141,10 +141,17 @@ trivy-scan:
     policy: pull-push
   script:
     - trivy --version
-    - trivy fs --scanners vuln,config,secret --severity CRITICAL,HIGH --skip-dirs .git --no-progress --exit-code 1 --format table .
-    - trivy fs --scanners vuln --severity CRITICAL,HIGH,MEDIUM,LOW --skip-dirs .git --no-progress --exit-code 0 --format sarif --output trivy-report.sarif .
+    - |
+      set -euo pipefail
+      set +e
+      trivy fs --scanners vuln,misconfig,secret --severity CRITICAL,HIGH --skip-dirs .git --no-progress --exit-code 1 --format table . | tee trivy-summary.txt
+      scan_exit=$?
+      set -e
+      trivy fs --scanners vuln --severity CRITICAL,HIGH,MEDIUM,LOW --skip-dirs .git --no-progress --exit-code 0 --format sarif --output trivy-report.sarif .
+      exit ${scan_exit}
   artifacts:
     paths:
+      - trivy-summary.txt
       - trivy-report.sarif
     when: always
     expire_in: 1 week

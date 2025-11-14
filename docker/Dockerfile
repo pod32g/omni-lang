@@ -14,5 +14,10 @@ RUN ln -s ${OMNI_HOME}/bin/omnic /usr/local/bin/omnic && \
 
 ENV PATH="${OMNI_HOME}/bin:${PATH}"
 
-CMD ["omnic", "--help"]
+RUN groupadd --system omni && \
+    useradd --system --gid omni --home-dir ${OMNI_HOME} --shell /bin/bash omni && \
+    chown -R omni:omni ${OMNI_HOME}
 
+USER omni
+
+CMD ["omnic", "--help"]
