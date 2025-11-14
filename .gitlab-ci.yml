@@ -481,8 +481,6 @@ sync-to-github:
       sync_identity_name="${GITHUB_USERNAME:-${GITLAB_USER_NAME:-GitLab CI}}"
       sync_identity_email="${GITHUB_EMAIL:-${GITLAB_USER_EMAIL:-ci@example.com}}"
       sync_http_user="${GITHUB_USERNAME:-${GITLAB_USER_LOGIN:-gitlab-ci}}"
-      git config user.name "${sync_identity_name}"
-      git config user.email "${sync_identity_email}"
       if [ -z "${GITHUB_TOKEN:-}" ]; then
         echo "GITHUB_TOKEN variable is required for GitHub mirroring."
         exit 1
@@ -506,6 +504,8 @@ sync-to-github:
       trap 'rm -rf "${workdir}" ~/.git-credentials' EXIT
       git clone --filter=blob:none "${CI_REPOSITORY_URL}" "${workdir}/repo"
       cd "${workdir}/repo"
+      git config user.name "${sync_identity_name}"
+      git config user.email "${sync_identity_email}"
       git remote add github "${repo_url}"
       git fetch origin "${CI_COMMIT_REF_NAME}"
       git checkout --detach "${CI_COMMIT_SHA}"
