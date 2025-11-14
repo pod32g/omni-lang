@@ -494,20 +494,26 @@ sync-to-github:
           exit 1
         fi
       fi
-      git remote remove github 2>/dev/null || true
-      git config credential.helper store
-      cat <<EOF > ~/.git-credentials
-      https://${sync_http_user}:${GITHUB_TOKEN}@github.com
-      EOF
-      chmod 600 ~/.git-credentials
       workdir="$(mktemp -d)"
-      trap 'rm -rf "${workdir}" ~/.git-credentials' EXIT
+      trap 'rm -rf "${workdir}"' EXIT
       git clone --filter=blob:none "${CI_REPOSITORY_URL}" "${workdir}/repo"
       cd "${workdir}/repo"
       git config user.name "${sync_identity_name}"
       git config user.email "${sync_identity_email}"
-      git remote add github "${repo_url}"
-      git config credential.helper "store --file ~/.git-credentials"
+      sanitized_repo_url="${repo_url}"
+      case "${sanitized_repo_url}" in
+        https://*)
+          sanitized_repo_url="${sanitized_repo_url#https://}"
+          ;;
+        http://*)
+          sanitized_repo_url="${sanitized_repo_url#http://}"
+          ;;
+        *)
+          echo "Only HTTPS GitHub remotes are supported."
+          exit 1
+          ;;
+      esac
+      git remote add github "https://${sync_http_user}:${GITHUB_TOKEN}@${sanitized_repo_url}"
       git fetch origin "${CI_COMMIT_REF_NAME}"
       git checkout --detach "${CI_COMMIT_SHA}"
       rm -f .gitlab-ci.yml
