@@ -90,7 +90,7 @@ jobs:
               make build-runtime
               make build-rust
               make build
-              export LD_LIBRARY_PATH=$PWD/native/clift/target/release:$PWD/runtime/posix:$LD_LIBRARY_PATH
+              export LD_LIBRARY_PATH="$PWD/native/clift/target/release:$PWD/runtime/posix:${LD_LIBRARY_PATH:-}"
               make test
               ;;
             macos-amd64)
