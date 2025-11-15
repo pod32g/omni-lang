@@ -19,6 +19,7 @@ releases/
 # Rust build artifacts
 target/
 Cargo.lock
+!omni/native/clift/vendor/**/Cargo.lock
 **/*.rs.bk
 
 # Object files
