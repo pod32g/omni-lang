@@ -10,23 +10,41 @@ import (
 )
 
 // transformTokensForNestedGenerics converts >> tokens to two > tokens in generic contexts
-// Only treats < as generic delimiter when it follows an identifier or type keyword
+// Only treats < as generic delimiter when it follows an identifier in a type context
+// (i.e., when the next token is likely a type argument, not a comparison)
 func transformTokensForNestedGenerics(tokens []lexer.Token) []lexer.Token {
 	var result []lexer.Token
 	genericDepth := 0
 
 	for i, token := range tokens {
-		// Only treat < as generic delimiter when it follows an identifier or type keyword
-		// This prevents treating comparison operators like a < b as generic delimiters
+		// Only treat < as generic delimiter when it follows an identifier AND
+		// the next token suggests a type context (identifier, keyword, or type-related token)
 		if token.Kind == lexer.TokenLess {
-			// Check if previous token is an identifier or type keyword
+			// Check if previous token is an identifier
 			if i > 0 {
 				prevToken := tokens[i-1]
-				// Check if previous token is identifier or a type-related keyword
 				if prevToken.Kind == lexer.TokenIdentifier {
-					genericDepth++
+					// Look ahead to see if this is likely a type context
+					// If next token is identifier, keyword, or we're in a type-like position, it's generic
+					if i+1 < len(tokens) {
+						nextToken := tokens[i+1]
+						// Type contexts: identifier (type name), keywords, or we're already in generics
+						if nextToken.Kind == lexer.TokenIdentifier || 
+						   nextToken.Kind == lexer.TokenLess || // nested generic
+						   genericDepth > 0 { // already in generic context
+							genericDepth++
+						} else {
+							// Not a generic delimiter (likely comparison), just pass through
+							result = append(result, token)
+							continue
+						}
+					} else {
+						// End of tokens, not a generic
+						result = append(result, token)
+						continue
+					}
 				} else {
-					// Not a generic delimiter, just pass through
+					// Not following identifier, not a generic delimiter
 					result = append(result, token)
 					continue
 				}
@@ -43,16 +61,21 @@ func transformTokensForNestedGenerics(tokens []lexer.Token) []lexer.Token {
 
 		// Transform >> to two > tokens when in generic context
 		if token.Kind == lexer.TokenRShift && genericDepth > 0 {
-			// Create two separate > tokens
+			// Create two separate > tokens with proper spans
+			// First token: use the start position, advance column by 1 for non-zero width
+			firstEnd := token.Span.Start
+			firstEnd.Column++
 			firstGreater := lexer.Token{
 				Kind:   lexer.TokenGreater,
 				Lexeme: ">",
-				Span:   lexer.Span{Start: token.Span.Start, End: token.Span.Start},
+				Span:   lexer.Span{Start: token.Span.Start, End: firstEnd},
 			}
+			// Second token: start where first ended, use original end
+			secondStart := firstEnd
 			secondGreater := lexer.Token{
 				Kind:   lexer.TokenGreater,
 				Lexeme: ">",
-				Span:   lexer.Span{Start: token.Span.Start, End: token.Span.End},
+				Span:   lexer.Span{Start: secondStart, End: token.Span.End},
 			}
 			result = append(result, firstGreater, secondGreater)
 		} else {
@@ -1019,18 +1042,34 @@ func (p *Parser) parseStructLiteral(base ast.Expr) (ast.Expr, error) {
 	var typeName string
 	var startSpan lexer.Span
 	
-	// Handle both IdentifierExpr and MemberExpr (qualified types like pkg.Type)
+	// Handle IdentifierExpr and MemberExpr (including multi-level qualified types like pkg.sub.Type)
 	switch expr := base.(type) {
 	case *ast.IdentifierExpr:
 		typeName = expr.Name
 		startSpan = expr.SpanInfo
 	case *ast.MemberExpr:
-		// For qualified types, construct the full name (e.g., "pkg.Type")
-		if targetIdent, ok := expr.Target.(*ast.IdentifierExpr); ok {
-			typeName = targetIdent.Name + "." + expr.Member
-			startSpan = expr.SpanInfo
-		} else {
-			return nil, p.errorAtCurrent("struct literal must start with type identifier or qualified type")
+		// Walk the chain of MemberExpr targets to build the full qualified name
+		parts := []string{expr.Member}
+		current := expr.Target
+		found := false
+		
+		for !found {
+			switch target := current.(type) {
+			case *ast.IdentifierExpr:
+				parts = append(parts, target.Name)
+				// Reverse the parts since we built them backwards
+				for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+					parts[i], parts[j] = parts[j], parts[i]
+				}
+				typeName = strings.Join(parts, ".")
+				startSpan = expr.SpanInfo
+				found = true
+			case *ast.MemberExpr:
+				parts = append(parts, target.Member)
+				current = target.Target
+			default:
+				return nil, p.errorAtCurrent("struct literal must start with type identifier or qualified type")
+			}
 		}
 	default:
 		return nil, p.errorAtCurrent("struct literal must start with type identifier or qualified type")
@@ -1083,11 +1122,21 @@ func (p *Parser) parseMapLiteral(lbrace lexer.Token) (ast.Expr, error) {
 }
 
 func (p *Parser) isStructLiteralContext(base ast.Expr) bool {
-	// Accept both IdentifierExpr and MemberExpr (qualified types)
+	// Accept IdentifierExpr and MemberExpr (including multi-level qualified types)
 	_, isIdent := base.(*ast.IdentifierExpr)
 	_, isMember := base.(*ast.MemberExpr)
 	if !isIdent && !isMember {
 		return false
+	}
+	// For MemberExpr, recursively check if the target is also valid
+	if isMember {
+		memberExpr := base.(*ast.MemberExpr)
+		// The target should also be an identifier or member expression
+		_, targetIsIdent := memberExpr.Target.(*ast.IdentifierExpr)
+		_, targetIsMember := memberExpr.Target.(*ast.MemberExpr)
+		if !targetIsIdent && !targetIsMember {
+			return false
+		}
 	}
 	k1 := p.peekKindN(1)
 	if k1 == lexer.TokenRBrace {
@@ -1335,9 +1384,18 @@ func (p *Parser) parseSingleTypeWithNestedGenerics() (*ast.TypeExpr, error) {
 		return nil, p.errorAtCurrent("multiple types in parentheses must be followed by '->' for function type")
 	}
 
-	// Handle simple identifier types
+	// Handle simple identifier types and qualified types (e.g., math.Point, pkg.sub.Type)
 	nameTok := p.expect(lexer.TokenIdentifier)
-	typeExpr := &ast.TypeExpr{SpanInfo: nameTok.Span, Name: nameTok.Lexeme}
+	typeName := nameTok.Lexeme
+	startSpan := nameTok.Span
+	
+	// Consume additional .-separated identifiers for qualified types
+	for p.match(lexer.TokenDot) {
+		nextIdent := p.expect(lexer.TokenIdentifier)
+		typeName += "." + nextIdent.Lexeme
+	}
+	
+	typeExpr := &ast.TypeExpr{SpanInfo: lexer.Span{Start: startSpan.Start, End: p.previous().Span.End}, Name: typeName}
 	if p.match(lexer.TokenLess) {
 		args, err := p.parseGenericTypeArgs()
 		if err != nil {
@@ -1464,9 +1522,18 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 		return nil, p.errorAtCurrent("multiple types in parentheses must be followed by '->' for function type")
 	}
 
-	// Handle simple identifier types
+	// Handle simple identifier types and qualified types (e.g., math.Point, pkg.sub.Type)
 	nameTok := p.expect(lexer.TokenIdentifier)
-	typeExpr := &ast.TypeExpr{SpanInfo: nameTok.Span, Name: nameTok.Lexeme}
+	typeName := nameTok.Lexeme
+	startSpan := nameTok.Span
+	
+	// Consume additional .-separated identifiers for qualified types
+	for p.match(lexer.TokenDot) {
+		nextIdent := p.expect(lexer.TokenIdentifier)
+		typeName += "." + nextIdent.Lexeme
+	}
+	
+	typeExpr := &ast.TypeExpr{SpanInfo: lexer.Span{Start: startSpan.Start, End: p.previous().Span.End}, Name: typeName}
 	if p.match(lexer.TokenLess) {
 		args, err := p.parseGenericTypeArgs()
 		if err != nil {
@@ -1754,11 +1821,13 @@ func (p *Parser) parseStringInterpolation(tok lexer.Token) (ast.Expr, error) {
 			// Parse the expression inside the braces
 			exprContent := content[exprStart : i-1] // exclude the closing brace
 			// Create a temporary parser to parse just this expression
-			tempTokens, err := lexer.LexAll("", exprContent)
+			// Apply the same token transform as the main parser
+			rawTokens, err := lexer.LexAll("", exprContent)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse interpolation expression: %v", err)
 			}
-
+			// Apply the same transformTokensForNestedGenerics transform
+			tempTokens := transformTokensForNestedGenerics(rawTokens)
 			tempParser := &Parser{
 				filename: "interpolation",
 				tokens:   tempTokens,
@@ -1768,6 +1837,10 @@ func (p *Parser) parseStringInterpolation(tok lexer.Token) (ast.Expr, error) {
 			expr, err := tempParser.parseExpr()
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse interpolation expression: %v", err)
+			}
+			// Verify that we consumed all tokens (enforce EOF)
+			if tempParser.pos < len(tempParser.tokens) {
+				return nil, fmt.Errorf("interpolation expression has trailing tokens")
 			}
 
 			parts = append(parts, ast.StringInterpolationPart{

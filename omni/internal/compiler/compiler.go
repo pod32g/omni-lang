@@ -209,7 +209,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 					return fmt.Errorf("merge nested imports for %s: %w", strings.Join(imp.Path, "."), err)
 				}
 
-				// Append cloned function decls with namespaced names for each alias
+				// Append cloned declarations with namespaced names for each alias
 				for _, ns := range aliases {
 					for _, d := range imported.Decls {
 						switch decl := d.(type) {
@@ -218,6 +218,14 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 							cloned.Name = ns + "." + decl.Name
 							mod.Decls = append(mod.Decls, &cloned)
 						case *ast.StructDecl:
+							cloned := *decl
+							cloned.Name = ns + "." + decl.Name
+							mod.Decls = append(mod.Decls, &cloned)
+						case *ast.EnumDecl:
+							cloned := *decl
+							cloned.Name = ns + "." + decl.Name
+							mod.Decls = append(mod.Decls, &cloned)
+						case *ast.TypeAliasDecl:
 							cloned := *decl
 							cloned.Name = ns + "." + decl.Name
 							mod.Decls = append(mod.Decls, &cloned)
@@ -331,6 +339,14 @@ func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast
 						cloned.Name = ns + "." + decl.Name
 						targetMod.Decls = append(targetMod.Decls, &cloned)
 					case *ast.StructDecl:
+						cloned := *decl
+						cloned.Name = ns + "." + decl.Name
+						targetMod.Decls = append(targetMod.Decls, &cloned)
+					case *ast.EnumDecl:
+						cloned := *decl
+						cloned.Name = ns + "." + decl.Name
+						targetMod.Decls = append(targetMod.Decls, &cloned)
+					case *ast.TypeAliasDecl:
 						cloned := *decl
 						cloned.Name = ns + "." + decl.Name
 						targetMod.Decls = append(targetMod.Decls, &cloned)

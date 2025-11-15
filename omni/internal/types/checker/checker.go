@@ -129,49 +129,90 @@ func (c *Checker) isFunctionTypeParam(name string, typeParams []ast.TypeParam) b
 
 // inferTypeParametersFromGeneric infers type parameters from generic types
 // For example, if expected is "array<T>" and argType is "array<int>", it infers T = int
+// Now handles arbitrary generic types like Result<T>, List<T>, etc.
 func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeParams []ast.TypeParam) map[string]string {
 	inferred := make(map[string]string)
 
-	// Handle array types: array<T> vs array<int>
-	if strings.HasPrefix(expected, "array<") && strings.HasSuffix(expected, ">") &&
-		strings.HasPrefix(argType, "array<") && strings.HasSuffix(argType, ">") {
-		expectedInner := expected[6 : len(expected)-1] // Remove "array<" and ">"
-		argInner := argType[6 : len(argType)-1]        // Remove "array<" and ">"
-
-		// If the expected inner type is a type parameter, infer it
-		if c.isFunctionTypeParam(expectedInner, typeParams) {
-			inferred[expectedInner] = argInner
+	// Find the generic delimiter position for both types
+	expectedLess := strings.Index(expected, "<")
+	argLess := strings.Index(argType, "<")
+	
+	// Both must be generic types
+	if expectedLess == -1 || argLess == -1 {
+		return inferred
+	}
+	
+	// Extract base type names (everything before <)
+	expectedBase := expected[:expectedLess]
+	argBase := argType[:argLess]
+	
+	// Base types must match (e.g., both "array" or both "Result")
+	if expectedBase != argBase {
+		return inferred
+	}
+	
+	// Extract inner types (everything between < and >)
+	expectedInner := expected[expectedLess+1 : len(expected)-1]
+	argInner := argType[argLess+1 : len(argType)-1]
+	
+	// Handle single type parameter: TypeName<T> vs TypeName<int>
+	if !strings.Contains(expectedInner, ",") && !strings.Contains(argInner, ",") {
+		// Single type parameter
+		if c.isFunctionTypeParam(strings.TrimSpace(expectedInner), typeParams) {
+			inferred[strings.TrimSpace(expectedInner)] = strings.TrimSpace(argInner)
+		}
+		return inferred
+	}
+	
+	// Handle multiple type parameters: TypeName<K,V> vs TypeName<string,int>
+	// Split by comma, but be careful of nested generics
+	expectedParts := c.splitGenericArgs(expectedInner)
+	argParts := c.splitGenericArgs(argInner)
+	
+	if len(expectedParts) == len(argParts) {
+		for i := 0; i < len(expectedParts); i++ {
+			expectedPart := strings.TrimSpace(expectedParts[i])
+			argPart := strings.TrimSpace(argParts[i])
+			if c.isFunctionTypeParam(expectedPart, typeParams) {
+				inferred[expectedPart] = argPart
+			}
 		}
 	}
-
-	// Handle map types: map<K,V> vs map<string,int>
-	if strings.HasPrefix(expected, "map<") && strings.HasSuffix(expected, ">") &&
-		strings.HasPrefix(argType, "map<") && strings.HasSuffix(argType, ">") {
-		expectedInner := expected[4 : len(expected)-1] // Remove "map<" and ">"
-		argInner := argType[4 : len(argType)-1]        // Remove "map<" and ">"
-
-		// Split by comma to get key and value types
-		expectedParts := strings.Split(expectedInner, ",")
-		argParts := strings.Split(argInner, ",")
-
-		if len(expectedParts) == 2 && len(argParts) == 2 {
-			expectedKey := strings.TrimSpace(expectedParts[0])
-			expectedValue := strings.TrimSpace(expectedParts[1])
-			argKey := strings.TrimSpace(argParts[0])
-			argValue := strings.TrimSpace(argParts[1])
-
-			// Infer key type parameter
-			if c.isFunctionTypeParam(expectedKey, typeParams) {
-				inferred[expectedKey] = argKey
-			}
-			// Infer value type parameter
-			if c.isFunctionTypeParam(expectedValue, typeParams) {
-				inferred[expectedValue] = argValue
-			}
-		}
-	}
-
+	
 	return inferred
+}
+
+// splitGenericArgs splits generic arguments by comma, handling nested generics
+func (c *Checker) splitGenericArgs(s string) []string {
+	var parts []string
+	var current strings.Builder
+	depth := 0
+	
+	for _, r := range s {
+		switch r {
+		case '<':
+			depth++
+			current.WriteRune(r)
+		case '>':
+			depth--
+			current.WriteRune(r)
+		case ',':
+			if depth == 0 {
+				parts = append(parts, current.String())
+				current.Reset()
+			} else {
+				current.WriteRune(r)
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+	
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+	
+	return parts
 }
 
 // Symbol represents an entry in the scope stack.
@@ -1369,6 +1410,12 @@ func (c *Checker) typeExprToString(t *ast.TypeExpr) string {
 		return "*" + baseType
 	}
 
+	// Handle optional types: T?
+	if t.IsOptional && t.OptionalType != nil {
+		innerType := c.typeExprToString(t.OptionalType)
+		return innerType + "?"
+	}
+
 	// Handle generic types
 	if len(t.Args) > 0 {
 		args := make([]string, len(t.Args))
@@ -1481,6 +1528,12 @@ func typeExprToString(t *ast.TypeExpr) string {
 		}
 		returnType := typeExprToString(t.ReturnType)
 		return buildFunctionType(paramTypes, returnType)
+	}
+
+	// Handle optional types: T?
+	if t.IsOptional && t.OptionalType != nil {
+		innerType := typeExprToString(t.OptionalType)
+		return innerType + "?"
 	}
 
 	if len(t.Args) == 0 {
