@@ -58,7 +58,7 @@ cache:
 # Format and lint checks
 fmt:
   stage: lint
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   script:
     - cd omni
     - make fmt
@@ -68,7 +68,7 @@ fmt:
 
 lint:
   stage: lint
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   script:
     - cd omni
     - make lint
@@ -91,7 +91,7 @@ rust-lint:
 # Security scanning (basic checks)
 security-scan:
   stage: lint
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   script:
     - cd omni
     - echo "Running comprehensive security checks..."
@@ -109,7 +109,7 @@ security-scan:
 # Code quality checks (basic)
 code-quality:
   stage: lint
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   script:
     - cd omni
     - echo "Running comprehensive code quality checks..."
@@ -162,7 +162,7 @@ trivy-scan:
 # Dependency update check (runs weekly)
 dependency-check:
   stage: lint
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   script:
     - cd omni
     - echo "Checking for dependency updates..."
@@ -178,7 +178,7 @@ dependency-check:
 # Run all tests
 test:
   stage: test
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   before_script:
     - apt-get update && apt-get install -y gcc curl
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -215,7 +215,7 @@ rust-test:
 # Integration testing with real OmniLang programs
 integration-test:
   stage: test
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   before_script:
     - apt-get update && apt-get install -y gcc curl
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -265,7 +265,7 @@ integration-test:
 # Comprehensive test suite (runs in parallel with other test jobs)
 comprehensive-test:
   stage: test
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   before_script:
     - apt-get update && apt-get install -y gcc curl
     - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -315,7 +315,7 @@ comprehensive-test:
 # Performance benchmarking
 benchmark:
   stage: test
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   timeout: 30m
   before_script:
     - apt-get update && apt-get install -y gcc curl
@@ -361,7 +361,7 @@ build-vscode-extension:
 # Build for Linux x86_64
 build-linux:
   stage: build
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   timeout: 20m
   <<: *retry_template
   before_script:
@@ -390,7 +390,7 @@ build-linux:
 # Build for macOS (using Linux with cross-compilation)
 build-macos:
   stage: build
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   <<: *retry_template
   before_script:
     - apt-get update && apt-get install -y gcc curl
@@ -414,7 +414,7 @@ build-macos:
 # Build for Windows
 build-windows:
   stage: build
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   <<: *retry_template
   before_script:
     - apt-get update && apt-get install -y gcc curl
@@ -437,7 +437,7 @@ build-windows:
 # Create distribution package
 package:
   stage: package
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   dependencies:
     - build-linux
     - build-macos
@@ -465,7 +465,7 @@ package:
 # Create release
 release:
   stage: release
-  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.23
+  image: 192.168.68.15:5050/pod32g/docker-mirror/golang:1.24
   dependencies:
     - package
   script:
