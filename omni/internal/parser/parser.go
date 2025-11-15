@@ -10,74 +10,152 @@ import (
 )
 
 // transformTokensForNestedGenerics converts >> tokens to two > tokens in generic contexts
-// Only treats < as generic delimiter when it follows an identifier in a type context
-// (i.e., when the next token is likely a type argument, not a comparison)
+// Only treats < as generic delimiter when it follows an identifier in a CLEAR type context
+// (e.g., after : in declarations, after ( in function parameters, etc.)
+// This prevents mangling ordinary comparisons like "a < b >> 1"
 func transformTokensForNestedGenerics(tokens []lexer.Token) []lexer.Token {
 	var result []lexer.Token
 	genericDepth := 0
 
+	// Helper to check if a token kind indicates we're in a type context
+	// (e.g., after :, catch, function parameters, etc.)
+	isTypeContextMarker := func(kind lexer.Kind) bool {
+		switch kind {
+		case lexer.TokenColon,        // let x: Type<...>
+			lexer.TokenLParen,        // func f(x: Type<...>) or catch (e: Type<...>)
+			lexer.TokenComma,         // func f(x: Type<...>, y: ...)
+			lexer.TokenArrow,         // (Type<...>) -> ReturnType
+			lexer.TokenLBracket,      // []Type<...>
+			lexer.TokenStar,          // *Type<...>
+			lexer.TokenQuestion:      // Type<...>?
+			return true
+		}
+		return false
+	}
+
+	// Helper to check if a token kind indicates an expression context
+	// (where < is definitely a comparison, not a generic)
+	isExpressionContext := func(kind lexer.Kind) bool {
+		switch kind {
+		case lexer.TokenAndAnd, lexer.TokenOrOr,     // &&, ||
+			lexer.TokenEqualEqual, lexer.TokenBangEqual, // ==, !=
+			lexer.TokenLessEqual, lexer.TokenGreaterEqual, // <=, >=
+			lexer.TokenAssign,                        // =
+			lexer.TokenPlus, lexer.TokenMinus,        // +, -
+			lexer.TokenStar, lexer.TokenSlash,        // *, /
+			lexer.TokenPercent,                       // %
+			lexer.TokenRShift,                        // >> (shift operator)
+			lexer.TokenLShift,                        // <<
+			lexer.TokenSemicolon,                     // ;
+			lexer.TokenRParen,                        // ) (end of expression)
+			lexer.TokenRBracket,                      // ] (end of array access)
+			lexer.TokenRBrace:                        // } (end of block)
+			return true
+		}
+		return false
+	}
+
 	for i, token := range tokens {
-		// Only treat < as generic delimiter when it follows an identifier AND
-		// the next token suggests a type context (identifier, keyword, or type-related token)
 		if token.Kind == lexer.TokenLess {
-			// Check if previous token is an identifier
-			if i > 0 {
-				prevToken := tokens[i-1]
-				if prevToken.Kind == lexer.TokenIdentifier {
-					// Look ahead to see if this is likely a type context
-					// If next token is identifier, keyword, or we're in a type-like position, it's generic
-					if i+1 < len(tokens) {
-						nextToken := tokens[i+1]
-						// Type contexts: identifier (type name), keywords, or we're already in generics
-						if nextToken.Kind == lexer.TokenIdentifier || 
-						   nextToken.Kind == lexer.TokenLess || // nested generic
-						   genericDepth > 0 { // already in generic context
-							genericDepth++
-						} else {
-							// Not a generic delimiter (likely comparison), just pass through
-							result = append(result, token)
-							continue
+			// Only treat < as generic if:
+			// 1. It follows an identifier
+			// 2. AND we're in a type context (previous token indicates type context)
+			// 3. AND the next token is a valid type argument starter
+			if i > 0 && tokens[i-1].Kind == lexer.TokenIdentifier {
+				// Check if we're in a type context by looking at tokens before the identifier
+				inTypeContext := false
+				if i >= 2 {
+					// Look back further to find type context markers
+					for j := i - 2; j >= 0 && j >= i-10; j-- { // Look back up to 10 tokens
+						if isTypeContextMarker(tokens[j].Kind) {
+							inTypeContext = true
+							break
 						}
-					} else {
-						// End of tokens, not a generic
+						// Stop if we hit an expression context marker
+						if isExpressionContext(tokens[j].Kind) {
+							break
+						}
+						// Stop if we hit certain keywords that indicate expression context
+						if tokens[j].Kind == lexer.TokenIf || 
+						   tokens[j].Kind == lexer.TokenWhile ||
+						   tokens[j].Kind == lexer.TokenFor ||
+						   tokens[j].Kind == lexer.TokenReturn {
+							break
+						}
+					}
+				}
+				
+				// Also check if we're already in a generic context
+				if genericDepth > 0 {
+					inTypeContext = true
+				}
+				
+				// Check next token to see if it's a valid type argument starter
+				if i+1 < len(tokens) {
+					nextToken := tokens[i+1]
+					// Valid type argument starters: identifier, [, *, (, <, or we're in generics
+					// Also handle cases like []Bar<Baz> where [] starts the type argument
+					validTypeArgStart := nextToken.Kind == lexer.TokenIdentifier ||
+						nextToken.Kind == lexer.TokenLBracket || // []Type<...>
+						nextToken.Kind == lexer.TokenStar ||     // *Type<...>
+						nextToken.Kind == lexer.TokenLParen ||   // (Type<...>)
+						nextToken.Kind == lexer.TokenLess ||     // nested generic
+						genericDepth > 0
+					
+					// If next token is clearly an expression operator, it's NOT a generic
+					if isExpressionContext(nextToken.Kind) {
+						validTypeArgStart = false
+					}
+					
+					// Also check if the token after next is a valid type continuation
+					// (e.g., for []Bar, we need to see [ followed by ] then identifier)
+					if !validTypeArgStart && i+2 < len(tokens) {
+						nextNextToken := tokens[i+2]
+						// []Type pattern: [ followed by ] then identifier
+						if nextToken.Kind == lexer.TokenLBracket && 
+						   nextNextToken.Kind == lexer.TokenRBracket &&
+						   i+3 < len(tokens) &&
+						   tokens[i+3].Kind == lexer.TokenIdentifier {
+							validTypeArgStart = true
+						}
+					}
+					
+					if inTypeContext && validTypeArgStart {
+						genericDepth++
 						result = append(result, token)
 						continue
 					}
-				} else {
-					// Not following identifier, not a generic delimiter
-					result = append(result, token)
-					continue
 				}
-			} else {
-				// First token can't be a generic delimiter
-				result = append(result, token)
-				continue
 			}
+			// Not a generic delimiter, pass through
+			result = append(result, token)
 		} else if token.Kind == lexer.TokenGreater {
 			if genericDepth > 0 {
 				genericDepth--
 			}
-		}
-
-		// Transform >> to two > tokens when in generic context
-		if token.Kind == lexer.TokenRShift && genericDepth > 0 {
-			// Create two separate > tokens with proper spans
-			// First token: use the start position, advance column by 1 for non-zero width
-			firstEnd := token.Span.Start
-			firstEnd.Column++
-			firstGreater := lexer.Token{
-				Kind:   lexer.TokenGreater,
-				Lexeme: ">",
-				Span:   lexer.Span{Start: token.Span.Start, End: firstEnd},
+			result = append(result, token)
+		} else if token.Kind == lexer.TokenRShift {
+			// Transform >> to two > tokens when in generic context
+			if genericDepth > 0 {
+				// Create two separate > tokens with proper spans
+				firstEnd := token.Span.Start
+				firstEnd.Column++
+				firstGreater := lexer.Token{
+					Kind:   lexer.TokenGreater,
+					Lexeme: ">",
+					Span:   lexer.Span{Start: token.Span.Start, End: firstEnd},
+				}
+				secondStart := firstEnd
+				secondGreater := lexer.Token{
+					Kind:   lexer.TokenGreater,
+					Lexeme: ">",
+					Span:   lexer.Span{Start: secondStart, End: token.Span.End},
+				}
+				result = append(result, firstGreater, secondGreater)
+			} else {
+				// Not in generic context, pass through as shift operator
+				result = append(result, token)
 			}
-			// Second token: start where first ended, use original end
-			secondStart := firstEnd
-			secondGreater := lexer.Token{
-				Kind:   lexer.TokenGreater,
-				Lexeme: ">",
-				Span:   lexer.Span{Start: secondStart, End: token.Span.End},
-			}
-			result = append(result, firstGreater, secondGreater)
 		} else {
 			result = append(result, token)
 		}
@@ -594,6 +672,11 @@ func (p *Parser) parseForStmt() (ast.Stmt, error) {
 }
 
 func (p *Parser) parseForInit() (ast.Stmt, error) {
+	// Support let/var declarations: for let i = 0; ...
+	if p.peekKind() == lexer.TokenLet || p.peekKind() == lexer.TokenVar {
+		return p.parseBindingStmt(p.peekKind() == lexer.TokenVar)
+	}
+	// Support typed variable declaration: for i: int = 0; ...
 	if p.peekKind() == lexer.TokenIdentifier && p.peekKindN(1) == lexer.TokenColon {
 		nameTok := p.advance()
 		p.advance() // colon
@@ -609,6 +692,7 @@ func (p *Parser) parseForInit() (ast.Stmt, error) {
 		span := lexer.Span{Start: nameTok.Span.Start, End: value.Span().End}
 		return &ast.ShortVarDeclStmt{SpanInfo: span, Name: nameTok.Lexeme, Type: typ, Value: value}, nil
 	}
+	// Support assignment or expression: for i = 0; ... or for i++; ...
 	expr, err := p.parseExpr()
 	if err != nil {
 		return nil, err
@@ -861,6 +945,14 @@ func (p *Parser) parseUnary() (ast.Expr, error) {
 			return nil, err
 		}
 		return &ast.AwaitExpr{SpanInfo: lexer.Span{Start: awaitTok.Span.Start, End: expr.Span().End}, Expr: expr}, nil
+	case lexer.TokenDelete:
+		// delete should be a unary operator that only binds to the following postfix expression
+		deleteTok := p.advance()
+		expr, err := p.parsePostfix() // Only parse postfix, not full expression
+		if err != nil {
+			return nil, err
+		}
+		return &ast.DeleteExpr{SpanInfo: lexer.Span{Start: deleteTok.Span.Start, End: expr.Span().End}, Target: expr}, nil
 	case lexer.TokenBang, lexer.TokenMinus, lexer.TokenTilde:
 		op := p.advance()
 		expr, err := p.parseUnary()
@@ -963,6 +1055,10 @@ func (p *Parser) finishCall(callee ast.Expr) (ast.Expr, error) {
 			}
 			args = append(args, arg)
 			if p.match(lexer.TokenComma) {
+				// Check if next token is closing paren (trailing comma)
+				if p.peekKind() == lexer.TokenRParen {
+					break
+				}
 				continue
 			}
 			break
@@ -1020,19 +1116,22 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 				}
 				elems = append(elems, expr)
 				if p.match(lexer.TokenComma) {
+					// Check if next token is closing bracket (trailing comma)
+					if p.peekKind() == lexer.TokenRBracket {
+						break
+					}
 					continue
 				}
-				rbrack := p.expect(lexer.TokenRBracket)
-				return &ast.ArrayLiteralExpr{SpanInfo: lexer.Span{Start: tok.Span.Start, End: rbrack.Span.End}, Elements: elems}, nil
+				break
 			}
+			rbrack := p.expect(lexer.TokenRBracket)
+			return &ast.ArrayLiteralExpr{SpanInfo: lexer.Span{Start: tok.Span.Start, End: rbrack.Span.End}, Elements: elems}, nil
 		}
 		return &ast.ArrayLiteralExpr{SpanInfo: lexer.Span{Start: tok.Span.Start, End: p.previous().Span.End}, Elements: elems}, nil
 	case lexer.TokenLBrace:
 		return p.parseMapLiteral(tok)
 	case lexer.TokenNew:
 		return p.parseNewExpr(tok)
-	case lexer.TokenDelete:
-		return p.parseDeleteExpr(tok)
 	default:
 		return nil, p.errorAt(tok, "unexpected token %s", tok.Kind)
 	}
@@ -1157,28 +1256,60 @@ func (p *Parser) addError(err error) {
 }
 
 func (p *Parser) synchronizeDecl() {
-	if p.peekKind() != lexer.TokenEOF {
-		p.advance()
-	}
+	// Skip tokens until we find a declaration start or a synchronization point
 	for {
 		switch p.peekKind() {
 		case lexer.TokenEOF, lexer.TokenFunc, lexer.TokenLet, lexer.TokenVar, lexer.TokenStruct, lexer.TokenEnum, lexer.TokenImport:
 			return
+		case lexer.TokenSemicolon, lexer.TokenRBrace:
+			// Skip semicolon or closing brace, then continue
+			p.advance()
+			return
+		case lexer.TokenLBrace:
+			// Skip opening brace and try to find matching closing brace
+			p.advance()
+			braceDepth := 1
+			for braceDepth > 0 && p.peekKind() != lexer.TokenEOF {
+				if p.peekKind() == lexer.TokenLBrace {
+					braceDepth++
+				} else if p.peekKind() == lexer.TokenRBrace {
+					braceDepth--
+				}
+				p.advance()
+			}
+			return
+		default:
+			p.advance()
 		}
-		p.advance()
 	}
 }
 
 func (p *Parser) synchronizeStmt() {
-	if p.peekKind() != lexer.TokenEOF {
-		p.advance()
-	}
+	// Skip tokens until we find a statement start or a synchronization point
 	for {
 		switch p.peekKind() {
-		case lexer.TokenEOF, lexer.TokenRBrace, lexer.TokenReturn, lexer.TokenIf, lexer.TokenFor, lexer.TokenLet, lexer.TokenVar:
+		case lexer.TokenEOF, lexer.TokenRBrace, lexer.TokenReturn, lexer.TokenIf, lexer.TokenFor, lexer.TokenWhile, lexer.TokenBreak, lexer.TokenContinue, lexer.TokenLet, lexer.TokenVar:
 			return
+		case lexer.TokenSemicolon:
+			// Skip semicolon, then continue
+			p.advance()
+			return
+		case lexer.TokenLBrace:
+			// Skip opening brace and try to find matching closing brace
+			p.advance()
+			braceDepth := 1
+			for braceDepth > 0 && p.peekKind() != lexer.TokenEOF {
+				if p.peekKind() == lexer.TokenLBrace {
+					braceDepth++
+				} else if p.peekKind() == lexer.TokenRBrace {
+					braceDepth--
+				}
+				p.advance()
+			}
+			return
+		default:
+			p.advance()
 		}
-		p.advance()
 	}
 }
 
@@ -1219,30 +1350,34 @@ func (p *Parser) parseTypeExpr() (*ast.TypeExpr, error) {
 
 // parseGenericTypeArgs parses generic type arguments with proper handling of nested generics
 func (p *Parser) parseGenericTypeArgs() ([]*ast.TypeExpr, error) {
-	args := []*ast.TypeExpr{}
-	if !p.match(lexer.TokenGreater) {
-		for {
-			arg, err := p.parseTypeExprWithNestedGenerics()
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, arg)
-			if p.match(lexer.TokenComma) {
-				continue
-			}
-			// Handle nested generics: array<array<int>> should parse as array<array<int>>
-			// Check if we have >> (right shift) and convert to two separate > tokens
-			if p.peekKind() == lexer.TokenRShift {
-				// We have >> which should be parsed as two separate > tokens
-				// The first > closes the inner generic, the second > closes the outer generic
-				p.advance() // consume the RShift token
-				return args, nil
-			}
-			p.expect(lexer.TokenGreater)
-			return args, nil
-		}
+	// Reject empty generic argument lists: <>
+	if p.match(lexer.TokenGreater) {
+		return nil, p.errorAtCurrent("generic type arguments cannot be empty")
 	}
-	return args, nil
+	
+	args := []*ast.TypeExpr{}
+	for {
+		arg, err := p.parseTypeExprWithNestedGenerics()
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, arg)
+		if p.match(lexer.TokenComma) {
+			continue
+		}
+		// Handle nested generics: array<array<int>> should parse as array<array<int>>
+		// Check if we have >> (right shift) - this means the transformer missed it
+		// We need to split it into two > tokens
+		if p.peekKind() == lexer.TokenRShift {
+			// The transformer should have split >> into two > tokens, but it missed this case.
+			// For now, report an error - the transformer should be improved to catch all cases.
+			// In the future, we could split it here by inserting tokens into the stream.
+			p.advance() // consume the >> token
+			return nil, p.errorAtCurrent("unexpected >> in generic type arguments (this should have been split by the token transformer)")
+		}
+		p.expect(lexer.TokenGreater)
+		return args, nil
+	}
 }
 
 // parseTypeExprWithNestedGenerics is a specialized version that handles >> in generic contexts
@@ -1801,52 +1936,162 @@ func (p *Parser) parseStringInterpolation(tok lexer.Token) (ast.Expr, error) {
 				current = ""
 			}
 
-			// Find the closing brace
+			// Find the closing brace - use proper tokenization to handle nested contexts
+			// The lexer already handled this correctly, so we just need to extract the expression
+			// by finding the matching } that closes this ${...}
 			i += 2 // skip "${"
 			exprStart := i
+			exprStartOffset := i // Track byte offset for span calculation
 			braceCount := 1
+			// Track if we're inside a string/char literal or comment
+			inString := false
+			inChar := false
+			inLineComment := false
+			inBlockComment := false
+			
 			for i < len(content) && braceCount > 0 {
-				if content[i] == '{' {
-					braceCount++
-				} else if content[i] == '}' {
-					braceCount--
+				// Handle escape sequences - they don't affect brace counting
+				if !inString && !inChar && !inLineComment && !inBlockComment && content[i] == '\\' && i+1 < len(content) {
+					i += 2 // skip escaped character
+					continue
+				}
+				
+				// Handle string literals inside interpolation
+				if !inChar && !inLineComment && !inBlockComment && content[i] == '"' {
+					inString = !inString
+					i++
+					continue
+				}
+				
+				// Handle char literals inside interpolation
+				if !inString && !inLineComment && !inBlockComment && content[i] == '\'' {
+					inChar = !inChar
+					i++
+					continue
+				}
+				
+				// Handle line comments
+				if !inString && !inChar && !inBlockComment && i+1 < len(content) && content[i] == '/' && content[i+1] == '/' {
+					inLineComment = true
+					i += 2
+					// Skip to end of line
+					for i < len(content) && content[i] != '\n' {
+						i++
+					}
+					if i < len(content) {
+						inLineComment = false
+						i++ // skip newline
+					}
+					continue
+				}
+				
+				// Handle block comments
+				if !inString && !inChar && !inLineComment && i+1 < len(content) && content[i] == '/' && content[i+1] == '*' {
+					inBlockComment = true
+					i += 2
+					// Skip to end of comment
+					for i+1 < len(content) {
+						if content[i] == '*' && content[i+1] == '/' {
+							inBlockComment = false
+							i += 2
+							break
+						}
+						i++
+					}
+					continue
+				}
+				
+				// Only count braces if we're not in a nested context
+				if !inString && !inChar && !inLineComment && !inBlockComment {
+					if content[i] == '{' {
+						braceCount++
+					} else if content[i] == '}' {
+						braceCount--
+					}
 				}
 				i++
 			}
 
 			if braceCount > 0 {
-				return nil, fmt.Errorf("unterminated interpolation expression in string")
+				// Calculate approximate position in original file for better error reporting
+				exprEndOffset := i - 1
+				approxLine := tok.Span.Start.Line
+				approxCol := tok.Span.Start.Column + exprStartOffset
+				return nil, p.errorAt(lexer.Token{
+					Span: lexer.Span{
+						Start: lexer.Position{Line: approxLine, Column: approxCol},
+						End:   lexer.Position{Line: approxLine, Column: approxCol + (exprEndOffset - exprStartOffset)},
+					},
+				}, "unterminated interpolation expression in string")
 			}
 
 			// Parse the expression inside the braces
 			exprContent := content[exprStart : i-1] // exclude the closing brace
+			// Calculate approximate source position for better diagnostics
+			exprStartLine := tok.Span.Start.Line
+			exprStartCol := tok.Span.Start.Column + exprStartOffset
+			
 			// Create a temporary parser to parse just this expression
 			// Apply the same token transform as the main parser
-			rawTokens, err := lexer.LexAll("", exprContent)
+			rawTokens, err := lexer.LexAll(p.filename, exprContent)
 			if err != nil {
+				// Map error back to original file location
+				if diag, ok := err.(lexer.Diagnostic); ok {
+					// Adjust line/column to account for position in original string
+					diag.Span.Start.Line = exprStartLine
+					diag.Span.Start.Column = exprStartCol + diag.Span.Start.Column - 1
+					diag.Span.End.Line = exprStartLine
+					diag.Span.End.Column = exprStartCol + diag.Span.End.Column - 1
+					diag.File = p.filename
+					return nil, diag
+				}
 				return nil, fmt.Errorf("failed to parse interpolation expression: %v", err)
 			}
 			// Apply the same transformTokensForNestedGenerics transform
 			tempTokens := transformTokensForNestedGenerics(rawTokens)
 			tempParser := &Parser{
-				filename: "interpolation",
+				filename: p.filename, // Use original filename, not "interpolation"
 				tokens:   tempTokens,
-				lines:    []string{exprContent},
+				lines:    p.lines, // Use original lines for context
+			}
+			// Adjust token spans to point to original file location
+			for j := range tempParser.tokens {
+				if tempParser.tokens[j].Span.Start.Line > 0 {
+					tempParser.tokens[j].Span.Start.Line = exprStartLine
+					tempParser.tokens[j].Span.Start.Column = exprStartCol + tempParser.tokens[j].Span.Start.Column - 1
+					tempParser.tokens[j].Span.End.Line = exprStartLine
+					tempParser.tokens[j].Span.End.Column = exprStartCol + tempParser.tokens[j].Span.End.Column - 1
+				}
 			}
 
 			expr, err := tempParser.parseExpr()
 			if err != nil {
+				// Map error back to original file location
+				if diag, ok := err.(lexer.Diagnostic); ok {
+					diag.File = p.filename
+					return nil, diag
+				}
 				return nil, fmt.Errorf("failed to parse interpolation expression: %v", err)
 			}
 			// Verify that we consumed all tokens (enforce EOF)
-			if tempParser.pos < len(tempParser.tokens) {
-				return nil, fmt.Errorf("interpolation expression has trailing tokens")
+			if tempParser.peekKind() != lexer.TokenEOF {
+				return nil, p.errorAt(lexer.Token{
+					Span: lexer.Span{
+						Start: lexer.Position{Line: exprStartLine, Column: exprStartCol + len(exprContent)},
+						End:   lexer.Position{Line: exprStartLine, Column: exprStartCol + len(exprContent)},
+					},
+				}, "interpolation expression has trailing tokens")
 			}
 
+			// Calculate precise span for the expression part
+			exprSpan := lexer.Span{
+				Start: lexer.Position{Line: exprStartLine, Column: exprStartCol},
+				End:   lexer.Position{Line: exprStartLine, Column: exprStartCol + len(exprContent)},
+			}
 			parts = append(parts, ast.StringInterpolationPart{
 				IsLiteral: false,
 				Expr:      expr,
-				Span:      lexer.Span{Start: tok.Span.Start, End: tok.Span.End}, // TODO: calculate precise span
+				Span:      exprSpan,
 			})
 		} else {
 			current += string(content[i])
@@ -1866,6 +2111,82 @@ func (p *Parser) parseStringInterpolation(tok lexer.Token) (ast.Expr, error) {
 		SpanInfo: tok.Span,
 		Parts:    parts,
 	}, nil
+}
+
+// typeExprToString converts a TypeExpr to its string representation
+// This is used for catch clauses where we need to store the type as a string
+// Correctly handles arrays ([]), pointers (*), optionals (?), unions (|), and generics (<...>)
+func (p *Parser) typeExprToString(typ *ast.TypeExpr) string {
+	if typ == nil {
+		return ""
+	}
+	
+	// Handle union types
+	if typ.IsUnion {
+		parts := make([]string, len(typ.Members))
+		for i, member := range typ.Members {
+			parts[i] = p.typeExprToString(member)
+		}
+		return strings.Join(parts, " | ")
+	}
+	
+	// Handle optional types - wrap the inner type in parentheses if needed
+	if typ.IsOptional && typ.OptionalType != nil {
+		inner := p.typeExprToString(typ.OptionalType)
+		// Add parentheses if inner type is a union or function type
+		if typ.OptionalType.IsUnion || typ.OptionalType.IsFunction {
+			return "(" + inner + ")?"
+		}
+		return inner + "?"
+	}
+	
+	// Handle array types: []Type (not []<Type>)
+	if typ.Name == "[]" && len(typ.Args) > 0 {
+		elementType := p.typeExprToString(typ.Args[0])
+		// For arrays, the syntax is []Type, not []<Type>
+		return "[]" + elementType
+	}
+	
+	// Handle pointer types: *Type (not *Type<...>)
+	// Check if name starts with * and has args (generic pointer)
+	if strings.HasPrefix(typ.Name, "*") && len(typ.Args) > 0 {
+		// This is a pointer to a generic type, e.g., *List<int>
+		baseName := strings.TrimPrefix(typ.Name, "*")
+		argStrs := make([]string, len(typ.Args))
+		for i, arg := range typ.Args {
+			argStrs[i] = p.typeExprToString(arg)
+		}
+		return "*" + baseName + "<" + strings.Join(argStrs, ",") + ">"
+	}
+	
+	// Handle function types: (params) -> returnType
+	if typ.IsFunction {
+		paramStrs := make([]string, len(typ.ParamTypes))
+		for i, param := range typ.ParamTypes {
+			paramStrs[i] = p.typeExprToString(param)
+		}
+		returnType := p.typeExprToString(typ.ReturnType)
+		return "(" + strings.Join(paramStrs, ",") + ") -> " + returnType
+	}
+	
+	// Build the base name
+	name := typ.Name
+	
+	// Add generic arguments if present
+	if len(typ.Args) > 0 {
+		argStrs := make([]string, len(typ.Args))
+		for i, arg := range typ.Args {
+			argStrs[i] = p.typeExprToString(arg)
+		}
+		name += "<" + strings.Join(argStrs, ",") + ">"
+	}
+	
+	// Add optional marker (if not already handled above)
+	if typ.IsOptional {
+		name += "?"
+	}
+	
+	return name
 }
 
 // parseTryStmt parses a try-catch-finally statement
@@ -1889,13 +2210,16 @@ func (p *Parser) parseTryStmt() (ast.Stmt, error) {
 			if p.peekKind() == lexer.TokenIdentifier {
 				catchClause.ExceptionVar = p.advance().Lexeme
 
-				// Parse optional exception type
+				// Parse optional exception type (supports qualified types like std.io.Error)
 				if p.match(lexer.TokenColon) {
-					if p.peekKind() == lexer.TokenIdentifier {
-						catchClause.ExceptionType = p.advance().Lexeme
-					} else {
-						return nil, p.errorAtCurrent("expected exception type after colon")
+					// Parse as type expression to support qualified types and generics
+					typ, err := p.parseTypeExpr()
+					if err != nil {
+						return nil, err
 					}
+					// Convert type expression to string representation
+					// This preserves qualified names like "std.io.Error"
+					catchClause.ExceptionType = p.typeExprToString(typ)
 				}
 			}
 
@@ -2005,7 +2329,7 @@ func (p *Parser) parseTypeAliasDecl() (ast.Decl, error) {
 		SpanInfo:   lexer.Span{Start: startPos, End: endPos},
 		Name:       name,
 		TypeParams: typeParams,
-		Type:       *typeExpr,
+		Type:       typeExpr, // Now a pointer, no need to dereference
 	}, nil
 }
 

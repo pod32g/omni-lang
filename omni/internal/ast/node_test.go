@@ -156,7 +156,7 @@ func TestNodeMethods(t *testing.T) {
 		decl := &TypeAliasDecl{
 			SpanInfo: span,
 			Name:     "UserID",
-			Type:     TypeExpr{Name: "int"},
+			Type:     &TypeExpr{Name: "int"},
 		}
 
 		if decl.Span() != span {

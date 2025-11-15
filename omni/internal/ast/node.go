@@ -184,15 +184,21 @@ func (s *ExprStmt) node()            {}
 func (s *ExprStmt) stmt()            {}
 
 // ForStmt handles both range and classic for loops.
+// ForStmt represents a for loop statement.
+// INVARIANT: Either IsRange is true (range form: for item in items { ... })
+// or IsRange is false (classic form: for init; cond; post { ... }).
+// When IsRange is true, only Target, Iterable, and Body should be set.
+// When IsRange is false, only Init, Condition, Post, and Body should be set.
+// The parser must enforce this invariant.
 type ForStmt struct {
 	SpanInfo  lexer.Span
-	Init      Stmt // optional
-	Condition Expr // optional
-	Post      Stmt // optional
-	Target    *IdentifierExpr
-	Iterable  Expr
+	Init      Stmt // optional - only used when IsRange is false
+	Condition Expr // optional - only used when IsRange is false
+	Post      Stmt // optional - only used when IsRange is false
+	Target    *IdentifierExpr // only used when IsRange is true
+	Iterable  Expr            // only used when IsRange is true
 	Body      *BlockStmt
-	IsRange   bool
+	IsRange   bool // true for range form, false for classic form
 }
 
 func (s *ForStmt) Span() lexer.Span { return s.SpanInfo }
@@ -279,7 +285,7 @@ type TypeAliasDecl struct {
 	SpanInfo   lexer.Span
 	Name       string
 	TypeParams []string // For generic type aliases
-	Type       TypeExpr
+	Type       *TypeExpr // Pointer to avoid copying and allow updates to propagate
 }
 
 func (d *TypeAliasDecl) Span() lexer.Span { return d.SpanInfo }

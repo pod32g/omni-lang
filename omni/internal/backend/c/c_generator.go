@@ -23,13 +23,19 @@ type CGenerator struct {
 	phiVars map[mir.ValueID]bool
 	// Track variables that are updated in loop contexts
 	mutableVars map[mir.ValueID]bool
-	// Track variables that are maps
+	// Track variables that are maps (by variable name - legacy)
 	mapVars map[string]bool
+	// Track map types by value ID (more reliable)
+	mapTypes map[mir.ValueID]string
+	// Track array lengths by value ID (for runtime bounds checking and len())
+	arrayLengths map[mir.ValueID]int
 	// Debug symbol tracking
 	sourceMap map[string]int // Maps source locations to line numbers
 	lineMap   map[int]string // Maps line numbers to source locations
 	// Track discovered value types to help with conversions
 	valueTypes map[mir.ValueID]string
+	// Track errors during code generation
+	errors []string
 }
 
 // NewCGenerator creates a new C code generator
@@ -43,16 +49,19 @@ func NewCGenerator(module *mir.Module) *CGenerator {
 		phiVars:     make(map[mir.ValueID]bool),
 		mutableVars: make(map[mir.ValueID]bool),
 		mapVars:     make(map[string]bool),
+		mapTypes:    make(map[mir.ValueID]string),
+		arrayLengths: make(map[mir.ValueID]int),
 		sourceMap:   make(map[string]int),
 		lineMap:     make(map[int]string),
 		valueTypes:  make(map[mir.ValueID]string),
+		errors:      []string{},
 	}
 }
 
 // NewCGeneratorWithOptLevel creates a new C code generator with specified optimization level
 func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator {
 	return &CGenerator{
-		module:      module,
+		module:       module,
 		optLevel:    optLevel,
 		debugInfo:   false,
 		sourceFile:  "",
@@ -60,9 +69,12 @@ func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator 
 		phiVars:     make(map[mir.ValueID]bool),
 		mutableVars: make(map[mir.ValueID]bool),
 		mapVars:     make(map[string]bool),
+		mapTypes:    make(map[mir.ValueID]string),
+		arrayLengths: make(map[mir.ValueID]int),
 		sourceMap:   make(map[string]int),
 		lineMap:     make(map[int]string),
 		valueTypes:  make(map[mir.ValueID]string),
+		errors:     []string{},
 	}
 }
 
@@ -77,9 +89,12 @@ func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool,
 		phiVars:     make(map[mir.ValueID]bool),
 		mutableVars: make(map[mir.ValueID]bool),
 		mapVars:     make(map[string]bool),
+		mapTypes:    make(map[mir.ValueID]string),
+		arrayLengths: make(map[mir.ValueID]int),
 		sourceMap:   make(map[string]int),
 		lineMap:     make(map[int]string),
 		valueTypes:  make(map[mir.ValueID]string),
+		errors:     []string{},
 	}
 }
 
@@ -122,6 +137,11 @@ func (g *CGenerator) generate() (string, error) {
 	}
 
 	g.writeMain()
+
+	// Check for errors collected during code generation
+	if len(g.errors) > 0 {
+		return "", fmt.Errorf("code generation errors:\n%s", strings.Join(g.errors, "\n"))
+	}
 
 	// Apply optimizations
 	code := g.output.String()
@@ -224,11 +244,10 @@ func (g *CGenerator) writeFunctionDeclarations() {
 			returnType = "int32_t" // Always use int32_t for omni_main to match runtime
 		}
 		
-		// For async functions (Promise<T>), the function should return the inner type, not Promise
-		// The Promise wrapper is added when the function is called
+		// For async functions (Promise<T>), the function should return omni_promise_t*
+		// The Promise is created at the call site, but the function itself returns the promise
 		if strings.HasPrefix(fn.ReturnType, "Promise<") {
-			innerType := fn.ReturnType[8 : len(fn.ReturnType)-1] // Remove "Promise<" and ">"
-			returnType = g.mapType(innerType)
+			returnType = "omni_promise_t*"
 		}
 
 		// Handle function pointer return types
@@ -341,11 +360,15 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 
 	// Collect all variables that need to be declared
 	allVariables := make(map[mir.ValueID]string)
+	// Build a map from ValueID to Instruction for O(1) lookups (optimization: O(N) instead of O(N²))
+	instructionMap := make(map[mir.ValueID]*mir.Instruction)
 	for _, block := range fn.Blocks {
-		for _, inst := range block.Instructions {
+		for i := range block.Instructions {
+			inst := &block.Instructions[i]
 			if inst.ID != mir.InvalidValue {
 				varName := fmt.Sprintf("v%d", int(inst.ID))
 				allVariables[inst.ID] = varName
+				instructionMap[inst.ID] = inst
 			}
 		}
 		// Terminators don't produce values, so we don't need to track them
@@ -358,115 +381,99 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 			// Determine the type based on the instruction that produces this value
 			var varType string
 			var isArrayInit bool
-			// Find the instruction that produces this value
-			for _, block := range fn.Blocks {
-				for _, inst := range block.Instructions {
-					if inst.ID == id {
-						// Special case for read_line() - always returns string
-						if inst.Op == "call" || inst.Op == "call.string" {
-							if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandLiteral {
-								funcName := inst.Operands[0].Literal
-								if funcName == "std.io.read_line" || funcName == "io.read_line" {
-									varType = "const char*"
-									break
-								}
-							}
+			// Use the instruction map for O(1) lookup instead of scanning all instructions
+			if inst, found := instructionMap[id]; found {
+				// Special case for read_line() - always returns string
+				if inst.Op == "call" || inst.Op == "call.string" {
+					if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandLiteral {
+						funcName := inst.Operands[0].Literal
+						if funcName == "std.io.read_line" || funcName == "io.read_line" {
+							varType = "const char*"
 						}
-						// Special case for await - always use string for async I/O operations
-						if inst.Op == "await" {
-							// For async I/O operations, the result is typically a string
-							// Check the actual type from inst.Type, but default to string
-							if inst.Type == "string" {
-								varType = "const char*"
-							} else if inst.Type == "int" {
-								varType = "int32_t"
-							} else if inst.Type == "bool" {
-								varType = "int32_t"
-							} else if inst.Type == "float" || inst.Type == "double" {
-								varType = "double"
-							} else {
-								// Default to string for await (most common case for async I/O)
-								varType = "const char*"
-							}
-							break
-						}
-						// Special case for index - check if indexing into struct array
-						if inst.Op == "index" && len(inst.Operands) >= 2 {
-							// Check the target array type
-							targetOp := inst.Operands[0]
-							if targetOp.Kind == mir.OperandValue {
-								// Try to find the array type from the target variable
-								// Look for array.init instruction that created the target
-								for _, block := range fn.Blocks {
-									for _, prevInst := range block.Instructions {
-										if prevInst.ID == targetOp.Value {
-											// Found the instruction that created the array
-											if prevInst.Op == "array.init" {
-												// Extract element type
-												var elementTypeStr string
-												if strings.HasPrefix(prevInst.Type, "array<") && strings.HasSuffix(prevInst.Type, ">") {
-													elementTypeStr = prevInst.Type[6 : len(prevInst.Type)-1]
-												} else if strings.HasPrefix(prevInst.Type, "[]<") && strings.HasSuffix(prevInst.Type, ">") {
-													elementTypeStr = prevInst.Type[3 : len(prevInst.Type)-1]
-												}
-												// Check if element type is a struct
-												if elementTypeStr != "" && !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(") {
-													varType = "omni_struct_t*"
-													break
-												}
-											}
-										}
-									}
-								}
-							}
-							// If we didn't find it, use the instruction type
-							if varType == "" {
-								resultType := inst.Type
-								isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
-								if isStruct {
-									varType = "omni_struct_t*"
-								} else {
-									varType = g.mapType(inst.Type)
-								}
-							}
-							break
-						}
-						// Special case for phi - check if it's a struct type (for struct array iteration)
-						if inst.Op == "phi" {
-							resultType := inst.Type
-							isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
-							if isStruct {
-								varType = "omni_struct_t*"
-								break
-							}
-						}
-						varType = g.mapType(inst.Type)
-						// Check if this is an array.init instruction
-						if inst.Op == "array.init" {
-							isArrayInit = true
-							// For struct arrays, the type should be omni_struct_t*
-							var elementTypeStr string
-							if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
-								elementTypeStr = inst.Type[6 : len(inst.Type)-1]
-							} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
-								elementTypeStr = inst.Type[3 : len(inst.Type)-1]
-							} else {
-								elementTypeStr = inst.Type
-							}
-							// Check if element type is a struct
-							if !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(") {
-								varType = "omni_struct_t*"
-							}
-						}
-						// Check if this is a struct.init instruction
-						if inst.Op == "struct.init" {
-							varType = "omni_struct_t*"
-						}
-						break
 					}
 				}
-				if varType != "" {
-					break
+				// Special case for await - always use string for async I/O operations
+				if inst.Op == "await" {
+					// For async I/O operations, the result is typically a string
+					// Check the actual type from inst.Type, but default to string
+					if inst.Type == "string" {
+						varType = "const char*"
+					} else if inst.Type == "int" {
+						varType = "int32_t"
+					} else if inst.Type == "bool" {
+						varType = "int32_t"
+					} else if inst.Type == "float" || inst.Type == "double" {
+						varType = "double"
+					} else {
+						// Default to string for await (most common case for async I/O)
+						varType = "const char*"
+					}
+				}
+				// Special case for index - check if indexing into struct array
+				if inst.Op == "index" && len(inst.Operands) >= 2 {
+					// Check the target array type
+					targetOp := inst.Operands[0]
+					if targetOp.Kind == mir.OperandValue {
+						// Use instruction map for O(1) lookup instead of scanning
+						if targetInst, targetFound := instructionMap[targetOp.Value]; targetFound {
+							if targetInst.Op == "array.init" {
+								// Extract element type
+								var elementTypeStr string
+								if strings.HasPrefix(targetInst.Type, "array<") && strings.HasSuffix(targetInst.Type, ">") {
+									elementTypeStr = targetInst.Type[6 : len(targetInst.Type)-1]
+								} else if strings.HasPrefix(targetInst.Type, "[]<") && strings.HasSuffix(targetInst.Type, ">") {
+									elementTypeStr = targetInst.Type[3 : len(targetInst.Type)-1]
+								}
+								// Check if element type is a struct
+								if elementTypeStr != "" && !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(") {
+									varType = "omni_struct_t*"
+								}
+							}
+						}
+					}
+					// If we didn't find it, use the instruction type
+					if varType == "" {
+						resultType := inst.Type
+						isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
+						if isStruct {
+							varType = "omni_struct_t*"
+						} else {
+							varType = g.mapType(inst.Type)
+						}
+					}
+				}
+				// Special case for phi - check if it's a struct type (for struct array iteration)
+				if inst.Op == "phi" {
+					resultType := inst.Type
+					isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
+					if isStruct {
+						varType = "omni_struct_t*"
+					}
+				}
+				// Default: use the instruction type
+				if varType == "" {
+					varType = g.mapType(inst.Type)
+				}
+				// Check if this is an array.init instruction
+				if inst.Op == "array.init" {
+					isArrayInit = true
+					// For struct arrays, the type should be omni_struct_t*
+					var elementTypeStr string
+					if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
+						elementTypeStr = inst.Type[6 : len(inst.Type)-1]
+					} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
+						elementTypeStr = inst.Type[3 : len(inst.Type)-1]
+					} else {
+						elementTypeStr = inst.Type
+					}
+					// Check if element type is a struct
+					if !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(") {
+						varType = "omni_struct_t*"
+					}
+				}
+				// Check if this is a struct.init instruction
+				if inst.Op == "struct.init" {
+					varType = "omni_struct_t*"
 				}
 			}
 			if varType == "" {
@@ -477,26 +484,21 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 			// For string constants, we'll initialize them in the const instruction
 			if varType != "void" && !isArrayInit {
 				// Check if this is a const instruction with a string literal
+				// Use instruction map for O(1) lookup
 				isStringConst := false
-				for _, block := range fn.Blocks {
-					for _, inst := range block.Instructions {
-						if inst.ID == id && inst.Op == "const" && len(inst.Operands) > 0 {
-							// Check if it's a string literal (either by type or by literal value)
-							isString := inst.Type == "string" || 
-								(inst.Operands[0].Kind == mir.OperandLiteral && 
-								 strings.HasPrefix(inst.Operands[0].Literal, "\"") && 
-								 strings.HasSuffix(inst.Operands[0].Literal, "\""))
-							if isString && inst.Operands[0].Kind == mir.OperandLiteral {
-								isStringConst = true
-								// Initialize string constant at declaration
-								literalValue := g.getOperandValue(inst.Operands[0])
-								g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n", varType, varName, literalValue))
-								break
-							}
+				if inst, found := instructionMap[id]; found {
+					if inst.Op == "const" && len(inst.Operands) > 0 {
+						// Check if it's a string literal (either by type or by literal value)
+						isString := inst.Type == "string" || 
+							(inst.Operands[0].Kind == mir.OperandLiteral && 
+							 strings.HasPrefix(inst.Operands[0].Literal, "\"") && 
+							 strings.HasSuffix(inst.Operands[0].Literal, "\""))
+						if isString && inst.Operands[0].Kind == mir.OperandLiteral {
+							isStringConst = true
+							// Initialize string constant at declaration
+							literalValue := g.getOperandValue(inst.Operands[0])
+							g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n", varType, varName, literalValue))
 						}
-					}
-					if isStringConst {
-						break
 					}
 				}
 				if !isStringConst {
@@ -874,9 +876,39 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			if funcName == "len" && len(inst.Operands) == 2 {
 				varName := g.getVariableName(inst.ID)
 				arrayVar := g.getOperandValue(inst.Operands[1])
-				// Array length - assign to already declared variable
-				g.output.WriteString(fmt.Sprintf("  %s = sizeof(%s) / sizeof(%s[0]);\n",
-					varName, arrayVar, arrayVar))
+				// Get array length from tracked array lengths
+				arrayLength := 0
+				if inst.Operands[1].Kind == mir.OperandValue {
+					arrayOperandID := inst.Operands[1].Value
+					if length, ok := g.arrayLengths[arrayOperandID]; ok {
+						arrayLength = length
+					} else {
+						// Array length not found - this might be a parameter or passed array
+						// For now, we'll use 0 and let the runtime handle it
+						// TODO: Track array lengths through function parameters
+						g.errors = append(g.errors, fmt.Sprintf("array length not known for variable %s (may be a function parameter)", arrayVar))
+					}
+				}
+				// Get array type to determine element size
+				arrayType := "int32_t" // Default element type
+				if inst.Operands[1].Kind == mir.OperandValue {
+					arrayOperandID := inst.Operands[1].Value
+					if arrType, ok := g.valueTypes[arrayOperandID]; ok {
+						// Extract element type from array type (e.g., "[]<int>" -> "int")
+						if strings.HasPrefix(arrType, "[]<") && strings.HasSuffix(arrType, ">") {
+							arrayType = arrType[3 : len(arrType)-1]
+						} else if strings.HasPrefix(arrType, "array<") && strings.HasSuffix(arrType, ">") {
+							arrayType = arrType[6 : len(arrType)-1]
+						}
+					}
+				}
+				// Map element type to C type to get element size
+				elementCType := g.mapType(arrayType)
+				// Calculate element size
+				elementSize := "sizeof(" + elementCType + ")"
+				// Use runtime function omni_len with explicit length
+				g.output.WriteString(fmt.Sprintf("  %s = omni_len((void*)%s, %s, %d);\n",
+					varName, arrayVar, elementSize, arrayLength))
 				return nil
 			}
 
@@ -1039,10 +1071,37 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			index := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
 
-			// Check if target is a map variable
-			if g.isMapVariable(target) {
-				// Map indexing - assign to already declared variable
-				g.output.WriteString(fmt.Sprintf("  %s = omni_map_get_string_int(%s, %s);\n", varName, target, index))
+			// Check if target is a map - use type-based detection (more reliable)
+			isMap := false
+			if inst.Operands[0].Kind == mir.OperandValue {
+				if mapType, ok := g.mapTypes[inst.Operands[0].Value]; ok {
+					isMap = strings.HasPrefix(mapType, "map<")
+				} else if storedType, ok := g.valueTypes[inst.Operands[0].Value]; ok {
+					isMap = strings.HasPrefix(storedType, "map<")
+				}
+			}
+			// Fallback to legacy name-based detection
+			if !isMap {
+				isMap = g.isMapVariable(target)
+			}
+			
+			if isMap {
+				// Map indexing - need to determine key and value types from map type
+				mapType := "map<string,int>" // Default
+				if inst.Operands[0].Kind == mir.OperandValue {
+					if storedType, ok := g.valueTypes[inst.Operands[0].Value]; ok && strings.HasPrefix(storedType, "map<") {
+						mapType = storedType
+					}
+				}
+				// Extract key and value types
+				keyType, valueType := g.extractMapTypes(mapType)
+				getFunc := g.getMapGetFunction(keyType, valueType)
+				if getFunc != "" {
+					g.output.WriteString(fmt.Sprintf("  %s = %s(%s, %s);\n", varName, getFunc, target, index))
+				} else {
+					g.errors = append(g.errors, fmt.Sprintf("unsupported map get operation for type: %s", mapType))
+					g.output.WriteString(fmt.Sprintf("  // ERROR: Unsupported map get for %s\n", mapType))
+				}
 			} else {
 				// Array indexing - assign to already declared variable
 				// Check if result type is a struct (array of structs)
@@ -1058,8 +1117,23 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					// Store the struct type
 					g.valueTypes[inst.ID] = resultType
 				} else {
-					// For primitive arrays, simple indexing
-					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
+					// For primitive arrays, use runtime function with bounds checking if length is known
+					arrayLength := 0
+					if inst.Operands[0].Kind == mir.OperandValue {
+						arrayOperandID := inst.Operands[0].Value
+						if length, ok := g.arrayLengths[arrayOperandID]; ok {
+							arrayLength = length
+						}
+					}
+					if arrayLength > 0 {
+						// Use runtime function with bounds checking
+						g.output.WriteString(fmt.Sprintf("  %s = omni_array_get_int(%s, %s, %d);\n", 
+							varName, target, index, arrayLength))
+					} else {
+						// Length unknown (might be parameter) - use direct indexing
+						// TODO: Track array lengths through function parameters
+						g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
+					}
 				}
 			}
 		}
@@ -1067,6 +1141,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		// Handle array literal initialization
 		if len(inst.Operands) > 0 {
 			varName := g.getVariableName(inst.ID)
+			arrayLength := len(inst.Operands)
+			// Store array length for later use in len() and bounds checking
+			g.arrayLengths[inst.ID] = arrayLength
+			
 			// Extract element type from array type
 			var elementTypeStr string
 			if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
@@ -1083,7 +1161,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			if isStruct {
 				// For struct arrays, create array of pointers
 				elementType := "omni_struct_t*"
-				g.output.WriteString(fmt.Sprintf("  %s %s[%d];\n", elementType, varName, len(inst.Operands)))
+				g.output.WriteString(fmt.Sprintf("  %s %s[%d];\n", elementType, varName, arrayLength))
 				// Initialize each struct element
 				for i, op := range inst.Operands {
 					// Each operand should be a struct.init instruction result
@@ -1126,21 +1204,25 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						valueType := strings.TrimSpace(parts[1])
 
 						// Generate appropriate put function call based on types
-						if keyType == "string" && valueType == "int" {
-							g.output.WriteString(fmt.Sprintf("  omni_map_put_string_int(%s, %s, %s);\n", varName, key, value))
-						} else if keyType == "int" && valueType == "int" {
-							g.output.WriteString(fmt.Sprintf("  omni_map_put_int_int(%s, %s, %s);\n", varName, key, value))
+						putFunc := g.getMapPutFunction(keyType, valueType)
+						if putFunc != "" {
+							g.output.WriteString(fmt.Sprintf("  %s(%s, %s, %s);\n", putFunc, varName, key, value))
 						} else {
-							// Fallback for other type combinations
-							g.output.WriteString(fmt.Sprintf("  // TODO: Handle map type %s\n", mapType))
+							// Unsupported type combination - report error
+							g.errors = append(g.errors, fmt.Sprintf("unsupported map type combination: map<%s,%s>", keyType, valueType))
+							g.output.WriteString(fmt.Sprintf("  // ERROR: Unsupported map type %s\n", mapType))
 						}
 					}
 				}
 			}
 		}
 
-		// Mark this variable as a map
+		// Mark this variable as a map (legacy tracking by name)
 		g.mapVars[varName] = true
+		// Also track by value ID and type (more reliable)
+		if inst.ID != mir.InvalidValue {
+			g.mapTypes[inst.ID] = inst.Type
+		}
 	case "struct.init":
 		// Handle struct initialization
 		varName := g.getVariableName(inst.ID)
@@ -1362,8 +1444,56 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 			} else {
 				// Positional field format: [field1Value, field2Value, ...]
-				// For now, just create empty struct (can be enhanced later with field names)
-				g.output.WriteString(fmt.Sprintf("  // TODO: Handle positional struct initialization\n"))
+				// We need to know the struct field names and order
+				// For now, we'll use generic field names based on position
+				// This is a limitation - ideally we'd look up the struct definition
+				// but that information isn't easily accessible in the C generator
+				for i, fieldValueOp := range inst.Operands {
+					// Skip first operand if it's the struct type name
+					if i == 0 && fieldValueOp.Kind == mir.OperandLiteral {
+						// This might be the struct type name, skip it
+						continue
+					}
+					
+					fieldValue := g.getOperandValue(fieldValueOp)
+					// Determine field type from the value operand
+					fieldType := ""
+					if fieldValueOp.Type != "" && fieldValueOp.Type != inferTypePlaceholder {
+						fieldType = fieldValueOp.Type
+					} else if fieldValueOp.Kind == mir.OperandValue {
+						if storedType, ok := g.valueTypes[fieldValueOp.Value]; ok && storedType != "" {
+							fieldType = storedType
+						}
+					}
+					
+					// Default to int if type not found
+					if fieldType == "" {
+						fieldType = "int"
+					}
+					
+					// Use generic field name based on position
+					fieldIndex := i
+					if inst.Operands[0].Kind == mir.OperandLiteral {
+						fieldIndex = i - 1 // Adjust if first operand was type name
+					}
+					fieldName := fmt.Sprintf("field%d", fieldIndex)
+					
+					// Use appropriate setter based on field type
+					switch fieldType {
+					case "string":
+						actualValue := fieldValue
+						if fieldValueOp.Kind == mir.OperandLiteral && strings.HasPrefix(fieldValueOp.Literal, "\"") && strings.HasSuffix(fieldValueOp.Literal, "\"") {
+							actualValue = fieldValueOp.Literal
+						}
+						g.output.WriteString(fmt.Sprintf("  omni_struct_set_string_field(%s, \"%s\", %s);\n", varName, fieldName, actualValue))
+					case "float", "double":
+						g.output.WriteString(fmt.Sprintf("  omni_struct_set_float_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+					case "bool":
+						g.output.WriteString(fmt.Sprintf("  omni_struct_set_bool_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+					default:
+						g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+					}
+				}
 			}
 		}
 	case "member":
@@ -1374,25 +1504,52 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			varName := g.getVariableName(inst.ID)
 
 			// Determine field type from instruction type
+			// The type checker should have already substituted type parameters for generic structs
+			// (e.g., Box<int>.value should have inst.Type = "int", not "T")
 			fieldType := inst.Type
-			if fieldType == "" || fieldType == "<inferred>" {
-				// Try to look up the type from stored valueTypes
-				// This should have been set when the struct field was accessed
-				if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandValue {
-					// Check if we have type information for this struct variable
-					if storedType, ok := g.valueTypes[inst.Operands[0].Value]; ok && storedType != "" && storedType != inferTypePlaceholder {
-						// This is the struct type, not the field type
-						// We need to look up the field type from the struct definition
-						// For now, try to infer from the instruction's type or default
+			
+			// If type is not set or is a placeholder, try to infer it
+			if fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder {
+				// Try to get the struct type and look up the field
+				if inst.Operands[0].Kind == mir.OperandValue {
+					if structType, ok := g.valueTypes[inst.Operands[0].Value]; ok && structType != "" && structType != inferTypePlaceholder {
+						// Check if this is a generic struct (e.g., "Box<int>")
+						if strings.Contains(structType, "<") && strings.Contains(structType, ">") {
+							// Extract base name and type arguments
+							baseName, typeArgs := g.extractGenericType(structType)
+							if baseName != "" && len(typeArgs) > 0 {
+								// For generic structs, we'd need struct field definitions to do substitution
+								// But the type checker should have already done this, so inst.Type should be set
+								// If it's not, we'll fall back to checking the operand type
+							}
+						}
 					}
 				}
-				// If still not found, try to look up from the module to find struct field definitions
-				// For now, we'll try to use the instruction type if it was set by the type checker
-				// The type checker should set inst.Type to the field's type
-				if fieldType == "" || fieldType == "<inferred>" {
-					// Last resort: check if we can infer from context
-					// But we really should have the type from the type checker
-					fieldType = "int" // Default fallback
+				
+				// Check operand type as fallback
+				if (fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder) && len(inst.Operands) > 0 {
+					if inst.Operands[0].Type != "" && inst.Operands[0].Type != inferTypePlaceholder {
+						// This is the struct type, not the field type, but we can use it as a hint
+						// The real field type should come from inst.Type set by the type checker
+					}
+				}
+				
+				// Last resort: default to int (but this should rarely happen if type checker is working correctly)
+				if fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder {
+					fieldType = "int"
+				}
+			}
+			
+			// Ensure we strip any generic syntax that might have leaked through
+			// The type should already be the concrete type (e.g., "int" not "T" or "Box<int>")
+			if strings.Contains(fieldType, "<") {
+				// This shouldn't happen if type checker did its job, but handle it gracefully
+				// Extract the inner type if it's a generic
+				if strings.HasPrefix(fieldType, "array<") || strings.HasPrefix(fieldType, "[]<") {
+					// Field type is an array, keep it as is
+				} else {
+					// Try to extract base type
+					fieldType = strings.TrimSpace(fieldType)
 				}
 			}
 			
@@ -1840,10 +1997,12 @@ func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string) e
 			value := g.getOperandValue(term.Operands[0])
 			g.output.WriteString(fmt.Sprintf("  return %s;\n", value))
 		} else {
-			// For main function, return 0 instead of void return
-			if funcName == "main" {
+			// For main function (omni_main), return 0 instead of void return
+			// Check if this is actually omni_main (mapped from main)
+			if funcName == "omni_main" {
 				g.output.WriteString("  return 0;\n")
 			} else {
+				// For void functions, use void return
 				g.output.WriteString("  return;\n")
 			}
 		}
@@ -2048,7 +2207,10 @@ func (g *CGenerator) mapType(omniType string) string {
 	case "ptr":
 		return "void*"
 	default:
-		return "int32_t" // Default fallback
+		// Unknown type - this should not happen in valid programs
+		// Report error instead of silently defaulting to int32_t
+		g.errors = append(g.errors, fmt.Sprintf("unknown type: %s (cannot map to C type)", omniType))
+		return "int32_t" // Temporary fallback to allow compilation to continue
 	}
 }
 
@@ -2631,6 +2793,140 @@ func (g *CGenerator) isPrimitiveType(omniType string) bool {
 	}
 }
 
+// extractMapTypes extracts key and value types from a map type string
+func (g *CGenerator) extractMapTypes(mapType string) (keyType, valueType string) {
+	if !strings.HasPrefix(mapType, "map<") || !strings.HasSuffix(mapType, ">") {
+		return "string", "int" // Default fallback
+	}
+	inner := mapType[4 : len(mapType)-1] // Remove "map<" and ">"
+	parts := strings.Split(inner, ",")
+	if len(parts) == 2 {
+		return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	}
+	return "string", "int" // Default fallback
+}
+
+// getMapPutFunction returns the appropriate map put function name for the given key and value types
+func (g *CGenerator) getMapPutFunction(keyType, valueType string) string {
+	// Normalize types (handle float/double, etc.)
+	if valueType == "float" || valueType == "double" {
+		valueType = "float"
+	}
+	if valueType == "bool" {
+		valueType = "bool"
+	}
+	
+	if keyType == "string" {
+		switch valueType {
+		case "int":
+			return "omni_map_put_string_int"
+		case "string":
+			return "omni_map_put_string_string"
+		case "float":
+			return "omni_map_put_string_float"
+		case "bool":
+			return "omni_map_put_string_bool"
+		}
+	} else if keyType == "int" {
+		switch valueType {
+		case "int":
+			return "omni_map_put_int_int"
+		case "string":
+			return "omni_map_put_int_string"
+		case "float":
+			return "omni_map_put_int_float"
+		case "bool":
+			return "omni_map_put_int_bool"
+		}
+	}
+	return "" // Unsupported combination
+}
+
+// extractGenericType extracts the base name and type arguments from a generic type string
+// e.g., "Box<int>" -> ("Box", ["int"]), "array<string>" -> ("array", ["string"])
+func (g *CGenerator) extractGenericType(typeStr string) (baseName string, typeArgs []string) {
+	if !strings.Contains(typeStr, "<") || !strings.HasSuffix(typeStr, ">") {
+		return typeStr, nil
+	}
+	
+	lessPos := strings.Index(typeStr, "<")
+	baseName = typeStr[:lessPos]
+	inner := typeStr[lessPos+1 : len(typeStr)-1] // Remove "<" and ">"
+	
+	// Split by comma, but handle nested generics
+	typeArgs = g.splitGenericArgs(inner)
+	return baseName, typeArgs
+}
+
+// splitGenericArgs splits generic arguments by comma, handling nested generics
+func (g *CGenerator) splitGenericArgs(s string) []string {
+	var args []string
+	var current strings.Builder
+	depth := 0
+	
+	for _, r := range s {
+		switch r {
+		case '<':
+			depth++
+			current.WriteRune(r)
+		case '>':
+			depth--
+			current.WriteRune(r)
+		case ',':
+			if depth == 0 {
+				args = append(args, strings.TrimSpace(current.String()))
+				current.Reset()
+			} else {
+				current.WriteRune(r)
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+	
+	if current.Len() > 0 {
+		args = append(args, strings.TrimSpace(current.String()))
+	}
+	
+	return args
+}
+
+// getMapGetFunction returns the appropriate map get function name for the given key and value types
+func (g *CGenerator) getMapGetFunction(keyType, valueType string) string {
+	// Normalize types (handle float/double, etc.)
+	if valueType == "float" || valueType == "double" {
+		valueType = "float"
+	}
+	if valueType == "bool" {
+		valueType = "bool"
+	}
+	
+	if keyType == "string" {
+		switch valueType {
+		case "int":
+			return "omni_map_get_string_int"
+		case "string":
+			return "omni_map_get_string_string"
+		case "float":
+			return "omni_map_get_string_float"
+		case "bool":
+			return "omni_map_get_string_bool"
+		}
+	} else if keyType == "int" {
+		switch valueType {
+		case "int":
+			return "omni_map_get_int_int"
+		case "string":
+			return "omni_map_get_int_string"
+		case "float":
+			return "omni_map_get_int_float"
+		case "bool":
+			return "omni_map_get_int_bool"
+		}
+	}
+	return "" // Unsupported combination
+}
+
 // convertLiteralToDecimal converts hex and binary literals to decimal
 func (g *CGenerator) convertLiteralToDecimal(literal string) string {
 	if strings.HasPrefix(literal, "0x") || strings.HasPrefix(literal, "0X") {
@@ -2658,10 +2954,37 @@ func (g *CGenerator) convertLiteralToDecimal(literal string) string {
 
 // writeMain writes the main function that calls the OmniLang main
 func (g *CGenerator) writeMain() {
-	g.output.WriteString(`int main() {
-    int32_t result = omni_main();
-    printf("OmniLang program result: %d\n", result);
-    return (int)result;
-}
-`)
+	// Find the main function to determine its return type
+	var mainReturnType string = "int32_t" // Default
+	for _, fn := range g.module.Functions {
+		if fn.Name == "main" {
+			mainReturnType = fn.ReturnType
+			break
+		}
+	}
+	
+	g.output.WriteString("int main() {\n")
+	
+	// Handle different return types
+	if mainReturnType == "void" {
+		g.output.WriteString("    omni_main();\n")
+		g.output.WriteString("    printf(\"OmniLang program completed\\n\");\n")
+		g.output.WriteString("    return 0;\n")
+	} else if mainReturnType == "string" {
+		g.output.WriteString("    const char* result = omni_main();\n")
+		g.output.WriteString("    printf(\"OmniLang program result: %s\\n\", result ? result : \"(null)\");\n")
+		g.output.WriteString("    return 0;\n")
+	} else {
+		// For int, float, bool, etc., use the mapped C type
+		cReturnType := g.mapType(mainReturnType)
+		g.output.WriteString(fmt.Sprintf("    %s result = omni_main();\n", cReturnType))
+		if mainReturnType == "float" || mainReturnType == "double" {
+			g.output.WriteString("    printf(\"OmniLang program result: %f\\n\", result);\n")
+		} else {
+			g.output.WriteString("    printf(\"OmniLang program result: %d\\n\", (int)result);\n")
+		}
+		g.output.WriteString("    return (int)result;\n")
+	}
+	
+	g.output.WriteString("}\n")
 }

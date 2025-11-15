@@ -281,18 +281,38 @@ char* omni_trim(const char* str) {
         return NULL;
     }
     
+    // Handle empty string
+    size_t str_len = strlen(str);
+    if (str_len == 0) {
+        char* result = malloc(1);
+        if (result) {
+            result[0] = '\0';
+        }
+        return result;
+    }
+    
     // Find start of non-whitespace
     const char* start = str;
     while (*start && (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r')) {
         start++;
     }
     
-    // Find end of non-whitespace
-    const char* end = str + strlen(str) - 1;
-    while (end > start && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) {
+    // If entire string is whitespace, return empty string
+    if (*start == '\0') {
+        char* result = malloc(1);
+        if (result) {
+            result[0] = '\0';
+        }
+        return result;
+    }
+    
+    // Find end of non-whitespace (safe: we know start is valid)
+    const char* end = str + str_len - 1;
+    while (end >= start && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r')) {
         end--;
     }
     
+    // Calculate length (end >= start is guaranteed at this point)
     int32_t len = (int32_t)(end - start + 1);
     char* result = malloc(len + 1);
     if (result) {
@@ -433,23 +453,33 @@ int32_t omni_string_to_bool(const char* str) {
 }
 
 // Array operations
+// NOTE: Array length cannot be determined from a pointer alone in C.
+// The backend should pass array length as a parameter or track it separately.
+// For now, return 0 as a safe default (backend should use compile-time known lengths).
 int32_t omni_array_length(int32_t* arr) {
     if (!arr) return 0;
-    // For now, we'll use a simple approach where we can't determine the length
-    // In a real implementation, we'd have proper array metadata
-    // For testing purposes, return a fixed value
-    return 5; // This is a placeholder - in reality we'd need array metadata
+    // Cannot determine length from pointer - backend must pass length explicitly
+    // Returning 0 is safer than a hardcoded value
+    return 0;
 }
 
-int32_t omni_array_get_int(int32_t* arr, int32_t index) {
-    if (!arr || index < 0) return 0;
-    // Return the actual element at the given index
+// Array get operation with bounds checking
+int32_t omni_array_get_int(int32_t* arr, int32_t index, int32_t length) {
+    if (!arr || index < 0 || index >= length) {
+        // Out of bounds - return 0 as safe default
+        // In a production system, this could abort or throw an exception
+        return 0;
+    }
     return arr[index];
 }
 
-void omni_array_set_int(int32_t* arr, int32_t index, int32_t value) {
-    if (!arr || index < 0) return;
-    // Set the actual element at the given index
+// Array set operation with bounds checking
+void omni_array_set_int(int32_t* arr, int32_t index, int32_t value, int32_t length) {
+    if (!arr || index < 0 || index >= length) {
+        // Out of bounds - silently ignore
+        // In a production system, this could abort or throw an exception
+        return;
+    }
     arr[index] = value;
 }
 
@@ -499,63 +529,62 @@ int32_t omni_factorial(int32_t n) {
 }
 
 // Array operations
-int32_t omni_len(void* array, size_t element_size) {
-    // This is a placeholder - in practice, we need to track array sizes
-    // For now, we'll return 0 as a safe default
-    // TODO: Implement proper array size tracking
+// omni_len returns the length of an array. The length is passed explicitly by the backend.
+int32_t omni_len(void* array, size_t element_size, int32_t array_length) {
     (void)array;        // Suppress unused parameter warning
     (void)element_size; // Suppress unused parameter warning
-    return 0;
+    // Return the length passed by the backend
+    return array_length;
 }
 
 // File I/O operations
-int32_t omni_file_open(const char* filename, const char* mode) {
+intptr_t omni_file_open(const char* filename, const char* mode) {
     FILE* file = fopen(filename, mode);
     if (file == NULL) {
-        return -1; // Error: file could not be opened
+        return (intptr_t)-1; // Error: file could not be opened
     }
-    return (int32_t)(intptr_t)file; // Cast FILE* to int32_t handle
+    return (intptr_t)file; // Cast FILE* to intptr_t handle (safe on 64-bit)
 }
 
-int32_t omni_file_close(int32_t file_handle) {
-    if (file_handle == -1) {
+int32_t omni_file_close(intptr_t file_handle) {
+    if (file_handle == (intptr_t)-1) {
         return -1; // Error: invalid handle
     }
     FILE* file = (FILE*)(intptr_t)file_handle;
     return fclose(file) == 0 ? 0 : -1;
 }
 
-int32_t omni_file_read(int32_t file_handle, char* buffer, int32_t size) {
-    if (file_handle == -1 || buffer == NULL || size <= 0) {
+int32_t omni_file_read(intptr_t file_handle, char* buffer, int32_t size) {
+    if (file_handle == (intptr_t)-1 || buffer == NULL || size <= 0) {
         return -1; // Error: invalid parameters
     }
-    FILE* file = (FILE*)(intptr_t)file_handle;
+    FILE* file = (FILE*)file_handle;
     size_t bytes_read = fread(buffer, 1, (size_t)size, file);
     return (int32_t)bytes_read;
 }
 
-int32_t omni_file_write(int32_t file_handle, const char* buffer, int32_t size) {
-    if (file_handle == -1 || buffer == NULL || size <= 0) {
+int32_t omni_file_write(intptr_t file_handle, const char* buffer, int32_t size) {
+    if (file_handle == (intptr_t)-1 || buffer == NULL || size <= 0) {
         return -1; // Error: invalid parameters
     }
-    FILE* file = (FILE*)(intptr_t)file_handle;
+    FILE* file = (FILE*)file_handle;
     size_t bytes_written = fwrite(buffer, 1, (size_t)size, file);
     return (int32_t)bytes_written;
 }
 
-int32_t omni_file_seek(int32_t file_handle, int32_t offset, int32_t whence) {
-    if (file_handle == -1) {
+int32_t omni_file_seek(intptr_t file_handle, int32_t offset, int32_t whence) {
+    if (file_handle == (intptr_t)-1) {
         return -1; // Error: invalid handle
     }
-    FILE* file = (FILE*)(intptr_t)file_handle;
+    FILE* file = (FILE*)file_handle;
     return fseek(file, offset, whence) == 0 ? 0 : -1;
 }
 
-int32_t omni_file_tell(int32_t file_handle) {
-    if (file_handle == -1) {
+int32_t omni_file_tell(intptr_t file_handle) {
+    if (file_handle == (intptr_t)-1) {
         return -1; // Error: invalid handle
     }
-    FILE* file = (FILE*)(intptr_t)file_handle;
+    FILE* file = (FILE*)file_handle;
     long pos = ftell(file);
     return pos >= 0 ? (int32_t)pos : -1;
 }
@@ -647,6 +676,13 @@ int32_t omni_test_summary() {
         printf("Some tests failed! ✗\n");
         return 1;
     }
+}
+
+void omni_test_reset() {
+    // Reset test counters (useful when running multiple test files)
+    total_tests = 0;
+    passed_tests = 0;
+    current_test_passed = 1;
 }
 
 // System operations
@@ -866,6 +902,390 @@ int32_t omni_map_contains_int(omni_map_t* map, int32_t key) {
 
 int32_t omni_map_size(omni_map_t* map) {
     return map ? map->size : 0;
+}
+
+// Additional map put operations
+void omni_map_put_string_string(omni_map_t* map, const char* key, const char* value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            // Update existing value
+            free(entry->value);
+            entry->value = malloc(strlen(value) + 1);
+            if (entry->value) {
+                strcpy((char*)entry->value, value);
+            }
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(strlen(key) + 1);
+    entry->value = malloc(strlen(value) + 1);
+    if (!entry->key || !entry->value) {
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    strcpy((char*)entry->key, key);
+    strcpy((char*)entry->value, value);
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_string_float(omni_map_t* map, const char* key, double value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            *(double*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(strlen(key) + 1);
+    entry->value = malloc(sizeof(double));
+    if (!entry->key || !entry->value) {
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    strcpy((char*)entry->key, key);
+    *(double*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_string_bool(omni_map_t* map, const char* key, int32_t value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            *(int32_t*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(strlen(key) + 1);
+    entry->value = malloc(sizeof(int32_t));
+    if (!entry->key || !entry->value) {
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    strcpy((char*)entry->key, key);
+    *(int32_t*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_int_string(omni_map_t* map, int32_t key, const char* value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            free(entry->value);
+            entry->value = malloc(strlen(value) + 1);
+            if (entry->value) {
+                strcpy((char*)entry->value, value);
+            }
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(sizeof(int32_t));
+    entry->value = malloc(strlen(value) + 1);
+    if (!entry->key || !entry->value) {
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    *(int32_t*)entry->key = key;
+    strcpy((char*)entry->value, value);
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_int_float(omni_map_t* map, int32_t key, double value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            *(double*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(sizeof(int32_t));
+    entry->value = malloc(sizeof(double));
+    if (!entry->key || !entry->value) {
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    *(int32_t*)entry->key = key;
+    *(double*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_int_bool(omni_map_t* map, int32_t key, int32_t value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            *(int32_t*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(sizeof(int32_t));
+    entry->value = malloc(sizeof(int32_t));
+    if (!entry->key || !entry->value) {
+        free(entry->key);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    *(int32_t*)entry->key = key;
+    *(int32_t*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+// Additional map get operations
+const char* omni_map_get_string_string(omni_map_t* map, const char* key) {
+    if (!map) return NULL;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            return (const char*)entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return NULL; // Key not found
+}
+
+double omni_map_get_string_float(omni_map_t* map, const char* key) {
+    if (!map) return 0.0;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            return *(double*)entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return 0.0; // Key not found
+}
+
+int32_t omni_map_get_string_bool(omni_map_t* map, const char* key) {
+    if (!map) return 0;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            return *(int32_t*)entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return 0; // Key not found
+}
+
+const char* omni_map_get_int_string(omni_map_t* map, int32_t key) {
+    if (!map) return NULL;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            return (const char*)entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return NULL; // Key not found
+}
+
+double omni_map_get_int_float(omni_map_t* map, int32_t key) {
+    if (!map) return 0.0;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            return *(double*)entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return 0.0; // Key not found
+}
+
+int32_t omni_map_get_int_bool(omni_map_t* map, int32_t key) {
+    if (!map) return 0;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            return *(int32_t*)entry->value;
+        }
+        entry = entry->next;
+    }
+    
+    return 0; // Key not found
+}
+
+// Map delete operations
+void omni_map_delete_string(omni_map_t* map, const char* key) {
+    if (!map) return;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    omni_map_entry_t* prev = NULL;
+    
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            if (prev) {
+                prev->next = entry->next;
+            } else {
+                map->buckets[bucket] = entry->next;
+            }
+            free(entry->key);
+            free(entry->value);
+            free(entry);
+            map->size--;
+            return;
+        }
+        prev = entry;
+        entry = entry->next;
+    }
+}
+
+void omni_map_delete_int(omni_map_t* map, int32_t key) {
+    if (!map) return;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    omni_map_entry_t* prev = NULL;
+    
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            if (prev) {
+                prev->next = entry->next;
+            } else {
+                map->buckets[bucket] = entry->next;
+            }
+            free(entry->key);
+            free(entry->value);
+            free(entry);
+            map->size--;
+            return;
+        }
+        prev = entry;
+        entry = entry->next;
+    }
 }
 
 // ============================================================================
@@ -1203,6 +1623,9 @@ int32_t omni_await_int(omni_promise_t* promise) {
     return *(int32_t*)promise->value;
 }
 
+// NOTE: This function returns a pointer to the string stored in the promise.
+// The string is valid until omni_promise_free is called on the promise.
+// If you need the string after freeing the promise, you must copy it first (e.g., using strdup).
 const char* omni_await_string(omni_promise_t* promise) {
     if (!promise || !promise->done || promise->type != 1) {
         return "";
@@ -1224,35 +1647,49 @@ int32_t omni_await_bool(omni_promise_t* promise) {
     return *(int32_t*)promise->value;
 }
 
+// NOTE: This function frees the promise and all its associated memory.
+// For string promises, the string returned by omni_await_string becomes invalid after this call.
+// Callers must copy the string (e.g., using strdup) if they need it after freeing the promise.
 void omni_promise_free(omni_promise_t* promise) {
     if (!promise) return;
     if (promise->value) {
-        if (promise->type == 1) {
-            // String - free the duplicated string
-            free(promise->value);
-        } else {
-            // Other types - free the allocated value
-            free(promise->value);
-        }
+        // For string promises, value is a strdup'd string that needs freeing
+        // For other types, value is a malloc'd buffer that needs freeing
+        free(promise->value);
     }
     free(promise);
 }
 
 // File I/O convenience functions (for async operations)
 const char* omni_read_file(const char* path) {
+    if (!path) {
+        return NULL;
+    }
+    
     FILE* file = fopen(path, "r");
     if (!file) {
-        return strdup("");
+        // Return NULL on error instead of leaking strdup("")
+        return NULL;
     }
     
     fseek(file, 0, SEEK_END);
     long size = ftell(file);
     fseek(file, 0, SEEK_SET);
     
+    // Handle empty files
+    if (size <= 0) {
+        fclose(file);
+        char* empty = (char*)malloc(1);
+        if (empty) {
+            empty[0] = '\0';
+        }
+        return empty;
+    }
+    
     char* buffer = (char*)malloc(size + 1);
     if (!buffer) {
         fclose(file);
-        return strdup("");
+        return NULL;
     }
     
     size_t read = fread(buffer, 1, size, file);

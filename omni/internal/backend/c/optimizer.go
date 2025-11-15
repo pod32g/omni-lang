@@ -2,6 +2,7 @@ package cbackend
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -217,32 +218,28 @@ func (o *COptimizer) optimizeArithmetic(code string) string {
 // optimizeArithmeticLine optimizes a single line of arithmetic
 func (o *COptimizer) optimizeArithmeticLine(line string) string {
 	// Optimize multiplication by powers of 2 to bit shifts
-	// This is a simplified version - would need proper parsing for full implementation
-
-	// Replace x * 2 with x << 1
-	line = strings.ReplaceAll(line, " * 2", " << 1")
-	line = strings.ReplaceAll(line, "*2", "<<1")
-
-	// Replace x * 4 with x << 2
-	line = strings.ReplaceAll(line, " * 4", " << 2")
-	line = strings.ReplaceAll(line, "*4", "<<2")
-
-	// Replace x * 8 with x << 3
-	line = strings.ReplaceAll(line, " * 8", " << 3")
-	line = strings.ReplaceAll(line, "*8", "<<3")
+	// Use word boundaries to avoid matching inside identifiers or pointer declarations
+	
+	// Replace x * 2 with x << 1 (but not in pointer declarations like "int *v")
+	// Match: space or identifier char, then " * 2" or "*2", then space or operator
+	re := regexp.MustCompile(`([\w\)])\s*\*\s*2(\s|;|\)|,|\[)`)
+	line = re.ReplaceAllString(line, "${1} << 1${2}")
+	
+	re = regexp.MustCompile(`([\w\)])\s*\*\s*4(\s|;|\)|,|\[)`)
+	line = re.ReplaceAllString(line, "${1} << 2${2}")
+	
+	re = regexp.MustCompile(`([\w\)])\s*\*\s*8(\s|;|\)|,|\[)`)
+	line = re.ReplaceAllString(line, "${1} << 3${2}")
 
 	// Optimize division by powers of 2 to bit shifts
-	// Replace x / 2 with x >> 1
-	line = strings.ReplaceAll(line, " / 2", " >> 1")
-	line = strings.ReplaceAll(line, "/2", ">>1")
-
-	// Replace x / 4 with x >> 2
-	line = strings.ReplaceAll(line, " / 4", " >> 2")
-	line = strings.ReplaceAll(line, "/4", ">>2")
-
-	// Replace x / 8 with x >> 3
-	line = strings.ReplaceAll(line, " / 8", " >> 3")
-	line = strings.ReplaceAll(line, "/8", ">>3")
+	re = regexp.MustCompile(`([\w\)])\s*/\s*2(\s|;|\)|,|\[)`)
+	line = re.ReplaceAllString(line, "${1} >> 1${2}")
+	
+	re = regexp.MustCompile(`([\w\)])\s*/\s*4(\s|;|\)|,|\[)`)
+	line = re.ReplaceAllString(line, "${1} >> 2${2}")
+	
+	re = regexp.MustCompile(`([\w\)])\s*/\s*8(\s|;|\)|,|\[)`)
+	line = re.ReplaceAllString(line, "${1} >> 3${2}")
 
 	return line
 }
@@ -299,11 +296,15 @@ func (o *COptimizer) minimizeVariableNames(code string) string {
 	}
 
 	// Replace all variable references with short names
+	// Use word boundaries to avoid replacing substrings inside other identifiers
 	var finalResult []string
 	for _, line := range result {
 		optimized := line
 		for oldName, newName := range varMap {
-			optimized = strings.ReplaceAll(optimized, oldName, newName)
+			// Use regex to match whole words only (word boundaries)
+			// This prevents replacing "v1" inside "v10" or string literals
+			re := regexp.MustCompile(`\b` + regexp.QuoteMeta(oldName) + `\b`)
+			optimized = re.ReplaceAllString(optimized, newName)
 		}
 		finalResult = append(finalResult, optimized)
 	}

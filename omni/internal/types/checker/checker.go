@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/omni-lang/omni/internal/ast"
@@ -28,6 +29,7 @@ func Check(filename, src string, mod *ast.Module) error {
 		knownTypes:       make(map[string]struct{}),
 		typeAliases:      make(map[string]string),
 		structFields:     make(map[string]map[string]string),
+		structTypeParams: make(map[string][]ast.TypeParam),
 		functions:        make(map[string]FunctionSignature),
 		imports:          make(map[string]bool),
 		moduleLoader:     *moduleloader.NewModuleLoader(),
@@ -79,13 +81,15 @@ type Checker struct {
 	knownTypes  map[string]struct{}
 	typeAliases map[string]string // Maps type alias names to their underlying types
 
-	structFields map[string]map[string]string
-	functions    map[string]FunctionSignature
+	structFields     map[string]map[string]string
+	structTypeParams map[string][]ast.TypeParam // Store type parameters for generic structs
+	functions        map[string]FunctionSignature
 
 	scopes      []map[string]Symbol
 	diagnostics []error
 
 	functionStack []functionContext
+	loopDepth     int // Track nesting depth of loops for break/continue validation
 
 	// Import resolution
 	imports map[string]bool // available imported symbols
@@ -152,8 +156,16 @@ func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeP
 	}
 
 	// Extract inner types (everything between < and >)
-	expectedInner := expected[expectedLess+1 : len(expected)-1]
-	argInner := argType[argLess+1 : len(argType)-1]
+	// Find the matching > for the < we found, accounting for nested generics
+	expectedGreater := c.findMatchingGreater(expected, expectedLess)
+	argGreater := c.findMatchingGreater(argType, argLess)
+	
+	if expectedGreater == -1 || argGreater == -1 {
+		return inferred // Malformed generic type
+	}
+	
+	expectedInner := expected[expectedLess+1 : expectedGreater]
+	argInner := argType[argLess+1 : argGreater]
 
 	// Handle single type parameter: TypeName<T> vs TypeName<int>
 	if !strings.Contains(expectedInner, ",") && !strings.Contains(argInner, ",") {
@@ -180,6 +192,27 @@ func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeP
 	}
 
 	return inferred
+}
+
+// findMatchingGreater finds the matching > for a < at the given position
+// Handles nested generics by tracking depth
+func (c *Checker) findMatchingGreater(typeStr string, lessPos int) int {
+	if lessPos < 0 || lessPos >= len(typeStr) {
+		return -1
+	}
+	depth := 1
+	for i := lessPos + 1; i < len(typeStr); i++ {
+		switch typeStr[i] {
+		case '<':
+			depth++
+		case '>':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1 // No matching >
 }
 
 // splitGenericArgs splits generic arguments by comma, handling nested generics
@@ -270,6 +303,10 @@ func (c *Checker) collectTypeDecls(mod *ast.Module) {
 				fields[field.Name] = typeExprToString(field.Type)
 			}
 			c.structFields[d.Name] = fields
+			// Store type parameters for generic structs
+			if len(d.TypeParams) > 0 {
+				c.structTypeParams[d.Name] = d.TypeParams
+			}
 		case *ast.EnumDecl:
 			c.knownTypes[d.Name] = struct{}{}
 		}
@@ -280,10 +317,22 @@ func (c *Checker) registerTopLevelSymbols(mod *ast.Module) {
 	for _, decl := range mod.Decls {
 		switch d := decl.(type) {
 		case *ast.LetDecl:
-			typ := c.resolveTypeExpr(d.Type)
+			var typ string
+			if d.Type != nil {
+				typ = c.resolveTypeExpr(d.Type)
+			} else {
+				// Type will be inferred later in checkLet
+				typ = typeInfer
+			}
 			c.declare(d.Name, typ, false, d.Span())
 		case *ast.VarDecl:
-			typ := c.resolveTypeExpr(d.Type)
+			var typ string
+			if d.Type != nil {
+				typ = c.resolveTypeExpr(d.Type)
+			} else {
+				// Type will be inferred later in checkVar
+				typ = typeInfer
+			}
 			c.declare(d.Name, typ, true, d.Span())
 		case *ast.FuncDecl:
 			// Skip namespaced functions (imported modules) - they're already registered
@@ -447,7 +496,7 @@ func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
 	finalType := expectedType
 	if finalType == typeInfer {
 		finalType = valueType
-	} else if valueType != typeInfer && valueType != typeError && !c.typesEqual(finalType, valueType) {
+	} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, finalType) {
 		c.report(decl.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, finalType),
 			fmt.Sprintf("convert the expression to %s or change the variable type to %s", finalType, valueType))
 	}
@@ -495,9 +544,15 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 	case *ast.WhileStmt:
 		c.checkWhileStmt(s)
 	case *ast.BreakStmt:
-		// Break statements are allowed in loops (we could add a loop depth check here)
+		// Break statements are only allowed in loops
+		if c.loopDepth == 0 {
+			c.report(s.Span(), "break statement outside of loop", "use break only inside for or while loops")
+		}
 	case *ast.ContinueStmt:
-		// Continue statements are allowed in loops (we could add a loop depth check here)
+		// Continue statements are only allowed in loops
+		if c.loopDepth == 0 {
+			c.report(s.Span(), "continue statement outside of loop", "use continue only inside for or while loops")
+		}
 	case *ast.BindingStmt:
 		c.checkBindingStmt(s)
 	case *ast.ShortVarDeclStmt:
@@ -509,7 +564,7 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 		finalType := declaredType
 		if declaredType == typeInfer {
 			finalType = valueType
-		} else if valueType != typeInfer && valueType != typeError && !c.typesEqual(declaredType, valueType) {
+		} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, declaredType) {
 			c.report(s.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, declaredType),
 				fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
 		}
@@ -559,11 +614,43 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 // checkTypeAliasDecl checks a type alias declaration
 func (c *Checker) checkTypeAliasDecl(decl *ast.TypeAliasDecl) {
 	// Check the type expression
-	underlyingType := c.checkTypeExpr(&decl.Type)
+	if decl.Type == nil {
+		c.report(decl.Span(), "type alias must have a type", "provide a type expression after the '='")
+		return
+	}
+	
+	// For generic aliases, enter type parameter scope so T, U, etc. are recognized
+	// Convert []string to []ast.TypeParam for scope management
+	var typeParams []ast.TypeParam
+	if len(decl.TypeParams) > 0 {
+		typeParams = make([]ast.TypeParam, len(decl.TypeParams))
+		for i, paramName := range decl.TypeParams {
+			// Create a TypeParam with the name (span will be approximate)
+			typeParams[i] = ast.TypeParam{
+				Name: paramName,
+				Span: decl.Span(), // Use alias span as approximation
+			}
+		}
+		c.enterTypeParams(typeParams)
+	}
+	
+	// Check the underlying type expression (T is now in scope for generic aliases)
+	underlyingType := c.checkTypeExpr(decl.Type)
+	
+	// Leave type parameter scope
+	if len(typeParams) > 0 {
+		c.leaveTypeParams(typeParams)
+	}
 
 	// Store the type alias mapping
+	// For generic aliases, store the template string (e.g., "T?") which will be substituted later
 	c.knownTypes[decl.Name] = struct{}{}
 	c.typeAliases[decl.Name] = underlyingType
+	
+	// Store type parameters for generic aliases so we can substitute them later
+	if len(typeParams) > 0 {
+		c.structTypeParams[decl.Name] = typeParams
+	}
 }
 
 func (c *Checker) checkBindingStmt(stmt *ast.BindingStmt) {
@@ -578,7 +665,7 @@ func (c *Checker) checkBindingStmt(stmt *ast.BindingStmt) {
 	finalType := declaredType
 	if declaredType == typeInfer {
 		finalType = valueType
-	} else if valueType != typeInfer && valueType != typeError && !c.typesEqual(declaredType, valueType) {
+	} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, declaredType) {
 		c.report(stmt.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, declaredType),
 			fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
 	}
@@ -586,8 +673,32 @@ func (c *Checker) checkBindingStmt(stmt *ast.BindingStmt) {
 }
 
 func (c *Checker) checkForStmt(stmt *ast.ForStmt) {
-	c.enterScope()
+	// Validate AST invariant: IsRange and classic form fields are mutually exclusive
 	if stmt.IsRange {
+		// Range form: should not have Init, Condition, or Post
+		if stmt.Init != nil || stmt.Condition != nil || stmt.Post != nil {
+			c.report(stmt.Span(), "range for loop cannot have init, condition, or post clauses", "use 'for item in items { ... }' syntax")
+		}
+	} else {
+		// Classic form: should not have Target or Iterable
+		if stmt.Target != nil || stmt.Iterable != nil {
+			c.report(stmt.Span(), "classic for loop cannot have target or iterable", "use 'for init; cond; post { ... }' syntax")
+		}
+	}
+
+	c.enterScope()
+	c.loopDepth++ // Increment loop depth
+	defer func() {
+		c.loopDepth-- // Decrement on exit
+		c.leaveScope()
+	}()
+
+	if stmt.IsRange {
+		// Range form: for item in items { ... }
+		if stmt.Iterable == nil {
+			c.report(stmt.Span(), "range for loop requires an iterable expression", "provide an array or map to iterate over")
+			return
+		}
 		iterType := c.checkExpr(stmt.Iterable)
 		elementType := typeInfer
 		if t, ok := arrayElementType(iterType); ok {
@@ -601,10 +712,10 @@ func (c *Checker) checkForStmt(stmt *ast.ForStmt) {
 			c.declare(stmt.Target.Name, elementType, false, stmt.Target.Span())
 		}
 		c.checkBlock(stmt.Body)
-		c.leaveScope()
 		return
 	}
 
+	// Classic form: for init; cond; post { ... }
 	if stmt.Init != nil {
 		c.checkStmt(stmt.Init)
 	}
@@ -618,7 +729,6 @@ func (c *Checker) checkForStmt(stmt *ast.ForStmt) {
 		c.checkStmt(stmt.Post)
 	}
 	c.checkBlock(stmt.Body)
-	c.leaveScope()
 }
 
 func (c *Checker) checkWhileStmt(stmt *ast.WhileStmt) {
@@ -627,8 +737,12 @@ func (c *Checker) checkWhileStmt(stmt *ast.WhileStmt) {
 		c.report(stmt.Cond.Span(), "while condition must be bool", "use a boolean expression")
 	}
 	c.enterScope()
+	c.loopDepth++ // Increment loop depth
+	defer func() {
+		c.loopDepth-- // Decrement on exit
+		c.leaveScope()
+	}()
 	c.checkBlock(stmt.Body)
-	c.leaveScope()
 }
 
 func (c *Checker) handleReturn(ret *ast.ReturnStmt) {
@@ -661,7 +775,7 @@ func (c *Checker) handleReturn(ret *ast.ReturnStmt) {
 		}
 		return
 	}
-	if valueType != typeError && !c.typesEqual(expected, valueType) {
+	if valueType != typeError && !c.isAssignable(valueType, expected) {
 		c.report(ret.Value.Span(), fmt.Sprintf("cannot return %s from function returning %s", valueType, expected), "return an expression with the correct type")
 	}
 }
@@ -825,12 +939,62 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		}
 
 		// Handle struct field access
-		if fields, ok := c.structFields[targetType]; ok {
+		// Try qualified name first, then unqualified name
+		var fields map[string]string
+		var ok bool
+		if fields, ok = c.structFields[targetType]; !ok {
+			// If targetType is qualified (e.g., "foo.bar.Point"), also try unqualified ("Point")
+			if lastDot := strings.LastIndex(targetType, "."); lastDot >= 0 {
+				unqualifiedName := targetType[lastDot+1:]
+				fields, ok = c.structFields[unqualifiedName]
+			}
+		}
+		if ok {
 			if fieldType, exists := fields[e.Member]; exists {
+				// Check if targetType is a generic instantiation (e.g., "Box<int>")
+				// and if so, substitute type parameters in the field type
+				if strings.Contains(targetType, "<") && strings.Contains(targetType, ">") {
+					// Extract base name and type arguments
+					baseName, typeArgs := c.extractGenericType(targetType)
+					if baseName != "" && len(typeArgs) > 0 {
+						// Look up struct type parameters
+						if typeParams, hasParams := c.structTypeParams[baseName]; hasParams && len(typeParams) == len(typeArgs) {
+							// Substitute type parameters in field type
+							substitutedType := fieldType
+							for i, param := range typeParams {
+								if i < len(typeArgs) {
+									substitutedType = c.substituteTypeParam(substitutedType, param.Name, typeArgs[i])
+								}
+							}
+							return substitutedType
+						}
+					}
+				}
 				return fieldType
 			}
 			c.report(e.Span(), fmt.Sprintf("struct %s has no field %q", targetType, e.Member), "use a declared field name")
 			return typeError
+		}
+
+		// Handle static method calls on struct types (e.g., pkg.Type.staticMethod())
+		// Check if targetType is a struct type and the member is a function
+		if strings.Contains(targetType, ".") {
+			// This might be a qualified type name (e.g., "pkg.Type")
+			qualifiedName := targetType + "." + e.Member
+			// Check if it's a function from the module/package
+			if sig, exists := c.functions[qualifiedName]; exists {
+				return sig.Return
+			}
+		}
+		// Also check MemberExpr targets (e.g., pkg.Type.staticMethod where pkg.Type is a MemberExpr)
+		if member, ok := e.Target.(*ast.MemberExpr); ok {
+			if ident, ok := member.Target.(*ast.IdentifierExpr); ok {
+				// Construct qualified name: pkg.Type.staticMethod
+				qualifiedName := ident.Name + "." + member.Member + "." + e.Member
+				if sig, exists := c.functions[qualifiedName]; exists {
+					return sig.Return
+				}
+			}
 		}
 
 		// Handle module member access (e.g., math_utils.add, io.println)
@@ -907,6 +1071,9 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			}
 		}
 		if elementType == typeInfer {
+			// Empty array literal - cannot infer element type
+			c.report(e.Span(), "cannot infer element type of empty array literal", 
+				"add a type annotation like let arr: array<int> = [] or provide at least one element")
 			elementType = typeError
 		}
 		return buildGeneric("[]", []string{elementType})
@@ -937,7 +1104,16 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		}
 		return buildGeneric("map", []string{keyType, valueType})
 	case *ast.StructLiteralExpr:
-		fields, ok := c.structFields[e.TypeName]
+		// Try qualified name first, then unqualified name
+		var fields map[string]string
+		var ok bool
+		if fields, ok = c.structFields[e.TypeName]; !ok {
+			// If TypeName is qualified (e.g., "foo.bar.Point"), also try unqualified ("Point")
+			if lastDot := strings.LastIndex(e.TypeName, "."); lastDot >= 0 {
+				unqualifiedName := e.TypeName[lastDot+1:]
+				fields, ok = c.structFields[unqualifiedName]
+			}
+		}
 		if !ok {
 			c.report(e.Span(), fmt.Sprintf("unknown struct type %q", e.TypeName), "define the struct before constructing it")
 			return typeError
@@ -974,7 +1150,14 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		return "*" + typ
 	case *ast.DeleteExpr:
 		// delete expression returns void
-		c.checkExpr(e.Target)
+		// Validate that the target is a pointer type
+		targetType := c.checkExpr(e.Target)
+		// Check if target is a pointer type (starts with *)
+		if !strings.HasPrefix(targetType, "*") {
+			c.report(e.Target.Span(), fmt.Sprintf("delete operand must be a pointer, got %s", targetType),
+				"delete can only be used on pointer types (values returned from new)")
+			return typeError
+		}
 		return "void"
 	case *ast.LambdaExpr:
 		// Lambda expression: |a, b| a + b
@@ -982,14 +1165,15 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		c.enterScope()
 
 		// Infer parameter types and add them to the scope
+		// Use typeInfer instead of hardcoding int - this allows type inference
+		// from usage in the lambda body and call sites
 		paramTypes := make([]string, len(e.Params))
 		for i, param := range e.Params {
-			// For now, infer parameter types from usage
-			// In a full implementation, we'd do proper type inference
-			paramType := "int" // Default to int for now
+			// Use typeInfer to allow inference from usage
+			paramType := typeInfer
 			paramTypes[i] = paramType
 
-			// Add parameter to the current scope
+			// Add parameter to the current scope with inferred type
 			c.declare(param.Name, paramType, false, param.Span)
 		}
 
@@ -1021,6 +1205,16 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		// For now, allow all casts (in a full implementation, we'd check compatibility)
 		// TODO: Add proper type compatibility checking
 		return targetType
+	case *ast.StringInterpolationExpr:
+		// String interpolation always returns string type
+		// Check each part to ensure expressions are valid
+		for _, part := range e.Parts {
+			if !part.IsLiteral {
+				// Check the expression part
+				c.checkExpr(part.Expr)
+			}
+		}
+		return "string"
 	default:
 		return typeInfer
 	}
@@ -1081,10 +1275,10 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 		}
 		return "bool"
 	case "&", "|", "^", "<<", ">>":
-		// Bitwise operators require integer operands
-		if !isNumeric(leftType) || !isNumeric(rightType) {
+		// Bitwise operators require integer operands (not floats)
+		if !isInteger(leftType) || !isInteger(rightType) {
 			c.report(expr.Span(), fmt.Sprintf("operator %s requires integer operands", expr.Op),
-				fmt.Sprintf("use integer expressions (int), got %s and %s", leftType, rightType))
+				fmt.Sprintf("use integer expressions (int, long, byte), got %s and %s", leftType, rightType))
 			return typeError
 		}
 		if !c.typesEqual(leftType, rightType) {
@@ -1138,8 +1332,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 	}
 
 	// Handle function type calls (e.g., (int, string) -> bool)
-	// Only use this path if we didn't find the function in c.functions above
-	// This handles cases where the callee is a function type variable
+	// This handles cases where the callee is a function type variable or expression
 	// Check if we already handled this as a direct function call above
 	handledAsDirectCall := false
 	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok {
@@ -1147,6 +1340,20 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 			handledAsDirectCall = true
 		}
 	}
+
+	// Also check MemberExpr for qualified function names
+	if !handledAsDirectCall {
+		if member, ok := expr.Callee.(*ast.MemberExpr); ok {
+			if ident, ok := member.Target.(*ast.IdentifierExpr); ok {
+				qualifiedName := ident.Name + "." + member.Member
+				if _, exists := c.functions[qualifiedName]; exists {
+					handledAsDirectCall = true
+				}
+			}
+		}
+	}
+
+	// If calleeType is a function type, validate arguments
 	if strings.Contains(calleeType, ") -> ") && !handledAsDirectCall {
 		// Parse function type: (param1, param2) -> returnType
 		arrowIndex := strings.Index(calleeType, ") -> ")
@@ -1291,7 +1498,7 @@ func (c *Checker) checkGenericFunctionCall(expr *ast.CallExpr, sig FunctionSigna
 				// Check if the expected type contains type parameters that need substitution
 				substitutedExpected := expected
 				for typeParam, concreteType := range typeSubstitutions {
-					substitutedExpected = strings.ReplaceAll(substitutedExpected, typeParam, concreteType)
+					substitutedExpected = c.substituteTypeParam(substitutedExpected, typeParam, concreteType)
 				}
 				if !c.typesEqual(substitutedExpected, argType) {
 					c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, substitutedExpected, argType),
@@ -1304,7 +1511,7 @@ func (c *Checker) checkGenericFunctionCall(expr *ast.CallExpr, sig FunctionSigna
 	// Apply type substitutions to return type
 	returnType := sig.Return
 	for typeParam, concreteType := range typeSubstitutions {
-		returnType = strings.ReplaceAll(returnType, typeParam, concreteType)
+		returnType = c.substituteTypeParam(returnType, typeParam, concreteType)
 	}
 
 	return returnType
@@ -1334,7 +1541,7 @@ func (c *Checker) checkAssignmentExpr(expr *ast.AssignmentExpr) string {
 		c.updateSymbolType(ident.Name, rhsType)
 		sym.Type = rhsType
 	}
-	if rhsType != typeError && sym.Type != typeInfer && !c.typesEqual(sym.Type, rhsType) {
+	if rhsType != typeError && sym.Type != typeInfer && !c.isAssignable(rhsType, sym.Type) {
 		c.report(expr.Right.Span(), fmt.Sprintf("cannot assign %s to %s", rhsType, sym.Type),
 			fmt.Sprintf("convert the expression to %s or change the variable type to %s", sym.Type, rhsType))
 	}
@@ -1497,7 +1704,25 @@ func (c *Checker) checkTypeExpr(t *ast.TypeExpr) string {
 	}
 
 	// Handle type aliases - resolve to underlying type
+	// For generic aliases, substitute type arguments
 	if underlyingType, isAlias := c.typeAliases[t.Name]; isAlias {
+		// Check if this is a generic alias with type arguments
+		if len(t.Args) > 0 {
+			// Get type parameters for this alias
+			if typeParams, hasParams := c.structTypeParams[t.Name]; hasParams {
+				// Substitute type parameters in the underlying type
+				substituted := underlyingType
+				for i, param := range typeParams {
+					if i < len(t.Args) {
+						argType := c.checkTypeExpr(t.Args[i])
+						// Substitute the type parameter with the actual argument
+						substituted = c.substituteTypeParam(substituted, param.Name, argType)
+					}
+				}
+				return substituted
+			}
+		}
+		// Non-generic alias or alias without arguments - return as-is
 		return underlyingType
 	}
 
@@ -1561,8 +1786,14 @@ func buildGeneric(name string, args []string) string {
 }
 
 func buildUnion(members []string) string {
+	// Canonicalize union by sorting members to ensure deterministic ordering
+	// This makes int | string equal to string | int
+	sorted := make([]string, len(members))
+	copy(sorted, members)
+	sort.Strings(sorted)
+
 	var b strings.Builder
-	for i, member := range members {
+	for i, member := range sorted {
 		if i > 0 {
 			b.WriteString(" | ")
 		}
@@ -1583,6 +1814,90 @@ func buildFunctionType(paramTypes []string, returnType string) string {
 	b.WriteString(") -> ")
 	b.WriteString(returnType)
 	return b.String()
+}
+
+// substituteTypeParam replaces type parameters in type strings with boundary awareness.
+// This prevents substring replacement bugs (e.g., "T" in "Matrix" becoming "Main<int>rix").
+// It only replaces type parameters that appear as standalone identifiers, not substrings.
+func (c *Checker) substituteTypeParam(typeStr, typeParam, concreteType string) string {
+	// Type parameters can appear in several contexts:
+	// 1. Standalone: "T" -> "int"
+	// 2. In generics: "array<T>" -> "array<int>"
+	// 3. In unions: "T | string" -> "int | string"
+	// 4. In function types: "(T) -> T" -> "(int) -> int"
+	// We need to replace only when the type parameter is a complete identifier,
+	// not when it's part of another identifier.
+
+	// Simple approach: replace only when preceded/followed by non-identifier characters
+	// or at start/end of string. This handles most cases correctly.
+	result := typeStr
+	paramLen := len(typeParam)
+
+	// Find all occurrences and check boundaries
+	for i := 0; i <= len(result)-paramLen; {
+		pos := strings.Index(result[i:], typeParam)
+		if pos == -1 {
+			break
+		}
+		actualPos := i + pos
+
+		// Check if this is a standalone identifier
+		// It should be preceded by a non-identifier char (or start) and followed by a non-identifier char (or end)
+		isStart := actualPos == 0
+		isEnd := actualPos+paramLen == len(result)
+		prevOK := isStart || !isIdentifierChar(rune(result[actualPos-1]))
+		nextOK := isEnd || !isIdentifierChar(rune(result[actualPos+paramLen]))
+
+		if prevOK && nextOK {
+			// This is a standalone type parameter, replace it
+			result = result[:actualPos] + concreteType + result[actualPos+paramLen:]
+			i = actualPos + len(concreteType)
+		} else {
+			// Skip this occurrence, continue searching
+			i = actualPos + 1
+		}
+	}
+
+	return result
+}
+
+// isIdentifierChar checks if a rune is part of an identifier (letter, digit, underscore)
+func isIdentifierChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
+
+// extractGenericType extracts the base name and type arguments from a generic type string.
+// For example, "Box<int>" returns ("Box", ["int"]), "array<string>" returns ("array", ["string"]).
+// Returns empty strings if the type is not generic.
+func (c *Checker) extractGenericType(typeStr string) (baseName string, typeArgs []string) {
+	// Find the first '<' that's not part of a qualified name
+	ltIndex := strings.Index(typeStr, "<")
+	if ltIndex == -1 {
+		return "", nil
+	}
+
+	// Extract base name (everything before '<')
+	baseName = strings.TrimSpace(typeStr[:ltIndex])
+
+	// Handle qualified names (e.g., "foo.bar.Box<int>")
+	if lastDot := strings.LastIndex(baseName, "."); lastDot >= 0 {
+		baseName = baseName[lastDot+1:]
+	}
+
+	// Extract type arguments (everything between '<' and matching '>')
+	gtIndex := strings.LastIndex(typeStr, ">")
+	if gtIndex == -1 || gtIndex <= ltIndex {
+		return "", nil
+	}
+
+	argsStr := strings.TrimSpace(typeStr[ltIndex+1 : gtIndex])
+	if argsStr == "" {
+		return baseName, []string{}
+	}
+
+	// Split by comma, handling nested generics
+	typeArgs = c.splitGenericArgs(argsStr)
+	return baseName, typeArgs
 }
 
 func splitGenericArgs(body string) []string {
@@ -1652,6 +1967,16 @@ func isNumeric(typ string) bool {
 	}
 }
 
+// isInteger checks if a type is an integer type (not float/double)
+func isInteger(typ string) bool {
+	switch typ {
+	case "int", "long", "byte":
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *Checker) typesEqual(a, b string) bool {
 	if a == typeError || b == typeError {
 		return true
@@ -1671,19 +1996,42 @@ func (c *Checker) typesEqual(a, b string) bool {
 		return c.typesEqual(aElement, bElement)
 	}
 
-	// Handle optional types - int? is compatible with int
-	if strings.HasSuffix(a, "?") && !strings.HasSuffix(b, "?") {
-		baseType := a[:len(a)-1] // Remove the ?
-		return c.typesEqual(baseType, b)
+	// Handle optional types - preserve optionality for null-safety
+	// int? is NOT compatible with int (no implicit unwrapping)
+	// Only allow widening: non-optional -> optional (e.g., int can be assigned to int?)
+	// Reject narrowing: optional -> non-optional (e.g., int? cannot be assigned to int)
+	aBase := strings.TrimRight(a, "?")
+	bBase := strings.TrimRight(b, "?")
+	aOptional := len(a) - len(aBase)
+	bOptional := len(b) - len(bBase)
+
+	// Normalize optional-of-optional (int?? -> int?)
+	// But preserve the distinction between optional and non-optional
+	if aOptional > 1 {
+		a = aBase + "?"
+		aOptional = 1
 	}
-	if !strings.HasSuffix(a, "?") && strings.HasSuffix(b, "?") {
-		baseType := b[:len(b)-1] // Remove the ?
-		return c.typesEqual(a, baseType)
+	if bOptional > 1 {
+		b = bBase + "?"
+		bOptional = 1
+	}
+
+	// If both are non-optional, continue with normal comparison below
+	if aOptional == 0 && bOptional == 0 {
+		// Continue with normal comparison below
+	} else if aOptional > 0 && bOptional > 0 {
+		// Both are optional - compare base types
+		return c.typesEqual(aBase, bBase)
+	} else {
+		// One is optional, one is not - they are NOT equal
+		// This enforces null-safety in type equality checks
+		// For assignments, use isAssignable() which allows widening
+		return false
 	}
 
 	// Handle union types
 	if c.isUnionType(a) && c.isUnionType(b) {
-		return a == b // Exact union match
+		return a == b // Exact union match (already canonicalized by buildUnion)
 	}
 	if c.isUnionType(a) {
 		return c.isTypeInUnion(b, a)
@@ -1692,7 +2040,62 @@ func (c *Checker) typesEqual(a, b string) bool {
 		return c.isTypeInUnion(a, b)
 	}
 
+	// Handle pointer types - compare base types after stripping leading *
+	// Count leading * characters only
+	aPtrCount := 0
+	for i := 0; i < len(a) && a[i] == '*'; i++ {
+		aPtrCount++
+	}
+	bPtrCount := 0
+	for i := 0; i < len(b) && b[i] == '*'; i++ {
+		bPtrCount++
+	}
+	if aPtrCount > 0 || bPtrCount > 0 {
+		// Both must have same number of pointer levels
+		if aPtrCount != bPtrCount {
+			return false
+		}
+		// Strip leading * prefixes and compare base types
+		aBase := a[aPtrCount:]
+		bBase := b[bPtrCount:]
+		return c.typesEqual(aBase, bBase)
+	}
+
 	return a == b
+}
+
+// isAssignable checks if a value of type fromType can be assigned to a variable of type toType
+// This allows widening (non-optional -> optional) but not narrowing (optional -> non-optional)
+func (c *Checker) isAssignable(fromType, toType string) bool {
+	// First check exact equality
+	if c.typesEqual(fromType, toType) {
+		return true
+	}
+	
+	// Handle optional types: allow widening (non-optional -> optional)
+	fromBase := strings.TrimRight(fromType, "?")
+	toBase := strings.TrimRight(toType, "?")
+	fromOptional := len(fromType) - len(fromBase)
+	toOptional := len(toType) - len(toBase)
+	
+	// Normalize optional-of-optional
+	if fromOptional > 1 {
+		fromOptional = 1
+		fromBase = strings.TrimRight(fromType, "?")
+	}
+	if toOptional > 1 {
+		toOptional = 1
+		toBase = strings.TrimRight(toType, "?")
+	}
+	
+	// Allow widening: non-optional can be assigned to optional if base types match
+	if fromOptional == 0 && toOptional > 0 {
+		return c.typesEqual(fromBase, toBase)
+	}
+	
+	// Reject narrowing: optional cannot be assigned to non-optional
+	// Reject other mismatches
+	return false
 }
 
 // isArrayType checks if a type string represents an array type
@@ -2049,6 +2452,8 @@ func (c *Checker) processImport(imp *ast.ImportDecl) {
 
 		// Register the module's function signatures
 		c.registerModuleFunctionSignatures(module, imp.Path)
+		// Register the module's struct fields
+		c.registerModuleStructFields(module, imp.Path)
 
 		// Process nested imports recursively (but don't process function declarations)
 		// Only process imports, not function declarations
@@ -2182,6 +2587,42 @@ func (c *Checker) registerMergedFunctionSignatures(mod *ast.Module) {
 				c.leaveTypeParams(fn.TypeParams)
 
 				c.functions[fn.Name] = sig
+			}
+		}
+	}
+}
+
+// registerModuleStructFields registers struct field definitions from an imported module
+func (c *Checker) registerModuleStructFields(mod *ast.Module, importPath []string) {
+	// Create the module prefix (e.g., "std.math" for importPath ["std", "math"])
+	modulePrefix := strings.Join(importPath, ".")
+
+	for _, decl := range mod.Decls {
+		if structDecl, ok := decl.(*ast.StructDecl); ok {
+			// Create the fully qualified struct name
+			qualifiedName := modulePrefix + "." + structDecl.Name
+
+			// Register the struct type
+			c.knownTypes[qualifiedName] = struct{}{}
+			// Also register the unqualified name for backward compatibility
+			c.knownTypes[structDecl.Name] = struct{}{}
+
+			// Collect field types
+			fields := make(map[string]string, len(structDecl.Fields))
+			for _, field := range structDecl.Fields {
+				fields[field.Name] = typeExprToString(field.Type)
+			}
+
+			// Store with qualified name
+			c.structFields[qualifiedName] = fields
+			// Also store with unqualified name for backward compatibility
+			// (in case the parser uses unqualified names in some contexts)
+			c.structFields[structDecl.Name] = fields
+
+			// Store type parameters for generic structs
+			if len(structDecl.TypeParams) > 0 {
+				c.structTypeParams[qualifiedName] = structDecl.TypeParams
+				c.structTypeParams[structDecl.Name] = structDecl.TypeParams
 			}
 		}
 	}

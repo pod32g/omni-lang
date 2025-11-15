@@ -138,7 +138,11 @@ func (p *printer) writeDecl(decl Decl) {
 			if len(d.TypeParams) > 0 {
 				p.writeLine("TypeParams: " + strings.Join(d.TypeParams, ", "))
 			}
-			p.writeLine("Type " + p.formatType(&d.Type))
+			if d.Type != nil {
+				p.writeLine("Type " + p.formatType(d.Type))
+			} else {
+				p.writeLine("Type <nil>")
+			}
 		})
 		p.writeLine("}")
 	default:

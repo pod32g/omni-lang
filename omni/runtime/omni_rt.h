@@ -64,7 +64,9 @@ int32_t omni_await_bool(omni_promise_t* promise);
 void omni_promise_free(omni_promise_t* promise);
 
 // Array operations
-int32_t omni_len(void* array, size_t element_size);
+// omni_len returns the length of an array. The length must be passed explicitly
+// by the backend since C arrays don't carry length metadata.
+int32_t omni_len(void* array, size_t element_size, int32_t array_length);
 
 // Math operations
 int32_t omni_add(int32_t a, int32_t b);
@@ -83,20 +85,41 @@ int32_t omni_string_to_bool(const char* str);
 
 // Array operations
 int32_t omni_array_length(int32_t* arr);
-int32_t omni_array_get_int(int32_t* arr, int32_t index);
-void omni_array_set_int(int32_t* arr, int32_t index, int32_t value);
+// Array get/set operations with bounds checking
+// length parameter must be passed by the backend for bounds checking
+int32_t omni_array_get_int(int32_t* arr, int32_t index, int32_t length);
+void omni_array_set_int(int32_t* arr, int32_t index, int32_t value, int32_t length);
 
 // Map operations
 typedef struct omni_map omni_map_t;
 omni_map_t* omni_map_create();
 void omni_map_destroy(omni_map_t* map);
+
+// Map put operations for all type combinations
 void omni_map_put_string_int(omni_map_t* map, const char* key, int32_t value);
+void omni_map_put_string_string(omni_map_t* map, const char* key, const char* value);
+void omni_map_put_string_float(omni_map_t* map, const char* key, double value);
+void omni_map_put_string_bool(omni_map_t* map, const char* key, int32_t value);
 void omni_map_put_int_int(omni_map_t* map, int32_t key, int32_t value);
+void omni_map_put_int_string(omni_map_t* map, int32_t key, const char* value);
+void omni_map_put_int_float(omni_map_t* map, int32_t key, double value);
+void omni_map_put_int_bool(omni_map_t* map, int32_t key, int32_t value);
+
+// Map get operations for all type combinations
 int32_t omni_map_get_string_int(omni_map_t* map, const char* key);
+const char* omni_map_get_string_string(omni_map_t* map, const char* key);
+double omni_map_get_string_float(omni_map_t* map, const char* key);
+int32_t omni_map_get_string_bool(omni_map_t* map, const char* key);
 int32_t omni_map_get_int_int(omni_map_t* map, int32_t key);
+const char* omni_map_get_int_string(omni_map_t* map, int32_t key);
+double omni_map_get_int_float(omni_map_t* map, int32_t key);
+int32_t omni_map_get_int_bool(omni_map_t* map, int32_t key);
+
 int32_t omni_map_contains_string(omni_map_t* map, const char* key);
 int32_t omni_map_contains_int(omni_map_t* map, int32_t key);
 int32_t omni_map_size(omni_map_t* map);
+void omni_map_delete_string(omni_map_t* map, const char* key);
+void omni_map_delete_int(omni_map_t* map, int32_t key);
 
 // Struct operations
 typedef struct omni_struct omni_struct_t;
@@ -121,12 +144,13 @@ int32_t omni_lcm(int32_t a, int32_t b);
 int32_t omni_factorial(int32_t n);
 
 // File I/O operations
-int32_t omni_file_open(const char* filename, const char* mode);
-int32_t omni_file_close(int32_t file_handle);
-int32_t omni_file_read(int32_t file_handle, char* buffer, int32_t size);
-int32_t omni_file_write(int32_t file_handle, const char* buffer, int32_t size);
-int32_t omni_file_seek(int32_t file_handle, int32_t offset, int32_t whence);
-int32_t omni_file_tell(int32_t file_handle);
+// Use intptr_t for file handles to safely store FILE* pointers on 64-bit platforms
+intptr_t omni_file_open(const char* filename, const char* mode);
+int32_t omni_file_close(intptr_t file_handle);
+int32_t omni_file_read(intptr_t file_handle, char* buffer, int32_t size);
+int32_t omni_file_write(intptr_t file_handle, const char* buffer, int32_t size);
+int32_t omni_file_seek(intptr_t file_handle, int32_t offset, int32_t whence);
+int32_t omni_file_tell(intptr_t file_handle);
 int32_t omni_file_exists(const char* filename);
 int32_t omni_file_size(const char* filename);
 
@@ -145,6 +169,7 @@ void omni_assert_eq_float(double expected, double actual, const char* message);
 void omni_assert_true(int32_t condition, const char* message);
 void omni_assert_false(int32_t condition, const char* message);
 int32_t omni_test_summary();
+void omni_test_reset(); // Reset test counters (useful when running multiple test files)
 
 // System operations
 void omni_exit(int32_t code);
