@@ -282,6 +282,8 @@ venv.bak/
 *.log
 logs/
 log/
+!omni/native/clift/vendor/log/
+!omni/native/clift/vendor/log/**
 
 # =============================================================================
 # Backup Files
