@@ -245,11 +245,24 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 		if local == "" {
 			local = imp.Path[len(imp.Path)-1]
 		}
-		// Append cloned function decls with namespaced names
+		// Append cloned declarations with namespaced names (mirror std module behavior)
 		for _, d := range imported.Decls {
-			if fn, ok := d.(*ast.FuncDecl); ok {
-				cloned := *fn
-				cloned.Name = local + "." + fn.Name
+			switch decl := d.(type) {
+			case *ast.FuncDecl:
+				cloned := *decl
+				cloned.Name = local + "." + decl.Name
+				mod.Decls = append(mod.Decls, &cloned)
+			case *ast.StructDecl:
+				cloned := *decl
+				cloned.Name = local + "." + decl.Name
+				mod.Decls = append(mod.Decls, &cloned)
+			case *ast.EnumDecl:
+				cloned := *decl
+				cloned.Name = local + "." + decl.Name
+				mod.Decls = append(mod.Decls, &cloned)
+			case *ast.TypeAliasDecl:
+				cloned := *decl
+				cloned.Name = local + "." + decl.Name
 				mod.Decls = append(mod.Decls, &cloned)
 			}
 		}

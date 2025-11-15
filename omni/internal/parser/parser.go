@@ -10,14 +10,31 @@ import (
 )
 
 // transformTokensForNestedGenerics converts >> tokens to two > tokens in generic contexts
+// Only treats < as generic delimiter when it follows an identifier or type keyword
 func transformTokensForNestedGenerics(tokens []lexer.Token) []lexer.Token {
 	var result []lexer.Token
 	genericDepth := 0
 
-	for _, token := range tokens {
-		// Track generic depth
+	for i, token := range tokens {
+		// Only treat < as generic delimiter when it follows an identifier or type keyword
+		// This prevents treating comparison operators like a < b as generic delimiters
 		if token.Kind == lexer.TokenLess {
-			genericDepth++
+			// Check if previous token is an identifier or type keyword
+			if i > 0 {
+				prevToken := tokens[i-1]
+				// Check if previous token is identifier or a type-related keyword
+				if prevToken.Kind == lexer.TokenIdentifier {
+					genericDepth++
+				} else {
+					// Not a generic delimiter, just pass through
+					result = append(result, token)
+					continue
+				}
+			} else {
+				// First token can't be a generic delimiter
+				result = append(result, token)
+				continue
+			}
 		} else if token.Kind == lexer.TokenGreater {
 			if genericDepth > 0 {
 				genericDepth--
@@ -506,6 +523,16 @@ func (p *Parser) parseForStmt() (ast.Stmt, error) {
 	}
 
 	// Classic for loop grammar: for init; cond; post { ... }
+	// Handle infinite loop: for { ... }
+	if p.peekKind() == lexer.TokenLBrace {
+		body, err := p.parseBlock()
+		if err != nil {
+			return nil, err
+		}
+		span := lexer.Span{Start: tok.Span.Start, End: body.Span().End}
+		return &ast.ForStmt{SpanInfo: span, Body: body}, nil
+	}
+
 	var init ast.Stmt
 	if p.peekKind() != lexer.TokenSemicolon {
 		stmt, err := p.parseForInit()
@@ -989,10 +1016,26 @@ func (p *Parser) parsePrimary() (ast.Expr, error) {
 }
 
 func (p *Parser) parseStructLiteral(base ast.Expr) (ast.Expr, error) {
-	ident, ok := base.(*ast.IdentifierExpr)
-	if !ok {
-		return nil, p.errorAtCurrent("struct literal must start with type identifier")
+	var typeName string
+	var startSpan lexer.Span
+	
+	// Handle both IdentifierExpr and MemberExpr (qualified types like pkg.Type)
+	switch expr := base.(type) {
+	case *ast.IdentifierExpr:
+		typeName = expr.Name
+		startSpan = expr.SpanInfo
+	case *ast.MemberExpr:
+		// For qualified types, construct the full name (e.g., "pkg.Type")
+		if targetIdent, ok := expr.Target.(*ast.IdentifierExpr); ok {
+			typeName = targetIdent.Name + "." + expr.Member
+			startSpan = expr.SpanInfo
+		} else {
+			return nil, p.errorAtCurrent("struct literal must start with type identifier or qualified type")
+		}
+	default:
+		return nil, p.errorAtCurrent("struct literal must start with type identifier or qualified type")
 	}
+	
 	p.expect(lexer.TokenLBrace)
 	fields := []ast.StructLiteralField{}
 	if p.peekKind() != lexer.TokenRBrace {
@@ -1011,8 +1054,8 @@ func (p *Parser) parseStructLiteral(base ast.Expr) (ast.Expr, error) {
 		}
 	}
 	rbrace := p.expect(lexer.TokenRBrace)
-	span := lexer.Span{Start: base.Span().Start, End: rbrace.Span.End}
-	return &ast.StructLiteralExpr{SpanInfo: span, TypeName: ident.Name, Fields: fields}, nil
+	span := lexer.Span{Start: startSpan.Start, End: rbrace.Span.End}
+	return &ast.StructLiteralExpr{SpanInfo: span, TypeName: typeName, Fields: fields}, nil
 }
 
 func (p *Parser) parseMapLiteral(lbrace lexer.Token) (ast.Expr, error) {
@@ -1040,7 +1083,10 @@ func (p *Parser) parseMapLiteral(lbrace lexer.Token) (ast.Expr, error) {
 }
 
 func (p *Parser) isStructLiteralContext(base ast.Expr) bool {
-	if _, ok := base.(*ast.IdentifierExpr); !ok {
+	// Accept both IdentifierExpr and MemberExpr (qualified types)
+	_, isIdent := base.(*ast.IdentifierExpr)
+	_, isMember := base.(*ast.MemberExpr)
+	if !isIdent && !isMember {
 		return false
 	}
 	k1 := p.peekKindN(1)
@@ -1202,6 +1248,7 @@ func (p *Parser) parseSingleTypeWithNestedGenerics() (*ast.TypeExpr, error) {
 
 	// Handle pointer types: *Type or *(Type)
 	if p.match(lexer.TokenStar) {
+		starToken := p.previous() // Capture the * token for correct span
 		var baseType *ast.TypeExpr
 		var err error
 
@@ -1220,12 +1267,23 @@ func (p *Parser) parseSingleTypeWithNestedGenerics() (*ast.TypeExpr, error) {
 			}
 		}
 
-		span := lexer.Span{Start: p.previous().Span.Start, End: baseType.SpanInfo.End}
+		// Span should start at the * token, not the base type
+		span := lexer.Span{Start: starToken.Span.Start, End: baseType.SpanInfo.End}
+		
 		// For union types, store the base type in Args
 		if baseType.IsUnion {
 			return &ast.TypeExpr{SpanInfo: span, Name: "*", Args: baseType.Members}, nil
 		}
-		return &ast.TypeExpr{SpanInfo: span, Name: "*" + baseType.Name}, nil
+		
+		// Preserve generic arguments and other flags from baseType
+		// Create a new TypeExpr that wraps the base type with pointer semantics
+		return &ast.TypeExpr{
+			SpanInfo:   span,
+			Name:       "*" + baseType.Name,
+			Args:       baseType.Args,        // Preserve generic arguments
+			IsOptional: baseType.IsOptional,  // Preserve optional flag
+			OptionalType: baseType.OptionalType, // Preserve optional type if present
+		}, nil
 	}
 
 	// Handle parentheses around types: (Type) or function types: (int, string) -> bool
@@ -1319,6 +1377,7 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 
 	// Handle pointer types: *Type or *(Type)
 	if p.match(lexer.TokenStar) {
+		starToken := p.previous() // Capture the * token for correct span
 		var baseType *ast.TypeExpr
 		var err error
 
@@ -1337,12 +1396,22 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 			}
 		}
 
-		span := lexer.Span{Start: p.previous().Span.Start, End: baseType.SpanInfo.End}
+		// Span should start at the * token, not the base type
+		span := lexer.Span{Start: starToken.Span.Start, End: baseType.SpanInfo.End}
+		
 		// For union types, store the base type in Args
 		if baseType.IsUnion {
 			return &ast.TypeExpr{SpanInfo: span, Name: "*", Args: baseType.Members}, nil
 		}
-		return &ast.TypeExpr{SpanInfo: span, Name: "*" + baseType.Name}, nil
+		
+		// Preserve generic arguments and other flags from baseType
+		return &ast.TypeExpr{
+			SpanInfo:   span,
+			Name:       "*" + baseType.Name,
+			Args:       baseType.Args,        // Preserve generic arguments
+			IsOptional: baseType.IsOptional,  // Preserve optional flag
+			OptionalType: baseType.OptionalType, // Preserve optional type if present
+		}, nil
 	}
 
 	// Handle parentheses around types: (Type) or function types: (int, string) -> bool
