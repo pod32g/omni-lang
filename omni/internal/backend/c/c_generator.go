@@ -972,10 +972,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					}
 				}
 				// Get array type to determine element size
-				arrayType := "int32_t" // Default element type
+				arrayType := "int" // Default element type
 				if inst.Operands[1].Kind == mir.OperandValue {
 					arrayOperandID := inst.Operands[1].Value
-					if arrType, ok := g.valueTypes[arrayOperandID]; ok {
+					if arrType, ok := g.valueTypes[arrayOperandID]; ok && arrType != "" && arrType != "<infer>" {
 						// Extract element type from array type (e.g., "[]<int>" -> "int")
 						if strings.HasPrefix(arrType, "[]<") && strings.HasSuffix(arrType, ">") {
 							arrayType = arrType[3 : len(arrType)-1]
@@ -983,6 +983,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							arrayType = arrType[6 : len(arrType)-1]
 						}
 					}
+				}
+				// Handle <infer> type - use default int type
+				if arrayType == "<infer>" || arrayType == "" {
+					arrayType = "int"
 				}
 				// Map element type to C type to get element size
 				elementCType := g.mapType(arrayType)
@@ -1551,6 +1555,24 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 			} else {
 				// Array indexing - assign to already declared variable
+				// Get the element type from the array type
+				var elementType string
+				if inst.Operands[0].Kind == mir.OperandValue {
+					arrayOperandID := inst.Operands[0].Value
+					if arrType, ok := g.valueTypes[arrayOperandID]; ok {
+						// Extract element type from array type (e.g., "array<string>" -> "string")
+						if strings.HasPrefix(arrType, "array<") && strings.HasSuffix(arrType, ">") {
+							elementType = arrType[6 : len(arrType)-1]
+						} else if strings.HasPrefix(arrType, "[]<") && strings.HasSuffix(arrType, ">") {
+							elementType = arrType[3 : len(arrType)-1]
+						}
+					}
+				}
+				// Fallback to result type if element type not found
+				if elementType == "" {
+					elementType = inst.Type
+				}
+				
 				// Check if result type is a struct (array of structs)
 				resultType := inst.Type
 				if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" {
@@ -1563,8 +1585,23 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
 					// Store the struct type
 					g.valueTypes[inst.ID] = resultType
-				} else {
-					// For primitive arrays, use runtime function with bounds checking if length is known
+				} else if elementType == "string" {
+					// For string arrays, use direct indexing (strings are const char*)
+					arrayLength := -1
+					if inst.Operands[0].Kind == mir.OperandValue {
+						arrayOperandID := inst.Operands[0].Value
+						if length, ok := g.arrayLengths[arrayOperandID]; ok {
+							arrayLength = length
+						}
+					}
+					if arrayLength >= 0 {
+						// Use bounds checking for string arrays
+						g.output.WriteString(fmt.Sprintf("  if (%s < 0 || %s >= %d) { fprintf(stderr, \"Array index out of bounds: %%d (length: %%d)\\n\", %s, %d); exit(1); }\n", 
+							index, index, arrayLength, index, arrayLength))
+					}
+					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
+				} else if elementType == "int" || elementType == "int32" {
+					// For int arrays, use runtime function with bounds checking if length is known
 					arrayLength := -1
 					if inst.Operands[0].Kind == mir.OperandValue {
 						arrayOperandID := inst.Operands[0].Value
@@ -1583,6 +1620,21 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						g.output.WriteString(fmt.Sprintf("  // WARNING: Array length unknown, bounds checking disabled\n"))
 						g.output.WriteString(fmt.Sprintf("  %s = %s[%s]; // UNSAFE: No bounds check\n", varName, target, index))
 					}
+				} else {
+					// For other types (float, bool, etc.), use direct indexing
+					arrayLength := -1
+					if inst.Operands[0].Kind == mir.OperandValue {
+						arrayOperandID := inst.Operands[0].Value
+						if length, ok := g.arrayLengths[arrayOperandID]; ok {
+							arrayLength = length
+						}
+					}
+					if arrayLength >= 0 {
+						// Use bounds checking
+						g.output.WriteString(fmt.Sprintf("  if (%s < 0 || %s >= %d) { fprintf(stderr, \"Array index out of bounds: %%d (length: %%d)\\n\", %s, %d); exit(1); }\n", 
+							index, index, arrayLength, index, arrayLength))
+					}
+					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
 				}
 			}
 		}

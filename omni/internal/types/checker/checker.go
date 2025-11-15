@@ -490,7 +490,20 @@ func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
 	}
 	valueType := typeInfer
 	if decl.Value != nil {
-		valueType = c.checkExpr(decl.Value)
+		// Special handling for lambda expressions with expected function type
+		if lambda, ok := decl.Value.(*ast.LambdaExpr); ok && expectedType != typeInfer && strings.Contains(expectedType, ") -> ") {
+			// Parse expected function type to get parameter types
+			expectedParamTypes := c.parseFunctionTypeParams(expectedType)
+			if len(expectedParamTypes) == len(lambda.Params) {
+				// Check lambda with expected parameter types
+				valueType = c.checkLambdaWithTypes(lambda, expectedParamTypes)
+			} else {
+				// Parameter count mismatch - check normally and let error be reported
+				valueType = c.checkExpr(decl.Value)
+			}
+		} else {
+			valueType = c.checkExpr(decl.Value)
+		}
 	}
 
 	finalType := expectedType
@@ -1161,33 +1174,12 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		return "void"
 	case *ast.LambdaExpr:
 		// Lambda expression: |a, b| a + b
-		// Create a new scope for lambda parameters
-		c.enterScope()
-
-		// Infer parameter types and add them to the scope
-		// Use typeInfer instead of hardcoding int - this allows type inference
-		// from usage in the lambda body and call sites
+		// Use typeInfer for parameters - will be inferred from context or usage
 		paramTypes := make([]string, len(e.Params))
-		for i, param := range e.Params {
-			// Use typeInfer to allow inference from usage
-			paramType := typeInfer
-			paramTypes[i] = paramType
-
-			// Add parameter to the current scope with inferred type
-			c.declare(param.Name, paramType, false, param.Span)
+		for i := range e.Params {
+			paramTypes[i] = typeInfer
 		}
-
-		// Check the lambda body to infer return type
-		returnType := c.checkExpr(e.Body)
-		if returnType == typeError {
-			c.leaveScope()
-			return typeError
-		}
-
-		// Clean up the lambda scope
-		c.leaveScope()
-
-		return buildFunctionType(paramTypes, returnType)
+		return c.checkLambdaWithTypes(e, paramTypes)
 	case *ast.CastExpr:
 		// Type cast expression: (type) expression
 		// Check that the target type is valid
@@ -1814,6 +1806,67 @@ func buildFunctionType(paramTypes []string, returnType string) string {
 	b.WriteString(") -> ")
 	b.WriteString(returnType)
 	return b.String()
+}
+
+// parseFunctionTypeParams extracts parameter types from a function type string like "(int, int) -> int"
+func (c *Checker) parseFunctionTypeParams(funcType string) []string {
+	// Find the arrow
+	arrowIndex := strings.Index(funcType, ") -> ")
+	if arrowIndex == -1 {
+		return nil
+	}
+	
+	// Extract parameter part: "(int, int)" -> "int, int"
+	paramPart := funcType[1:arrowIndex] // Remove opening (
+	if paramPart == "" {
+		return []string{} // No parameters
+	}
+	
+	// Split by comma and trim
+	parts := strings.Split(paramPart, ",")
+	paramTypes := make([]string, len(parts))
+	for i, part := range parts {
+		paramTypes[i] = strings.TrimSpace(part)
+	}
+	return paramTypes
+}
+
+// checkLambdaWithTypes checks a lambda expression with given parameter types
+func (c *Checker) checkLambdaWithTypes(e *ast.LambdaExpr, paramTypes []string) string {
+	// Create a new scope for lambda parameters
+	c.enterScope()
+
+	// Use provided parameter types or typeInfer if not provided
+	for i, param := range e.Params {
+		paramType := typeInfer
+		if i < len(paramTypes) && paramTypes[i] != typeInfer {
+			paramType = paramTypes[i]
+		}
+		// Add parameter to the current scope with its type
+		c.declare(param.Name, paramType, false, param.Span)
+	}
+
+	// Check the lambda body to infer return type
+	returnType := c.checkExpr(e.Body)
+	if returnType == typeError {
+		c.leaveScope()
+		return typeError
+	}
+
+	// Clean up the lambda scope
+	c.leaveScope()
+
+	// Build final parameter types (use provided types or typeInfer)
+	finalParamTypes := make([]string, len(e.Params))
+	for i := range e.Params {
+		if i < len(paramTypes) {
+			finalParamTypes[i] = paramTypes[i]
+		} else {
+			finalParamTypes[i] = typeInfer
+		}
+	}
+
+	return buildFunctionType(finalParamTypes, returnType)
 }
 
 // substituteTypeParam replaces type parameters in type strings with boundary awareness.
