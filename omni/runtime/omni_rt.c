@@ -1,3 +1,11 @@
+// Enable POSIX and GNU extensions for functions like localtime_r, setenv, strdup, etc.
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "omni_rt.h"
 #include <stdlib.h>
 #include <string.h>
@@ -253,7 +261,7 @@ static const char* next_utf8_rune(const char* str) {
 }
 
 // Helper function to find the start of the previous UTF-8 rune
-static const char* prev_utf8_rune(const char* str, const char* start) {
+static const char* __attribute__((unused)) prev_utf8_rune(const char* str, const char* start) {
     if (!str || str <= start) return start;
     str--;
     // Skip continuation bytes backwards
@@ -1490,7 +1498,6 @@ char* omni_string_replace_regex(const char* str, const char* pattern, const char
     }
     
     size_t result_pos = 0;
-    int first_match = 1;
     
     while (regexec(&regex, search_start, 1, matches, 0) == 0 && matches[0].rm_so >= 0) {
         // Copy text before match
@@ -1512,7 +1519,6 @@ char* omni_string_replace_regex(const char* str, const char* pattern, const char
         result_pos += repl_len;
         
         search_start += matches[0].rm_eo;
-        first_match = 0;
     }
     
     // Copy remaining text
@@ -1575,16 +1581,13 @@ void omni_time_sleep_milliseconds(int32_t milliseconds) {
 
 int32_t omni_time_zone_offset(void) {
     time_t now = time(NULL);
-    struct tm* local = localtime(&now);
-    if (!local) return 0;
-#ifdef _WIN32
-    // Windows doesn't have tm_gmtoff, calculate it differently
-    struct tm* utc = gmtime(&now);
-    if (!utc) return 0;
-    return (int32_t)(mktime(local) - mktime(utc));
-#else
-    return (int32_t)local->tm_gmtoff;
-#endif
+    // Use portable calculation method that works on all platforms
+    // Calculate offset by comparing local and UTC time
+    struct tm local_tm, utc_tm;
+    struct tm* local = localtime_r(&now, &local_tm);
+    struct tm* utc = gmtime_r(&now, &utc_tm);
+    if (!local || !utc) return 0;
+    return (int32_t)(mktime(&local_tm) - mktime(&utc_tm));
 }
 
 const char* omni_time_zone_name(void) {
@@ -3724,10 +3727,12 @@ omni_http_response_t* omni_http_get(const char* url) {
 }
 
 omni_http_response_t* omni_http_post(const char* url, const char* body) {
+    (void)body; // Unused in stub implementation
     return omni_http_get(url); // Stub
 }
 
 omni_http_response_t* omni_http_put(const char* url, const char* body) {
+    (void)body; // Unused in stub implementation
     return omni_http_get(url); // Stub
 }
 
