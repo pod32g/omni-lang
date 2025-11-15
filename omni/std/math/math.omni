@@ -98,9 +98,9 @@ func sqrt(x:float):float {
 }
 
 // cbrt returns the cube root of x
+// [IMPLEMENTED] Wired to omni_cbrt runtime function
 func cbrt(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_cbrt during compilation.
     return 0.0
 }
 
@@ -130,9 +130,9 @@ func round(x:float):float {
 }
 
 // trunc returns the integer part of x
+// [IMPLEMENTED] Wired to omni_trunc runtime function
 func trunc(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_trunc during compilation.
     return 0.0
 }
 
@@ -155,6 +155,7 @@ func lcm(a:int, b:int):int {
 }
 
 // is_prime checks if a number is prime
+// [IMPLEMENTED] Implemented in OmniLang
 func is_prime(n:int):bool {
     if n < 2 {
         return false
@@ -185,6 +186,7 @@ func factorial(n:int):int {
 }
 
 // fibonacci returns the nth Fibonacci number
+// [IMPLEMENTED] Implemented in OmniLang
 func fibonacci(n:int):int {
     if n <= 0 {
         return 0
@@ -212,51 +214,52 @@ func fibonacci(n:int):int {
 // ============================================================================
 
 // sin returns the sine of x (in radians)
+// [IMPLEMENTED] Wired to omni_sin runtime function
 func sin(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_sin during compilation.
+    // The body below is never executed - it's skipped by the backend.
     return 0.0
 }
 
 // cos returns the cosine of x (in radians)
+// [IMPLEMENTED] Wired to omni_cos runtime function
 func cos(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_cos during compilation.
     return 0.0
 }
 
 // tan returns the tangent of x (in radians)
+// [IMPLEMENTED] Wired to omni_tan runtime function
 func tan(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_tan during compilation.
     return 0.0
 }
 
 // asin returns the arcsine of x
+// [IMPLEMENTED] Wired to omni_asin runtime function
 func asin(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_asin during compilation.
     return 0.0
 }
 
 // acos returns the arccosine of x
+// [IMPLEMENTED] Wired to omni_acos runtime function
 func acos(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_acos during compilation.
     return 0.0
 }
 
 // atan returns the arctangent of x
+// [IMPLEMENTED] Wired to omni_atan runtime function
 func atan(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_atan during compilation.
     return 0.0
 }
 
 // atan2 returns the arctangent of y/x
+// [IMPLEMENTED] Wired to omni_atan2 runtime function
 func atan2(y:float, x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_atan2 during compilation.
     return 0.0
 }
 
@@ -265,30 +268,30 @@ func atan2(y:float, x:float):float {
 // ============================================================================
 
 // exp returns e raised to the power of x
+// [IMPLEMENTED] Wired to omni_exp runtime function
 func exp(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_exp during compilation.
     return 0.0
 }
 
 // log returns the natural logarithm of x
+// [IMPLEMENTED] Wired to omni_log runtime function
 func log(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_log during compilation.
     return 0.0
 }
 
 // log10 returns the base-10 logarithm of x
+// [IMPLEMENTED] Wired to omni_log10 runtime function
 func log10(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_log10 during compilation.
     return 0.0
 }
 
 // log2 returns the base-2 logarithm of x
+// [IMPLEMENTED] Wired to omni_log2 runtime function
 func log2(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_log2 during compilation.
     return 0.0
 }
 
@@ -297,23 +300,23 @@ func log2(x:float):float {
 // ============================================================================
 
 // sinh returns the hyperbolic sine of x
+// [IMPLEMENTED] Wired to omni_sinh runtime function
 func sinh(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_sinh during compilation.
     return 0.0
 }
 
 // cosh returns the hyperbolic cosine of x
+// [IMPLEMENTED] Wired to omni_cosh runtime function
 func cosh(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_cosh during compilation.
     return 0.0
 }
 
 // tanh returns the hyperbolic tangent of x
+// [IMPLEMENTED] Wired to omni_tanh runtime function
 func tanh(x:float):float {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_tanh during compilation.
     return 0.0
 }
 
@@ -322,34 +325,36 @@ func tanh(x:float):float {
 // ============================================================================
 
 // mean returns the arithmetic mean of an array of integers
+// [IMPLEMENTED] Implemented in OmniLang
 func mean(values:array<int>):float {
-    if std.array.length(values) == 0 {
+    if len(values) == 0 {
         return 0.0
     }
     
     var sum:int = 0
     var i:int = 0
-    while i < std.array.length(values) {
-        sum = sum + std.array.get(values, i)
+    while i < len(values) {
+        sum = sum + values[i]
         i = i + 1
     }
     
-    return sum / std.array.length(values)
+    return sum / len(values)
 }
 
 // median returns the median of an array of integers
+// [IMPLEMENTED] Implemented in OmniLang (requires sorted array)
+// NOTE: This assumes the array is already sorted. For unsorted arrays,
+// you should sort it first using a sorting algorithm.
 func median(values:array<int>):float {
-    if std.array.length(values) == 0 {
+    if len(values) == 0 {
         return 0.0
     }
     
-    // For simplicity, we'll implement a basic version
-    // In a full implementation, we'd sort the array first
-    let len:int = std.array.length(values)
-    if len % 2 == 1 {
-        return std.array.get(values, len / 2)
+    let len_val:int = len(values)
+    if len_val % 2 == 1 {
+        return values[len_val / 2]
     } else {
-        return (std.array.get(values, len / 2 - 1) + std.array.get(values, len / 2)) / 2.0
+        return (values[len_val / 2 - 1] + values[len_val / 2]) / 2.0
     }
 }
 
@@ -358,6 +363,7 @@ func median(values:array<int>):float {
 // ============================================================================
 
 // clamp clamps a value between min and max
+// [IMPLEMENTED] Implemented in OmniLang
 func clamp(value:int, min_val:int, max_val:int):int {
     if value < min_val {
         return min_val
@@ -369,6 +375,7 @@ func clamp(value:int, min_val:int, max_val:int):int {
 }
 
 // clamp_float clamps a float value between min and max
+// [IMPLEMENTED] Implemented in OmniLang
 func clamp_float(value:float, min_val:float, max_val:float):float {
     if value < min_val {
         return min_val
@@ -380,16 +387,19 @@ func clamp_float(value:float, min_val:float, max_val:float):float {
 }
 
 // lerp performs linear interpolation between a and b
+// [IMPLEMENTED] Implemented in OmniLang
 func lerp(a:float, b:float, t:float):float {
     return a + t * (b - a)
 }
 
 // deg_to_rad converts degrees to radians
+// [IMPLEMENTED] Implemented in OmniLang
 func deg_to_rad(degrees:float):float {
     return degrees * 3.141592653589793 / 180.0
 }
 
 // rad_to_deg converts radians to degrees
+// [IMPLEMENTED] Implemented in OmniLang
 func rad_to_deg(radians:float):float {
     return radians * 180.0 / 3.141592653589793
 }

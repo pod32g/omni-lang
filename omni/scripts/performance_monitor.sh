@@ -188,10 +188,10 @@ if regressions:
         print(f'    Baseline: {reg[\"baseline_duration\"]:.0f}ns, Current: {reg[\"current_duration\"]:.0f}ns')
     sys.exit(1)
 else:
-    print('✅ No performance regressions detected!')
+    print('[OK] No performance regressions detected!')
 
 if improvements:
-    print('\\n🚀 PERFORMANCE IMPROVEMENTS:')
+    print('\\n[IMPROVEMENTS] PERFORMANCE IMPROVEMENTS:')
     for imp in improvements:
         print(f'  {imp[\"test\"]}: {imp[\"duration_change\"]*100:.1f}% faster')
 "

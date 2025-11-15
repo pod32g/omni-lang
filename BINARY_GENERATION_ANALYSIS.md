@@ -5,7 +5,7 @@ This document analyzes OmniLang's binary object generation capabilities across d
 
 ## Current Binary Generation Support
 
-### 1. C Backend (Primary) ✅ **WORKING**
+### 1. C Backend (Primary) [WORKING]
 
 #### Supported Emission Formats:
 - **`exe`** - Native executable (default)
@@ -19,11 +19,11 @@ This document analyzes OmniLang's binary object generation capabilities across d
 5. **Architecture Support**: x86_64, ARM64, and others
 
 #### Features:
-- ✅ **Optimization levels**: O0, O1, O2, O3, Os (size optimization)
-- ✅ **Debug symbols**: `-g` flag support with `-debug` option
-- ✅ **Platform-specific flags**: Automatic OS/arch detection
-- ✅ **Runtime integration**: Automatic linking with runtime library
-- ✅ **Clean compilation**: Temporary files cleaned up
+- [YES] **Optimization levels**: O0, O1, O2, O3, Os (size optimization)
+- [YES] **Debug symbols**: `-g` flag support with `-debug` option
+- [YES] **Platform-specific flags**: Automatic OS/arch detection
+- [YES] **Runtime integration**: Automatic linking with runtime library
+- [YES] **Clean compilation**: Temporary files cleaned up
 
 #### Example:
 ```bash
@@ -32,7 +32,7 @@ omnic -emit asm hello.omni          # → hello.s (assembly)
 omnic -O O3 -debug hello.omni       # → optimized with debug symbols
 ```
 
-### 2. Cranelift Backend (Experimental) ⚠️ **PARTIAL**
+### 2. Cranelift Backend (Experimental) [PARTIAL]
 
 #### Supported Emission Formats:
 - **`obj`** - Object file (default)
@@ -41,9 +41,9 @@ omnic -O O3 -debug hello.omni       # → optimized with debug symbols
 - **`asm`** - Assembly source code
 
 #### Current Status:
-- **Linux**: ✅ Working (uses native Cranelift Rust library)
-- **macOS**: ❌ Not available (placeholder implementation)
-- **Windows**: ❌ Not available (placeholder implementation)
+- **Linux**: [YES] Working (uses native Cranelift Rust library)
+- **macOS**: [NO] Not available (placeholder implementation)
+- **Windows**: [NO] Not available (placeholder implementation)
 
 #### Implementation:
 - **Linux**: Uses `omni_clift_compile_to_object()` from Rust library
@@ -55,7 +55,7 @@ omnic -backend clift hello.omni     # → hello.o (object file)
 omnic -backend clift -emit exe hello.omni  # → hello (executable)
 ```
 
-### 3. VM Backend ❌ **NO BINARY GENERATION**
+### 3. VM Backend [NO BINARY GENERATION]
 
 #### Supported Emission Formats:
 - **`mir`** - MIR intermediate representation only
@@ -90,56 +90,56 @@ OmniLang Source → AST → MIR → MIR File (no binary generation)
 - **Automatic linking**: Integrated into compilation process
 
 ### Runtime Features:
-- ✅ **Cross-platform**: Windows, macOS, Linux support
-- ✅ **Architecture support**: x86_64, ARM64, and others
-- ✅ **Standard library**: Basic I/O and math functions
-- ⚠️ **Memory management**: Basic implementation
-- ❌ **Garbage collection**: Not implemented
+- [YES] **Cross-platform**: Windows, macOS, Linux support
+- [YES] **Architecture support**: x86_64, ARM64, and others
+- [YES] **Standard library**: Basic I/O and math functions
+- [PARTIAL] **Memory management**: Basic implementation
+- [NO] **Garbage collection**: Not implemented
 
 ## Platform Support Matrix
 
 | Platform | C Backend | Cranelift Backend | VM Backend |
 |----------|-----------|-------------------|------------|
-| **Linux** | ✅ Full | ✅ Full | ✅ MIR only |
-| **macOS** | ✅ Full | ❌ Placeholder | ✅ MIR only |
-| **Windows** | ✅ Full | ❌ Placeholder | ✅ MIR only |
+| **Linux** | [YES] Full | [YES] Full | [YES] MIR only |
+| **macOS** | [YES] Full | [NO] Placeholder | [YES] MIR only |
+| **Windows** | [YES] Full | [NO] Placeholder | [YES] MIR only |
 
 ## Optimization Support
 
 ### C Backend Optimizations:
-- ✅ **GCC optimization levels**: O0, O1, O2, O3, Os
-- ✅ **Debug symbols**: DWARF debug information
-- ✅ **Platform-specific optimizations**: Architecture-specific flags
-- ✅ **Size optimization**: Os flag for smaller binaries
+- [YES] **GCC optimization levels**: O0, O1, O2, O3, Os
+- [YES] **Debug symbols**: DWARF debug information
+- [YES] **Platform-specific optimizations**: Architecture-specific flags
+- [YES] **Size optimization**: Os flag for smaller binaries
 
 ### Cranelift Backend Optimizations:
-- ✅ **Native optimizations**: Built into Cranelift
-- ✅ **Target-specific**: Architecture-specific optimizations
-- ⚠️ **Limited control**: Optimization level control not exposed
+- [YES] **Native optimizations**: Built into Cranelift
+- [YES] **Target-specific**: Architecture-specific optimizations
+- [PARTIAL] **Limited control**: Optimization level control not exposed
 
 ## Missing Binary Generation Features
 
-### 1. Static Linking ⚠️ **MISSING**
+### 1. Static Linking [MISSING]
 - **Status**: Not implemented
 - **Impact**: Binaries require runtime library
 - **Fix needed**: Static linking support
 
-### 2. Dynamic Libraries (.so/.dll) ⚠️ **MISSING**
+### 2. Dynamic Libraries (.so/.dll) [MISSING]
 - **Status**: Not implemented
 - **Impact**: No shared library generation
 - **Fix needed**: Dynamic library support
 
-### 3. Cross-Compilation ⚠️ **MISSING**
+### 3. Cross-Compilation [MISSING]
 - **Status**: Not implemented
 - **Impact**: Can only compile for current platform
 - **Fix needed**: Cross-compilation support
 
-### 4. Binary Size Optimization ⚠️ **PARTIAL**
+### 4. Binary Size Optimization [PARTIAL]
 - **Status**: Basic size optimization (Os flag)
 - **Impact**: No advanced size optimization
 - **Fix needed**: Advanced size optimization
 
-### 5. Binary Analysis Tools ⚠️ **MISSING**
+### 5. Binary Analysis Tools [MISSING]
 - **Status**: Not implemented
 - **Impact**: No binary analysis capabilities
 - **Fix needed**: Binary analysis tools

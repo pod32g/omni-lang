@@ -181,14 +181,14 @@ This release introduces significant improvements to OmniLang, including enhanced
 
 ## What's New
 
-### 🚀 Major Features
+### Major Features
 
 - **Enhanced Debug Support**: Comprehensive debug symbol generation with source mapping
 - **C Backend**: Native code generation for improved performance
 - **Package System**: Complete packaging and distribution system
 - **Performance Testing**: Automated performance regression testing
 
-### 🔧 Improvements
+### Improvements
 
 - **Debug Information**: Full debug symbol generation with DWARF support
 - **Compilation Performance**: Improved compilation speed with optimization levels

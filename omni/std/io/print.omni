@@ -1,9 +1,14 @@
 // std.io - Input/Output functions for OmniLang
+//
+// IMPLEMENTATION STATUS:
+// [IMPLEMENTED] (Runtime): print, println, read_line
+// [PARTIAL] read_line_async (returns Promise but is synchronous)
 
 // print outputs a printable value to stdout without a newline
+// [IMPLEMENTED] Wired to omni_print_string runtime function
 func print(value:string | int | float | double | bool) {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_print_string during compilation.
+    // The body below is never executed - it's skipped by the backend.
 }
 
 // println outputs a printable value to stdout with a newline
@@ -20,9 +25,11 @@ func read_line():string {
 }
 
 // read_line_async reads a line from standard input asynchronously
+// [PARTIAL] Returns a Promise but currently executes synchronously
+// The Promise is immediately resolved with the result.
 async func read_line_async():string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to async I/O during compilation.
+    // Currently implemented as synchronous (Promise is immediately resolved).
     return ""
 }
 

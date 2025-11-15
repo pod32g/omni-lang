@@ -1,8 +1,8 @@
 # OmniLang Compiler Roadmap
 
-## Current Status (v0.5.0) ✅
+## Current Status (v0.5.0)
 
-### ✅ **Completed Features**
+### **Completed Features**
 - **Frontend**: Complete lexer, parser, AST, type checker
 - **MIR**: SSA-based intermediate representation with builder and PHI nodes
 - **Multiple Backends**: C (default), VM, and Cranelift (experimental)
@@ -162,7 +162,7 @@
 
 ## Recent Achievements (v0.4.0 - v0.4.3)
 
-### ✅ **Major Features Completed**
+### **Major Features Completed**
 - **Data Structures**: Arrays, maps, and structs with full support
 - **PHI Nodes**: Proper SSA form for control flow
 - **Method Syntax**: `x.len()` instead of `len(x)`
@@ -213,18 +213,18 @@
 ### 📊 **Self-Hosting Analysis**
 
 **Current State (v0.4.3):**
-- ✅ **Basic Language Features**: Variables, functions, control flow, data structures
-- ✅ **Import System**: Module loading and namespace resolution
-- ✅ **Standard Library**: I/O, math, string operations
-- ✅ **Multiple Backends**: C, VM, Cranelift for compilation targets
+- [COMPLETED] **Basic Language Features**: Variables, functions, control flow, data structures
+- [COMPLETED] **Import System**: Module loading and namespace resolution
+- [COMPLETED] **Standard Library**: I/O, math, string operations
+- [COMPLETED] **Multiple Backends**: C, VM, Cranelift for compilation targets
 
 **Missing for Self-Hosting:**
-- ❌ **File I/O**: No file reading/writing capabilities
-- ❌ **Generic Types**: Needed for compiler data structures (AST nodes, symbol tables)
-- ❌ **Error Handling**: Robust error reporting system
-- ❌ **Advanced Memory Management**: Dynamic allocation for large data structures
-- ❌ **String Processing**: Advanced string manipulation for source code
-- ❌ **Testing Framework**: No built-in testing capabilities
+- [NOT IMPLEMENTED] **File I/O**: No file reading/writing capabilities
+- [NOT IMPLEMENTED] **Generic Types**: Needed for compiler data structures (AST nodes, symbol tables)
+- [NOT IMPLEMENTED] **Error Handling**: Robust error reporting system
+- [NOT IMPLEMENTED] **Advanced Memory Management**: Dynamic allocation for large data structures
+- [NOT IMPLEMENTED] **String Processing**: Advanced string manipulation for source code
+- [NOT IMPLEMENTED] **Testing Framework**: No built-in testing capabilities
 
 **Estimated Timeline:**
 - **File I/O System**: 1 week

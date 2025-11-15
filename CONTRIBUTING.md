@@ -422,4 +422,4 @@ By contributing to OmniLang, you agree that your contributions will be licensed 
 
 ---
 
-Thank you for contributing to OmniLang! 🚀
+Thank you for contributing to OmniLang!

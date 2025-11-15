@@ -27,7 +27,7 @@ func TestCGenerator(t *testing.T) {
 							},
 						},
 						Terminator: mir.Terminator{
-							Op: "return",
+							Op: "ret",
 							Operands: []mir.Operand{
 								{Kind: mir.OperandValue, Value: 1, Type: "int"},
 							},
@@ -192,7 +192,7 @@ func TestCGenerator(t *testing.T) {
 						},
 					},
 					Terminator: mir.Terminator{
-						Op: "return",
+						Op: "ret",
 						Operands: []mir.Operand{
 							{Kind: mir.OperandValue, Value: 1, Type: "int"},
 						},
@@ -281,14 +281,14 @@ func TestCGenerator(t *testing.T) {
 	t.Run("GenerateTerminator", func(t *testing.T) {
 		// Test return terminator
 		terminator := &mir.Terminator{
-			Op: "return",
+			Op: "ret",
 			Operands: []mir.Operand{
 				{Kind: mir.OperandValue, Value: 1, Type: "int"},
 			},
 		}
 
 		generator := NewCGenerator(module)
-		generator.generateTerminator(terminator, "main")
+		generator.generateTerminator(terminator, "main", "int")
 
 		result := generator.output.String()
 		if result == "" {

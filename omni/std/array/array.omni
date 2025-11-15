@@ -1,9 +1,19 @@
 // std.array - Array manipulation functions for OmniLang
+//
+// IMPLEMENTATION STATUS:
+// [LIMITATION] Arrays in OmniLang are fixed-size (like C arrays).
+//    Functions like append, prepend, insert, remove, slice, concat are NOT supported
+//    because they would require dynamic memory allocation.
+// [STUB] All array manipulation functions are stubs that return default values.
+//
+// NOTE: Use the built-in `len()` function for array length, and direct indexing
+// for array access. Dynamic array operations are not available.
 
 // length returns the length of an array
+// [NOTE] Use the built-in `len()` function instead. This function is a stub.
+// The compiler will emit a warning when this function is called.
 func length<T>(arr:array<T>):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // STUB: Use built-in len() function instead. Returns 0 and emits a warning.
     return 0
 }
 

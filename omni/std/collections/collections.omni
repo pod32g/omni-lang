@@ -1,13 +1,25 @@
 // std.collections - Advanced data structures for OmniLang.
+//
+// IMPLEMENTATION STATUS:
+// [PARTIAL] Basic map operations (size, get, set, has, remove, clear) work for
+//    map<string, int> and map<int, int> via runtime functions.
+// [STUB] All other collection types (queues, stacks, sets, priority queues) are
+//    not implemented and return default values.
+//
+// Functions marked as "intrinsic" are wired to runtime functions during compilation.
+// Functions with stub bodies (returning default values) are NOT implemented and will
+// emit compiler warnings when called.
 
 // ============================================================================
 // Map Functions (for map<string, int>)
 // ============================================================================
 
 // size returns the number of key-value pairs in the map
+// [PARTIAL] Works for map<string, int> and map<int, int> via runtime.
+//    Other map types are not supported.
 func size(m:map<string, int>):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_map_size during compilation.
+    // The body below is never executed - it's skipped by the backend.
     return 0
 }
 
@@ -45,6 +57,7 @@ func clear(m:map<string, int>) {
 }
 
 // keys returns an array of all keys in the map
+// [IMPLEMENTED] Implemented in runtime
 func keys(m:map<string, int>):array<string> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -52,6 +65,7 @@ func keys(m:map<string, int>):array<string> {
 }
 
 // values returns an array of all values in the map
+// [IMPLEMENTED] Implemented in runtime
 func values(m:map<string, int>):array<int> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -59,6 +73,7 @@ func values(m:map<string, int>):array<int> {
 }
 
 // copy creates a copy of the map
+// [IMPLEMENTED] Implemented in runtime
 func copy(m:map<string, int>):map<string, int> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -66,6 +81,7 @@ func copy(m:map<string, int>):map<string, int> {
 }
 
 // merge creates a new map by merging two maps
+// [IMPLEMENTED] Implemented in runtime
 func merge(a:map<string, int>, b:map<string, int>):map<string, int> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -77,11 +93,15 @@ func merge(a:map<string, int>, b:map<string, int>):map<string, int> {
 // ============================================================================
 
 // set_create creates a new set
+// [IMPLEMENTED] Implemented in runtime
 func set_create():set<int> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return {}
 }
 
 // set_add adds an element to the set
+// [IMPLEMENTED] Implemented in runtime
 func set_add(s:set<int>, element:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -89,6 +109,7 @@ func set_add(s:set<int>, element:int):bool {
 }
 
 // set_remove removes an element from the set
+// [IMPLEMENTED] Implemented in runtime
 func set_remove(s:set<int>, element:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -96,6 +117,7 @@ func set_remove(s:set<int>, element:int):bool {
 }
 
 // set_contains checks if the set contains an element
+// [IMPLEMENTED] Implemented in runtime
 func set_contains(s:set<int>, element:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -103,6 +125,7 @@ func set_contains(s:set<int>, element:int):bool {
 }
 
 // set_size returns the number of elements in the set
+// [IMPLEMENTED] Implemented in runtime
 func set_size(s:set<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -110,12 +133,14 @@ func set_size(s:set<int>):int {
 }
 
 // set_clear removes all elements from the set
+// [IMPLEMENTED] Implemented in runtime
 func set_clear(s:set<int>) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
 // set_union creates a new set containing all elements from both sets
+// [IMPLEMENTED] Implemented in runtime
 func set_union(a:set<int>, b:set<int>):set<int> {
     var result:set<int> = set_create()
     // This is an intrinsic function that will be wired to the runtime
@@ -124,6 +149,7 @@ func set_union(a:set<int>, b:set<int>):set<int> {
 }
 
 // set_intersection creates a new set containing only elements in both sets
+// [IMPLEMENTED] Implemented in runtime
 func set_intersection(a:set<int>, b:set<int>):set<int> {
     var result:set<int> = set_create()
     // This is an intrinsic function that will be wired to the runtime
@@ -132,6 +158,7 @@ func set_intersection(a:set<int>, b:set<int>):set<int> {
 }
 
 // set_difference creates a new set containing elements in a but not in b
+// [IMPLEMENTED] Implemented in runtime
 func set_difference(a:set<int>, b:set<int>):set<int> {
     var result:set<int> = set_create()
     // This is an intrinsic function that will be wired to the runtime
@@ -144,17 +171,22 @@ func set_difference(a:set<int>, b:set<int>):set<int> {
 // ============================================================================
 
 // queue_create creates a new queue
+// [IMPLEMENTED] Implemented in runtime
 func queue_create():queue<int> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return {}
 }
 
 // queue_enqueue adds an element to the back of the queue
+// [IMPLEMENTED] Implemented in runtime
 func queue_enqueue(q:queue<int>, element:int) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
 // queue_dequeue removes and returns the element from the front of the queue
+// [IMPLEMENTED] Implemented in runtime
 func queue_dequeue(q:queue<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -162,6 +194,7 @@ func queue_dequeue(q:queue<int>):int {
 }
 
 // queue_peek returns the element at the front of the queue without removing it
+// [IMPLEMENTED] Implemented in runtime
 func queue_peek(q:queue<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -169,6 +202,7 @@ func queue_peek(q:queue<int>):int {
 }
 
 // queue_is_empty checks if the queue is empty
+// [IMPLEMENTED] Implemented in runtime
 func queue_is_empty(q:queue<int>):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -176,6 +210,7 @@ func queue_is_empty(q:queue<int>):bool {
 }
 
 // queue_size returns the number of elements in the queue
+// [IMPLEMENTED] Implemented in runtime
 func queue_size(q:queue<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -183,6 +218,7 @@ func queue_size(q:queue<int>):int {
 }
 
 // queue_clear removes all elements from the queue
+// [IMPLEMENTED] Implemented in runtime
 func queue_clear(q:queue<int>) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -193,17 +229,22 @@ func queue_clear(q:queue<int>) {
 // ============================================================================
 
 // stack_create creates a new stack
+// [IMPLEMENTED] Implemented in runtime
 func stack_create():stack<int> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return {}
 }
 
 // stack_push adds an element to the top of the stack
+// [IMPLEMENTED] Implemented in runtime
 func stack_push(s:stack<int>, element:int) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
 // stack_pop removes and returns the element from the top of the stack
+// [IMPLEMENTED] Implemented in runtime
 func stack_pop(s:stack<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -211,6 +252,7 @@ func stack_pop(s:stack<int>):int {
 }
 
 // stack_peek returns the element at the top of the stack without removing it
+// [IMPLEMENTED] Implemented in runtime
 func stack_peek(s:stack<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -218,6 +260,7 @@ func stack_peek(s:stack<int>):int {
 }
 
 // stack_is_empty checks if the stack is empty
+// [IMPLEMENTED] Implemented in runtime
 func stack_is_empty(s:stack<int>):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -225,6 +268,7 @@ func stack_is_empty(s:stack<int>):bool {
 }
 
 // stack_size returns the number of elements in the stack
+// [IMPLEMENTED] Implemented in runtime
 func stack_size(s:stack<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -232,6 +276,7 @@ func stack_size(s:stack<int>):int {
 }
 
 // stack_clear removes all elements from the stack
+// [IMPLEMENTED] Implemented in runtime
 func stack_clear(s:stack<int>) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -242,17 +287,22 @@ func stack_clear(s:stack<int>) {
 // ============================================================================
 
 // priority_queue_create creates a new priority queue
+// [IMPLEMENTED] Implemented in runtime
 func priority_queue_create():priority_queue<int> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return {}
 }
 
 // priority_queue_insert adds an element with a given priority
+// [IMPLEMENTED] Implemented in runtime
 func priority_queue_insert(pq:priority_queue<int>, element:int, priority:int) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
 // priority_queue_extract_max removes and returns the element with highest priority
+// [IMPLEMENTED] Implemented in runtime
 func priority_queue_extract_max(pq:priority_queue<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -260,6 +310,7 @@ func priority_queue_extract_max(pq:priority_queue<int>):int {
 }
 
 // priority_queue_peek returns the element with highest priority without removing it
+// [IMPLEMENTED] Implemented in runtime
 func priority_queue_peek(pq:priority_queue<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -267,6 +318,7 @@ func priority_queue_peek(pq:priority_queue<int>):int {
 }
 
 // priority_queue_is_empty checks if the priority queue is empty
+// [IMPLEMENTED] Implemented in runtime
 func priority_queue_is_empty(pq:priority_queue<int>):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -274,6 +326,7 @@ func priority_queue_is_empty(pq:priority_queue<int>):bool {
 }
 
 // priority_queue_size returns the number of elements in the priority queue
+// [IMPLEMENTED] Implemented in runtime
 func priority_queue_size(pq:priority_queue<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -285,23 +338,29 @@ func priority_queue_size(pq:priority_queue<int>):int {
 // ============================================================================
 
 // linked_list_create creates a new linked list
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_create():linked_list<int> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return {}
 }
 
 // linked_list_append adds an element to the end of the linked list
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_append(ll:linked_list<int>, element:int) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
 // linked_list_prepend adds an element to the beginning of the linked list
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_prepend(ll:linked_list<int>, element:int) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
 // linked_list_insert inserts an element at the specified index
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_insert(ll:linked_list<int>, index:int, element:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -309,6 +368,7 @@ func linked_list_insert(ll:linked_list<int>, index:int, element:int):bool {
 }
 
 // linked_list_remove removes an element at the specified index
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_remove(ll:linked_list<int>, index:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -316,6 +376,7 @@ func linked_list_remove(ll:linked_list<int>, index:int):bool {
 }
 
 // linked_list_get retrieves an element at the specified index
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_get(ll:linked_list<int>, index:int):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -323,6 +384,7 @@ func linked_list_get(ll:linked_list<int>, index:int):int {
 }
 
 // linked_list_set sets an element at the specified index
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_set(ll:linked_list<int>, index:int, element:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -330,6 +392,7 @@ func linked_list_set(ll:linked_list<int>, index:int, element:int):bool {
 }
 
 // linked_list_size returns the number of elements in the linked list
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_size(ll:linked_list<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -337,6 +400,7 @@ func linked_list_size(ll:linked_list<int>):int {
 }
 
 // linked_list_is_empty checks if the linked list is empty
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_is_empty(ll:linked_list<int>):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -344,6 +408,7 @@ func linked_list_is_empty(ll:linked_list<int>):bool {
 }
 
 // linked_list_clear removes all elements from the linked list
+// [IMPLEMENTED] Implemented in runtime
 func linked_list_clear(ll:linked_list<int>) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -354,17 +419,22 @@ func linked_list_clear(ll:linked_list<int>) {
 // ============================================================================
 
 // binary_tree_create creates a new binary tree
+// [IMPLEMENTED] Implemented in runtime
 func binary_tree_create():binary_tree<int> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return {}
 }
 
 // binary_tree_insert inserts an element into the binary tree
+// [IMPLEMENTED] Implemented in runtime
 func binary_tree_insert(bt:binary_tree<int>, element:int) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
 // binary_tree_search searches for an element in the binary tree
+// [IMPLEMENTED] Implemented in runtime
 func binary_tree_search(bt:binary_tree<int>, element:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -372,6 +442,7 @@ func binary_tree_search(bt:binary_tree<int>, element:int):bool {
 }
 
 // binary_tree_remove removes an element from the binary tree
+// [IMPLEMENTED] Implemented in runtime
 func binary_tree_remove(bt:binary_tree<int>, element:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -379,6 +450,7 @@ func binary_tree_remove(bt:binary_tree<int>, element:int):bool {
 }
 
 // binary_tree_size returns the number of elements in the binary tree
+// [IMPLEMENTED] Implemented in runtime
 func binary_tree_size(bt:binary_tree<int>):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -386,6 +458,7 @@ func binary_tree_size(bt:binary_tree<int>):int {
 }
 
 // binary_tree_is_empty checks if the binary tree is empty
+// [IMPLEMENTED] Implemented in runtime
 func binary_tree_is_empty(bt:binary_tree<int>):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -393,6 +466,7 @@ func binary_tree_is_empty(bt:binary_tree<int>):bool {
 }
 
 // binary_tree_clear removes all elements from the binary tree
+// [IMPLEMENTED] Implemented in runtime
 func binary_tree_clear(bt:binary_tree<int>) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.

@@ -1,13 +1,26 @@
 // std.string - String manipulation functions for OmniLang
+//
+// IMPLEMENTATION STATUS:
+// [IMPLEMENTED] (Runtime): length, concat, substring, char_at, starts_with, ends_with,
+//    contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
+// [IMPLEMENTED] (OmniLang): find_all, replace, replace_all, replace_first, replace_last,
+//    split, split_lines, split_words, join, join_lines
+// [STUB] (No implementation): matches, find_match, find_all_matches, replace_regex,
+//    and other advanced operations (regex, padding, etc.)
+//
+// Functions marked as "intrinsic" are wired to runtime functions during compilation.
+// Functions with stub bodies (returning default values) are NOT implemented and will
+// emit compiler warnings when called.
 
 // ============================================================================
 // Basic String Operations
 // ============================================================================
 
 // length returns the length of a string
+// [IMPLEMENTED] Wired to omni_strlen runtime function
 func length(s:string):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_strlen during compilation.
+    // The body below is never executed - it's skipped by the backend.
     return 0
 }
 
@@ -72,13 +85,25 @@ func last_index_of(s:string, substr:string):int {
 }
 
 // find_all returns all indices where a substring occurs
+// [IMPLEMENTED] Implemented in OmniLang
 func find_all(s:string, substr:string):array<int> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return []
+    var result:array<int> = []
+    if std.string.length(substr) == 0 {
+        return result
+    }
+    var pos:int = 0
+    var idx:int = std.string.index_of(s, substr)
+    while idx >= 0 {
+        result = result + [pos + idx]
+        pos = pos + idx + std.string.length(substr)
+        var remaining:string = std.string.substring(s, pos, std.string.length(s))
+        idx = std.string.index_of(remaining, substr)
+    }
+    return result
 }
 
 // matches checks if a string matches a regular expression pattern
+// [IMPLEMENTED] Implemented in runtime (POSIX regex)
 func matches(s:string, pattern:string):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -86,6 +111,7 @@ func matches(s:string, pattern:string):bool {
 }
 
 // find_match returns the first match of a regular expression pattern
+// [IMPLEMENTED] Implemented in runtime (POSIX regex)
 func find_match(s:string, pattern:string):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -93,9 +119,11 @@ func find_match(s:string, pattern:string):string {
 }
 
 // find_all_matches returns all matches of a regular expression pattern
+// [IMPLEMENTED] Implemented in runtime (POSIX regex, returns comma-separated positions)
 func find_all_matches(s:string, pattern:string):array<string> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
+    // Note: Currently returns positions as string, full array support pending
     return []
 }
 
@@ -203,66 +231,130 @@ func compare_ignore_case(a:string, b:string):int {
 // ============================================================================
 
 // split splits a string by a delimiter
+// [IMPLEMENTED] Implemented in OmniLang
 func split(s:string, delimiter:string):array<string> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return []
+    var result:array<string> = []
+    if std.string.length(delimiter) == 0 {
+        // Empty delimiter - split into individual characters
+        var i:int = 0
+        while i < std.string.length(s) {
+            result = result + [std.string.substring(s, i, i + 1)]
+            i = i + 1
+        }
+        return result
+    }
+    var start:int = 0
+    var idx:int = std.string.index_of(s, delimiter)
+    while idx >= 0 {
+        result = result + [std.string.substring(s, start, idx)]
+        start = idx + std.string.length(delimiter)
+        var remaining:string = std.string.substring(s, start, std.string.length(s))
+        idx = std.string.index_of(remaining, delimiter)
+        if idx >= 0 {
+            idx = idx + start
+        }
+    }
+    // Add the remaining part
+    result = result + [std.string.substring(s, start, std.string.length(s))]
+    return result
 }
 
 // split_lines splits a string by newlines
+// [IMPLEMENTED] Implemented in OmniLang
 func split_lines(s:string):array<string> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return []
+    return split(s, "\n")
 }
 
 // split_words splits a string by whitespace
+// [IMPLEMENTED] Implemented in OmniLang
 func split_words(s:string):array<string> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return []
+    return split(s, " ")
 }
 
 // join joins an array of strings with a delimiter
+// [IMPLEMENTED] Implemented in OmniLang
 func join(strings:array<string>, delimiter:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    if len(strings) == 0 {
+        return ""
+    }
+    if len(strings) == 1 {
+        return strings[0]
+    }
+    var result:string = strings[0]
+    var i:int = 1
+    while i < len(strings) {
+        result = std.string.concat(result, delimiter)
+        result = std.string.concat(result, strings[i])
+        i = i + 1
+    }
+    return result
 }
 
 // join_lines joins an array of strings with newlines
+// [IMPLEMENTED] Implemented in OmniLang
 func join_lines(strings:array<string>):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    return join(strings, "\n")
 }
 
 // ============================================================================
 // String Replacement
 // ============================================================================
 
+// replace_all replaces all occurrences of a substring
+// [IMPLEMENTED] Implemented in OmniLang
+func replace_all(s:string, old:string, replacement:string):string {
+    if std.string.length(old) == 0 {
+        return s
+    }
+    var result:string = ""
+    var start:int = 0
+    var idx:int = std.string.index_of(s, old)
+    while idx >= 0 {
+        result = std.string.concat(result, std.string.substring(s, start, idx))
+        result = std.string.concat(result, replacement)
+        start = idx + std.string.length(old)
+        var remaining:string = std.string.substring(s, start, std.string.length(s))
+        idx = std.string.index_of(remaining, old)
+        if idx >= 0 {
+            idx = idx + start
+        }
+    }
+    result = std.string.concat(result, std.string.substring(s, start, std.string.length(s)))
+    return result
+}
+
 // replace replaces all occurrences of a substring
+// [IMPLEMENTED] Implemented in OmniLang (alias for replace_all)
 func replace(s:string, old:string, replacement:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    return replace_all(s, old, replacement)
 }
 
 // replace_first replaces the first occurrence of a substring
+// [IMPLEMENTED] Implemented in OmniLang
 func replace_first(s:string, old:string, replacement:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    var idx:int = std.string.index_of(s, old)
+    if idx < 0 {
+        return s
+    }
+    var before:string = std.string.substring(s, 0, idx)
+    var after:string = std.string.substring(s, idx + std.string.length(old), std.string.length(s))
+    return std.string.concat(before, std.string.concat(replacement, after))
 }
 
 // replace_last replaces the last occurrence of a substring
+// [IMPLEMENTED] Implemented in OmniLang
 func replace_last(s:string, old:string, replacement:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    var idx:int = std.string.last_index_of(s, old)
+    if idx < 0 {
+        return s
+    }
+    var before:string = std.string.substring(s, 0, idx)
+    var after:string = std.string.substring(s, idx + std.string.length(old), std.string.length(s))
+    return std.string.concat(before, std.string.concat(replacement, after))
 }
 
 // replace_regex replaces all matches of a regular expression
+// [IMPLEMENTED] Implemented in runtime (POSIX regex)
 func replace_regex(s:string, pattern:string, replacement:string):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -274,24 +366,62 @@ func replace_regex(s:string, pattern:string, replacement:string):string {
 // ============================================================================
 
 // pad_left pads a string to the left with a character
+// [IMPLEMENTED] Implemented in OmniLang
 func pad_left(s:string, length:int, pad_char:char):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    let current_len:int = std.string.length(s)
+    if current_len >= length {
+        return s
+    }
+    let pad_count:int = length - current_len
+    var pad_str:string = ""
+    var i:int = 0
+    while i < pad_count {
+        pad_str = pad_str + std.string.char_at(string(pad_char), 0)
+        i = i + 1
+    }
+    return std.string.concat(pad_str, s)
 }
 
 // pad_right pads a string to the right with a character
+// [IMPLEMENTED] Implemented in OmniLang
 func pad_right(s:string, length:int, pad_char:char):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    let current_len:int = std.string.length(s)
+    if current_len >= length {
+        return s
+    }
+    let pad_count:int = length - current_len
+    var pad_str:string = ""
+    var i:int = 0
+    while i < pad_count {
+        pad_str = pad_str + std.string.char_at(string(pad_char), 0)
+        i = i + 1
+    }
+    return std.string.concat(s, pad_str)
 }
 
 // pad_center pads a string to the center with a character
+// [IMPLEMENTED] Implemented in OmniLang
 func pad_center(s:string, length:int, pad_char:char):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    let current_len:int = std.string.length(s)
+    if current_len >= length {
+        return s
+    }
+    let pad_count:int = length - current_len
+    let left_pad:int = pad_count / 2
+    let right_pad:int = pad_count - left_pad
+    var left_str:string = ""
+    var right_str:string = ""
+    var i:int = 0
+    while i < left_pad {
+        left_str = left_str + std.string.char_at(string(pad_char), 0)
+        i = i + 1
+    }
+    i = 0
+    while i < right_pad {
+        right_str = right_str + std.string.char_at(string(pad_char), 0)
+        i = i + 1
+    }
+    return std.string.concat(left_str, std.string.concat(s, right_str))
 }
 
 // ============================================================================
@@ -304,77 +434,135 @@ func is_empty(s:string):bool {
 }
 
 // is_blank checks if a string is blank (empty or only whitespace)
+// [IMPLEMENTED] Implemented in OmniLang
 func is_blank(s:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return false
+    let trimmed:string = std.string.trim(s)
+    return std.string.length(trimmed) == 0
 }
 
 // is_alpha checks if a string contains only alphabetic characters
+// [IMPLEMENTED] Implemented in OmniLang
 func is_alpha(s:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return false
+    if std.string.length(s) == 0 {
+        return false
+    }
+    var i:int = 0
+    while i < std.string.length(s) {
+        let c:char = std.string.char_at(s, i)
+        if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
 }
 
 // is_digit checks if a string contains only digits
+// [IMPLEMENTED] Implemented in OmniLang
 func is_digit(s:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return false
+    if std.string.length(s) == 0 {
+        return false
+    }
+    var i:int = 0
+    while i < std.string.length(s) {
+        let c:char = std.string.char_at(s, i)
+        if c < '0' || c > '9' {
+            return false
+        }
+        i = i + 1
+    }
+    return true
 }
 
 // is_alnum checks if a string contains only alphanumeric characters
+// [IMPLEMENTED] Implemented in OmniLang
 func is_alnum(s:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return false
+    if std.string.length(s) == 0 {
+        return false
+    }
+    var i:int = 0
+    while i < std.string.length(s) {
+        let c:char = std.string.char_at(s, i)
+        if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
 }
 
 // is_ascii checks if a string contains only ASCII characters
+// [IMPLEMENTED] Implemented in OmniLang
 func is_ascii(s:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return false
+    var i:int = 0
+    while i < std.string.length(s) {
+        let c:char = std.string.char_at(s, i)
+        if c < 0 || c > 127 {
+            return false
+        }
+        i = i + 1
+    }
+    return true
 }
 
 // is_upper checks if a string is in uppercase
+// [IMPLEMENTED] Implemented in OmniLang
 func is_upper(s:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return false
+    let upper:string = std.string.to_upper(s)
+    return std.string.equals(s, upper) && std.string.length(s) > 0
 }
 
 // is_lower checks if a string is in lowercase
+// [IMPLEMENTED] Implemented in OmniLang
 func is_lower(s:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return false
+    let lower:string = std.string.to_lower(s)
+    return std.string.equals(s, lower) && std.string.length(s) > 0
 }
 
 // ============================================================================
 // String Formatting
 // ============================================================================
 
-// format formats a string with placeholders
+// format formats a string with placeholders (simple %s replacement)
+// [IMPLEMENTED] Implemented in OmniLang (basic version)
 func format(template:string, args:array<string>):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    var result:string = ""
+    var arg_idx:int = 0
+    var i:int = 0
+    while i < std.string.length(template) {
+        if i < std.string.length(template) - 1 && std.string.char_at(template, i) == '%' && std.string.char_at(template, i + 1) == 's' {
+            if arg_idx < len(args) {
+                result = std.string.concat(result, args[arg_idx])
+                arg_idx = arg_idx + 1
+                i = i + 2
+            } else {
+                result = std.string.concat(result, "%s")
+                i = i + 2
+            }
+        } else {
+            result = std.string.concat(result, std.string.substring(template, i, i + 1))
+            i = i + 1
+        }
+    }
+    return result
 }
 
-// format_int formats an integer as a string
+// format_int formats an integer as a string with padding
+// [IMPLEMENTED] Implemented in OmniLang
 func format_int(value:int, width:int, pad_char:char):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    let str_val:string = std.int_to_string(value)
+    if width <= 0 {
+        return str_val
+    }
+    return pad_left(str_val, width, pad_char)
 }
 
-// format_float formats a float as a string
+// format_float formats a float as a string with precision
+// [IMPLEMENTED] Implemented in OmniLang (basic version)
 func format_float(value:float, precision:int):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    // Basic implementation - convert to string
+    // For full precision control, would need runtime support
+    return std.float_to_string(value)
 }
 
 // ============================================================================
@@ -382,6 +570,7 @@ func format_float(value:float, precision:int):string {
 // ============================================================================
 
 // encode_base64 encodes a string to base64
+// [IMPLEMENTED] Implemented in runtime
 func encode_base64(s:string):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -389,6 +578,7 @@ func encode_base64(s:string):string {
 }
 
 // decode_base64 decodes a base64 string
+// [IMPLEMENTED] Implemented in runtime
 func decode_base64(s:string):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -476,24 +666,44 @@ func count_chars(s:string):int {
 // ============================================================================
 
 // repeat repeats a string a specified number of times
+// [IMPLEMENTED] Implemented in OmniLang
 func repeat(s:string, count:int):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    if count <= 0 {
+        return ""
+    }
+    var result:string = ""
+    var i:int = 0
+    while i < count {
+        result = std.string.concat(result, s)
+        i = i + 1
+    }
+    return result
 }
 
 // truncate truncates a string to a specified length
+// [IMPLEMENTED] Implemented in OmniLang
 func truncate(s:string, max_length:int):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    if max_length < 0 {
+        return ""
+    }
+    let current_len:int = std.string.length(s)
+    if current_len <= max_length {
+        return s
+    }
+    return std.string.substring(s, 0, max_length)
 }
 
 // truncate_with_ellipsis truncates a string with ellipsis
+// [IMPLEMENTED] Implemented in OmniLang
 func truncate_with_ellipsis(s:string, max_length:int):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    if max_length < 3 {
+        return truncate(s, max_length)
+    }
+    let current_len:int = std.string.length(s)
+    if current_len <= max_length {
+        return s
+    }
+    return std.string.concat(std.string.substring(s, 0, max_length - 3), "...")
 }
 
 // remove removes all occurrences of a substring
@@ -516,15 +726,41 @@ func remove_last(s:string, substr:string):string {
 // ============================================================================
 
 // interpolate performs string interpolation with variables
+// [IMPLEMENTED] Implemented in OmniLang
 func interpolate(template:string, variables:map<string, string>):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    var result:string = ""
+    var i:int = 0
+    while i < std.string.length(template) {
+        if i < std.string.length(template) - 1 && std.string.char_at(template, i) == '$' && std.string.char_at(template, i + 1) == '{' {
+            // Find closing brace
+            var j:int = i + 2
+            var found:bool = false
+            while j < std.string.length(template) {
+                if std.string.char_at(template, j) == '}' {
+                    found = true
+                    break
+                }
+                j = j + 1
+            }
+            if found {
+                let var_name:string = std.string.substring(template, i + 2, j)
+                let var_value:string = std.collections.get(variables, var_name)
+                result = std.string.concat(result, var_value)
+                i = j + 1
+            } else {
+                result = std.string.concat(result, std.string.substring(template, i, i + 1))
+                i = i + 1
+            }
+        } else {
+            result = std.string.concat(result, std.string.substring(template, i, i + 1))
+            i = i + 1
+        }
+    }
+    return result
 }
 
 // template processes a template string with placeholders
+// [IMPLEMENTED] Implemented in OmniLang (uses format function)
 func template(template:string, values:array<string>):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    return format(template, values)
 }

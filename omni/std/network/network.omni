@@ -42,6 +42,7 @@ struct HTTPResponse {
 // ============================================================================
 
 // ip_parse parses an IP address string
+// [IMPLEMENTED] Implemented in runtime
 func ip_parse(ip_str:string):IPAddress {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -53,6 +54,7 @@ func ip_parse(ip_str:string):IPAddress {
 }
 
 // ip_is_valid checks if an IP address string is valid
+// [IMPLEMENTED] Implemented in runtime
 func ip_is_valid(ip_str:string):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -60,6 +62,7 @@ func ip_is_valid(ip_str:string):bool {
 }
 
 // ip_is_private checks if an IP address is private
+// [IMPLEMENTED] Implemented in runtime
 func ip_is_private(ip:IPAddress):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -67,6 +70,7 @@ func ip_is_private(ip:IPAddress):bool {
 }
 
 // ip_is_loopback checks if an IP address is loopback
+// [IMPLEMENTED] Implemented in runtime
 func ip_is_loopback(ip:IPAddress):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -83,6 +87,7 @@ func ip_to_string(ip:IPAddress):string {
 // ============================================================================
 
 // url_parse parses a URL string
+// [IMPLEMENTED] Implemented in runtime
 func url_parse(url_str:string):URL {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -118,6 +123,7 @@ func url_to_string(url:URL):string {
 }
 
 // url_is_valid checks if a URL string is valid
+// [IMPLEMENTED] Implemented in runtime
 func url_is_valid(url_str:string):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -129,6 +135,7 @@ func url_is_valid(url_str:string):bool {
 // ============================================================================
 
 // dns_lookup performs a DNS lookup for a hostname
+// [PARTIAL] Stub implementation - would need getaddrinfo
 func dns_lookup(hostname:string):array<IPAddress> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -136,6 +143,7 @@ func dns_lookup(hostname:string):array<IPAddress> {
 }
 
 // dns_reverse_lookup performs a reverse DNS lookup for an IP address
+// [PARTIAL] Stub implementation - would need getnameinfo
 func dns_reverse_lookup(ip:IPAddress):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -147,6 +155,7 @@ func dns_reverse_lookup(ip:IPAddress):string {
 // ============================================================================
 
 // http_get performs an HTTP GET request
+// [PARTIAL] Stub implementation - would need HTTP library like libcurl
 func http_get(url:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -160,6 +169,7 @@ func http_get(url:string):HTTPResponse {
 }
 
 // http_post performs an HTTP POST request
+// [PARTIAL] Stub implementation - would need HTTP library like libcurl
 func http_post(url:string, body:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -173,6 +183,7 @@ func http_post(url:string, body:string):HTTPResponse {
 }
 
 // http_put performs an HTTP PUT request
+// [PARTIAL] Stub implementation - would need HTTP library like libcurl
 func http_put(url:string, body:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -186,6 +197,7 @@ func http_put(url:string, body:string):HTTPResponse {
 }
 
 // http_delete performs an HTTP DELETE request
+// [PARTIAL] Stub implementation - would need HTTP library like libcurl
 func http_delete(url:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -199,6 +211,7 @@ func http_delete(url:string):HTTPResponse {
 }
 
 // http_request performs a custom HTTP request
+// [PARTIAL] Stub implementation - would need HTTP library like libcurl
 func http_request(req:HTTPRequest):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -283,6 +296,7 @@ func http_request_get_header(req:HTTPRequest, name:string):string {
 // ============================================================================
 
 // socket_create creates a new socket
+// [IMPLEMENTED] Implemented in runtime
 func socket_create():int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -290,6 +304,7 @@ func socket_create():int {
 }
 
 // socket_connect connects a socket to an address
+// [IMPLEMENTED] Implemented in runtime
 func socket_connect(socket:int, address:string, port:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -297,6 +312,7 @@ func socket_connect(socket:int, address:string, port:int):bool {
 }
 
 // socket_bind binds a socket to an address and port
+// [IMPLEMENTED] Implemented in runtime
 func socket_bind(socket:int, address:string, port:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -304,6 +320,7 @@ func socket_bind(socket:int, address:string, port:int):bool {
 }
 
 // socket_listen starts listening on a socket
+// [IMPLEMENTED] Implemented in runtime
 func socket_listen(socket:int, backlog:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -311,6 +328,7 @@ func socket_listen(socket:int, backlog:int):bool {
 }
 
 // socket_accept accepts a connection on a socket
+// [IMPLEMENTED] Implemented in runtime
 func socket_accept(socket:int):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -318,6 +336,7 @@ func socket_accept(socket:int):int {
 }
 
 // socket_send sends data on a socket
+// [IMPLEMENTED] Implemented in runtime
 func socket_send(socket:int, data:string):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -325,6 +344,7 @@ func socket_send(socket:int, data:string):int {
 }
 
 // socket_receive receives data from a socket
+// [IMPLEMENTED] Implemented in runtime
 func socket_receive(socket:int, buffer_size:int):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -332,6 +352,7 @@ func socket_receive(socket:int, buffer_size:int):string {
 }
 
 // socket_close closes a socket
+// [IMPLEMENTED] Implemented in runtime
 func socket_close(socket:int):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -343,6 +364,7 @@ func socket_close(socket:int):bool {
 // ============================================================================
 
 // network_is_connected checks if the network is connected
+// [PARTIAL] Stub implementation - would need network interface checking
 func network_is_connected():bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -350,6 +372,7 @@ func network_is_connected():bool {
 }
 
 // network_get_local_ip returns the local IP address
+// [PARTIAL] Stub implementation - returns localhost
 func network_get_local_ip():IPAddress {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -361,6 +384,7 @@ func network_get_local_ip():IPAddress {
 }
 
 // network_ping pings a host
+// [PARTIAL] Stub implementation - would need ICMP ping
 func network_ping(host:string):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.

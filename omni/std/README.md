@@ -617,14 +617,31 @@ io.println(result)
 
 ## Implementation Status
 
-⚠️ **Note**: Most standard library functions are currently declared as intrinsic functions that need to be implemented in the runtime backends. The current implementation provides:
+**CRITICAL**: Many standard library functions are currently **stubs** that return default values (0, "", false, []). 
 
-- ✅ Function declarations and type signatures
-- ✅ Basic math functions (implemented in Go)
-- ❌ String manipulation (needs runtime implementation)
-- ❌ Array operations (needs runtime implementation)
-- ❌ OS operations (needs runtime implementation)
-- ❌ Collection operations (needs runtime implementation)
+**See [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) for a complete list of implemented vs. unimplemented functions.**
+
+### Currently Implemented
+- [IMPLEMENTED] Basic I/O (`print`, `println`, `read_line`)
+- [IMPLEMENTED] String operations (`length`, `concat`, `substring`, `char_at`, `starts_with`, `ends_with`, `contains`, `index_of`, `last_index_of`, `trim`, `to_upper`, `to_lower`, `equals`, `compare`)
+- [IMPLEMENTED] Basic math functions (`abs`, `max`, `min`, `pow`, `sqrt`, `floor`, `ceil`, `round`, `gcd`, `lcm`, `factorial`)
+- [IMPLEMENTED] File I/O operations (`open`, `close`, `read`, `write`, `seek`, `tell`, `exists`, `size`, `read_file`, `write_file`, `append_file`)
+- [IMPLEMENTED] Logging functions (`debug`, `info`, `warn`, `error`, `set_level`)
+- [IMPLEMENTED] Type conversions (`int_to_string`, `float_to_string`, `bool_to_string`, `string_to_int`, `string_to_float`, `string_to_bool`)
+- [IMPLEMENTED] System operations (`exit`)
+- [IMPLEMENTED] Testing framework (`test.start`, `test.end`, `assert`)
+
+### Not Implemented
+- [NOT IMPLEMENTED] Advanced string operations (regex, `find_all`, `replace`, `split`, `join`)
+- [NOT IMPLEMENTED] Advanced math (trigonometric, logarithmic, hyperbolic, statistical functions)
+- [NOT IMPLEMENTED] Array operations (arrays are fixed-size; `append`, `slice`, `sort`, etc. not supported)
+- [NOT IMPLEMENTED] Collection data structures (queues, stacks, sets, priority queues)
+- [NOT IMPLEMENTED] OS operations (environment variables, directory operations, file system queries)
+- [NOT IMPLEMENTED] Network operations
+- [NOT IMPLEMENTED] Time operations
+- [NOT IMPLEMENTED] Developer tools
+
+**The compiler will emit warnings when you call unimplemented functions.**
 
 ## Examples
 

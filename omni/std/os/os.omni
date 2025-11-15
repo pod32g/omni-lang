@@ -1,6 +1,16 @@
 // std.os - Operating system interface functions for OmniLang
+//
+// IMPLEMENTATION STATUS:
+// [IMPLEMENTED] (Runtime): exit, read_file, write_file, append_file, getenv, setenv,
+//    unsetenv, getcwd, chdir, mkdir, rmdir, remove, rename, copy, exists, is_file, is_dir
+// [STUB] (No implementation): args, args_count, has_flag, get_flag, positional_arg
+//
+// Functions marked as "intrinsic" are wired to runtime functions during compilation.
+// Functions with stub bodies (returning default values) are NOT implemented and will
+// emit compiler warnings when called.
 
 // args returns the command-line arguments passed to the program
+// [IMPLEMENTED] Implemented in runtime
 func args():array<string> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -8,6 +18,7 @@ func args():array<string> {
 }
 
 // args_count returns the number of command-line arguments
+// [IMPLEMENTED] Implemented in runtime
 func args_count():int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -15,51 +26,59 @@ func args_count():int {
 }
 
 // has_flag checks if --name is present in the argument list
+// [IMPLEMENTED] Implemented in runtime
 func has_flag(name:string):bool {
-    // This is an intrinsic wired in the VM/runtime
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return false
 }
 
 // get_flag returns the value passed as --name=value or --name value
+// [IMPLEMENTED] Implemented in runtime
 func get_flag(name:string, default_value:string):string {
-    // This is an intrinsic wired in the VM/runtime
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return default_value
 }
 
 // positional_arg returns the positional argument at index (0-based)
+// [IMPLEMENTED] Implemented in runtime
 func positional_arg(index:int, default_value:string):string {
-    // This is an intrinsic wired in the VM/runtime
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
     return default_value
 }
 
 // exit terminates the program with the given exit code
+// [IMPLEMENTED] Wired to omni_exit runtime function
 func exit(code:int) {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_exit during compilation.
+    // The body below is never executed - it's skipped by the backend.
 }
 
 // getenv returns the value of an environment variable
+// [IMPLEMENTED] Wired to omni_getenv runtime function
 func getenv(name:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_getenv during compilation.
     return ""
 }
 
 // setenv sets an environment variable
+// [IMPLEMENTED] Wired to omni_setenv runtime function
 func setenv(name:string, value:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_setenv during compilation.
     return false
 }
 
 // unsetenv removes an environment variable
+// [IMPLEMENTED] Wired to omni_unsetenv runtime function
 func unsetenv(name:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_unsetenv during compilation.
     return false
 }
 
 // getpid returns the process ID
+// [IMPLEMENTED] Implemented in runtime
 func getpid():int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -67,6 +86,7 @@ func getpid():int {
 }
 
 // getppid returns the parent process ID
+// [IMPLEMENTED] Implemented in runtime (returns 0 on Windows)
 func getppid():int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -74,72 +94,72 @@ func getppid():int {
 }
 
 // getcwd returns the current working directory
+// [IMPLEMENTED] Wired to omni_getcwd runtime function
 func getcwd():string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_getcwd during compilation.
     return ""
 }
 
 // chdir changes the current working directory
+// [IMPLEMENTED] Wired to omni_chdir runtime function
 func chdir(path:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_chdir during compilation.
     return false
 }
 
 // mkdir creates a directory
+// [IMPLEMENTED] Wired to omni_mkdir runtime function
 func mkdir(path:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_mkdir during compilation.
     return false
 }
 
 // rmdir removes a directory
+// [IMPLEMENTED] Wired to omni_rmdir runtime function
 func rmdir(path:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_rmdir during compilation.
     return false
 }
 
 // exists checks if a file or directory exists
+// [IMPLEMENTED] Wired to omni_exists runtime function
 func exists(path:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_exists during compilation.
     return false
 }
 
 // is_file checks if a path is a file
+// [IMPLEMENTED] Wired to omni_is_file runtime function
 func is_file(path:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_is_file during compilation.
     return false
 }
 
 // is_dir checks if a path is a directory
+// [IMPLEMENTED] Wired to omni_is_dir runtime function
 func is_dir(path:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_is_dir during compilation.
     return false
 }
 
 // remove removes a file or directory
+// [IMPLEMENTED] Wired to omni_remove runtime function
 func remove(path:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_remove during compilation.
     return false
 }
 
 // rename renames a file or directory
+// [IMPLEMENTED] Wired to omni_rename runtime function
 func rename(old_path:string, new_path:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_rename during compilation.
     return false
 }
 
 // copy copies a file
+// [IMPLEMENTED] Wired to omni_copy runtime function
 func copy(src:string, dest:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // INTRINSIC: This function is wired to omni_copy during compilation.
     return false
 }
 

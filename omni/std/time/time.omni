@@ -20,21 +20,16 @@ struct Time {
 // ============================================================================
 
 // now returns the current time
+// [IMPLEMENTED] Implemented in runtime
 func now():Time {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
-    return Time{
-        year: 2024,
-        month: 1,
-        day: 1,
-        hour: 0,
-        minute: 0,
-        second: 0,
-        nanosecond: 0
-    }
+    let unix_ts:int = unix_timestamp()
+    return time_from_unix(unix_ts)
 }
 
 // unix_timestamp returns the current Unix timestamp
+// [IMPLEMENTED] Implemented in runtime
 func unix_timestamp():int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -42,6 +37,7 @@ func unix_timestamp():int {
 }
 
 // unix_nano returns the current Unix timestamp in nanoseconds
+// [IMPLEMENTED] Implemented in runtime
 func unix_nano():int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -66,6 +62,7 @@ func time_create(year:int, month:int, day:int, hour:int, minute:int, second:int)
 }
 
 // time_from_unix creates a Time from a Unix timestamp
+// [IMPLEMENTED] Implemented in runtime
 func time_from_unix(timestamp:int):Time {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -81,6 +78,7 @@ func time_from_unix(timestamp:int):Time {
 }
 
 // time_from_string parses a time string in RFC3339 format
+// [IMPLEMENTED] Implemented in runtime
 func time_from_string(time_str:string):Time {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -100,6 +98,7 @@ func time_from_string(time_str:string):Time {
 // ============================================================================
 
 // time_to_unix converts a Time to a Unix timestamp
+// [IMPLEMENTED] Implemented in runtime
 func time_to_unix(t:Time):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -107,6 +106,7 @@ func time_to_unix(t:Time):int {
 }
 
 // time_to_string converts a Time to a string in RFC3339 format
+// [IMPLEMENTED] Implemented in runtime
 func time_to_string(t:Time):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -114,6 +114,7 @@ func time_to_string(t:Time):string {
 }
 
 // time_to_unix_nano converts a Time to Unix nanoseconds
+// [IMPLEMENTED] Implemented in runtime
 func time_to_unix_nano(t:Time):int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -279,6 +280,7 @@ func duration_to_days(d:Duration):float {
 }
 
 // duration_to_string converts a Duration to a string
+// [IMPLEMENTED] Implemented in runtime
 func duration_to_string(d:Duration):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -369,19 +371,23 @@ func duration_greater(d1:Duration, d2:Duration):bool {
 // ============================================================================
 
 // sleep pauses execution for the specified duration
+// [IMPLEMENTED] Implemented via sleep_seconds
 func sleep(duration:Duration) {
+    sleep_seconds(duration_to_seconds(duration))
+}
+
+// sleep_seconds pauses execution for the specified number of seconds
+// [IMPLEMENTED] Implemented in runtime
+func sleep_seconds(seconds:float) {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
 }
 
-// sleep_seconds pauses execution for the specified number of seconds
-func sleep_seconds(seconds:float) {
-    sleep(duration_from_seconds(seconds))
-}
-
 // sleep_milliseconds pauses execution for the specified number of milliseconds
+// [IMPLEMENTED] Implemented in runtime
 func sleep_milliseconds(milliseconds:int) {
-    sleep(duration_from_milliseconds(milliseconds))
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
 }
 
 // ============================================================================
@@ -389,6 +395,7 @@ func sleep_milliseconds(milliseconds:int) {
 // ============================================================================
 
 // time_zone_offset returns the time zone offset in seconds
+// [IMPLEMENTED] Implemented in runtime
 func time_zone_offset():int {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -396,6 +403,7 @@ func time_zone_offset():int {
 }
 
 // time_zone_name returns the time zone name
+// [IMPLEMENTED] Implemented in runtime
 func time_zone_name():string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -407,25 +415,17 @@ func time_zone_name():string {
 // ============================================================================
 
 // time_format formats a time according to the given layout
+// [PARTIAL] Basic RFC3339 formatting available via time_to_string, custom layouts pending
 func time_format(t:Time, layout:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    // For now, use RFC3339 format. Full layout parsing would require more complex implementation
+    return time_to_string(t)
 }
 
 // time_parse parses a time string according to the given layout
+// [PARTIAL] Basic RFC3339 parsing available via time_from_string, custom layouts pending
 func time_parse(time_str:string, layout:string):Time {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return Time{
-        year: 2024,
-        month: 1,
-        day: 1,
-        hour: 0,
-        minute: 0,
-        second: 0,
-        nanosecond: 0
-    }
+    // For now, assume RFC3339 format. Full layout parsing would require more complex implementation
+    return time_from_string(time_str)
 }
 
 // ============================================================================

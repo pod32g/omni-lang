@@ -7,15 +7,15 @@ Proposed
 
 The original ADR-001 provided a high-level roadmap, but we now have a much clearer picture of what's implemented and what needs to be done. The compiler has made significant progress with:
 
-- ✅ **Complete Frontend**: Lexer, Parser, AST, Type Checker
-- ✅ **Basic MIR**: SSA-based intermediate representation with builder
-- ✅ **VM Backend**: Working interpreter with 65.7% test coverage
-- ✅ **Import System**: Both std and local file imports with aliases
-- ✅ **Basic Stdlib**: I/O, math, and string intrinsics
-- ✅ **CLI Tools**: `omnic` compiler, `omnir` runner, and `omnipkg` packager
-- ✅ **Testing**: Comprehensive test suite with edge cases and `std.testing` harness
-- ✅ **Developer Utilities**: `std.testing` assertions, `std.dev` watch helpers, `omnir --test`
-- ✅ **Automation**: Machine-readable CLI endpoints, release manifests, Docker packaging workflow
+- [COMPLETED] **Complete Frontend**: Lexer, Parser, AST, Type Checker
+- [COMPLETED] **Basic MIR**: SSA-based intermediate representation with builder
+- [COMPLETED] **VM Backend**: Working interpreter with 65.7% test coverage
+- [COMPLETED] **Import System**: Both std and local file imports with aliases
+- [COMPLETED] **Basic Stdlib**: I/O, math, and string intrinsics
+- [COMPLETED] **CLI Tools**: `omnic` compiler, `omnir` runner, and `omnipkg` packager
+- [COMPLETED] **Testing**: Comprehensive test suite with edge cases and `std.testing` harness
+- [COMPLETED] **Developer Utilities**: `std.testing` assertions, `std.dev` watch helpers, `omnir --test`
+- [COMPLETED] **Automation**: Machine-readable CLI endpoints, release manifests, Docker packaging workflow
 
 However, several critical areas need completion to achieve a production-ready compiler.
 

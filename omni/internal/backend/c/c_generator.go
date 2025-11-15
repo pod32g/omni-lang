@@ -36,6 +36,14 @@ type CGenerator struct {
 	valueTypes map[mir.ValueID]string
 	// Track errors during code generation
 	errors []string
+	// Track variables that hold heap-allocated strings (need to be freed)
+	stringsToFree map[mir.ValueID]bool
+	// Track promises that need to be freed
+	promisesToFree map[mir.ValueID]bool
+	// Track temporary string variables created in convertOperandToString
+	tempStringsToFree []string
+	// Track the value ID that is being returned (to exclude from cleanup)
+	returnedValueID mir.ValueID
 }
 
 // NewCGenerator creates a new C code generator
@@ -53,48 +61,60 @@ func NewCGenerator(module *mir.Module) *CGenerator {
 		arrayLengths: make(map[mir.ValueID]int),
 		sourceMap:   make(map[string]int),
 		lineMap:     make(map[int]string),
-		valueTypes:  make(map[mir.ValueID]string),
-		errors:      []string{},
+		valueTypes:    make(map[mir.ValueID]string),
+		errors:        []string{},
+		stringsToFree:    make(map[mir.ValueID]bool),
+		promisesToFree:   make(map[mir.ValueID]bool),
+		tempStringsToFree: []string{},
+		returnedValueID:  mir.InvalidValue,
 	}
 }
 
 // NewCGeneratorWithOptLevel creates a new C code generator with specified optimization level
 func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator {
 	return &CGenerator{
-		module:       module,
-		optLevel:    optLevel,
-		debugInfo:   false,
-		sourceFile:  "",
-		variables:   make(map[mir.ValueID]string),
-		phiVars:     make(map[mir.ValueID]bool),
-		mutableVars: make(map[mir.ValueID]bool),
-		mapVars:     make(map[string]bool),
-		mapTypes:    make(map[mir.ValueID]string),
-		arrayLengths: make(map[mir.ValueID]int),
-		sourceMap:   make(map[string]int),
-		lineMap:     make(map[int]string),
-		valueTypes:  make(map[mir.ValueID]string),
-		errors:     []string{},
+		module:        module,
+		optLevel:      optLevel,
+		debugInfo:     false,
+		sourceFile:    "",
+		variables:     make(map[mir.ValueID]string),
+		phiVars:       make(map[mir.ValueID]bool),
+		mutableVars:   make(map[mir.ValueID]bool),
+		mapVars:       make(map[string]bool),
+		mapTypes:      make(map[mir.ValueID]string),
+		arrayLengths:  make(map[mir.ValueID]int),
+		sourceMap:     make(map[string]int),
+		lineMap:       make(map[int]string),
+		valueTypes:    make(map[mir.ValueID]string),
+		errors:        []string{},
+		stringsToFree:    make(map[mir.ValueID]bool),
+		promisesToFree:   make(map[mir.ValueID]bool),
+		tempStringsToFree: []string{},
+		returnedValueID:  mir.InvalidValue,
 	}
 }
 
 // NewCGeneratorWithDebug creates a new C code generator with debug information
 func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool, sourceFile string) *CGenerator {
 	return &CGenerator{
-		module:      module,
-		optLevel:    optLevel,
-		debugInfo:   debugInfo,
-		sourceFile:  sourceFile,
-		variables:   make(map[mir.ValueID]string),
-		phiVars:     make(map[mir.ValueID]bool),
-		mutableVars: make(map[mir.ValueID]bool),
-		mapVars:     make(map[string]bool),
-		mapTypes:    make(map[mir.ValueID]string),
-		arrayLengths: make(map[mir.ValueID]int),
-		sourceMap:   make(map[string]int),
-		lineMap:     make(map[int]string),
-		valueTypes:  make(map[mir.ValueID]string),
-		errors:     []string{},
+		module:        module,
+		optLevel:      optLevel,
+		debugInfo:     debugInfo,
+		sourceFile:    sourceFile,
+		variables:     make(map[mir.ValueID]string),
+		phiVars:       make(map[mir.ValueID]bool),
+		mutableVars:   make(map[mir.ValueID]bool),
+		mapVars:       make(map[string]bool),
+		mapTypes:      make(map[mir.ValueID]string),
+		arrayLengths:  make(map[mir.ValueID]int),
+		sourceMap:     make(map[string]int),
+		lineMap:       make(map[int]string),
+		valueTypes:    make(map[mir.ValueID]string),
+		errors:        []string{},
+		stringsToFree:    make(map[mir.ValueID]bool),
+		promisesToFree:   make(map[mir.ValueID]bool),
+		tempStringsToFree: []string{},
+		returnedValueID:  mir.InvalidValue,
 	}
 }
 
@@ -288,7 +308,18 @@ func (g *CGenerator) writeFunctionDeclarations() {
 func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	// Skip functions that are provided by the runtime
 	if g.isRuntimeProvidedFunction(fn.Name) {
+		// Verify that the function actually has a runtime implementation
+		if !g.hasRuntimeImplementation(fn.Name) {
+			g.errors = append(g.errors, fmt.Sprintf("ERROR: Function '%s' is marked as runtime-provided but has no runtime implementation. Remove it from isRuntimeProvidedFunction or implement it in the runtime.", fn.Name))
+		}
 		return nil
+	}
+	
+	// Warn if this is a stdlib function that should be an intrinsic but isn't implemented
+	if g.isStdFunction(fn.Name) && !g.hasRuntimeImplementation(fn.Name) {
+		// This is a stdlib function without a runtime implementation
+		// It will use its stub body, which is likely wrong
+		g.errors = append(g.errors, fmt.Sprintf("WARNING: stdlib function '%s' is not implemented in the runtime. It will use a stub body that returns a default value. Consider implementing it or removing it from the stdlib.", fn.Name))
 	}
 
 	// Add debug information if enabled
@@ -310,11 +341,10 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 		returnType = "int32_t" // Always use int32_t for omni_main to match runtime
 	}
 	
-	// For async functions (Promise<T>), the function should return the inner type, not Promise
-	// The Promise wrapper is added when the function is called
+	// For async functions (Promise<T>), the function should return omni_promise_t*
+	// The function body will create a promise and return it
 	if strings.HasPrefix(fn.ReturnType, "Promise<") {
-		innerType := fn.ReturnType[8 : len(fn.ReturnType)-1] // Remove "Promise<" and ">"
-		returnType = g.mapType(innerType)
+		returnType = "omni_promise_t*"
 	}
 
 	// Handle function pointer return types
@@ -352,6 +382,10 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	g.variables = make(map[mir.ValueID]string)
 	g.phiVars = make(map[mir.ValueID]bool)
 	g.mutableVars = make(map[mir.ValueID]bool)
+	g.stringsToFree = make(map[mir.ValueID]bool)
+	g.promisesToFree = make(map[mir.ValueID]bool)
+	g.tempStringsToFree = []string{}
+	g.returnedValueID = mir.InvalidValue
 
 	// Map parameter SSA values to their names
 	for _, param := range fn.Params {
@@ -546,6 +580,48 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 		}
 	}
 
+	// Generate cleanup code for heap-allocated strings and promises
+	// Free all tracked strings (in reverse order to handle dependencies)
+	// Note: We iterate in reverse to free strings that might depend on others
+	// Exclude the returned value from cleanup (caller owns it)
+	if len(g.stringsToFree) > 0 {
+		g.output.WriteString("  // Cleanup: free heap-allocated strings\n")
+		// Collect all string IDs and sort them in reverse order
+		var stringIDs []mir.ValueID
+		for id := range g.stringsToFree {
+			// Skip the returned value - caller owns it
+			if id == g.returnedValueID {
+				continue
+			}
+			stringIDs = append(stringIDs, id)
+		}
+		// Sort in reverse order (free later variables first)
+		for i := len(stringIDs) - 1; i >= 0; i-- {
+			id := stringIDs[i]
+			varName := g.getVariableName(id)
+			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { free((void*)%s); %s = NULL; }\n", varName, varName, varName))
+		}
+	}
+
+	// Free temporary string variables created in convertOperandToString
+	if len(g.tempStringsToFree) > 0 {
+		g.output.WriteString("  // Cleanup: free temporary string conversion variables\n")
+		// Free in reverse order (last created first)
+		for i := len(g.tempStringsToFree) - 1; i >= 0; i-- {
+			tempVar := g.tempStringsToFree[i]
+			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { free((void*)%s); %s = NULL; }\n", tempVar, tempVar, tempVar))
+		}
+	}
+
+	// Free all tracked promises
+	if len(g.promisesToFree) > 0 {
+		g.output.WriteString("  // Cleanup: free promises\n")
+		for id := range g.promisesToFree {
+			varName := g.getVariableName(id)
+			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { omni_promise_free(%s); %s = NULL; }\n", varName, varName, varName))
+		}
+	}
+
 	g.output.WriteString("}\n\n")
 	return nil
 }
@@ -596,7 +672,7 @@ func (g *CGenerator) generateBlock(block *mir.BasicBlock, fn *mir.Function) erro
 	}
 
 	// Generate terminator
-	if err := g.generateTerminator(&block.Terminator, funcName); err != nil {
+	if err := g.generateTerminator(&block.Terminator, funcName, fn.ReturnType); err != nil {
 		return err
 	}
 
@@ -794,6 +870,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			// Generate proper string concatenation using runtime function
 			g.output.WriteString(fmt.Sprintf("  %s = omni_strcat(%s, %s);\n",
 				varName, leftStr, rightStr))
+			// Track this string for cleanup (omni_strcat returns heap-allocated string)
+			if inst.ID != mir.InvalidValue {
+				g.stringsToFree[inst.ID] = true
+			}
 		}
 	case "throw":
 		// Handle throw statement - for now, just print the exception and continue
@@ -877,16 +957,18 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				varName := g.getVariableName(inst.ID)
 				arrayVar := g.getOperandValue(inst.Operands[1])
 				// Get array length from tracked array lengths
-				arrayLength := 0
+				arrayLength := -1 // Use -1 as sentinel for "unknown length"
 				if inst.Operands[1].Kind == mir.OperandValue {
 					arrayOperandID := inst.Operands[1].Value
 					if length, ok := g.arrayLengths[arrayOperandID]; ok {
 						arrayLength = length
 					} else {
 						// Array length not found - this might be a parameter or passed array
-						// For now, we'll use 0 and let the runtime handle it
-						// TODO: Track array lengths through function parameters
-						g.errors = append(g.errors, fmt.Sprintf("array length not known for variable %s (may be a function parameter)", arrayVar))
+						// For function parameters, we need to track array lengths separately
+						// For now, fail loudly to prevent silent bugs
+						g.errors = append(g.errors, fmt.Sprintf("array length not known for variable %s (ID: %d) - len() requires compile-time known array length or explicit length parameter", arrayVar, arrayOperandID))
+						// Still emit code with -1 so the program fails at runtime rather than silently returning 0
+						arrayLength = -1
 					}
 				}
 				// Get array type to determine element size
@@ -907,6 +989,11 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				// Calculate element size
 				elementSize := "sizeof(" + elementCType + ")"
 				// Use runtime function omni_len with explicit length
+				// If length is -1 (unknown), the runtime should handle it (currently returns -1, which is wrong)
+				// TODO: Implement proper array length tracking through function parameters
+				if arrayLength < 0 {
+					g.output.WriteString(fmt.Sprintf("  // WARNING: Array length unknown for %s, len() may return incorrect value\n", arrayVar))
+				}
 				g.output.WriteString(fmt.Sprintf("  %s = omni_len((void*)%s, %s, %d);\n",
 					varName, arrayVar, elementSize, arrayLength))
 				return nil
@@ -934,6 +1021,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.output.WriteString(fmt.Sprintf("  %s = omni_read_line();\n", varName))
 					// Record the type for this variable
 					g.valueTypes[inst.ID] = "string"
+					// Track this string for cleanup (omni_read_line returns heap-allocated string)
+					g.stringsToFree[inst.ID] = true
 				} else {
 					// If no ID, just call it (shouldn't happen, but handle gracefully)
 					g.output.WriteString("  omni_read_line();\n")
@@ -962,6 +1051,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_read_file(%s);\n", tempVar, pathVar))
 					g.output.WriteString(fmt.Sprintf("  omni_promise_t* %s = omni_promise_create_string(%s);\n", varName, tempVar))
 					g.valueTypes[inst.ID] = "Promise<string>"
+					// Track the promise for cleanup
+					g.promisesToFree[inst.ID] = true
 				}
 				return nil
 			}
@@ -975,6 +1066,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_write_file(%s, %s);\n", tempVar, pathVar, contentVar))
 					g.output.WriteString(fmt.Sprintf("  omni_promise_t* %s = omni_promise_create_bool(%s != 0);\n", varName, tempVar))
 					g.valueTypes[inst.ID] = "Promise<bool>"
+					// Track the promise for cleanup
+					g.promisesToFree[inst.ID] = true
 				}
 				return nil
 			}
@@ -988,6 +1081,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_append_file(%s, %s);\n", tempVar, pathVar, contentVar))
 					g.output.WriteString(fmt.Sprintf("  omni_promise_t* %s = omni_promise_create_bool(%s != 0);\n", varName, tempVar))
 					g.valueTypes[inst.ID] = "Promise<bool>"
+					// Track the promise for cleanup
+					g.promisesToFree[inst.ID] = true
 				}
 				return nil
 			}
@@ -1029,13 +1124,18 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_int(%s);\n", varName, tempVar))
 					case "string":
 						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_string(%s);\n", varName, tempVar))
+						// Track the promise for cleanup
+						g.promisesToFree[inst.ID] = true
 					case "float", "double":
 						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_float(%s);\n", varName, tempVar))
 					case "bool":
 						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_bool(%s);\n", varName, tempVar))
 					default:
-						// Default to int
-						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_int(%s);\n", varName, tempVar))
+						// For user-defined types, we cannot create promises yet
+						g.errors = append(g.errors, fmt.Sprintf("cannot create promise for user-defined type: %s in async call to %s", innerType, funcName))
+						// Still emit code to prevent compilation errors, but it will be wrong
+						g.output.WriteString(fmt.Sprintf("  // ERROR: Cannot create promise for type %s, using int (WRONG)\n", innerType))
+						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_int(%s); // WRONG TYPE\n", varName, tempVar))
 					}
 				} else if strings.Contains(inst.Type, ") -> ") {
 					// Generate function pointer variable declaration
@@ -1050,17 +1150,364 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					}
 					g.output.WriteString(");\n")
 				} else {
-					// Regular function call - assign to already declared variable
-					g.output.WriteString(fmt.Sprintf("  %s = %s(",
-						varName, cFuncName))
-					// Add arguments
-					for i, arg := range inst.Operands[1:] {
-						if i > 0 {
-							g.output.WriteString(", ")
+					// Special handling for functions that return structs (IPAddress, URL, HTTPResponse, etc.)
+					// Network functions returning structs
+					if (funcName == "omni_ip_parse" || funcName == "omni_network_get_local_ip") && inst.Type != "" && strings.Contains(inst.Type, "IPAddress") {
+						// IP functions return omni_ip_address_t*
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							ipStr := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  omni_ip_address_t* %s = omni_ip_parse(%s);\n", varName, ipStr))
+						} else if funcName == "omni_network_get_local_ip" {
+							g.output.WriteString(fmt.Sprintf("  omni_ip_address_t* %s = omni_network_get_local_ip();\n", varName))
 						}
-						g.output.WriteString(g.getOperandValue(arg))
+					} else if funcName == "omni_url_parse" && inst.Type != "" && strings.Contains(inst.Type, "URL") {
+						// URL functions return omni_url_t*
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							urlStr := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  omni_url_t* %s = omni_url_parse(%s);\n", varName, urlStr))
+						}
+					} else if (funcName == "omni_http_get" || funcName == "omni_http_post" || funcName == "omni_http_put" || funcName == "omni_http_delete" || funcName == "omni_http_request") && inst.Type != "" && strings.Contains(inst.Type, "HTTPResponse") {
+						// HTTP functions return omni_http_response_t*
+						varName := g.getVariableName(inst.ID)
+						if funcName == "omni_http_get" && len(inst.Operands) >= 2 {
+							url := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_get(%s);\n", varName, url))
+						} else if funcName == "omni_http_post" && len(inst.Operands) >= 3 {
+							url := g.getOperandValue(inst.Operands[1])
+							body := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_post(%s, %s);\n", varName, url, body))
+						} else if funcName == "omni_http_put" && len(inst.Operands) >= 3 {
+							url := g.getOperandValue(inst.Operands[1])
+							body := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_put(%s, %s);\n", varName, url, body))
+						} else if funcName == "omni_http_delete" && len(inst.Operands) >= 2 {
+							url := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_delete(%s);\n", varName, url))
+						} else if funcName == "omni_http_request" && len(inst.Operands) >= 2 {
+							req := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_request(%s);\n", varName, req))
+						}
+					} else if funcName == "omni_ip_to_string" && inst.Type == "string" {
+						// IP to string conversion
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							ipVar := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  const char* %s = omni_ip_to_string(%s);\n", varName, ipVar))
+							g.stringsToFree[inst.ID] = true
+						}
+					} else if funcName == "omni_url_to_string" && inst.Type == "string" {
+						// URL to string conversion
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							urlVar := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  const char* %s = omni_url_to_string(%s);\n", varName, urlVar))
+							g.stringsToFree[inst.ID] = true
+						}
+					} else if funcName == "omni_dns_reverse_lookup" && inst.Type == "string" {
+						// DNS reverse lookup returns string
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							ipVar := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  const char* %s = omni_dns_reverse_lookup(%s);\n", varName, ipVar))
+							g.stringsToFree[inst.ID] = true
+						}
+					} else if funcName == "omni_http_response_get_header" && inst.Type == "string" {
+						// HTTP response get header returns string
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							respVar := g.getOperandValue(inst.Operands[1])
+							headerName := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  const char* %s = omni_http_response_get_header(%s, %s);\n", varName, respVar, headerName))
+							g.stringsToFree[inst.ID] = true
+						}
+					} else if funcName == "omni_http_request_get_header" && inst.Type == "string" {
+						// HTTP request get header returns string
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							reqVar := g.getOperandValue(inst.Operands[1])
+							headerName := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  const char* %s = omni_http_request_get_header(%s, %s);\n", varName, reqVar, headerName))
+							g.stringsToFree[inst.ID] = true
+						}
+					} else if funcName == "omni_socket_receive" && inst.Type == "string" {
+						// Socket receive returns string
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							socketVar := g.getOperandValue(inst.Operands[1])
+							bufferSizeVar := g.getOperandValue(inst.Operands[2])
+							// Allocate buffer
+							bufferVar := fmt.Sprintf("_buffer_%d", inst.ID)
+							g.output.WriteString(fmt.Sprintf("  char %s[%s + 1];\n", bufferVar, bufferSizeVar))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s_len = omni_socket_receive(%s, %s, %s);\n", varName, socketVar, bufferVar, bufferSizeVar))
+							g.output.WriteString(fmt.Sprintf("  %s[%s_len] = '\\0';\n", bufferVar, varName))
+							g.output.WriteString(fmt.Sprintf("  const char* %s = strdup(%s);\n", varName, bufferVar))
+							g.stringsToFree[inst.ID] = true
+						}
+					} else if funcName == "omni_dns_lookup" && inst.Type != "" && strings.HasPrefix(inst.Type, "array<") {
+						// DNS lookup returns array of IPAddress
+						// For now, return empty array (stub implementation)
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							hostname := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  // DNS lookup stub - returns empty array\n"))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s_count = 0;\n", varName))
+							g.output.WriteString(fmt.Sprintf("  omni_ip_address_t** %s = omni_dns_lookup(%s, &%s_count);\n", varName, hostname, varName))
+						}
+					} else if funcName == "omni_map_keys_string_int" && inst.Type != "" && strings.HasPrefix(inst.Type, "array<") {
+						// Map keys returns array of strings
+						// For now, use a fixed-size buffer (limitation)
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							mapVar := g.getOperandValue(inst.Operands[1])
+							bufferVar := fmt.Sprintf("_keys_buffer_%d", inst.ID)
+							g.output.WriteString(fmt.Sprintf("  char* %s[256];\n", bufferVar))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s_count = omni_map_keys_string_int(%s, %s, 256);\n", varName, mapVar, bufferVar))
+							// Note: The array would need to be constructed from the buffer
+							// For now, just track the count
+						}
+					} else if funcName == "omni_map_values_string_int" && inst.Type != "" && strings.HasPrefix(inst.Type, "array<") {
+						// Map values returns array of ints
+						// For now, use a fixed-size buffer (limitation)
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							mapVar := g.getOperandValue(inst.Operands[1])
+							bufferVar := fmt.Sprintf("_values_buffer_%d", inst.ID)
+							g.output.WriteString(fmt.Sprintf("  int32_t %s[256];\n", bufferVar))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s_count = omni_map_values_string_int(%s, %s, 256);\n", varName, mapVar, bufferVar))
+							// Note: The array would need to be constructed from the buffer
+							// For now, just track the count
+						}
+					} else if funcName == "omni_map_copy_string_int" && inst.Type != "" && strings.HasPrefix(inst.Type, "map<") {
+						// Map copy returns a new map
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							mapVar := g.getOperandValue(inst.Operands[1])
+							g.output.WriteString(fmt.Sprintf("  omni_map_t* %s = omni_map_copy_string_int(%s);\n", varName, mapVar))
+						}
+					} else if funcName == "omni_map_merge_string_int" && inst.Type != "" && strings.HasPrefix(inst.Type, "map<") {
+						// Map merge returns a new map
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							mapA := g.getOperandValue(inst.Operands[1])
+							mapB := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  omni_map_t* %s = omni_map_merge_string_int(%s, %s);\n", varName, mapA, mapB))
+						}
+					} else if funcName == "omni_set_union" && inst.Type != "" && strings.HasPrefix(inst.Type, "set<") {
+						// Set union returns a new set
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							setA := g.getOperandValue(inst.Operands[1])
+							setB := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  omni_set_t* %s = omni_set_union(%s, %s);\n", varName, setA, setB))
+						}
+					} else if funcName == "omni_set_intersection" && inst.Type != "" && strings.HasPrefix(inst.Type, "set<") {
+						// Set intersection returns a new set
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							setA := g.getOperandValue(inst.Operands[1])
+							setB := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  omni_set_t* %s = omni_set_intersection(%s, %s);\n", varName, setA, setB))
+						}
+					} else if funcName == "omni_set_difference" && inst.Type != "" && strings.HasPrefix(inst.Type, "set<") {
+						// Set difference returns a new set
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							setA := g.getOperandValue(inst.Operands[1])
+							setB := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  omni_set_t* %s = omni_set_difference(%s, %s);\n", varName, setA, setB))
+						}
+					} else if funcName == "omni_set_create" && inst.Type != "" && strings.HasPrefix(inst.Type, "set<") {
+						// Set create returns a new set
+						varName := g.getVariableName(inst.ID)
+						g.output.WriteString(fmt.Sprintf("  omni_set_t* %s = omni_set_create();\n", varName))
+					} else if funcName == "omni_queue_create" && inst.Type != "" && strings.HasPrefix(inst.Type, "queue<") {
+						// Queue create returns a new queue
+						varName := g.getVariableName(inst.ID)
+						g.output.WriteString(fmt.Sprintf("  omni_queue_t* %s = omni_queue_create();\n", varName))
+					} else if funcName == "omni_stack_create" && inst.Type != "" && strings.HasPrefix(inst.Type, "stack<") {
+						// Stack create returns a new stack
+						varName := g.getVariableName(inst.ID)
+						g.output.WriteString(fmt.Sprintf("  omni_stack_t* %s = omni_stack_create();\n", varName))
+					} else if funcName == "omni_priority_queue_create" && inst.Type != "" && strings.HasPrefix(inst.Type, "priority_queue<") {
+						// Priority queue create returns a new priority queue
+						varName := g.getVariableName(inst.ID)
+						g.output.WriteString(fmt.Sprintf("  omni_priority_queue_t* %s = omni_priority_queue_create();\n", varName))
+					} else if funcName == "omni_linked_list_create" && inst.Type != "" && strings.HasPrefix(inst.Type, "linked_list<") {
+						// Linked list create returns a new linked list
+						varName := g.getVariableName(inst.ID)
+						g.output.WriteString(fmt.Sprintf("  omni_linked_list_t* %s = omni_linked_list_create();\n", varName))
+					} else if funcName == "omni_binary_tree_create" && inst.Type != "" && strings.HasPrefix(inst.Type, "binary_tree<") {
+						// Binary tree create returns a new binary tree
+						varName := g.getVariableName(inst.ID)
+						g.output.WriteString(fmt.Sprintf("  omni_binary_tree_t* %s = omni_binary_tree_create();\n", varName))
+					} else if funcName == "omni_http_request_create" && inst.Type != "" && strings.Contains(inst.Type, "HTTPRequest") {
+						// HTTP request create returns omni_http_request_t*
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							method := g.getOperandValue(inst.Operands[1])
+							url := g.getOperandValue(inst.Operands[2])
+							g.output.WriteString(fmt.Sprintf("  omni_http_request_t* %s = omni_http_request_create(%s, %s);\n", varName, method, url))
+						}
+					} else {
+						// Special handling for Time struct conversion functions
+						if funcName == "omni_time_from_unix" && inst.Type != "" && strings.Contains(inst.Type, "Time") {
+							// time_from_unix(timestamp) -> Time
+							// Need to extract fields from Time struct and pass as output parameters
+							if len(inst.Operands) >= 2 {
+								timestamp := g.getOperandValue(inst.Operands[1])
+								// Create temporary variables for output parameters
+								yearVar := fmt.Sprintf("_year_%d", inst.ID)
+								monthVar := fmt.Sprintf("_month_%d", inst.ID)
+								dayVar := fmt.Sprintf("_day_%d", inst.ID)
+								hourVar := fmt.Sprintf("_hour_%d", inst.ID)
+								minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
+								secondVar := fmt.Sprintf("_second_%d", inst.ID)
+								nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
+								
+								g.output.WriteString(fmt.Sprintf("  int32_t %s, %s, %s, %s, %s, %s, %s;\n",
+									yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+								g.output.WriteString(fmt.Sprintf("  omni_time_from_unix(%s, &%s, &%s, &%s, &%s, &%s, &%s, &%s);\n",
+									timestamp, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+								
+								// Create Time struct from the extracted fields
+								g.output.WriteString(fmt.Sprintf("  %s = omni_struct_create();\n", varName))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"year\", %s);\n", varName, yearVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"month\", %s);\n", varName, monthVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"day\", %s);\n", varName, dayVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"hour\", %s);\n", varName, hourVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"minute\", %s);\n", varName, minuteVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"second\", %s);\n", varName, secondVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"nanosecond\", %s);\n", varName, nanosecondVar))
+							}
+						} else if funcName == "omni_time_from_string" && inst.Type != "" && strings.Contains(inst.Type, "Time") {
+							// time_from_string(time_str) -> Time
+							if len(inst.Operands) >= 2 {
+								timeStr := g.getOperandValue(inst.Operands[1])
+								yearVar := fmt.Sprintf("_year_%d", inst.ID)
+								monthVar := fmt.Sprintf("_month_%d", inst.ID)
+								dayVar := fmt.Sprintf("_day_%d", inst.ID)
+								hourVar := fmt.Sprintf("_hour_%d", inst.ID)
+								minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
+								secondVar := fmt.Sprintf("_second_%d", inst.ID)
+								nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
+								
+								g.output.WriteString(fmt.Sprintf("  int32_t %s, %s, %s, %s, %s, %s, %s;\n",
+									yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+								g.output.WriteString(fmt.Sprintf("  omni_time_from_string(%s, &%s, &%s, &%s, &%s, &%s, &%s, &%s);\n",
+									timeStr, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+								
+								g.output.WriteString(fmt.Sprintf("  %s = omni_struct_create();\n", varName))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"year\", %s);\n", varName, yearVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"month\", %s);\n", varName, monthVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"day\", %s);\n", varName, dayVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"hour\", %s);\n", varName, hourVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"minute\", %s);\n", varName, minuteVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"second\", %s);\n", varName, secondVar))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"nanosecond\", %s);\n", varName, nanosecondVar))
+							}
+						} else if funcName == "omni_time_to_unix" && len(inst.Operands) >= 2 {
+							// time_to_unix(t:Time) -> int
+							// Need to extract fields from Time struct parameter
+							timeStruct := g.getOperandValue(inst.Operands[1])
+							yearVar := fmt.Sprintf("_year_%d", inst.ID)
+							monthVar := fmt.Sprintf("_month_%d", inst.ID)
+							dayVar := fmt.Sprintf("_day_%d", inst.ID)
+							hourVar := fmt.Sprintf("_hour_%d", inst.ID)
+							minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
+							secondVar := fmt.Sprintf("_second_%d", inst.ID)
+							nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
+							
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"year\");\n", yearVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"month\");\n", monthVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"day\");\n", dayVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"hour\");\n", hourVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"minute\");\n", minuteVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"second\");\n", secondVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"nanosecond\");\n", nanosecondVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  %s = omni_time_to_unix(%s, %s, %s, %s, %s, %s, %s);\n",
+								varName, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+						} else if funcName == "omni_time_to_string" && len(inst.Operands) >= 2 {
+							// time_to_string(t:Time) -> string
+							timeStruct := g.getOperandValue(inst.Operands[1])
+							yearVar := fmt.Sprintf("_year_%d", inst.ID)
+							monthVar := fmt.Sprintf("_month_%d", inst.ID)
+							dayVar := fmt.Sprintf("_day_%d", inst.ID)
+							hourVar := fmt.Sprintf("_hour_%d", inst.ID)
+							minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
+							secondVar := fmt.Sprintf("_second_%d", inst.ID)
+							nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
+							
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"year\");\n", yearVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"month\");\n", monthVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"day\");\n", dayVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"hour\");\n", hourVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"minute\");\n", minuteVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"second\");\n", secondVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"nanosecond\");\n", nanosecondVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  %s = omni_time_to_string(%s, %s, %s, %s, %s, %s, %s);\n",
+								varName, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+							// Track string for cleanup
+							if inst.Type == "string" {
+								g.stringsToFree[inst.ID] = true
+							}
+						} else if funcName == "omni_time_to_unix_nano" && len(inst.Operands) >= 2 {
+							// time_to_unix_nano(t:Time) -> int
+							timeStruct := g.getOperandValue(inst.Operands[1])
+							yearVar := fmt.Sprintf("_year_%d", inst.ID)
+							monthVar := fmt.Sprintf("_month_%d", inst.ID)
+							dayVar := fmt.Sprintf("_day_%d", inst.ID)
+							hourVar := fmt.Sprintf("_hour_%d", inst.ID)
+							minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
+							secondVar := fmt.Sprintf("_second_%d", inst.ID)
+							nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
+							
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"year\");\n", yearVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"month\");\n", monthVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"day\");\n", dayVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"hour\");\n", hourVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"minute\");\n", minuteVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"second\");\n", secondVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"nanosecond\");\n", nanosecondVar, timeStruct))
+							g.output.WriteString(fmt.Sprintf("  %s = omni_time_to_unix_nano(%s, %s, %s, %s, %s, %s, %s);\n",
+								varName, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+						} else if funcName == "omni_duration_to_string" && len(inst.Operands) >= 2 {
+							// duration_to_string(d:Duration) -> string
+							durationStruct := g.getOperandValue(inst.Operands[1])
+							secondsVar := fmt.Sprintf("_seconds_%d", inst.ID)
+							nanosecondsVar := fmt.Sprintf("_nanoseconds_%d", inst.ID)
+							
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"seconds\");\n", secondsVar, durationStruct))
+							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"nanoseconds\");\n", nanosecondsVar, durationStruct))
+							g.output.WriteString(fmt.Sprintf("  %s = omni_duration_to_string(%s, %s);\n",
+								varName, secondsVar, nanosecondsVar))
+							// Track string for cleanup
+							if inst.Type == "string" {
+								g.stringsToFree[inst.ID] = true
+							}
+						} else {
+							// Regular function call - assign to already declared variable
+							g.output.WriteString(fmt.Sprintf("  %s = %s(",
+								varName, cFuncName))
+							// Add arguments
+							for i, arg := range inst.Operands[1:] {
+								if i > 0 {
+									g.output.WriteString(", ")
+								}
+								g.output.WriteString(g.getOperandValue(arg))
+							}
+							g.output.WriteString(");\n")
+							// Track strings that need freeing if this function returns a heap-allocated string
+							if g.isStringReturningFunction(funcName) && inst.Type == "string" {
+								g.stringsToFree[inst.ID] = true
+							}
+							// Warn if function is called but doesn't have a runtime implementation
+							if !g.hasRuntimeImplementation(funcName) && g.isStdFunction(funcName) {
+								g.errors = append(g.errors, fmt.Sprintf("WARNING: stdlib function '%s' is called but has no runtime implementation. It will return a default value or do nothing.", funcName))
+							}
+						}
 					}
-					g.output.WriteString(");\n")
 				}
 			}
 		}
@@ -1118,27 +1565,34 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.valueTypes[inst.ID] = resultType
 				} else {
 					// For primitive arrays, use runtime function with bounds checking if length is known
-					arrayLength := 0
+					arrayLength := -1
 					if inst.Operands[0].Kind == mir.OperandValue {
 						arrayOperandID := inst.Operands[0].Value
 						if length, ok := g.arrayLengths[arrayOperandID]; ok {
 							arrayLength = length
 						}
 					}
-					if arrayLength > 0 {
+					if arrayLength >= 0 {
 						// Use runtime function with bounds checking
 						g.output.WriteString(fmt.Sprintf("  %s = omni_array_get_int(%s, %s, %d);\n", 
 							varName, target, index, arrayLength))
 					} else {
-						// Length unknown (might be parameter) - use direct indexing
-						// TODO: Track array lengths through function parameters
-						g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
+						// Length unknown (might be parameter) - still use runtime function but with -1
+						// This will cause a runtime error rather than silent memory corruption
+						g.errors = append(g.errors, fmt.Sprintf("array length not known for indexing %s (ID: %d) - bounds checking disabled, may cause memory corruption", target, inst.Operands[0].Value))
+						g.output.WriteString(fmt.Sprintf("  // WARNING: Array length unknown, bounds checking disabled\n"))
+						g.output.WriteString(fmt.Sprintf("  %s = %s[%s]; // UNSAFE: No bounds check\n", varName, target, index))
 					}
 				}
 			}
 		}
 	case "array.init":
 		// Handle array literal initialization
+		// WARNING: Arrays are currently allocated on the stack, which means:
+		// - They cannot be returned from functions (dangling pointers)
+		// - They cannot be stored in longer-lived variables
+		// - They decay to pointers when passed around
+		// TODO: Implement heap allocation for arrays to support proper value semantics
 		if len(inst.Operands) > 0 {
 			varName := g.getVariableName(inst.ID)
 			arrayLength := len(inst.Operands)
@@ -1161,6 +1615,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			if isStruct {
 				// For struct arrays, create array of pointers
 				elementType := "omni_struct_t*"
+				g.output.WriteString(fmt.Sprintf("  // WARNING: Stack-allocated array, cannot be returned or stored long-term\n"))
 				g.output.WriteString(fmt.Sprintf("  %s %s[%d];\n", elementType, varName, arrayLength))
 				// Initialize each struct element
 				for i, op := range inst.Operands {
@@ -1172,6 +1627,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			} else {
 				// For primitive types, create simple array
 				elementType := g.mapType(elementTypeStr) // Map "int" to "int32_t"
+				g.output.WriteString(fmt.Sprintf("  // WARNING: Stack-allocated array, cannot be returned or stored long-term\n"))
 				g.output.WriteString(fmt.Sprintf("  %s %s[] = {", elementType, varName))
 				for i, op := range inst.Operands {
 					if i > 0 {
@@ -1417,8 +1873,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						finalTypeFound:
 						}
 						
-						// Default to int if still no type
+						// Default to int if still no type, but warn about it
 						if fieldType == "" || fieldType == "<inferred>" {
+							g.errors = append(g.errors, fmt.Sprintf("could not infer type for struct field '%s' in struct.init, defaulting to int (this may cause incorrect behavior)", fieldName))
 							fieldType = "int"
 						}
 						
@@ -1437,8 +1894,17 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						case "bool":
 							g.output.WriteString(fmt.Sprintf("  omni_struct_set_bool_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
 						default:
-							// Default to int
-							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+							// For non-primitive types, we can't use the primitive setters
+							// This should have been caught earlier, but fail loudly here
+							if !g.isPrimitiveType(fieldType) {
+								g.errors = append(g.errors, fmt.Sprintf("cannot set struct field '%s' with type %s: only primitive types are supported", fieldName, fieldType))
+								// Fall back to int to prevent compilation errors
+								g.output.WriteString(fmt.Sprintf("  // ERROR: Cannot set field %s with type %s, using int setter (WRONG)\n", fieldName, fieldType))
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"%s\", %s); // WRONG TYPE\n", varName, fieldName, fieldValue))
+							} else {
+								// Default to int for unknown primitive types
+								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"%s\", %s);\n", varName, fieldName, fieldValue))
+							}
 						}
 					}
 				}
@@ -1873,32 +2339,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			}
 			g.output.WriteString(");\n")
 		}
-	case "closure.create":
-		// Handle closure creation
-		if len(inst.Operands) >= 1 {
-			funcName := g.getOperandValue(inst.Operands[0])
-			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  // TODO: Implement closure creation for %s\n", varName))
-			g.output.WriteString(fmt.Sprintf("  // Function: %s\n", funcName))
-			g.output.WriteString(fmt.Sprintf("  void* %s = NULL; // Placeholder for closure\n", varName))
-		}
-	case "closure.capture":
-		// Handle closure variable capture
-		if len(inst.Operands) >= 3 {
-			closure := g.getOperandValue(inst.Operands[0])
-			varName := inst.Operands[1].Literal
-			varValue := g.getOperandValue(inst.Operands[2])
-			g.output.WriteString(fmt.Sprintf("  // TODO: Implement closure capture for %s.%s = %s\n",
-				closure, varName, varValue))
-		}
-	case "closure.bind":
-		// Handle closure binding
-		if len(inst.Operands) >= 1 {
-			closure := g.getOperandValue(inst.Operands[0])
-			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  // TODO: Implement closure binding for %s\n", varName))
-			g.output.WriteString(fmt.Sprintf("  void* %s = %s; // Placeholder for bound closure\n", varName, closure))
-		}
+	case "closure.create", "closure.capture", "closure.bind":
+		// Closures are not yet supported in the C backend
+		g.errors = append(g.errors, fmt.Sprintf("closures are not supported in the C backend (instruction: %s)", inst.Op))
+		return fmt.Errorf("closures are not supported in the C backend: %s", inst.Op)
 	case "std.io.print":
 		if len(inst.Operands) >= 1 {
 			g.emitPrint(inst.Operands[0], false)
@@ -1968,34 +2412,78 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString(fmt.Sprintf("  %s = omni_await_int(%s);\n", varName, promiseVar))
 			case "string":
 				g.output.WriteString(fmt.Sprintf("  %s = omni_await_string(%s);\n", varName, promiseVar))
+				// Track this string for cleanup (omni_await_string returns heap-allocated string)
+				g.stringsToFree[inst.ID] = true
 			case "float", "double":
 				g.output.WriteString(fmt.Sprintf("  %s = omni_await_float(%s);\n", varName, promiseVar))
 			case "bool":
 				g.output.WriteString(fmt.Sprintf("  %s = omni_await_bool(%s);\n", varName, promiseVar))
 			default:
-				// For unknown types, default to string (most common for I/O)
-				g.output.WriteString(fmt.Sprintf("  %s = omni_await_string(%s);\n", varName, promiseVar))
-				resultType = "string"
+				// For user-defined types, we cannot await them yet
+				// Fail loudly instead of silently defaulting to string
+				g.errors = append(g.errors, fmt.Sprintf("cannot await Promise<%s>: user-defined types are not supported in await expressions", resultType))
+				// Still emit code to prevent compilation errors, but it will be wrong
+				g.output.WriteString(fmt.Sprintf("  // ERROR: Cannot await user-defined type %s, defaulting to int (WRONG)\n", resultType))
+				g.output.WriteString(fmt.Sprintf("  %s = omni_await_int(%s); // WRONG TYPE\n", varName, promiseVar))
+				resultType = "int" // Store as int to prevent further type errors
 			}
 			// Store the result type
 			g.valueTypes[inst.ID] = resultType
 		}
 	default:
-		// Handle unknown instructions
-		g.output.WriteString(fmt.Sprintf("  // TODO: Implement instruction %s\n", inst.Op))
+		// Unknown instructions should cause a hard failure
+		g.errors = append(g.errors, fmt.Sprintf("unsupported MIR instruction: %s (this indicates a missing implementation or invalid MIR)", inst.Op))
+		return fmt.Errorf("unsupported MIR instruction: %s", inst.Op)
 	}
 
 	return nil
 }
 
 // generateTerminator generates C code for a terminator
-func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string) error {
+func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string, returnType string) error {
 	switch term.Op {
 	case "ret":
 		// Handle return statement
 		if len(term.Operands) > 0 {
+			// Track the returned value ID to exclude it from cleanup
+			if term.Operands[0].Kind == mir.OperandValue {
+				g.returnedValueID = term.Operands[0].Value
+			}
 			value := g.getOperandValue(term.Operands[0])
-			g.output.WriteString(fmt.Sprintf("  return %s;\n", value))
+			// For async functions (Promise<T>), wrap the return value in a promise
+			if strings.HasPrefix(returnType, "Promise<") {
+				innerType := returnType[8 : len(returnType)-1] // Extract inner type from Promise<T>
+				// Determine the promise creation function based on inner type
+				var promiseFunc string
+				switch innerType {
+				case "int":
+					promiseFunc = "omni_promise_create_int"
+				case "string":
+					promiseFunc = "omni_promise_create_string"
+					// If returning a string, track the promise for cleanup (not the string itself)
+					// The promise will be freed, but the string inside it is owned by the promise
+				case "float", "double":
+					promiseFunc = "omni_promise_create_float"
+				case "bool":
+					promiseFunc = "omni_promise_create_bool"
+				default:
+					// For user-defined types, we can't create promises yet
+					// This should be caught earlier, but fail loudly here
+					g.errors = append(g.errors, fmt.Sprintf("cannot create promise for user-defined type: %s", innerType))
+					promiseFunc = "omni_promise_create_int" // Fallback to prevent compilation error
+				}
+				// Create promise and return it
+				g.output.WriteString(fmt.Sprintf("  return %s(%s);\n", promiseFunc, value))
+			} else {
+				// For string return types, exclude the returned value from cleanup
+				if returnType == "string" || returnType == "const char*" || returnType == "char*" {
+					// The returned string is owned by the caller, don't free it
+					if term.Operands[0].Kind == mir.OperandValue {
+						delete(g.stringsToFree, term.Operands[0].Value)
+					}
+				}
+				g.output.WriteString(fmt.Sprintf("  return %s;\n", value))
+			}
 		} else {
 			// For main function (omni_main), return 0 instead of void return
 			// Check if this is actually omni_main (mapped from main)
@@ -2031,8 +2519,9 @@ func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string) e
 			g.output.WriteString("  }\n")
 		}
 	default:
-		// Handle unknown terminators
-		g.output.WriteString(fmt.Sprintf("  // TODO: Implement terminator %s\n", term.Op))
+		// Unknown terminators should cause a hard failure
+		g.errors = append(g.errors, fmt.Sprintf("unsupported MIR terminator: %s (this indicates a missing implementation or invalid MIR)", term.Op))
+		return fmt.Errorf("unsupported MIR terminator: %s", term.Op)
 	}
 
 	return nil
@@ -2082,21 +2571,29 @@ func (g *CGenerator) convertOperandToString(op mir.Operand) string {
 			// Convert int to string - use unique counter to avoid conflicts
 			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_int_to_string(%s);\n", tempVar, varName))
+			// Track this temporary string for cleanup
+			g.tempStringsToFree = append(g.tempStringsToFree, tempVar)
 			return tempVar
 		} else if operandType == "float" || operandType == "double" {
 			// Convert float to string - use unique counter to avoid conflicts
 			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_float_to_string(%s);\n", tempVar, varName))
+			// Track this temporary string for cleanup
+			g.tempStringsToFree = append(g.tempStringsToFree, tempVar)
 			return tempVar
 		} else if operandType == "bool" {
 			// Convert bool to string - use unique counter to avoid conflicts
 			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_bool_to_string(%s);\n", tempVar, varName))
+			// Track this temporary string for cleanup
+			g.tempStringsToFree = append(g.tempStringsToFree, tempVar)
 			return tempVar
 		} else {
 			// Default: assume int - use unique counter to avoid conflicts
 			tempVar := fmt.Sprintf("temp_str_%d_%d", op.Value, g.output.Len())
 			g.output.WriteString(fmt.Sprintf("  const char* %s = omni_int_to_string(%s);\n", tempVar, varName))
+			// Track this temporary string for cleanup
+			g.tempStringsToFree = append(g.tempStringsToFree, tempVar)
 			return tempVar
 		}
 
@@ -2455,6 +2952,204 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_lcm"
 	case "std.math.factorial":
 		return "omni_factorial"
+	case "std.math.sin":
+		return "omni_sin"
+	case "std.math.cos":
+		return "omni_cos"
+	case "std.math.tan":
+		return "omni_tan"
+	case "std.math.asin":
+		return "omni_asin"
+	case "std.math.acos":
+		return "omni_acos"
+	case "std.math.atan":
+		return "omni_atan"
+	case "std.math.atan2":
+		return "omni_atan2"
+	case "std.math.exp":
+		return "omni_exp"
+	case "std.math.log":
+		return "omni_log"
+	case "std.math.log10":
+		return "omni_log10"
+	case "std.math.log2":
+		return "omni_log2"
+	case "std.math.sinh":
+		return "omni_sinh"
+	case "std.math.cosh":
+		return "omni_cosh"
+	case "std.math.tanh":
+		return "omni_tanh"
+	case "std.math.cbrt":
+		return "omni_cbrt"
+	case "std.math.trunc":
+		return "omni_trunc"
+	// Note: is_prime and fibonacci are implemented in OmniLang, not runtime
+	case "std.math.is_prime":
+		return "std_math_is_prime" // Will use OmniLang implementation
+	case "std.math.fibonacci":
+		return "std_math_fibonacci" // Will use OmniLang implementation
+
+	// Collections functions
+	case "std.collections.keys":
+		return "omni_map_keys_string_int"
+	case "std.collections.values":
+		return "omni_map_values_string_int"
+	case "std.collections.copy":
+		return "omni_map_copy_string_int"
+	case "std.collections.merge":
+		return "omni_map_merge_string_int"
+	// Set functions
+	case "std.collections.set_create":
+		return "omni_set_create"
+	case "std.collections.set_add":
+		return "omni_set_add"
+	case "std.collections.set_remove":
+		return "omni_set_remove"
+	case "std.collections.set_contains":
+		return "omni_set_contains"
+	case "std.collections.set_size":
+		return "omni_set_size"
+	case "std.collections.set_clear":
+		return "omni_set_clear"
+	case "std.collections.set_union":
+		return "omni_set_union"
+	case "std.collections.set_intersection":
+		return "omni_set_intersection"
+	case "std.collections.set_difference":
+		return "omni_set_difference"
+	// Queue functions
+	case "std.collections.queue_create":
+		return "omni_queue_create"
+	case "std.collections.queue_enqueue":
+		return "omni_queue_enqueue"
+	case "std.collections.queue_dequeue":
+		return "omni_queue_dequeue"
+	case "std.collections.queue_peek":
+		return "omni_queue_peek"
+	case "std.collections.queue_is_empty":
+		return "omni_queue_is_empty"
+	case "std.collections.queue_size":
+		return "omni_queue_size"
+	case "std.collections.queue_clear":
+		return "omni_queue_clear"
+	// Stack functions
+	case "std.collections.stack_create":
+		return "omni_stack_create"
+	case "std.collections.stack_push":
+		return "omni_stack_push"
+	case "std.collections.stack_pop":
+		return "omni_stack_pop"
+	case "std.collections.stack_peek":
+		return "omni_stack_peek"
+	case "std.collections.stack_is_empty":
+		return "omni_stack_is_empty"
+	case "std.collections.stack_size":
+		return "omni_stack_size"
+	case "std.collections.stack_clear":
+		return "omni_stack_clear"
+	// Priority queue functions
+	case "std.collections.priority_queue_create":
+		return "omni_priority_queue_create"
+	case "std.collections.priority_queue_insert":
+		return "omni_priority_queue_insert"
+	case "std.collections.priority_queue_extract_max":
+		return "omni_priority_queue_extract_max"
+	case "std.collections.priority_queue_peek":
+		return "omni_priority_queue_peek"
+	case "std.collections.priority_queue_is_empty":
+		return "omni_priority_queue_is_empty"
+	case "std.collections.priority_queue_size":
+		return "omni_priority_queue_size"
+	// Linked list functions
+	case "std.collections.linked_list_create":
+		return "omni_linked_list_create"
+	case "std.collections.linked_list_append":
+		return "omni_linked_list_append"
+	case "std.collections.linked_list_prepend":
+		return "omni_linked_list_prepend"
+	case "std.collections.linked_list_insert":
+		return "omni_linked_list_insert"
+	case "std.collections.linked_list_remove":
+		return "omni_linked_list_remove"
+	case "std.collections.linked_list_get":
+		return "omni_linked_list_get"
+	case "std.collections.linked_list_set":
+		return "omni_linked_list_set"
+	case "std.collections.linked_list_size":
+		return "omni_linked_list_size"
+	case "std.collections.linked_list_is_empty":
+		return "omni_linked_list_is_empty"
+	case "std.collections.linked_list_clear":
+		return "omni_linked_list_clear"
+	// Binary tree functions
+	case "std.collections.binary_tree_create":
+		return "omni_binary_tree_create"
+	case "std.collections.binary_tree_insert":
+		return "omni_binary_tree_insert"
+	case "std.collections.binary_tree_search":
+		return "omni_binary_tree_search"
+	case "std.collections.binary_tree_remove":
+		return "omni_binary_tree_remove"
+	case "std.collections.binary_tree_size":
+		return "omni_binary_tree_size"
+	case "std.collections.binary_tree_is_empty":
+		return "omni_binary_tree_is_empty"
+	case "std.collections.binary_tree_clear":
+		return "omni_binary_tree_clear"
+	// Network functions
+	case "std.network.ip_parse":
+		return "omni_ip_parse"
+	case "std.network.ip_is_valid":
+		return "omni_ip_is_valid"
+	case "std.network.ip_is_private":
+		return "omni_ip_is_private"
+	case "std.network.ip_is_loopback":
+		return "omni_ip_is_loopback"
+	case "std.network.ip_to_string":
+		return "omni_ip_to_string"
+	case "std.network.url_parse":
+		return "omni_url_parse"
+	case "std.network.url_to_string":
+		return "omni_url_to_string"
+	case "std.network.url_is_valid":
+		return "omni_url_is_valid"
+	case "std.network.dns_lookup":
+		return "omni_dns_lookup"
+	case "std.network.dns_reverse_lookup":
+		return "omni_dns_reverse_lookup"
+	case "std.network.http_get":
+		return "omni_http_get"
+	case "std.network.http_post":
+		return "omni_http_post"
+	case "std.network.http_put":
+		return "omni_http_put"
+	case "std.network.http_delete":
+		return "omni_http_delete"
+	case "std.network.http_request":
+		return "omni_http_request"
+	case "std.network.socket_create":
+		return "omni_socket_create"
+	case "std.network.socket_connect":
+		return "omni_socket_connect"
+	case "std.network.socket_bind":
+		return "omni_socket_bind"
+	case "std.network.socket_listen":
+		return "omni_socket_listen"
+	case "std.network.socket_accept":
+		return "omni_socket_accept"
+	case "std.network.socket_send":
+		return "omni_socket_send"
+	case "std.network.socket_receive":
+		return "omni_socket_receive"
+	case "std.network.socket_close":
+		return "omni_socket_close"
+	case "std.network.network_is_connected":
+		return "omni_network_is_connected"
+	case "std.network.network_get_local_ip":
+		return "omni_network_get_local_ip"
+	case "std.network.network_ping":
+		return "omni_network_ping"
 
 	// IO functions
 	case "std.io.print":
@@ -2509,6 +3204,144 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 	// OS functions
 	case "std.os.exit":
 		return "omni_exit"
+	case "std.os.getenv":
+		return "omni_getenv"
+	case "std.os.setenv":
+		return "omni_setenv"
+	case "std.os.unsetenv":
+		return "omni_unsetenv"
+	case "std.os.getcwd":
+		return "omni_getcwd"
+	case "std.os.chdir":
+		return "omni_chdir"
+	case "std.os.mkdir":
+		return "omni_mkdir"
+	case "std.os.rmdir":
+		return "omni_rmdir"
+	case "std.os.remove":
+		return "omni_remove"
+	case "std.os.rename":
+		return "omni_rename"
+	case "std.os.copy":
+		return "omni_copy"
+	case "std.os.exists":
+		return "omni_exists"
+	case "std.os.is_file":
+		return "omni_is_file"
+	case "std.os.is_dir":
+		return "omni_is_dir"
+	case "std.os.args":
+		return "omni_args_get"
+	case "std.os.args_count":
+		return "omni_args_count"
+	case "std.os.has_flag":
+		return "omni_args_has_flag"
+	case "std.os.get_flag":
+		return "omni_args_get_flag"
+	case "std.os.positional_arg":
+		return "omni_args_positional"
+	case "os.args":
+		return "omni_args_get"
+	case "os.args_count":
+		return "omni_args_count"
+	case "os.has_flag":
+		return "omni_args_has_flag"
+	case "os.get_flag":
+		return "omni_args_get_flag"
+	case "os.positional_arg":
+		return "omni_args_positional"
+	case "std.os.getpid":
+		return "omni_getpid"
+	case "std.os.getppid":
+		return "omni_getppid"
+	case "os.getpid":
+		return "omni_getpid"
+	case "os.getppid":
+		return "omni_getppid"
+	case "std.string.is_alpha":
+		return "omni_string_is_alpha"
+	case "std.string.is_digit":
+		return "omni_string_is_digit"
+	case "std.string.is_alnum":
+		return "omni_string_is_alnum"
+	case "std.string.is_ascii":
+		return "omni_string_is_ascii"
+	case "std.string.is_upper":
+		return "omni_string_is_upper"
+	case "std.string.is_lower":
+		return "omni_string_is_lower"
+	case "string.is_alpha":
+		return "omni_string_is_alpha"
+	case "string.is_digit":
+		return "omni_string_is_digit"
+	case "string.is_alnum":
+		return "omni_string_is_alnum"
+	case "string.is_ascii":
+		return "omni_string_is_ascii"
+	case "string.is_upper":
+		return "omni_string_is_upper"
+	case "string.is_lower":
+		return "omni_string_is_lower"
+	case "std.string.encode_base64":
+		return "omni_encode_base64"
+	case "std.string.decode_base64":
+		return "omni_decode_base64"
+	case "std.string.encode_url":
+		return "omni_encode_url"
+	case "std.string.decode_url":
+		return "omni_decode_url"
+	case "std.string.escape_html":
+		return "omni_escape_html"
+	case "std.string.unescape_html":
+		return "omni_unescape_html"
+	case "std.string.escape_json":
+		return "omni_escape_json"
+	case "std.string.escape_shell":
+		return "omni_escape_shell"
+	case "string.encode_base64":
+		return "omni_encode_base64"
+	case "string.decode_base64":
+		return "omni_decode_base64"
+	case "string.encode_url":
+		return "omni_encode_url"
+	case "string.decode_url":
+		return "omni_decode_url"
+	case "string.escape_html":
+		return "omni_escape_html"
+	case "string.unescape_html":
+		return "omni_unescape_html"
+	case "string.escape_json":
+		return "omni_escape_json"
+	case "string.escape_shell":
+		return "omni_escape_shell"
+	case "std.time.now":
+		return "omni_time_now_unix"
+	case "std.time.unix_timestamp":
+		return "omni_time_now_unix"
+	case "std.time.unix_nano":
+		return "omni_time_now_unix_nano"
+	case "std.time.sleep_seconds":
+		return "omni_time_sleep_seconds"
+	case "std.time.sleep_milliseconds":
+		return "omni_time_sleep_milliseconds"
+	case "std.time.time_zone_offset":
+		return "omni_time_zone_offset"
+	case "std.time.time_zone_name":
+		return "omni_time_zone_name"
+	case "time.now":
+		return "omni_time_now_unix"
+	case "time.unix_timestamp":
+		return "omni_time_now_unix"
+	case "time.unix_nano":
+		return "omni_time_now_unix_nano"
+	case "time.sleep_seconds":
+		return "omni_time_sleep_seconds"
+	case "time.sleep_milliseconds":
+		return "omni_time_sleep_milliseconds"
+	case "time.time_zone_offset":
+		return "omni_time_zone_offset"
+	case "time.time_zone_name":
+		return "omni_time_zone_name"
 
 	// Utility functions
 	case "std.assert":
@@ -2610,9 +3443,373 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 	}
 }
 
+// hasRuntimeImplementation checks if a function has an actual runtime implementation
+// This is used to verify that functions marked as runtime-provided actually exist
+func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
+	// Map of OmniLang function names to their runtime C function names
+	// Only include functions that actually exist in omni_rt.h
+	runtimeImplMap := map[string]string{
+		// I/O functions
+		"std.io.print":   "omni_print_string",
+		"std.io.println": "omni_println_string",
+		"io.print":       "omni_print_string",
+		"io.println":     "omni_println_string",
+		"std.io.read_line": "omni_read_line",
+		"io.read_line":     "omni_read_line",
+		
+		// String functions
+		"std.string.length":        "omni_strlen",
+		"std.string.concat":        "omni_strcat",
+		"std.string.substring":     "omni_substring",
+		"std.string.char_at":        "omni_char_at",
+		"std.string.starts_with":    "omni_starts_with",
+		"std.string.ends_with":      "omni_ends_with",
+		"std.string.contains":       "omni_contains",
+		"std.string.index_of":       "omni_index_of",
+		"std.string.last_index_of":  "omni_last_index_of",
+		"std.string.trim":           "omni_trim",
+		"std.string.to_upper":       "omni_to_upper",
+		"std.string.to_lower":       "omni_to_lower",
+		"std.string.equals":         "omni_string_equals",
+		"std.string.compare":        "omni_string_compare",
+		"string.length":             "omni_strlen",
+		"string.concat":             "omni_strcat",
+		"string.substring":          "omni_substring",
+		"string.char_at":            "omni_char_at",
+		"string.starts_with":        "omni_starts_with",
+		"string.ends_with":          "omni_ends_with",
+		"string.contains":           "omni_contains",
+		"string.index_of":           "omni_index_of",
+		"string.last_index_of":      "omni_last_index_of",
+		"string.trim":               "omni_trim",
+		"string.to_upper":           "omni_to_upper",
+		"string.to_lower":           "omni_to_lower",
+		"string.equals":             "omni_string_equals",
+		"string.compare":            "omni_string_compare",
+		
+		// Math functions (only those with runtime implementations)
+		"std.math.abs":       "omni_abs",
+		"std.math.max":       "omni_max",
+		"std.math.min":       "omni_min",
+		"std.math.pow":       "omni_pow",
+		"std.math.sqrt":      "omni_sqrt",
+		"std.math.floor":     "omni_floor",
+		"std.math.ceil":      "omni_ceil",
+		"std.math.round":     "omni_round",
+		"std.math.gcd":       "omni_gcd",
+		"std.math.lcm":       "omni_lcm",
+		"std.math.factorial": "omni_factorial",
+		"std.math.sin":       "omni_sin",
+		"std.math.cos":       "omni_cos",
+		"std.math.tan":       "omni_tan",
+		"std.math.asin":      "omni_asin",
+		"std.math.acos":      "omni_acos",
+		"std.math.atan":      "omni_atan",
+		"std.math.atan2":     "omni_atan2",
+		"std.math.exp":       "omni_exp",
+		"std.math.log":       "omni_log",
+		"std.math.log10":     "omni_log10",
+		"std.math.log2":      "omni_log2",
+		"std.math.sinh":      "omni_sinh",
+		"std.math.cosh":      "omni_cosh",
+		"std.math.tanh":      "omni_tanh",
+		"std.math.cbrt":      "omni_cbrt",
+		"std.math.trunc":     "omni_trunc",
+		"math.abs":           "omni_abs",
+		"math.max":           "omni_max",
+		"math.min":           "omni_min",
+		"math.pow":           "omni_pow",
+		"math.sqrt":          "omni_sqrt",
+		"math.floor":         "omni_floor",
+		"math.ceil":          "omni_ceil",
+		"math.round":         "omni_round",
+		"math.gcd":           "omni_gcd",
+		"math.lcm":           "omni_lcm",
+		"math.factorial":     "omni_factorial",
+		"math.sin":           "omni_sin",
+		"math.cos":           "omni_cos",
+		"math.tan":           "omni_tan",
+		"math.asin":          "omni_asin",
+		"math.acos":          "omni_acos",
+		"math.atan":          "omni_atan",
+		"math.atan2":         "omni_atan2",
+		"math.exp":           "omni_exp",
+		"math.log":           "omni_log",
+		"math.log10":         "omni_log10",
+		"math.log2":          "omni_log2",
+		"math.sinh":          "omni_sinh",
+		"math.cosh":          "omni_cosh",
+		"math.tanh":          "omni_tanh",
+		"math.cbrt":          "omni_cbrt",
+		"math.trunc":         "omni_trunc",
+		
+		// Type conversion functions
+		"std.int_to_string":   "omni_int_to_string",
+		"std.float_to_string": "omni_float_to_string",
+		"std.bool_to_string": "omni_bool_to_string",
+		"std.string_to_int":   "omni_string_to_int",
+		"std.string_to_float": "omni_string_to_float",
+		"std.string_to_bool":  "omni_string_to_bool",
+		
+		// Logging functions
+		"std.log.debug":     "omni_log_debug",
+		"std.log.info":      "omni_log_info",
+		"std.log.warn":      "omni_log_warn",
+		"std.log.error":     "omni_log_error",
+		"std.log.set_level": "omni_log_set_level",
+		
+		// File operations
+		"std.file.open":   "omni_file_open",
+		"std.file.close":  "omni_file_close",
+		"std.file.read":   "omni_file_read",
+		"std.file.write":  "omni_file_write",
+		"std.file.seek":   "omni_file_seek",
+		"std.file.tell":   "omni_file_tell",
+		"std.file.exists": "omni_file_exists",
+		"std.file.size":   "omni_file_size",
+		"file.open":       "omni_file_open",
+		"file.close":      "omni_file_close",
+		"file.read":       "omni_file_read",
+		"file.write":      "omni_file_write",
+		"file.seek":       "omni_file_seek",
+		"file.tell":       "omni_file_tell",
+		"file.exists":    "omni_file_exists",
+		"file.size":       "omni_file_size",
+		"std.os.read_file":   "omni_read_file",
+		"std.os.write_file":  "omni_write_file",
+		"std.os.append_file": "omni_append_file",
+		"os.read_file":       "omni_read_file",
+		"os.write_file":     "omni_write_file",
+		"os.append_file":    "omni_append_file",
+		
+		// System operations
+		"std.os.exit":     "omni_exit",
+		"std.os.getenv":   "omni_getenv",
+		"std.os.setenv":   "omni_setenv",
+		"std.os.unsetenv": "omni_unsetenv",
+		"std.os.getcwd":   "omni_getcwd",
+		"std.os.chdir":    "omni_chdir",
+		"std.os.mkdir":    "omni_mkdir",
+		"std.os.rmdir":    "omni_rmdir",
+		"std.os.remove":   "omni_remove",
+		"std.os.rename":   "omni_rename",
+		"std.os.copy":     "omni_copy",
+		"std.os.exists":   "omni_exists",
+		"std.os.is_file":  "omni_is_file",
+		"std.os.is_dir":   "omni_is_dir",
+		"os.exit":         "omni_exit",
+		"os.getenv":       "omni_getenv",
+		"os.setenv":       "omni_setenv",
+		"os.unsetenv":     "omni_unsetenv",
+		"os.getcwd":       "omni_getcwd",
+		"os.chdir":        "omni_chdir",
+		"os.mkdir":        "omni_mkdir",
+		"os.rmdir":        "omni_rmdir",
+		"os.remove":       "omni_remove",
+		"os.rename":       "omni_rename",
+		"os.copy":         "omni_copy",
+		"os.exists":       "omni_exists",
+		"os.is_file":      "omni_is_file",
+		"os.is_dir":       "omni_is_dir",
+		
+		// Testing functions
+		"std.test.start": "omni_test_start",
+		"std.test.end":   "omni_test_end",
+		"std.assert":     "omni_assert",
+		"std.assert_eq":  "omni_assert_eq_int", // Note: type-specific versions exist
+		"test.start":     "omni_test_start",
+		"test.end":       "omni_test_end",
+		
+		// String validation functions
+		"std.string.is_alpha": "omni_string_is_alpha",
+		"std.string.is_digit": "omni_string_is_digit",
+		"std.string.is_alnum": "omni_string_is_alnum",
+		"std.string.is_ascii": "omni_string_is_ascii",
+		"std.string.is_upper": "omni_string_is_upper",
+		"std.string.is_lower": "omni_string_is_lower",
+		"string.is_alpha":     "omni_string_is_alpha",
+		"string.is_digit":     "omni_string_is_digit",
+		"string.is_alnum":     "omni_string_is_alnum",
+		"string.is_ascii":     "omni_string_is_ascii",
+		"string.is_upper":     "omni_string_is_upper",
+		"string.is_lower":     "omni_string_is_lower",
+		
+		// String encoding/escaping functions
+		"std.string.encode_base64": "omni_encode_base64",
+		"std.string.decode_base64": "omni_decode_base64",
+		"std.string.encode_url":    "omni_encode_url",
+		"std.string.decode_url":    "omni_decode_url",
+		"std.string.escape_html":   "omni_escape_html",
+		"std.string.unescape_html": "omni_unescape_html",
+		"std.string.escape_json":   "omni_escape_json",
+		"std.string.escape_shell":  "omni_escape_shell",
+		"string.encode_base64":     "omni_encode_base64",
+		"string.decode_base64":     "omni_decode_base64",
+		"string.encode_url":        "omni_encode_url",
+		"string.decode_url":        "omni_decode_url",
+		"string.escape_html":       "omni_escape_html",
+		"string.unescape_html":     "omni_unescape_html",
+		"string.escape_json":       "omni_escape_json",
+		"string.escape_shell":      "omni_escape_shell",
+		
+		// Regex functions
+		"std.string.matches":        "omni_string_matches",
+		"std.string.find_match":     "omni_string_find_match",
+		"std.string.find_all_matches": "omni_string_find_all_matches",
+		"std.string.replace_regex":  "omni_string_replace_regex",
+		"string.matches":             "omni_string_matches",
+		"string.find_match":         "omni_string_find_match",
+		"string.find_all_matches":   "omni_string_find_all_matches",
+		"string.replace_regex":      "omni_string_replace_regex",
+		
+		// Time functions
+		"std.time.now":              "omni_time_now_unix",
+		"std.time.unix_timestamp":   "omni_time_now_unix",
+		"std.time.unix_nano":        "omni_time_now_unix_nano",
+		"std.time.sleep_seconds":   "omni_time_sleep_seconds",
+		"std.time.sleep_milliseconds": "omni_time_sleep_milliseconds",
+		"std.time.time_zone_offset": "omni_time_zone_offset",
+		"std.time.time_zone_name":   "omni_time_zone_name",
+		"std.time.time_from_unix":   "omni_time_from_unix",
+		"std.time.time_to_unix":     "omni_time_to_unix",
+		"std.time.time_to_string":   "omni_time_to_string",
+		"std.time.time_from_string": "omni_time_from_string",
+		"std.time.time_to_unix_nano": "omni_time_to_unix_nano",
+		"std.time.duration_to_string": "omni_duration_to_string",
+		"time.now":                  "omni_time_now_unix",
+		"time.unix_timestamp":       "omni_time_now_unix",
+		"time.unix_nano":            "omni_time_now_unix_nano",
+		"time.sleep_seconds":        "omni_time_sleep_seconds",
+		"time.sleep_milliseconds":   "omni_time_sleep_milliseconds",
+		"time.time_zone_offset":     "omni_time_zone_offset",
+		"time.time_zone_name":       "omni_time_zone_name",
+		"time.time_from_unix":       "omni_time_from_unix",
+		"time.time_to_unix":         "omni_time_to_unix",
+		"time.time_to_string":       "omni_time_to_string",
+		"time.time_from_string":     "omni_time_from_string",
+		"time.time_to_unix_nano":    "omni_time_to_unix_nano",
+		"time.duration_to_string":   "omni_duration_to_string",
+		
+		// Command-line argument functions
+		"std.os.args":            "omni_args_get",
+		"std.os.args_count":      "omni_args_count",
+		"std.os.has_flag":        "omni_args_has_flag",
+		"std.os.get_flag":        "omni_args_get_flag",
+		"std.os.positional_arg":  "omni_args_positional",
+		"os.args":                "omni_args_get",
+		"os.args_count":          "omni_args_count",
+		"os.has_flag":            "omni_args_has_flag",
+		"os.get_flag":            "omni_args_get_flag",
+		"os.positional_arg":      "omni_args_positional",
+		
+		// Process ID functions
+		"std.os.getpid":  "omni_getpid",
+		"std.os.getppid": "omni_getppid",
+		"os.getpid":      "omni_getpid",
+		"os.getppid":     "omni_getppid",
+		
+		// Collections functions
+		"std.collections.keys":   "omni_map_keys_string_int",
+		"std.collections.values": "omni_map_values_string_int",
+		"std.collections.copy":   "omni_map_copy_string_int",
+		"std.collections.merge":  "omni_map_merge_string_int",
+		// Set functions
+		"std.collections.set_create":       "omni_set_create",
+		"std.collections.set_add":           "omni_set_add",
+		"std.collections.set_remove":        "omni_set_remove",
+		"std.collections.set_contains":      "omni_set_contains",
+		"std.collections.set_size":          "omni_set_size",
+		"std.collections.set_clear":         "omni_set_clear",
+		"std.collections.set_union":         "omni_set_union",
+		"std.collections.set_intersection": "omni_set_intersection",
+		"std.collections.set_difference":   "omni_set_difference",
+		// Queue functions
+		"std.collections.queue_create":   "omni_queue_create",
+		"std.collections.queue_enqueue":  "omni_queue_enqueue",
+		"std.collections.queue_dequeue":  "omni_queue_dequeue",
+		"std.collections.queue_peek":     "omni_queue_peek",
+		"std.collections.queue_is_empty": "omni_queue_is_empty",
+		"std.collections.queue_size":     "omni_queue_size",
+		"std.collections.queue_clear":    "omni_queue_clear",
+		// Stack functions
+		"std.collections.stack_create":   "omni_stack_create",
+		"std.collections.stack_push":      "omni_stack_push",
+		"std.collections.stack_pop":       "omni_stack_pop",
+		"std.collections.stack_peek":      "omni_stack_peek",
+		"std.collections.stack_is_empty":  "omni_stack_is_empty",
+		"std.collections.stack_size":      "omni_stack_size",
+		"std.collections.stack_clear":     "omni_stack_clear",
+		// Priority queue functions
+		"std.collections.priority_queue_create":    "omni_priority_queue_create",
+		"std.collections.priority_queue_insert":     "omni_priority_queue_insert",
+		"std.collections.priority_queue_extract_max": "omni_priority_queue_extract_max",
+		"std.collections.priority_queue_peek":       "omni_priority_queue_peek",
+		"std.collections.priority_queue_is_empty":   "omni_priority_queue_is_empty",
+		"std.collections.priority_queue_size":       "omni_priority_queue_size",
+		// Linked list functions
+		"std.collections.linked_list_create":   "omni_linked_list_create",
+		"std.collections.linked_list_append":   "omni_linked_list_append",
+		"std.collections.linked_list_prepend":  "omni_linked_list_prepend",
+		"std.collections.linked_list_insert":   "omni_linked_list_insert",
+		"std.collections.linked_list_remove":  "omni_linked_list_remove",
+		"std.collections.linked_list_get":     "omni_linked_list_get",
+		"std.collections.linked_list_set":      "omni_linked_list_set",
+		"std.collections.linked_list_size":    "omni_linked_list_size",
+		"std.collections.linked_list_is_empty": "omni_linked_list_is_empty",
+		"std.collections.linked_list_clear":   "omni_linked_list_clear",
+		// Binary tree functions
+		"std.collections.binary_tree_create":   "omni_binary_tree_create",
+		"std.collections.binary_tree_insert":   "omni_binary_tree_insert",
+		"std.collections.binary_tree_search":   "omni_binary_tree_search",
+		"std.collections.binary_tree_remove":   "omni_binary_tree_remove",
+		"std.collections.binary_tree_size":    "omni_binary_tree_size",
+		"std.collections.binary_tree_is_empty": "omni_binary_tree_is_empty",
+		"std.collections.binary_tree_clear":    "omni_binary_tree_clear",
+		// Network functions
+		"std.network.ip_parse":         "omni_ip_parse",
+		"std.network.ip_is_valid":      "omni_ip_is_valid",
+		"std.network.ip_is_private":    "omni_ip_is_private",
+		"std.network.ip_is_loopback":   "omni_ip_is_loopback",
+		"std.network.ip_to_string":     "omni_ip_to_string",
+		"std.network.url_parse":        "omni_url_parse",
+		"std.network.url_to_string":    "omni_url_to_string",
+		"std.network.url_is_valid":     "omni_url_is_valid",
+		"std.network.dns_lookup":       "omni_dns_lookup",
+		"std.network.dns_reverse_lookup": "omni_dns_reverse_lookup",
+		"std.network.http_get":         "omni_http_get",
+		"std.network.http_post":        "omni_http_post",
+		"std.network.http_put":         "omni_http_put",
+		"std.network.http_delete":      "omni_http_delete",
+		"std.network.http_request":      "omni_http_request",
+		"std.network.socket_create":    "omni_socket_create",
+		"std.network.socket_connect":   "omni_socket_connect",
+		"std.network.socket_bind":      "omni_socket_bind",
+		"std.network.socket_listen":    "omni_socket_listen",
+		"std.network.socket_accept":    "omni_socket_accept",
+		"std.network.socket_send":       "omni_socket_send",
+		"std.network.socket_receive":    "omni_socket_receive",
+		"std.network.socket_close":     "omni_socket_close",
+		"std.network.network_is_connected": "omni_network_is_connected",
+		"std.network.network_get_local_ip":  "omni_network_get_local_ip",
+		"std.network.network_ping":          "omni_network_ping",
+	}
+	
+	_, exists := runtimeImplMap[funcName]
+	return exists
+}
+
 // isRuntimeProvidedFunction checks if a function is provided by the runtime
+// This should only return true for functions that actually have runtime implementations
 func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
+	// Only mark functions as runtime-provided if they actually have implementations
+	if !g.hasRuntimeImplementation(funcName) {
+		return false
+	}
+	
 	// List of functions that are provided by the runtime
+	// NOTE: This list should only include functions that:
+	// 1. Have actual runtime implementations (checked by hasRuntimeImplementation)
+	// 2. Should skip body generation (intrinsics)
 	runtimeFunctions := map[string]bool{
 		"std.io.print":             true,
 		"std.io.println":           true,
@@ -2656,62 +3853,26 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.math.round":           true,
 		"std.math.gcd":             true,
 		"std.math.lcm":             true,
-		"std.math.factorial":       true,
-		"math.abs":                 true,
-		"math.max":                 true,
-		"math.min":                 true,
-		"math.pow":                 true,
-		"math.sqrt":                true,
-		"math.floor":               true,
-		"math.ceil":                true,
-		"math.round":               true,
-		"math.gcd":                 true,
-		"math.lcm":                 true,
-		"math.factorial":           true,
-		"math.toString":            true,
-		"std.os.exit":              true,
-		"os.exit":                  true,
-		"os.getenv":                true,
-		"os.setenv":                true,
-		"os.unsetenv":              true,
-		"os.getcwd":                true,
-		"os.chdir":                 true,
-		"os.mkdir":                 true,
-		"os.rmdir":                 true,
-		"os.exists":                true,
-		"os.is_file":               true,
-		"os.is_dir":                true,
-		"os.remove":                true,
-		"os.rename":                true,
-		"os.copy":                  true,
-		"os.read_file":             true,
-		"os.write_file":            true,
-		"os.append_file":           true,
-		"array.length":             true,
-		"array.get":                true,
-		"array.set":                true,
-		"array.append":             true,
-		"array.prepend":            true,
-		"array.insert":             true,
-		"array.remove":             true,
-		"array.contains":           true,
-		"array.index_of":           true,
-		"array.reverse":            true,
-		"array.sort":               true,
-		"array.slice":              true,
-		"array.concat":             true,
-		"array.fill":               true,
-		"array.copy":               true,
-		"collections.size":         true,
-		"collections.get":          true,
-		"collections.set":          true,
-		"collections.has":          true,
-		"collections.remove":       true,
-		"collections.clear":        true,
-		"collections.keys":         true,
-		"collections.values":       true,
-		"collections.entries":      true,
-		"collections.merge":        true,
+		"std.math.factorial": true,
+		"math.abs":           true,
+		"math.max":           true,
+		"math.min":           true,
+		"math.pow":           true,
+		"math.sqrt":          true,
+		"math.floor":         true,
+		"math.ceil":          true,
+		"math.round":         true,
+		"math.gcd":           true,
+		"math.lcm":           true,
+		"math.factorial":     true,
+		"std.os.exit":        true,
+		"os.exit":            true,
+		"std.os.read_file":   true,
+		"std.os.write_file":  true,
+		"std.os.append_file": true,
+		"os.read_file":       true,
+		"os.write_file":      true,
+		"os.append_file":     true,
 		// File operations
 		"file.open":         true,
 		"file.close":        true,
@@ -2721,31 +3882,148 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"file.tell":         true,
 		"file.exists":       true,
 		"file.size":         true,
-		"std.int_to_string": true,
-		"std.free":          true,
-		// Skip std module utility functions that are not implemented in runtime
-		"std.assert":          true,
-		"std.assert_eq":       true,
-		"std.panic":           true,
+		"std.int_to_string":   true,
 		"std.float_to_string": true,
 		"std.bool_to_string":  true,
 		"std.string_to_int":   true,
 		"std.string_to_float": true,
 		"std.string_to_bool":  true,
-		"std.malloc":          true,
-		"std.realloc":         true,
-		// Array operations
-		"std.array.length":  true,
-		"std.array.get":     true,
-		"std.array.set":     true,
-		"std.log.debug":     true,
-		"std.log.info":      true,
-		"std.log.warn":      true,
-		"std.log.error":     true,
-		"std.log.set_level": true,
+		"std.log.debug":       true,
+		"std.log.info":        true,
+		"std.log.warn":        true,
+		"std.log.error":       true,
+		"std.log.set_level":  true,
+		"std.test.start":      true,
+		"std.test.end":        true,
+		"std.assert":          true,
+		"test.start":          true,
+		"test.end":            true,
+		// Collections functions
+		"std.collections.keys":   true,
+		"std.collections.values": true,
+		"std.collections.copy":   true,
+		"std.collections.merge":  true,
+		"std.collections.set_create":       true,
+		"std.collections.set_add":           true,
+		"std.collections.set_remove":        true,
+		"std.collections.set_contains":      true,
+		"std.collections.set_size":          true,
+		"std.collections.set_clear":         true,
+		"std.collections.set_union":         true,
+		"std.collections.set_intersection": true,
+		"std.collections.set_difference":   true,
+		"std.collections.queue_create":   true,
+		"std.collections.queue_enqueue":  true,
+		"std.collections.queue_dequeue":  true,
+		"std.collections.queue_peek":     true,
+		"std.collections.queue_is_empty": true,
+		"std.collections.queue_size":     true,
+		"std.collections.queue_clear":    true,
+		"std.collections.stack_create":   true,
+		"std.collections.stack_push":     true,
+		"std.collections.stack_pop":      true,
+		"std.collections.stack_peek":     true,
+		"std.collections.stack_is_empty": true,
+		"std.collections.stack_size":     true,
+		"std.collections.stack_clear":    true,
+		"std.collections.priority_queue_create":    true,
+		"std.collections.priority_queue_insert":     true,
+		"std.collections.priority_queue_extract_max": true,
+		"std.collections.priority_queue_peek":       true,
+		"std.collections.priority_queue_is_empty":   true,
+		"std.collections.priority_queue_size":       true,
+		"std.collections.linked_list_create":   true,
+		"std.collections.linked_list_append":   true,
+		"std.collections.linked_list_prepend":  true,
+		"std.collections.linked_list_insert":   true,
+		"std.collections.linked_list_remove":  true,
+		"std.collections.linked_list_get":     true,
+		"std.collections.linked_list_set":      true,
+		"std.collections.linked_list_size":    true,
+		"std.collections.linked_list_is_empty": true,
+		"std.collections.linked_list_clear":   true,
+		"std.collections.binary_tree_create":   true,
+		"std.collections.binary_tree_insert":   true,
+		"std.collections.binary_tree_search":   true,
+		"std.collections.binary_tree_remove":   true,
+		"std.collections.binary_tree_size":    true,
+		"std.collections.binary_tree_is_empty": true,
+		"std.collections.binary_tree_clear":    true,
+		// Network functions
+		"std.network.ip_parse":         true,
+		"std.network.ip_is_valid":      true,
+		"std.network.ip_is_private":    true,
+		"std.network.ip_is_loopback":   true,
+		"std.network.ip_to_string":     true,
+		"std.network.url_parse":        true,
+		"std.network.url_to_string":    true,
+		"std.network.url_is_valid":     true,
+		"std.network.dns_lookup":       true,
+		"std.network.dns_reverse_lookup": true,
+		"std.network.http_get":         true,
+		"std.network.http_post":        true,
+		"std.network.http_put":         true,
+		"std.network.http_delete":      true,
+		"std.network.http_request":      true,
+		"std.network.socket_create":    true,
+		"std.network.socket_connect":   true,
+		"std.network.socket_bind":      true,
+		"std.network.socket_listen":    true,
+		"std.network.socket_accept":    true,
+		"std.network.socket_send":       true,
+		"std.network.socket_receive":    true,
+		"std.network.socket_close":     true,
+		"std.network.network_is_connected": true,
+		"std.network.network_get_local_ip":  true,
+		"std.network.network_ping":          true,
 	}
 
 	return runtimeFunctions[funcName]
+}
+
+// isStdFunction checks if a function name looks like a standard library function
+func (g *CGenerator) isStdFunction(funcName string) bool {
+	return strings.HasPrefix(funcName, "std.") || 
+		   strings.HasPrefix(funcName, "io.") ||
+		   strings.HasPrefix(funcName, "math.") ||
+		   strings.HasPrefix(funcName, "string.") ||
+		   strings.HasPrefix(funcName, "array.") ||
+		   strings.HasPrefix(funcName, "os.") ||
+		   strings.HasPrefix(funcName, "collections.") ||
+		   strings.HasPrefix(funcName, "file.") ||
+		   strings.HasPrefix(funcName, "test.") ||
+		   strings.HasPrefix(funcName, "network.")
+}
+
+// isStringReturningFunction checks if a function returns a heap-allocated string
+// that needs to be freed by the caller
+func (g *CGenerator) isStringReturningFunction(funcName string) bool {
+	stringReturningFunctions := map[string]bool{
+		"std.io.read_line":        true,
+		"io.read_line":            true,
+		"std.string.concat":       true,
+		"std.string.substring":    true,
+		"std.string.trim":         true,
+		"std.string.to_upper":     true,
+		"std.string.to_lower":     true,
+		"std.int_to_string":       true,
+		"std.float_to_string":     true,
+		"std.bool_to_string":      true,
+		"std.os.read_file":        true,
+		"os.read_file":            true,
+		"omni_read_line":          true,
+		"omni_strcat":             true,
+		"omni_substring":          true,
+		"omni_trim":               true,
+		"omni_to_upper":            true,
+		"omni_to_lower":            true,
+		"omni_int_to_string":      true,
+		"omni_float_to_string":    true,
+		"omni_bool_to_string":     true,
+		"omni_read_file":          true,
+		"omni_await_string":       true,
+	}
+	return stringReturningFunctions[funcName]
 }
 
 // getVariableName returns a C variable name for an SSA value
@@ -2963,7 +4241,8 @@ func (g *CGenerator) writeMain() {
 		}
 	}
 	
-	g.output.WriteString("int main() {\n")
+	g.output.WriteString("int main(int argc, char** argv) {\n")
+	g.output.WriteString("    omni_args_init(argc, argv);\n")
 	
 	// Handle different return types
 	if mainReturnType == "void" {
