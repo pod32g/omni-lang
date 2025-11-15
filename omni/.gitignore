@@ -14,6 +14,8 @@
 # Test executables (but allow test files in new_features/)
 test_*
 !tests/e2e/new_features/test_*
+!native/clift/vendor/
+!native/clift/vendor/**
 
 # Debug symbols
 *.dSYM/
