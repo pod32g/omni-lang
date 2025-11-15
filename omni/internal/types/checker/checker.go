@@ -136,25 +136,25 @@ func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeP
 	// Find the generic delimiter position for both types
 	expectedLess := strings.Index(expected, "<")
 	argLess := strings.Index(argType, "<")
-	
+
 	// Both must be generic types
 	if expectedLess == -1 || argLess == -1 {
 		return inferred
 	}
-	
+
 	// Extract base type names (everything before <)
 	expectedBase := expected[:expectedLess]
 	argBase := argType[:argLess]
-	
+
 	// Base types must match (e.g., both "array" or both "Result")
 	if expectedBase != argBase {
 		return inferred
 	}
-	
+
 	// Extract inner types (everything between < and >)
 	expectedInner := expected[expectedLess+1 : len(expected)-1]
 	argInner := argType[argLess+1 : len(argType)-1]
-	
+
 	// Handle single type parameter: TypeName<T> vs TypeName<int>
 	if !strings.Contains(expectedInner, ",") && !strings.Contains(argInner, ",") {
 		// Single type parameter
@@ -163,12 +163,12 @@ func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeP
 		}
 		return inferred
 	}
-	
+
 	// Handle multiple type parameters: TypeName<K,V> vs TypeName<string,int>
 	// Split by comma, but be careful of nested generics
 	expectedParts := c.splitGenericArgs(expectedInner)
 	argParts := c.splitGenericArgs(argInner)
-	
+
 	if len(expectedParts) == len(argParts) {
 		for i := 0; i < len(expectedParts); i++ {
 			expectedPart := strings.TrimSpace(expectedParts[i])
@@ -178,7 +178,7 @@ func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeP
 			}
 		}
 	}
-	
+
 	return inferred
 }
 
@@ -187,7 +187,7 @@ func (c *Checker) splitGenericArgs(s string) []string {
 	var parts []string
 	var current strings.Builder
 	depth := 0
-	
+
 	for _, r := range s {
 		switch r {
 		case '<':
@@ -207,11 +207,11 @@ func (c *Checker) splitGenericArgs(s string) []string {
 			current.WriteRune(r)
 		}
 	}
-	
+
 	if current.Len() > 0 {
 		parts = append(parts, current.String())
 	}
-	
+
 	return parts
 }
 
