@@ -982,11 +982,11 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						} else if strings.HasPrefix(arrType, "array<") && strings.HasSuffix(arrType, ">") {
 							arrayType = arrType[6 : len(arrType)-1]
 						}
+						// Handle cases where element type is still <infer>
+						if arrayType == "<infer>" || arrayType == "" {
+							arrayType = "int"
+						}
 					}
-				}
-				// Handle <infer> type - use default int type
-				if arrayType == "<infer>" || arrayType == "" {
-					arrayType = "int"
 				}
 				// Map element type to C type to get element size
 				elementCType := g.mapType(arrayType)

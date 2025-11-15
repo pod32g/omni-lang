@@ -1839,7 +1839,7 @@ func (c *Checker) checkLambdaWithTypes(e *ast.LambdaExpr, paramTypes []string) s
 	// Use provided parameter types or typeInfer if not provided
 	for i, param := range e.Params {
 		paramType := typeInfer
-		if i < len(paramTypes) && paramTypes[i] != typeInfer {
+		if i < len(paramTypes) && paramTypes[i] != typeInfer && paramTypes[i] != "" {
 			paramType = paramTypes[i]
 		}
 		// Add parameter to the current scope with its type
