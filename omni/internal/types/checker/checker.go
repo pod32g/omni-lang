@@ -500,8 +500,18 @@ func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
 					// Check lambda with expected parameter types
 					valueType = c.checkLambdaWithTypes(lambda, expectedParamTypes)
 				} else {
-					// Parameter count mismatch or parsing failed - check normally and let error be reported
-					valueType = c.checkExpr(decl.Value)
+					// Parameter count mismatch or parsing failed
+					// If parsing failed (nil), try to check normally and let error be reported
+					// If count mismatch, report error
+					if expectedParamTypes == nil {
+						// Parsing failed - check normally (will likely fail)
+						valueType = c.checkExpr(decl.Value)
+					} else {
+						// Count mismatch - report error and check normally
+						c.report(decl.Span(), fmt.Sprintf("lambda expects %d parameters, but function type has %d", len(lambda.Params), len(expectedParamTypes)),
+							fmt.Sprintf("provide %d parameter(s) matching the function type", len(expectedParamTypes)))
+						valueType = c.checkExpr(decl.Value)
+					}
 				}
 			} else {
 				// Not a function type - check normally
@@ -1315,7 +1325,26 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 
 			// Validate argument types
 			for i, arg := range expr.Args {
-				argType := c.checkExpr(arg)
+				var argType string
+				// Special handling for lambda expressions - infer parameter types from expected function type
+				if lambda, ok := arg.(*ast.LambdaExpr); ok && i < len(sig.Params) {
+					expected := sig.Params[i]
+					// If expected type is a function type, use it to infer lambda parameter types
+					if expected != typeInfer && strings.Contains(expected, ") -> ") {
+						expectedParamTypes := c.parseFunctionTypeParams(expected)
+						if expectedParamTypes != nil && len(expectedParamTypes) == len(lambda.Params) {
+							argType = c.checkLambdaWithTypes(lambda, expectedParamTypes)
+						} else {
+							// Parameter count mismatch - check normally
+							argType = c.checkExpr(arg)
+						}
+					} else {
+						// Not a function type or no expected type - check normally
+						argType = c.checkExpr(arg)
+					}
+				} else {
+					argType = c.checkExpr(arg)
+				}
 				if i < len(sig.Params) {
 					expected := sig.Params[i]
 					if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
@@ -1378,7 +1407,26 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 
 			// Validate argument types
 			for i, arg := range expr.Args {
-				argType := c.checkExpr(arg)
+				var argType string
+				// Special handling for lambda expressions - infer parameter types from expected function type
+				if lambda, ok := arg.(*ast.LambdaExpr); ok && i < len(expectedParamTypes) {
+					expected := expectedParamTypes[i]
+					// If expected type is a function type, use it to infer lambda parameter types
+					if expected != typeInfer && strings.Contains(expected, ") -> ") {
+						expectedParamTypes := c.parseFunctionTypeParams(expected)
+						if expectedParamTypes != nil && len(expectedParamTypes) == len(lambda.Params) {
+							argType = c.checkLambdaWithTypes(lambda, expectedParamTypes)
+						} else {
+							// Parameter count mismatch - check normally
+							argType = c.checkExpr(arg)
+						}
+					} else {
+						// Not a function type or no expected type - check normally
+						argType = c.checkExpr(arg)
+					}
+				} else {
+					argType = c.checkExpr(arg)
+				}
 				if i < len(expectedParamTypes) {
 					expected := expectedParamTypes[i]
 					if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
@@ -1845,11 +1893,9 @@ func (c *Checker) checkLambdaWithTypes(e *ast.LambdaExpr, paramTypes []string) s
 	// Use provided parameter types or typeInfer if not provided
 	for i, param := range e.Params {
 		paramType := typeInfer
-		if i < len(paramTypes) {
-			// Use the provided type if it's not empty or typeInfer
-			if paramTypes[i] != "" && paramTypes[i] != typeInfer {
-				paramType = paramTypes[i]
-			}
+		// If we have a provided type for this parameter, use it
+		if i < len(paramTypes) && paramTypes[i] != "" && paramTypes[i] != typeInfer {
+			paramType = paramTypes[i]
 		}
 		// Add parameter to the current scope with its type
 		// This is critical - the type must be set correctly for the body to type-check
