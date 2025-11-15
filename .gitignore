@@ -286,6 +286,8 @@ logs/
 log/
 !omni/native/clift/vendor/log/
 !omni/native/clift/vendor/log/**
+!omni/native/clift/vendor/
+!omni/native/clift/vendor/**
 
 # =============================================================================
 # Backup Files
