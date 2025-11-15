@@ -486,7 +486,18 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				}
 				// Default: use the instruction type
 				if varType == "" {
-					varType = g.mapType(inst.Type)
+					// Handle <infer> type - try to infer from context or use default
+					if inst.Type == "<infer>" || inst.Type == inferTypePlaceholder {
+						// Try to get type from valueTypes map
+						if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" && storedType != "<infer>" && storedType != inferTypePlaceholder {
+							varType = g.mapType(storedType)
+						} else {
+							// Default to int if we can't infer
+							varType = "int32_t"
+						}
+					} else {
+						varType = g.mapType(inst.Type)
+					}
 				}
 				// Check if this is an array.init instruction
 				if inst.Op == "array.init" {
@@ -915,7 +926,13 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		if len(inst.Operands) >= 1 {
 			operand := g.getOperandValue(inst.Operands[0])
 			varName := g.getVariableName(inst.ID)
-			targetType := g.mapType(inst.Type)
+			// Handle <infer> type
+			targetType := "int32_t" // Default
+			if inst.Type != "<infer>" && inst.Type != inferTypePlaceholder {
+				targetType = g.mapType(inst.Type)
+			} else if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" && storedType != "<infer>" && storedType != inferTypePlaceholder {
+				targetType = g.mapType(storedType)
+			}
 			// Type cast - assign to already declared variable
 			g.output.WriteString(fmt.Sprintf("  %s = (%s)%s;\n",
 				varName, targetType, operand))
@@ -2694,6 +2711,17 @@ func (g *CGenerator) isMapVariable(varName string) bool {
 
 // mapType converts OmniLang types to C types
 func (g *CGenerator) mapType(omniType string) string {
+	// Normalize the type string (trim whitespace)
+	omniType = strings.TrimSpace(omniType)
+	
+	// Handle <infer> type - default to int
+	// Also handle "infer" (without brackets) which can come from array element extraction
+	// Check for various forms of infer type
+	if omniType == "<infer>" || omniType == inferTypePlaceholder || omniType == "infer" || omniType == "" || 
+		omniType == "<inferred>" || strings.HasPrefix(omniType, "<infer") {
+		return "int32_t"
+	}
+	
 	// Handle function types: (param1, param2) -> returnType
 	if strings.Contains(omniType, ") -> ") {
 		return g.mapFunctionType(omniType)
@@ -2707,12 +2735,20 @@ func (g *CGenerator) mapType(omniType string) string {
 	// Handle array types: []<ElementType>
 	if strings.HasPrefix(omniType, "[]<") && strings.HasSuffix(omniType, ">") {
 		elementType := omniType[3 : len(omniType)-1]
+		// Handle <infer> element type
+		if elementType == "<infer>" || elementType == inferTypePlaceholder || elementType == "infer" {
+			elementType = "int"
+		}
 		// Arrays in C are represented as pointers to the element type
 		return g.mapType(elementType) + "*"
 	}
 	// Handle old array syntax: array<ElementType>
 	if strings.HasPrefix(omniType, "array<") && strings.HasSuffix(omniType, ">") {
 		elementType := omniType[6 : len(omniType)-1]
+		// Handle <infer> element type
+		if elementType == "<infer>" || elementType == inferTypePlaceholder || elementType == "infer" {
+			elementType = "int"
+		}
 		// Arrays in C are represented as pointers to the element type
 		return g.mapType(elementType) + "*"
 	}
@@ -2756,6 +2792,11 @@ func (g *CGenerator) mapType(omniType string) string {
 	case "ptr":
 		return "void*"
 	default:
+		// Check again for infer types that might have been missed
+		if omniType == "<infer>" || omniType == inferTypePlaceholder || omniType == "infer" || omniType == "" || 
+			omniType == "<inferred>" || strings.HasPrefix(omniType, "<infer") {
+			return "int32_t"
+		}
 		// Unknown type - this should not happen in valid programs
 		// Report error instead of silently defaulting to int32_t
 		g.errors = append(g.errors, fmt.Sprintf("unknown type: %s (cannot map to C type)", omniType))

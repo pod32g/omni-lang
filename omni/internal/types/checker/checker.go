@@ -491,14 +491,20 @@ func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
 	valueType := typeInfer
 	if decl.Value != nil {
 		// Special handling for lambda expressions with expected function type
-		if lambda, ok := decl.Value.(*ast.LambdaExpr); ok && expectedType != typeInfer && strings.Contains(expectedType, ") -> ") {
-			// Parse expected function type to get parameter types
-			expectedParamTypes := c.parseFunctionTypeParams(expectedType)
-			if len(expectedParamTypes) == len(lambda.Params) {
-				// Check lambda with expected parameter types
-				valueType = c.checkLambdaWithTypes(lambda, expectedParamTypes)
+		if lambda, ok := decl.Value.(*ast.LambdaExpr); ok && expectedType != typeInfer && expectedType != "" {
+			// Check if expected type is a function type (contains ") -> ")
+			if strings.Contains(expectedType, ") -> ") {
+				// Parse expected function type to get parameter types
+				expectedParamTypes := c.parseFunctionTypeParams(expectedType)
+				if expectedParamTypes != nil && len(expectedParamTypes) == len(lambda.Params) {
+					// Check lambda with expected parameter types
+					valueType = c.checkLambdaWithTypes(lambda, expectedParamTypes)
+				} else {
+					// Parameter count mismatch or parsing failed - check normally and let error be reported
+					valueType = c.checkExpr(decl.Value)
+				}
 			} else {
-				// Parameter count mismatch - check normally and let error be reported
+				// Not a function type - check normally
 				valueType = c.checkExpr(decl.Value)
 			}
 		} else {
@@ -1839,10 +1845,14 @@ func (c *Checker) checkLambdaWithTypes(e *ast.LambdaExpr, paramTypes []string) s
 	// Use provided parameter types or typeInfer if not provided
 	for i, param := range e.Params {
 		paramType := typeInfer
-		if i < len(paramTypes) && paramTypes[i] != typeInfer && paramTypes[i] != "" {
-			paramType = paramTypes[i]
+		if i < len(paramTypes) {
+			// Use the provided type if it's not empty or typeInfer
+			if paramTypes[i] != "" && paramTypes[i] != typeInfer {
+				paramType = paramTypes[i]
+			}
 		}
 		// Add parameter to the current scope with its type
+		// This is critical - the type must be set correctly for the body to type-check
 		c.declare(param.Name, paramType, false, param.Span)
 	}
 
@@ -2012,6 +2022,10 @@ func promiseInnerType(typ string) (string, bool) {
 }
 
 func isNumeric(typ string) bool {
+	// Don't treat typeInfer as numeric - it needs to be resolved first
+	if typ == typeInfer || typ == "" {
+		return false
+	}
 	switch typ {
 	case "int", "long", "byte", "float", "double":
 		return true
