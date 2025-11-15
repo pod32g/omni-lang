@@ -215,7 +215,7 @@ func TestBuildModuleWithTypeAlias(t *testing.T) {
 	// Test building a module with a type alias
 	typeAliasDecl := &ast.TypeAliasDecl{
 		Name: "MyInt",
-		Type: ast.TypeExpr{Name: "int"},
+		Type: &ast.TypeExpr{Name: "int"},
 	}
 
 	module := &ast.Module{
