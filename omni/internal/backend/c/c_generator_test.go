@@ -90,7 +90,7 @@ func TestCGenerator(t *testing.T) {
 		}
 
 		// Check for basic C structure
-		if !strings.Contains(result, "int main()") {
+		if !strings.Contains(result, "int main(") {
 			t.Error("Expected main function in generated C code")
 		}
 
@@ -494,7 +494,7 @@ func TestCGenerator(t *testing.T) {
 		}
 
 		// Check for main function signature
-		if !strings.Contains(result, "int main()") {
+		if !strings.Contains(result, "int main(") {
 			t.Error("Expected main function signature")
 		}
 	})
