@@ -434,8 +434,8 @@ func TestVerifyInstructionComparison(t *testing.T) {
 		{
 			name: "unsupported instruction",
 			instruction: mir.Instruction{
-				Op:   "invalid_op",
-				Type: "int",
+				Op:       "invalid_op",
+				Type:     "int",
 				Operands: []mir.Operand{},
 			},
 			expectError: true,
@@ -486,8 +486,8 @@ func TestVerifyInstructionPHI(t *testing.T) {
 		{
 			name: "PHI with insufficient operands",
 			instruction: mir.Instruction{
-				Op:   "phi",
-				Type: "int",
+				Op:       "phi",
+				Type:     "int",
 				Operands: []mir.Operand{},
 			},
 			expectError: true,

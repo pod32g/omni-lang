@@ -219,25 +219,25 @@ func (o *COptimizer) optimizeArithmetic(code string) string {
 func (o *COptimizer) optimizeArithmeticLine(line string) string {
 	// Optimize multiplication by powers of 2 to bit shifts
 	// Use word boundaries to avoid matching inside identifiers or pointer declarations
-	
+
 	// Replace x * 2 with x << 1 (but not in pointer declarations like "int *v")
 	// Match: space or identifier char, then " * 2" or "*2", then space or operator
 	re := regexp.MustCompile(`([\w\)])\s*\*\s*2(\s|;|\)|,|\[)`)
 	line = re.ReplaceAllString(line, "${1} << 1${2}")
-	
+
 	re = regexp.MustCompile(`([\w\)])\s*\*\s*4(\s|;|\)|,|\[)`)
 	line = re.ReplaceAllString(line, "${1} << 2${2}")
-	
+
 	re = regexp.MustCompile(`([\w\)])\s*\*\s*8(\s|;|\)|,|\[)`)
 	line = re.ReplaceAllString(line, "${1} << 3${2}")
 
 	// Optimize division by powers of 2 to bit shifts
 	re = regexp.MustCompile(`([\w\)])\s*/\s*2(\s|;|\)|,|\[)`)
 	line = re.ReplaceAllString(line, "${1} >> 1${2}")
-	
+
 	re = regexp.MustCompile(`([\w\)])\s*/\s*4(\s|;|\)|,|\[)`)
 	line = re.ReplaceAllString(line, "${1} >> 2${2}")
-	
+
 	re = regexp.MustCompile(`([\w\)])\s*/\s*8(\s|;|\)|,|\[)`)
 	line = re.ReplaceAllString(line, "${1} >> 3${2}")
 

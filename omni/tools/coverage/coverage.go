@@ -37,12 +37,12 @@ func ParseCoverageFile(path string) (*CoverageData, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read coverage file: %w", err)
 	}
-	
+
 	var coverage CoverageData
 	if err := json.Unmarshal(data, &coverage); err != nil {
 		return nil, fmt.Errorf("parse coverage JSON: %w", err)
 	}
-	
+
 	return &coverage, nil
 }
 
@@ -50,28 +50,28 @@ func ParseCoverageFile(path string) (*CoverageData, error) {
 func ParseStdLibrary(stdPath string) (map[string][]FunctionInfo, error) {
 	funcsByFile := make(map[string][]FunctionInfo)
 	runtimeFuncs := GetRuntimeWiredFunctions()
-	
+
 	err := filepath.Walk(stdPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		
+
 		if !strings.HasSuffix(path, ".omni") {
 			return nil
 		}
-		
+
 		funcs, err := parseOmniFile(path, runtimeFuncs)
 		if err != nil {
 			return fmt.Errorf("parse %s: %w", path, err)
 		}
-		
+
 		if len(funcs) > 0 {
 			funcsByFile[path] = funcs
 		}
-		
+
 		return nil
 	})
-	
+
 	return funcsByFile, err
 }
 
@@ -81,34 +81,34 @@ func parseOmniFile(path string, runtimeFuncs map[string]*RuntimeFunction) ([]Fun
 	if err != nil {
 		return nil, err
 	}
-	
+
 	content := string(data)
 	lines := strings.Split(content, "\n")
-	
+
 	var funcs []FunctionInfo
 	funcRegex := regexp.MustCompile(`^func\s+(\w+)\s*\(`)
-	
+
 	for i, line := range lines {
 		lineNum := i + 1
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if strings.HasPrefix(trimmed, "//") || trimmed == "" {
 			continue
 		}
-		
+
 		// Check for function definition
 		if matches := funcRegex.FindStringSubmatch(trimmed); matches != nil {
 			funcName := matches[1]
-			
+
 			// Try to determine full qualified name
 			// This is a simplified approach - in reality we'd need to parse imports
 			qualifiedName := determineQualifiedName(path, funcName)
-			
+
 			// Check if this function is runtime-wired
 			runtimeFn := runtimeFuncs[qualifiedName]
 			isWired := runtimeFn != nil
-			
+
 			funcs = append(funcs, FunctionInfo{
 				Name:       qualifiedName,
 				File:       path,
@@ -118,7 +118,7 @@ func parseOmniFile(path string, runtimeFuncs map[string]*RuntimeFunction) ([]Fun
 			})
 		}
 	}
-	
+
 	return funcs, nil
 }
 
@@ -134,7 +134,7 @@ func determineQualifiedName(filePath, funcName string) string {
 			modulePath := parts[1]
 			modulePath = strings.TrimSuffix(modulePath, ".omni")
 			modulePath = strings.ReplaceAll(modulePath, "/", ".")
-			
+
 			// Handle special cases
 			if modulePath == "io.print" || modulePath == "print" {
 				return fmt.Sprintf("std.io.%s", funcName)
@@ -145,11 +145,11 @@ func determineQualifiedName(filePath, funcName string) string {
 			if modulePath == "math.math" || modulePath == "math" {
 				return fmt.Sprintf("std.math.%s", funcName)
 			}
-			
+
 			return fmt.Sprintf("std.%s.%s", modulePath, funcName)
 		}
 	}
-	
+
 	// Fallback: try to infer from common patterns
 	if strings.Contains(filePath, "io/") {
 		return fmt.Sprintf("std.io.%s", funcName)
@@ -172,33 +172,33 @@ func determineQualifiedName(filePath, funcName string) string {
 	if strings.Contains(filePath, "collections/") {
 		return fmt.Sprintf("std.collections.%s", funcName)
 	}
-	
+
 	return funcName
 }
 
 // MatchCoverageToFunctions matches coverage data to function definitions
 func MatchCoverageToFunctions(coverage *CoverageData, funcsByFile map[string][]FunctionInfo) map[string]*CoverageMatch {
 	matches := make(map[string]*CoverageMatch)
-	
+
 	// Create a map of covered functions
 	covered := make(map[string]bool)
 	for _, entry := range coverage.Entries {
 		key := entry.Function
 		covered[key] = true
 	}
-	
+
 	// Match functions to coverage
 	for _, funcs := range funcsByFile {
 		for _, fn := range funcs {
 			if !fn.IsWired {
 				continue // Only track runtime-wired functions
 			}
-			
+
 			match := &CoverageMatch{
 				Function: fn,
 				Covered:  covered[fn.Name],
 			}
-			
+
 			if match.Covered {
 				// Find the coverage entry
 				for _, entry := range coverage.Entries {
@@ -208,11 +208,11 @@ func MatchCoverageToFunctions(coverage *CoverageData, funcsByFile map[string][]F
 					}
 				}
 			}
-			
+
 			matches[fn.Name] = match
 		}
 	}
-	
+
 	return matches
 }
 
@@ -226,20 +226,20 @@ type CoverageMatch struct {
 // CalculateCoverage calculates coverage statistics
 func CalculateCoverage(matches map[string]*CoverageMatch) CoverageStats {
 	stats := CoverageStats{
-		TotalFunctions:    len(matches),
+		TotalFunctions:   len(matches),
 		CoveredFunctions: 0,
 		TotalLines:       0,
 		CoveredLines:     0,
 		FunctionDetails:  make(map[string]FunctionCoverage),
 	}
-	
+
 	for name, match := range matches {
 		stats.TotalLines++
 		if match.Covered {
 			stats.CoveredFunctions++
 			stats.CoveredLines++
 		}
-		
+
 		stats.FunctionDetails[name] = FunctionCoverage{
 			Function:  match.Function.Name,
 			File:      match.Function.File,
@@ -248,7 +248,7 @@ func CalculateCoverage(matches map[string]*CoverageMatch) CoverageStats {
 			CallCount: match.CallCount,
 		}
 	}
-	
+
 	return stats
 }
 
@@ -285,4 +285,3 @@ func (s CoverageStats) GetLineCoveragePercentage() float64 {
 	}
 	return float64(s.CoveredLines) / float64(s.TotalLines) * 100.0
 }
-

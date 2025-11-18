@@ -18,7 +18,7 @@ func GetRuntimeWiredFunctions() map[string]*RuntimeFunction {
 	// This map is based on the runtimeImplMap in c_generator.go
 	// We only include functions that are actually wired to runtime
 	funcs := make(map[string]*RuntimeFunction)
-	
+
 	// I/O functions
 	addFunction(funcs, "std.io.print", "omni_print_string", "std.io", "print")
 	addFunction(funcs, "std.io.println", "omni_println_string", "std.io", "println")
@@ -26,7 +26,7 @@ func GetRuntimeWiredFunctions() map[string]*RuntimeFunction {
 	addFunction(funcs, "io.println", "omni_println_string", "std.io", "println")
 	addFunction(funcs, "std.io.read_line", "omni_read_line", "std.io", "read_line")
 	addFunction(funcs, "io.read_line", "omni_read_line", "std.io", "read_line")
-	
+
 	// String functions
 	stringFuncs := []struct {
 		omniName, runtimeName, funcName string
@@ -46,14 +46,14 @@ func GetRuntimeWiredFunctions() map[string]*RuntimeFunction {
 		{"std.string.equals", "omni_string_equals", "equals"},
 		{"std.string.compare", "omni_string_compare", "compare"},
 	}
-	
+
 	for _, f := range stringFuncs {
 		addFunction(funcs, f.omniName, f.runtimeName, "std.string", f.funcName)
 		// Also add without std. prefix
 		shortName := strings.TrimPrefix(f.omniName, "std.")
 		addFunction(funcs, shortName, f.runtimeName, "std.string", f.funcName)
 	}
-	
+
 	// Math functions
 	mathFuncs := []struct {
 		omniName, runtimeName, funcName string
@@ -69,15 +69,15 @@ func GetRuntimeWiredFunctions() map[string]*RuntimeFunction {
 		{"std.math.gcd", "omni_gcd", "gcd"},
 		{"std.math.lcm", "omni_lcm", "lcm"},
 	}
-	
+
 	for _, f := range mathFuncs {
 		addFunction(funcs, f.omniName, f.runtimeName, "std.math", f.funcName)
 	}
-	
+
 	// Array functions
 	addFunction(funcs, "std.array.length", "omni_array_length", "std.array", "length")
 	addFunction(funcs, "array.length", "omni_array_length", "std.array", "length")
-	
+
 	// File functions (runtime-wired ones)
 	fileFuncs := []struct {
 		omniName, runtimeName, funcName string
@@ -91,11 +91,11 @@ func GetRuntimeWiredFunctions() map[string]*RuntimeFunction {
 		{"std.file.exists", "omni_file_exists", "exists"},
 		{"std.file.size", "omni_file_size", "size"},
 	}
-	
+
 	for _, f := range fileFuncs {
 		addFunction(funcs, f.omniName, f.runtimeName, "std.file", f.funcName)
 	}
-	
+
 	// OS functions (runtime-wired ones)
 	osFuncs := []struct {
 		omniName, runtimeName, funcName string
@@ -105,11 +105,11 @@ func GetRuntimeWiredFunctions() map[string]*RuntimeFunction {
 		{"std.os.setenv", "omni_setenv", "setenv"},
 		{"std.os.remove", "omni_remove", "remove"},
 	}
-	
+
 	for _, f := range osFuncs {
 		addFunction(funcs, f.omniName, f.runtimeName, "std.os", f.funcName)
 	}
-	
+
 	// Map/Collections functions (runtime-wired ones)
 	// Note: Many collections functions are runtime-wired, but we'll focus on the main ones
 	mapFuncs := []struct {
@@ -121,11 +121,11 @@ func GetRuntimeWiredFunctions() map[string]*RuntimeFunction {
 		{"std.collections.map.get", "omni_map_get_string_int", "get"}, // Simplified
 		{"std.collections.map.size", "omni_map_size", "size"},
 	}
-	
+
 	for _, f := range mapFuncs {
 		addFunction(funcs, f.omniName, f.runtimeName, "std.collections", f.funcName)
 	}
-	
+
 	return funcs
 }
 
@@ -150,4 +150,3 @@ func GetRuntimeFunction(functionName string) *RuntimeFunction {
 	funcs := GetRuntimeWiredFunctions()
 	return funcs[functionName]
 }
-

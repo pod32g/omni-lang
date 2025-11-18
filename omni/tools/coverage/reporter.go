@@ -11,40 +11,40 @@ import (
 // GenerateTextReport generates a text coverage report
 func GenerateTextReport(stats CoverageStats, outputPath string) error {
 	var sb strings.Builder
-	
+
 	sb.WriteString("Standard Library Coverage Report\n")
 	sb.WriteString(strings.Repeat("=", 50) + "\n\n")
-	
+
 	funcCoverage := stats.GetFunctionCoveragePercentage()
 	lineCoverage := stats.GetLineCoveragePercentage()
-	
+
 	sb.WriteString(fmt.Sprintf("Function Coverage: %.2f%% (%d/%d functions)\n",
 		funcCoverage, stats.CoveredFunctions, stats.TotalFunctions))
 	sb.WriteString(fmt.Sprintf("Line Coverage: %.2f%% (%d/%d lines)\n\n",
 		lineCoverage, stats.CoveredLines, stats.TotalLines))
-	
+
 	// Group by file
 	files := make(map[string][]FunctionCoverage)
 	for _, fc := range stats.FunctionDetails {
 		files[fc.File] = append(files[fc.File], fc)
 	}
-	
+
 	// Sort files
 	fileList := make([]string, 0, len(files))
 	for f := range files {
 		fileList = append(fileList, f)
 	}
 	sort.Strings(fileList)
-	
+
 	for _, file := range fileList {
 		funcs := files[file]
 		sort.Slice(funcs, func(i, j int) bool {
 			return funcs[i].Line < funcs[j].Line
 		})
-		
+
 		sb.WriteString(fmt.Sprintf("\n%s\n", file))
 		sb.WriteString(strings.Repeat("-", len(file)) + "\n")
-		
+
 		for _, fc := range funcs {
 			status := "✗"
 			if fc.Covered {
@@ -57,12 +57,12 @@ func GenerateTextReport(stats CoverageStats, outputPath string) error {
 			sb.WriteString("\n")
 		}
 	}
-	
+
 	if outputPath == "" {
 		fmt.Print(sb.String())
 		return nil
 	}
-	
+
 	return os.WriteFile(outputPath, []byte(sb.String()), 0644)
 }
 
@@ -70,48 +70,48 @@ func GenerateTextReport(stats CoverageStats, outputPath string) error {
 func GenerateHTMLReport(stats CoverageStats, outputPath string) error {
 	funcCoverage := stats.GetFunctionCoveragePercentage()
 	lineCoverage := stats.GetLineCoveragePercentage()
-	
+
 	// Group by file
 	files := make(map[string][]FunctionCoverage)
 	for _, fc := range stats.FunctionDetails {
 		files[fc.File] = append(files[fc.File], fc)
 	}
-	
+
 	// Sort files
 	fileList := make([]string, 0, len(files))
 	for f := range files {
 		fileList = append(fileList, f)
 	}
 	sort.Strings(fileList)
-	
+
 	// Prepare file data for template
 	type FileData struct {
-		Path           string
-		Functions      []FunctionCoverage
-		CoveredCount   int
-		TotalCount     int
+		Path            string
+		Functions       []FunctionCoverage
+		CoveredCount    int
+		TotalCount      int
 		CoveragePercent float64
 	}
-	
+
 	fileDataList := make([]FileData, 0, len(fileList))
 	for _, file := range fileList {
 		funcs := files[file]
 		sort.Slice(funcs, func(i, j int) bool {
 			return funcs[i].Line < funcs[j].Line
 		})
-		
+
 		covered := 0
 		for _, fc := range funcs {
 			if fc.Covered {
 				covered++
 			}
 		}
-		
+
 		coveragePercent := 0.0
 		if len(funcs) > 0 {
 			coveragePercent = float64(covered) / float64(len(funcs)) * 100.0
 		}
-		
+
 		fileDataList = append(fileDataList, FileData{
 			Path:            file,
 			Functions:       funcs,
@@ -120,7 +120,7 @@ func GenerateHTMLReport(stats CoverageStats, outputPath string) error {
 			CoveragePercent: coveragePercent,
 		})
 	}
-	
+
 	tmpl := `<!DOCTYPE html>
 <html>
 <head>
@@ -258,9 +258,9 @@ func GenerateHTMLReport(stats CoverageStats, outputPath string) error {
     {{end}}
 </body>
 </html>`
-	
+
 	t := template.Must(template.New("report").Parse(tmpl))
-	
+
 	data := struct {
 		FuncCoverage     float64
 		LineCoverage     float64
@@ -278,17 +278,17 @@ func GenerateHTMLReport(stats CoverageStats, outputPath string) error {
 		TotalLines:       stats.TotalLines,
 		Files:            fileDataList,
 	}
-	
+
 	var output strings.Builder
 	if err := t.Execute(&output, data); err != nil {
 		return fmt.Errorf("execute template: %w", err)
 	}
-	
+
 	if outputPath == "" {
 		fmt.Print(output.String())
 		return nil
 	}
-	
+
 	return os.WriteFile(outputPath, []byte(output.String()), 0644)
 }
 
@@ -296,18 +296,17 @@ func GenerateHTMLReport(stats CoverageStats, outputPath string) error {
 func CheckCoverageThreshold(stats CoverageStats, threshold float64) (bool, string) {
 	funcCoverage := stats.GetFunctionCoveragePercentage()
 	lineCoverage := stats.GetLineCoveragePercentage()
-	
+
 	meetsThreshold := funcCoverage >= threshold && lineCoverage >= threshold
-	
+
 	message := fmt.Sprintf("Coverage: Function %.2f%%, Line %.2f%% (Threshold: %.2f%%)",
 		funcCoverage, lineCoverage, threshold)
-	
+
 	if !meetsThreshold {
 		message += " - FAILED"
 	} else {
 		message += " - PASSED"
 	}
-	
+
 	return meetsThreshold, message
 }
-

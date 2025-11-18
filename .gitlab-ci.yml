@@ -344,6 +344,7 @@ build-vscode-extension:
   image: docker.io/library/node:20
   needs: []
   before_script:
+    - apt-get update && apt-get install -y --no-install-recommends libsecret-1-dev pkg-config
     - npm ci --prefix vscode/omni
   script:
     - npm run compile --prefix vscode/omni

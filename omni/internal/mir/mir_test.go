@@ -323,7 +323,7 @@ func TestNewFunctionWithParams(t *testing.T) {
 
 func TestNextValueSequence(t *testing.T) {
 	fn := NewFunction("test", "int", []Param{})
-	
+
 	// Test that NextValue() returns sequential IDs
 	expected := ValueID(0)
 	for i := 0; i < 10; i++ {
@@ -337,20 +337,20 @@ func TestNextValueSequence(t *testing.T) {
 
 func TestNewBlockMultiple(t *testing.T) {
 	fn := NewFunction("test", "int", []Param{})
-	
+
 	// Create multiple blocks
 	block1 := fn.NewBlock("entry")
 	block2 := fn.NewBlock("loop")
 	block3 := fn.NewBlock("exit")
-	
+
 	if len(fn.Blocks) != 3 {
 		t.Errorf("Expected 3 blocks, got %d", len(fn.Blocks))
 	}
-	
+
 	if fn.Blocks[0] != block1 || fn.Blocks[1] != block2 || fn.Blocks[2] != block3 {
 		t.Error("Blocks not stored in correct order")
 	}
-	
+
 	if block1.Name != "entry" || block2.Name != "loop" || block3.Name != "exit" {
 		t.Error("Block names not set correctly")
 	}
@@ -358,29 +358,29 @@ func TestNewBlockMultiple(t *testing.T) {
 
 func TestHasTerminatorVariations(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		terminator Terminator
-		expected  bool
+		expected   bool
 	}{
 		{
-			name:      "empty terminator",
+			name:       "empty terminator",
 			terminator: Terminator{},
-			expected:  false,
+			expected:   false,
 		},
 		{
-			name:      "ret terminator",
+			name:       "ret terminator",
 			terminator: Terminator{Op: "ret"},
-			expected:  true,
+			expected:   true,
 		},
 		{
-			name:      "jmp terminator",
+			name:       "jmp terminator",
 			terminator: Terminator{Op: "jmp"},
-			expected:  true,
+			expected:   true,
 		},
 		{
-			name:      "cbr terminator",
+			name:       "cbr terminator",
 			terminator: Terminator{Op: "cbr"},
-			expected:  true,
+			expected:   true,
 		},
 	}
 
@@ -446,10 +446,10 @@ func TestInstructionWithInvalidValue(t *testing.T) {
 
 func TestOperandKinds(t *testing.T) {
 	tests := []struct {
-		name     string
-		operand  Operand
-		kind     OperandKind
-		hasValue bool
+		name       string
+		operand    Operand
+		kind       OperandKind
+		hasValue   bool
 		hasLiteral bool
 	}{
 		{
@@ -459,8 +459,8 @@ func TestOperandKinds(t *testing.T) {
 				Value: 42,
 				Type:  "int",
 			},
-			kind:     OperandValue,
-			hasValue: true,
+			kind:       OperandValue,
+			hasValue:   true,
 			hasLiteral: false,
 		},
 		{
@@ -470,8 +470,8 @@ func TestOperandKinds(t *testing.T) {
 				Literal: "42",
 				Type:    "int",
 			},
-			kind:     OperandLiteral,
-			hasValue: false,
+			kind:       OperandLiteral,
+			hasValue:   false,
 			hasLiteral: true,
 		},
 	}
@@ -493,12 +493,12 @@ func TestOperandKinds(t *testing.T) {
 
 func TestTerminatorWithOperands(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		terminator Terminator
-		opCount   int
+		opCount    int
 	}{
 		{
-			name:      "ret with value",
+			name: "ret with value",
 			terminator: Terminator{
 				Op: "ret",
 				Operands: []Operand{
@@ -508,7 +508,7 @@ func TestTerminatorWithOperands(t *testing.T) {
 			opCount: 1,
 		},
 		{
-			name:      "cbr with condition and targets",
+			name: "cbr with condition and targets",
 			terminator: Terminator{
 				Op: "cbr",
 				Operands: []Operand{
@@ -520,7 +520,7 @@ func TestTerminatorWithOperands(t *testing.T) {
 			opCount: 3,
 		},
 		{
-			name:      "jmp with target",
+			name: "jmp with target",
 			terminator: Terminator{
 				Op: "jmp",
 				Operands: []Operand{

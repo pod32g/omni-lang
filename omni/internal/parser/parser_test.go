@@ -70,7 +70,7 @@ func TestEvilParserCases(t *testing.T) {
 		{
 			name:          "generic_with_logical",
 			input:         "let x: Foo<Bar||Baz> = null",
-			expectError:   true, // Should error - || is not valid in type args
+			expectError:   true,    // Should error - || is not valid in type args
 			errorContains: "OR_OR", // Error should mention OR_OR token
 		},
 		{
@@ -180,7 +180,7 @@ func TestEvilParserCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			module, err := parser.Parse("test.omni", tt.input)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errorContains)
@@ -191,17 +191,17 @@ func TestEvilParserCases(t *testing.T) {
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			if module == nil {
 				t.Error("expected module but got nil")
 				return
 			}
-			
+
 			if tt.validateAST != nil {
 				tt.validateAST(t, module)
 			}
@@ -219,22 +219,22 @@ func TestParseWhileStmt(t *testing.T) {
 	}{
 		{
 			name:        "simple while loop",
-			input:        "func test() { while true { let x = 42 } }",
+			input:       "func test() { while true { let x = 42 } }",
 			expectError: false,
 		},
 		{
 			name:        "while with condition",
-			input:        "func test() { while x > 0 { x = x - 1 } }",
+			input:       "func test() { while x > 0 { x = x - 1 } }",
 			expectError: false,
 		},
 		{
 			name:        "while with block",
-			input:        "func test() { while true { return 1 } }",
+			input:       "func test() { while true { return 1 } }",
 			expectError: false,
 		},
 		{
 			name:        "nested while",
-			input:        "func test() { while true { while false { let x = 1 } } }",
+			input:       "func test() { while true { while false { let x = 1 } } }",
 			expectError: false,
 		},
 	}
@@ -259,17 +259,17 @@ func TestParseBreakStmt(t *testing.T) {
 	}{
 		{
 			name:        "break in while loop",
-			input:        "func test() { while true { break } }",
+			input:       "func test() { while true { break } }",
 			expectError: false,
 		},
 		{
 			name:        "break in for loop",
-			input:        "func test() { for let i = 0; i < 10; i++ { break } }",
+			input:       "func test() { for let i = 0; i < 10; i++ { break } }",
 			expectError: false,
 		},
 		{
 			name:        "break in nested loop",
-			input:        "func test() { while true { while false { break } } }",
+			input:       "func test() { while true { while false { break } } }",
 			expectError: false,
 		},
 	}
@@ -294,17 +294,17 @@ func TestParseContinueStmt(t *testing.T) {
 	}{
 		{
 			name:        "continue in while loop",
-			input:        "func test() { while true { continue } }",
+			input:       "func test() { while true { continue } }",
 			expectError: false,
 		},
 		{
 			name:        "continue in for loop",
-			input:        "func test() { for let i = 0; i < 10; i++ { continue } }",
+			input:       "func test() { for let i = 0; i < 10; i++ { continue } }",
 			expectError: false,
 		},
 		{
 			name:        "continue in nested loop",
-			input:        "func test() { while true { while false { continue } } }",
+			input:       "func test() { while true { while false { continue } } }",
 			expectError: false,
 		},
 	}
@@ -329,22 +329,22 @@ func TestParseImportSafe(t *testing.T) {
 	}{
 		{
 			name:        "valid import",
-			input:        "import std.io",
+			input:       "import std.io",
 			expectError: false,
 		},
 		{
 			name:        "import with alias",
-			input:        "import std.io as io",
+			input:       "import std.io as io",
 			expectError: false,
 		},
 		{
 			name:        "multiple imports",
-			input:        "import std.io\nimport std.math",
+			input:       "import std.io\nimport std.math",
 			expectError: false,
 		},
 		{
 			name:        "invalid import syntax",
-			input:        "import",
+			input:       "import",
 			expectError: true,
 		},
 	}
@@ -369,17 +369,17 @@ func TestParseStmtSafe(t *testing.T) {
 	}{
 		{
 			name:        "valid statement",
-			input:        "func test() { let x = 42 }",
+			input:       "func test() { let x = 42 }",
 			expectError: false,
 		},
 		{
 			name:        "statement with error recovery",
-			input:        "func test() { let x = }",
+			input:       "func test() { let x = }",
 			expectError: true,
 		},
 		{
 			name:        "multiple statements",
-			input:        "func test() { let x = 1 let y = 2 }",
+			input:       "func test() { let x = 1 let y = 2 }",
 			expectError: false,
 		},
 	}
@@ -404,22 +404,22 @@ func TestParseStructDecl(t *testing.T) {
 	}{
 		{
 			name:        "simple struct",
-			input:        "struct Point { x: int y: int }",
+			input:       "struct Point { x: int y: int }",
 			expectError: false,
 		},
 		{
 			name:        "struct with generic",
-			input:        "struct Box<T> { value: T }",
+			input:       "struct Box<T> { value: T }",
 			expectError: false,
 		},
 		{
 			name:        "struct with multiple generics",
-			input:        "struct Pair<T, U> { first: T second: U }",
+			input:       "struct Pair<T, U> { first: T second: U }",
 			expectError: false,
 		},
 		{
 			name:        "struct with methods",
-			input:        "struct Point { x: int y: int } func (p: Point) add(other: Point): Point { return Point{ x: p.x + other.x, y: p.y + other.y } }",
+			input:       "struct Point { x: int y: int } func (p: Point) add(other: Point): Point { return Point{ x: p.x + other.x, y: p.y + other.y } }",
 			expectError: false,
 		},
 	}
@@ -444,22 +444,22 @@ func TestParseIfStmt(t *testing.T) {
 	}{
 		{
 			name:        "simple if",
-			input:        "func test() { if true { return 1 } }",
+			input:       "func test() { if true { return 1 } }",
 			expectError: false,
 		},
 		{
 			name:        "if-else",
-			input:        "func test() { if true { return 1 } else { return 2 } }",
+			input:       "func test() { if true { return 1 } else { return 2 } }",
 			expectError: false,
 		},
 		{
 			name:        "nested if",
-			input:        "func test() { if true { if false { return 1 } } }",
+			input:       "func test() { if true { if false { return 1 } } }",
 			expectError: false,
 		},
 		{
 			name:        "if-else if",
-			input:        "func test() { if true { return 1 } else if false { return 2 } else { return 3 } }",
+			input:       "func test() { if true { return 1 } else if false { return 2 } else { return 3 } }",
 			expectError: false,
 		},
 	}
@@ -484,27 +484,27 @@ func TestParseFuncDecl(t *testing.T) {
 	}{
 		{
 			name:        "simple function",
-			input:        "func test(): int { return 42 }",
+			input:       "func test(): int { return 42 }",
 			expectError: false,
 		},
 		{
 			name:        "function with params",
-			input:        "func add(a: int, b: int): int { return a + b }",
+			input:       "func add(a: int, b: int): int { return a + b }",
 			expectError: false,
 		},
 		{
 			name:        "async function",
-			input:        "async func test(): Promise<int> { return 42 }",
+			input:       "async func test(): Promise<int> { return 42 }",
 			expectError: false,
 		},
 		{
 			name:        "function with generic",
-			input:        "func id<T>(x: T): T { return x }",
+			input:       "func id<T>(x: T): T { return x }",
 			expectError: false,
 		},
 		{
 			name:        "function with expression body",
-			input:        "func add(a: int, b: int): int = a + b",
+			input:       "func add(a: int, b: int): int = a + b",
 			expectError: false,
 		},
 	}
@@ -529,27 +529,27 @@ func TestParseForStmt(t *testing.T) {
 	}{
 		{
 			name:        "classic for loop",
-			input:        "func test() { for var i = 0; i < 10; i++ { let x = i } }",
+			input:       "func test() { for var i = 0; i < 10; i++ { let x = i } }",
 			expectError: false,
 		},
 		{
 			name:        "range for loop",
-			input:        "func test() { let arr = [1, 2, 3] for x in arr { let y = x } }",
+			input:       "func test() { let arr = [1, 2, 3] for x in arr { let y = x } }",
 			expectError: false,
 		},
 		{
 			name:        "infinite for loop",
-			input:        "func test() { for { break } }",
+			input:       "func test() { for { break } }",
 			expectError: false,
 		},
 		{
 			name:        "for loop with break",
-			input:        "func test() { for var i = 0; i < 10; i++ { if i > 5 { break } } }",
+			input:       "func test() { for var i = 0; i < 10; i++ { if i > 5 { break } } }",
 			expectError: false,
 		},
 		{
 			name:        "for loop with continue",
-			input:        "func test() { for var i = 0; i < 10; i++ { if i % 2 == 0 { continue } } }",
+			input:       "func test() { for var i = 0; i < 10; i++ { if i % 2 == 0 { continue } } }",
 			expectError: false,
 		},
 	}
@@ -574,22 +574,22 @@ func TestTransformTokensForNestedGenerics(t *testing.T) {
 	}{
 		{
 			name:        "simple generic",
-			input:        "let x: Box<int> = null",
+			input:       "let x: Box<int> = null",
 			expectError: false,
 		},
 		{
 			name:        "nested generic",
-			input:        "let x: Box<Box<int>> = null",
+			input:       "let x: Box<Box<int>> = null",
 			expectError: false,
 		},
 		{
 			name:        "generic with multiple args",
-			input:        "let x: Pair<int, string> = null",
+			input:       "let x: Pair<int, string> = null",
 			expectError: false,
 		},
 		{
 			name:        "generic in function",
-			input:        "func test<T>(x: T): T { return x }",
+			input:       "func test<T>(x: T): T { return x }",
 			expectError: false,
 		},
 	}

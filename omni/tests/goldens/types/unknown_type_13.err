@@ -4,7 +4,7 @@ tests/goldens/types/unknown_type_13.omni:1:13: error: unknown type "Mystery13"
      2 | 
   hint: import or declare the type before use
 
-tests/goldens/types/unknown_type_13.omni:1:1: error: cannot assign int to Mystery13
+tests/goldens/types/unknown_type_13.omni:1:1: error: type mismatch: cannot assign int to Mystery13
      1 | let value13:Mystery13 = 1
        | ^^^^^^^^^^^^^^^^^^^^^^^^^
      2 | 

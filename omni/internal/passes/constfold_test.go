@@ -58,9 +58,9 @@ func TestConstFoldArithmetic(t *testing.T) {
 
 func TestConstFoldAllOperations(t *testing.T) {
 	operations := []struct {
-		op      string
-		left    int
-		right   int
+		op       string
+		left     int
+		right    int
 		expected string
 	}{
 		{"add", 10, 5, "15"},

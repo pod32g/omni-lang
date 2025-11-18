@@ -9,7 +9,7 @@ func TestFFI(t *testing.T) {
 		// Test that Print function exists and can be called
 		// This is a simple test to ensure the function is available
 		result := Print("test")
-		
+
 		// When CGO is disabled, Print returns an error (stub implementation)
 		// When CGO is enabled, Print returns nil (real implementation)
 		// Both cases are valid, we just need to ensure the function exists

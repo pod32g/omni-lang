@@ -159,11 +159,11 @@ func (c *Checker) inferTypeParametersFromGeneric(expected, argType string, typeP
 	// Find the matching > for the < we found, accounting for nested generics
 	expectedGreater := c.findMatchingGreater(expected, expectedLess)
 	argGreater := c.findMatchingGreater(argType, argLess)
-	
+
 	if expectedGreater == -1 || argGreater == -1 {
 		return inferred // Malformed generic type
 	}
-	
+
 	expectedInner := expected[expectedLess+1 : expectedGreater]
 	argInner := argType[argLess+1 : argGreater]
 
@@ -265,6 +265,7 @@ type functionContext struct {
 	Name       string
 	ReturnType string
 	IsAsync    bool
+	HasReturn  bool
 }
 
 func (c *Checker) initBuiltins() {
@@ -373,12 +374,18 @@ func (c *Checker) buildFunctionSignature(decl *ast.FuncDecl) FunctionSignature {
 		}
 	}
 
-	// If function is async, wrap return type in Promise<T>
+	// If function is async, wrap return type in Promise<T>, but avoid double wrapping
 	if decl.IsAsync {
-		if ret == typeVoid {
+		asyncInner := ret
+		if strings.HasPrefix(asyncInner, "Promise<") && strings.HasSuffix(asyncInner, ">") {
+			if inner, ok := promiseInnerType(asyncInner); ok {
+				asyncInner = inner
+			}
+		}
+		if asyncInner == typeVoid || asyncInner == "" || asyncInner == typeInfer {
 			ret = "Promise<void>"
 		} else {
-			ret = "Promise<" + ret + ">"
+			ret = "Promise<" + asyncInner + ">"
 		}
 	}
 
@@ -441,7 +448,13 @@ func (c *Checker) checkFunc(decl *ast.FuncDecl) {
 		declaredReturn := c.checkTypeExpr(decl.Return)
 		// For async functions, compare with inner type
 		if isAsync {
-			if !c.typesEqual(declaredReturn, innerReturnType) {
+			declaredInner := declaredReturn
+			if strings.HasPrefix(declaredInner, "Promise<") && strings.HasSuffix(declaredInner, ">") {
+				if inner, ok := promiseInnerType(declaredInner); ok {
+					declaredInner = inner
+				}
+			}
+			if !c.typesEqual(declaredInner, innerReturnType) {
 				c.report(decl.Return.Span(), fmt.Sprintf("async function return type mismatch: declared %s but signature expects %s", declaredReturn, innerReturnType),
 					"align the return type annotation with the inner type of Promise")
 			}
@@ -470,13 +483,26 @@ func (c *Checker) checkFunc(decl *ast.FuncDecl) {
 	if decl.ExprBody != nil {
 		exprType := c.checkExpr(decl.ExprBody)
 		c.validateFunctionReturn(exprType, decl.ExprBody.Span())
+		if ctx := c.currentFunctionContext(); ctx != nil {
+			ctx.HasReturn = true
+		}
 	}
 
 	if decl.Body != nil {
 		c.checkBlock(decl.Body)
 	}
+	ctx := c.currentFunctionContext()
+	missingReturn := ctx != nil && ctx.ReturnType != typeVoid && ctx.ReturnType != typeInfer && !ctx.HasReturn
+	expectedType := ""
+	if ctx != nil {
+		expectedType = ctx.ReturnType
+	}
 
 	c.leaveScope()
+	if missingReturn {
+		c.report(decl.Span(), fmt.Sprintf("function %s is missing a return statement", decl.Name),
+			fmt.Sprintf("ensure all code paths return a %s value", expectedType))
+	}
 	c.popFunctionContext()
 
 	// Leave type parameter scope
@@ -526,7 +552,7 @@ func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
 	if finalType == typeInfer {
 		finalType = valueType
 	} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, finalType) {
-		c.report(decl.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, finalType),
+		c.report(decl.Span(), fmt.Sprintf("type mismatch: cannot assign %s to %s", valueType, finalType),
 			fmt.Sprintf("convert the expression to %s or change the variable type to %s", finalType, valueType))
 	}
 
@@ -594,7 +620,7 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 		if declaredType == typeInfer {
 			finalType = valueType
 		} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, declaredType) {
-			c.report(s.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, declaredType),
+			c.report(s.Span(), fmt.Sprintf("type mismatch: cannot assign %s to %s", valueType, declaredType),
 				fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
 		}
 		c.declare(s.Name, finalType, true, s.Span())
@@ -647,7 +673,7 @@ func (c *Checker) checkTypeAliasDecl(decl *ast.TypeAliasDecl) {
 		c.report(decl.Span(), "type alias must have a type", "provide a type expression after the '='")
 		return
 	}
-	
+
 	// For generic aliases, enter type parameter scope so T, U, etc. are recognized
 	// Convert []string to []ast.TypeParam for scope management
 	var typeParams []ast.TypeParam
@@ -662,10 +688,10 @@ func (c *Checker) checkTypeAliasDecl(decl *ast.TypeAliasDecl) {
 		}
 		c.enterTypeParams(typeParams)
 	}
-	
+
 	// Check the underlying type expression (T is now in scope for generic aliases)
 	underlyingType := c.checkTypeExpr(decl.Type)
-	
+
 	// Leave type parameter scope
 	if len(typeParams) > 0 {
 		c.leaveTypeParams(typeParams)
@@ -675,7 +701,7 @@ func (c *Checker) checkTypeAliasDecl(decl *ast.TypeAliasDecl) {
 	// For generic aliases, store the template string (e.g., "T?") which will be substituted later
 	c.knownTypes[decl.Name] = struct{}{}
 	c.typeAliases[decl.Name] = underlyingType
-	
+
 	// Store type parameters for generic aliases so we can substitute them later
 	if len(typeParams) > 0 {
 		c.structTypeParams[decl.Name] = typeParams
@@ -694,9 +720,9 @@ func (c *Checker) checkBindingStmt(stmt *ast.BindingStmt) {
 	finalType := declaredType
 	if declaredType == typeInfer {
 		finalType = valueType
-	} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, declaredType) {
-		c.report(stmt.Span(), fmt.Sprintf("cannot assign %s to %s", valueType, declaredType),
-			fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
+		} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, declaredType) {
+			c.report(stmt.Span(), fmt.Sprintf("type mismatch: cannot assign %s to %s", valueType, declaredType),
+				fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
 	}
 	c.declare(stmt.Name, finalType, stmt.Mutable, stmt.Span())
 }
@@ -783,6 +809,7 @@ func (c *Checker) handleReturn(ret *ast.ReturnStmt) {
 		}
 		return
 	}
+	ctx.HasReturn = true
 	expected := ctx.ReturnType
 	if ret.Value == nil {
 		if expected != typeVoid && expected != typeInfer {
@@ -967,38 +994,13 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			return typeError
 		}
 
-		// Handle struct field access
-		// Try qualified name first, then unqualified name
-		var fields map[string]string
-		var ok bool
-		if fields, ok = c.structFields[targetType]; !ok {
-			// If targetType is qualified (e.g., "foo.bar.Point"), also try unqualified ("Point")
-			if lastDot := strings.LastIndex(targetType, "."); lastDot >= 0 {
-				unqualifiedName := targetType[lastDot+1:]
-				fields, ok = c.structFields[unqualifiedName]
+		if structName, fields, ok := c.resolveStructDefinition(targetType); ok {
+			var typeArgs []string
+			if _, args := c.extractGenericType(targetType); len(args) > 0 {
+				typeArgs = args
 			}
-		}
-		if ok {
-			if fieldType, exists := fields[e.Member]; exists {
-				// Check if targetType is a generic instantiation (e.g., "Box<int>")
-				// and if so, substitute type parameters in the field type
-				if strings.Contains(targetType, "<") && strings.Contains(targetType, ">") {
-					// Extract base name and type arguments
-					baseName, typeArgs := c.extractGenericType(targetType)
-					if baseName != "" && len(typeArgs) > 0 {
-						// Look up struct type parameters
-						if typeParams, hasParams := c.structTypeParams[baseName]; hasParams && len(typeParams) == len(typeArgs) {
-							// Substitute type parameters in field type
-							substitutedType := fieldType
-							for i, param := range typeParams {
-								if i < len(typeArgs) {
-									substitutedType = c.substituteTypeParam(substitutedType, param.Name, typeArgs[i])
-								}
-							}
-							return substitutedType
-						}
-					}
-				}
+			resolvedFields := c.applyStructTypeArguments(structName, fields, typeArgs, e.Target.Span())
+			if fieldType, exists := resolvedFields[e.Member]; exists {
 				return fieldType
 			}
 			c.report(e.Span(), fmt.Sprintf("struct %s has no field %q", targetType, e.Member), "use a declared field name")
@@ -1101,7 +1103,7 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		}
 		if elementType == typeInfer {
 			// Empty array literal - cannot infer element type
-			c.report(e.Span(), "cannot infer element type of empty array literal", 
+			c.report(e.Span(), "cannot infer element type of empty array literal",
 				"add a type annotation like let arr: array<int> = [] or provide at least one element")
 			elementType = typeError
 		}
@@ -1133,22 +1135,18 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		}
 		return buildGeneric("map", []string{keyType, valueType})
 	case *ast.StructLiteralExpr:
-		// Try qualified name first, then unqualified name
-		var fields map[string]string
-		var ok bool
-		if fields, ok = c.structFields[e.TypeName]; !ok {
-			// If TypeName is qualified (e.g., "foo.bar.Point"), also try unqualified ("Point")
-			if lastDot := strings.LastIndex(e.TypeName, "."); lastDot >= 0 {
-				unqualifiedName := e.TypeName[lastDot+1:]
-				fields, ok = c.structFields[unqualifiedName]
-			}
-		}
+		structName, fields, ok := c.resolveStructDefinition(e.TypeName)
 		if !ok {
 			c.report(e.Span(), fmt.Sprintf("unknown struct type %q", e.TypeName), "define the struct before constructing it")
 			return typeError
 		}
+		typeArgs := make([]string, 0, len(e.TypeArgs))
+		for _, arg := range e.TypeArgs {
+			typeArgs = append(typeArgs, typeExprToString(arg))
+		}
+		resolvedFields := c.applyStructTypeArguments(structName, fields, typeArgs, e.Span())
 		for _, field := range e.Fields {
-			expectedType, exists := fields[field.Name]
+			expectedType, exists := resolvedFields[field.Name]
 			if !exists {
 				c.report(field.Span, fmt.Sprintf("struct %s has no field %q", e.TypeName, field.Name), "use a declared field name")
 				c.checkExpr(field.Expr)
@@ -1159,7 +1157,10 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 				c.report(field.Expr.Span(), fmt.Sprintf("field %s expects %s, got %s", field.Name, expectedType, actualType), "adjust the field expression")
 			}
 		}
-		return e.TypeName
+		if len(typeArgs) == 0 {
+			return e.TypeName
+		}
+		return buildGeneric(e.TypeName, typeArgs)
 	case *ast.AssignmentExpr:
 		return c.checkAssignmentExpr(e)
 	case *ast.IncrementExpr:
@@ -1318,7 +1319,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 			// This is a regular function call, not a function type call
 			// Validate argument count
 			if len(expr.Args) != len(sig.Params) {
-				c.report(expr.Span(), fmt.Sprintf("function %s expects %d arguments, got %d", ident.Name, len(sig.Params), len(expr.Args)),
+				c.report(expr.Span(), fmt.Sprintf("argument count mismatch: function %s expects %d arguments, got %d", ident.Name, len(sig.Params), len(expr.Args)),
 					fmt.Sprintf("provide %d argument(s) matching the function signature", len(sig.Params)))
 				return typeError
 			}
@@ -1348,7 +1349,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 				if i < len(sig.Params) {
 					expected := sig.Params[i]
 					if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
-						c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, expected, argType),
+						c.report(arg.Span(), fmt.Sprintf("argument type mismatch: argument %d expects %s, got %s", i+1, expected, argType),
 							fmt.Sprintf("convert the argument to %s or use a %s expression", expected, expected))
 					}
 				}
@@ -1400,7 +1401,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 
 			// Validate argument count
 			if len(expr.Args) != len(expectedParamTypes) {
-				c.report(expr.Span(), fmt.Sprintf("function expects %d arguments, got %d", len(expectedParamTypes), len(expr.Args)),
+				c.report(expr.Span(), fmt.Sprintf("argument count mismatch: function expects %d arguments, got %d", len(expectedParamTypes), len(expr.Args)),
 					fmt.Sprintf("provide %d argument(s) matching the function signature", len(expectedParamTypes)))
 				return typeError
 			}
@@ -1430,7 +1431,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 				if i < len(expectedParamTypes) {
 					expected := expectedParamTypes[i]
 					if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
-						c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, expected, argType),
+						c.report(arg.Span(), fmt.Sprintf("argument type mismatch: argument %d expects %s, got %s", i+1, expected, argType),
 							fmt.Sprintf("convert the argument to %s or use a %s expression", expected, expected))
 					}
 				}
@@ -1467,7 +1468,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 	if qualifiedName != "" {
 		if sig, exists := c.functions[qualifiedName]; exists {
 			if len(expr.Args) != len(sig.Params) {
-				c.report(expr.Span(), fmt.Sprintf("function %s expects %d arguments, got %d", qualifiedName, len(sig.Params), len(expr.Args)),
+				c.report(expr.Span(), fmt.Sprintf("argument count mismatch: function %s expects %d arguments, got %d", qualifiedName, len(sig.Params), len(expr.Args)),
 					fmt.Sprintf("provide %d argument(s) matching the function signature: %s(%s)", len(sig.Params), qualifiedName, strings.Join(sig.Params, ", ")))
 			}
 			for i, arg := range expr.Args {
@@ -1481,7 +1482,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 								"pass an array to the len() function")
 						}
 					} else if expected != typeInfer && argType != typeError && !c.typesEqual(expected, argType) {
-						c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, expected, argType),
+						c.report(arg.Span(), fmt.Sprintf("argument type mismatch: argument %d expects %s, got %s", i+1, expected, argType),
 							fmt.Sprintf("convert the argument to %s or use a %s expression", expected, expected))
 					}
 				}
@@ -1500,7 +1501,7 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 func (c *Checker) checkGenericFunctionCall(expr *ast.CallExpr, sig FunctionSignature, funcName string) string {
 	// First, check argument count
 	if len(expr.Args) != len(sig.Params) {
-		c.report(expr.Span(), fmt.Sprintf("function %s expects %d arguments, got %d", funcName, len(sig.Params), len(expr.Args)),
+		c.report(expr.Span(), fmt.Sprintf("argument count mismatch: function %s expects %d arguments, got %d", funcName, len(sig.Params), len(expr.Args)),
 			fmt.Sprintf("provide %d argument(s) matching the function signature", len(sig.Params)))
 		return typeError
 	}
@@ -1547,7 +1548,7 @@ func (c *Checker) checkGenericFunctionCall(expr *ast.CallExpr, sig FunctionSigna
 					substitutedExpected = c.substituteTypeParam(substitutedExpected, typeParam, concreteType)
 				}
 				if !c.typesEqual(substitutedExpected, argType) {
-					c.report(arg.Span(), fmt.Sprintf("argument %d expects %s, got %s", i+1, substitutedExpected, argType),
+					c.report(arg.Span(), fmt.Sprintf("argument type mismatch: argument %d expects %s, got %s", i+1, substitutedExpected, argType),
 						fmt.Sprintf("convert the argument to %s or use a %s expression", substitutedExpected, substitutedExpected))
 				}
 			}
@@ -1588,8 +1589,8 @@ func (c *Checker) checkAssignmentExpr(expr *ast.AssignmentExpr) string {
 		sym.Type = rhsType
 	}
 	if rhsType != typeError && sym.Type != typeInfer && !c.isAssignable(rhsType, sym.Type) {
-		c.report(expr.Right.Span(), fmt.Sprintf("cannot assign %s to %s", rhsType, sym.Type),
-			fmt.Sprintf("convert the expression to %s or change the variable type to %s", sym.Type, rhsType))
+			c.report(expr.Right.Span(), fmt.Sprintf("type mismatch: cannot assign %s to %s", rhsType, sym.Type),
+				fmt.Sprintf("convert the expression to %s or change the variable type to %s", sym.Type, rhsType))
 	}
 	return sym.Type
 }
@@ -1869,13 +1870,13 @@ func (c *Checker) parseFunctionTypeParams(funcType string) []string {
 	if arrowIndex == -1 {
 		return nil
 	}
-	
+
 	// Extract parameter part: "(int, int)" -> "int, int"
 	paramPart := funcType[1:arrowIndex] // Remove opening (
 	if paramPart == "" {
 		return []string{} // No parameters
 	}
-	
+
 	// Split by comma and trim
 	parts := strings.Split(paramPart, ",")
 	paramTypes := make([]string, len(parts))
@@ -2033,6 +2034,60 @@ func splitGenericArgs(body string) []string {
 	return parts
 }
 
+func (c *Checker) resolveStructDefinition(typeName string) (string, map[string]string, bool) {
+	cleanName := strings.TrimSpace(typeName)
+	if idx := strings.Index(cleanName, "<"); idx >= 0 {
+		cleanName = cleanName[:idx]
+	}
+	if fields, ok := c.structFields[cleanName]; ok {
+		return cleanName, fields, true
+	}
+	if lastDot := strings.LastIndex(cleanName, "."); lastDot >= 0 {
+		unqualified := cleanName[lastDot+1:]
+		if fields, ok := c.structFields[unqualified]; ok {
+			return unqualified, fields, true
+		}
+	}
+	return "", nil, false
+}
+
+func (c *Checker) applyStructTypeArguments(structName string, baseFields map[string]string, typeArgs []string, span lexer.Span) map[string]string {
+	resolved := make(map[string]string, len(baseFields))
+	for name, typ := range baseFields {
+		resolved[name] = typ
+	}
+
+	if len(typeArgs) == 0 {
+		if typeParams, ok := c.structTypeParams[structName]; ok && len(typeParams) > 0 {
+			c.report(span, fmt.Sprintf("struct %s requires %d type argument(s)", structName, len(typeParams)),
+				fmt.Sprintf("provide type arguments like %s<...>", structName))
+		}
+		return resolved
+	}
+
+	typeParams, hasParams := c.structTypeParams[structName]
+	if !hasParams {
+		c.report(span, fmt.Sprintf("struct %s is not generic", structName), "remove the type arguments")
+		return resolved
+	}
+
+	if len(typeArgs) != len(typeParams) {
+		c.report(span, fmt.Sprintf("struct %s expects %d type argument(s), got %d", structName, len(typeParams), len(typeArgs)),
+			fmt.Sprintf("provide %d type argument(s) matching the struct definition", len(typeParams)))
+	}
+
+	for i, param := range typeParams {
+		if i >= len(typeArgs) {
+			break
+		}
+		for fieldName, fieldType := range resolved {
+			resolved[fieldName] = c.substituteTypeParam(fieldType, param.Name, typeArgs[i])
+		}
+	}
+
+	return resolved
+}
+
 func arrayElementType(typ string) (string, bool) {
 	// Check for new array syntax: []<int>
 	if strings.HasPrefix(typ, "[]<") && strings.HasSuffix(typ, ">") {
@@ -2184,13 +2239,13 @@ func (c *Checker) isAssignable(fromType, toType string) bool {
 	if c.typesEqual(fromType, toType) {
 		return true
 	}
-	
+
 	// Handle optional types: allow widening (non-optional -> optional)
 	fromBase := strings.TrimRight(fromType, "?")
 	toBase := strings.TrimRight(toType, "?")
 	fromOptional := len(fromType) - len(fromBase)
 	toOptional := len(toType) - len(toBase)
-	
+
 	// Normalize optional-of-optional
 	if fromOptional > 1 {
 		fromOptional = 1
@@ -2200,12 +2255,12 @@ func (c *Checker) isAssignable(fromType, toType string) bool {
 		toOptional = 1
 		toBase = strings.TrimRight(toType, "?")
 	}
-	
+
 	// Allow widening: non-optional can be assigned to optional if base types match
 	if fromOptional == 0 && toOptional > 0 {
 		return c.typesEqual(fromBase, toBase)
 	}
-	
+
 	// Reject narrowing: optional cannot be assigned to non-optional
 	// Reject other mismatches
 	return false
@@ -2317,7 +2372,7 @@ func (c *Checker) pushFunctionContext(name, ret string, isAsync bool) {
 	if ret == "" {
 		ret = typeVoid
 	}
-	c.functionStack = append(c.functionStack, functionContext{Name: name, ReturnType: ret, IsAsync: isAsync})
+	c.functionStack = append(c.functionStack, functionContext{Name: name, ReturnType: ret, IsAsync: isAsync, HasReturn: false})
 }
 
 func (c *Checker) popFunctionContext() {

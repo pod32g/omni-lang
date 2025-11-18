@@ -11,10 +11,10 @@ import (
 // from parsing to error reporting
 func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
-		desc     string
+		desc      string
 	}{
 		{
 			name: "complete program with structs and functions",
@@ -36,7 +36,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      return 0
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with structs, functions, and type inference",
+			desc:      "Valid program with structs, functions, and type inference",
 		},
 		{
 			name: "program with type errors",
@@ -48,7 +48,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      let x = add(1, "2")
 			      }`,
 			shouldErr: true,
-			desc:     "Type mismatch in function call should error",
+			desc:      "Type mismatch in function call should error",
 		},
 		{
 			name: "program with missing return",
@@ -56,7 +56,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      let x = 42
 			      }`,
 			shouldErr: true,
-			desc:     "Missing return statement should error",
+			desc:      "Missing return statement should error",
 		},
 		{
 			name: "program with control flow",
@@ -69,7 +69,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      }
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with if-else control flow",
+			desc:      "Valid program with if-else control flow",
 		},
 		{
 			name: "program with loops",
@@ -81,7 +81,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      return sum
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with for loop",
+			desc:      "Valid program with for loop",
 		},
 		{
 			name: "program with arrays",
@@ -94,7 +94,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      return sum
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with arrays and range loops",
+			desc:      "Valid program with arrays and range loops",
 		},
 		{
 			name: "program with maps",
@@ -104,7 +104,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      return x
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with maps",
+			desc:      "Valid program with maps",
 		},
 		{
 			name: "program with generics",
@@ -117,7 +117,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      return box.value
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with generic structs",
+			desc:      "Valid program with generic structs",
 		},
 		{
 			name: "program with async",
@@ -130,7 +130,7 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 			      return x
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with async/await",
+			desc:      "Valid program with async/await",
 		},
 	}
 
@@ -154,9 +154,9 @@ func TestCompleteTypeCheckingWorkflow(t *testing.T) {
 // TestErrorReporting tests that error reporting provides useful information
 func TestErrorReporting(t *testing.T) {
 	tests := []struct {
-		name        string
-		src         string
-		expectError bool
+		name          string
+		src           string
+		expectError   bool
 		errorContains []string
 	}{
 		{
@@ -164,7 +164,7 @@ func TestErrorReporting(t *testing.T) {
 			src: `func main(): void {
 			      let x = y
 			      }`,
-			expectError: true,
+			expectError:   true,
 			errorContains: []string{"undefined", "y"},
 		},
 		{
@@ -172,7 +172,7 @@ func TestErrorReporting(t *testing.T) {
 			src: `func main(): void {
 			      let x: int = "hello"
 			      }`,
-			expectError: true,
+			expectError:   true,
 			errorContains: []string{"type", "mismatch", "int", "string"},
 		},
 		{
@@ -184,7 +184,7 @@ func TestErrorReporting(t *testing.T) {
 			      func main(): void {
 			      let x = add(1)
 			      }`,
-			expectError: true,
+			expectError:   true,
 			errorContains: []string{"argument", "count"},
 		},
 		{
@@ -196,7 +196,7 @@ func TestErrorReporting(t *testing.T) {
 			      func main(): void {
 			      let x = add(1, "2")
 			      }`,
-			expectError: true,
+			expectError:   true,
 			errorContains: []string{"type", "mismatch"},
 		},
 		{
@@ -204,7 +204,7 @@ func TestErrorReporting(t *testing.T) {
 			src: `func test(): int {
 			      let x = 42
 			      }`,
-			expectError: true,
+			expectError:   true,
 			errorContains: []string{"return"},
 		},
 		{
@@ -212,7 +212,7 @@ func TestErrorReporting(t *testing.T) {
 			src: `func test(): int {
 			      return "hello"
 			      }`,
-			expectError: true,
+			expectError:   true,
 			errorContains: []string{"return", "type"},
 		},
 	}
@@ -248,10 +248,10 @@ func TestErrorReporting(t *testing.T) {
 // TestModuleImports tests type checking with module imports
 func TestModuleImports(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
-		desc     string
+		desc      string
 	}{
 		{
 			name: "import std.io",
@@ -260,7 +260,7 @@ func TestModuleImports(t *testing.T) {
 			      std.io.print("hello")
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with std.io import",
+			desc:      "Valid program with std.io import",
 		},
 		{
 			name: "import std.math",
@@ -269,7 +269,7 @@ func TestModuleImports(t *testing.T) {
 			      let x = std.math.add(1, 2)
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with std.math import",
+			desc:      "Valid program with std.math import",
 		},
 		{
 			name: "import std.string",
@@ -278,7 +278,7 @@ func TestModuleImports(t *testing.T) {
 			      let x = std.string.length("hello")
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with std.string import",
+			desc:      "Valid program with std.string import",
 		},
 		{
 			name: "use std function without import",
@@ -286,7 +286,7 @@ func TestModuleImports(t *testing.T) {
 			      let x = std.math.add(1, 2)
 			      }`,
 			shouldErr: true,
-			desc:     "Using std function without import should error",
+			desc:      "Using std function without import should error",
 		},
 	}
 
@@ -310,10 +310,10 @@ func TestModuleImports(t *testing.T) {
 // TestComplexTypeInference tests complex type inference scenarios
 func TestComplexTypeInference(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
-		desc     string
+		desc      string
 	}{
 		{
 			name: "nested function calls",
@@ -326,7 +326,7 @@ func TestComplexTypeInference(t *testing.T) {
 			      return x
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with nested function calls",
+			desc:      "Valid program with nested function calls",
 		},
 		{
 			name: "array of structs",
@@ -341,7 +341,7 @@ func TestComplexTypeInference(t *testing.T) {
 			      return 0
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with array of structs",
+			desc:      "Valid program with array of structs",
 		},
 		{
 			name: "generic function inference",
@@ -355,7 +355,7 @@ func TestComplexTypeInference(t *testing.T) {
 			      return x
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with generic function type inference",
+			desc:      "Valid program with generic function type inference",
 		},
 		{
 			name: "optional types",
@@ -364,7 +364,7 @@ func TestComplexTypeInference(t *testing.T) {
 			      let y: int? = null
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with optional types",
+			desc:      "Valid program with optional types",
 		},
 		{
 			name: "union types",
@@ -373,7 +373,7 @@ func TestComplexTypeInference(t *testing.T) {
 			      let y: int | string = "hello"
 			      }`,
 			shouldErr: false,
-			desc:     "Valid program with union types",
+			desc:      "Valid program with union types",
 		},
 	}
 
@@ -396,9 +396,9 @@ func TestComplexTypeInference(t *testing.T) {
 
 // Helper function to check if a string contains a substring (case-insensitive)
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && 
-		(s == substr || 
-		 containsCaseInsensitive(s, substr))
+	return len(s) >= len(substr) &&
+		(s == substr ||
+			containsCaseInsensitive(s, substr))
 }
 
 func containsCaseInsensitive(s, substr string) bool {

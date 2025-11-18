@@ -51,72 +51,75 @@ type CGenerator struct {
 // NewCGenerator creates a new C code generator
 func NewCGenerator(module *mir.Module) *CGenerator {
 	return &CGenerator{
-		module:      module,
-		optLevel:    "2", // Default to standard optimization
-		debugInfo:   false,
-		sourceFile:  "",
-		variables:   make(map[mir.ValueID]string),
-		phiVars:     make(map[mir.ValueID]bool),
-		mutableVars: make(map[mir.ValueID]bool),
-		mapVars:     make(map[string]bool),
-		mapTypes:    make(map[mir.ValueID]string),
-		arrayLengths: make(map[mir.ValueID]int),
-		sourceMap:   make(map[string]int),
-		lineMap:     make(map[int]string),
-		valueTypes:    make(map[mir.ValueID]string),
-		errors:        []string{},
-		stringsToFree:    make(map[mir.ValueID]bool),
-		promisesToFree:   make(map[mir.ValueID]bool),
+		module:            module,
+		optLevel:          "2", // Default to standard optimization
+		debugInfo:         false,
+		sourceFile:        "",
+		variables:         make(map[mir.ValueID]string),
+		phiVars:           make(map[mir.ValueID]bool),
+		mutableVars:       make(map[mir.ValueID]bool),
+		mapVars:           make(map[string]bool),
+		mapTypes:          make(map[mir.ValueID]string),
+		arrayLengths:      make(map[mir.ValueID]int),
+		sourceMap:         make(map[string]int),
+		lineMap:           make(map[int]string),
+		valueTypes:        make(map[mir.ValueID]string),
+		errors:            []string{},
+		stringsToFree:     make(map[mir.ValueID]bool),
+		promisesToFree:    make(map[mir.ValueID]bool),
 		tempStringsToFree: []string{},
-		returnedValueID:  mir.InvalidValue,
+		returnedValueID:   mir.InvalidValue,
+		declaredVariables: make(map[mir.ValueID]bool),
 	}
 }
 
 // NewCGeneratorWithOptLevel creates a new C code generator with specified optimization level
 func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator {
 	return &CGenerator{
-		module:        module,
-		optLevel:      optLevel,
-		debugInfo:     false,
-		sourceFile:    "",
-		variables:     make(map[mir.ValueID]string),
-		phiVars:       make(map[mir.ValueID]bool),
-		mutableVars:   make(map[mir.ValueID]bool),
-		mapVars:       make(map[string]bool),
-		mapTypes:      make(map[mir.ValueID]string),
-		arrayLengths:  make(map[mir.ValueID]int),
-		sourceMap:     make(map[string]int),
-		lineMap:       make(map[int]string),
-		valueTypes:    make(map[mir.ValueID]string),
-		errors:        []string{},
-		stringsToFree:    make(map[mir.ValueID]bool),
-		promisesToFree:   make(map[mir.ValueID]bool),
+		module:            module,
+		optLevel:          optLevel,
+		debugInfo:         false,
+		sourceFile:        "",
+		variables:         make(map[mir.ValueID]string),
+		phiVars:           make(map[mir.ValueID]bool),
+		mutableVars:       make(map[mir.ValueID]bool),
+		mapVars:           make(map[string]bool),
+		mapTypes:          make(map[mir.ValueID]string),
+		arrayLengths:      make(map[mir.ValueID]int),
+		sourceMap:         make(map[string]int),
+		lineMap:           make(map[int]string),
+		valueTypes:        make(map[mir.ValueID]string),
+		errors:            []string{},
+		stringsToFree:     make(map[mir.ValueID]bool),
+		promisesToFree:    make(map[mir.ValueID]bool),
 		tempStringsToFree: []string{},
-		returnedValueID:  mir.InvalidValue,
+		returnedValueID:   mir.InvalidValue,
+		declaredVariables: make(map[mir.ValueID]bool),
 	}
 }
 
 // NewCGeneratorWithDebug creates a new C code generator with debug information
 func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool, sourceFile string) *CGenerator {
 	return &CGenerator{
-		module:        module,
-		optLevel:      optLevel,
-		debugInfo:     debugInfo,
-		sourceFile:    sourceFile,
-		variables:     make(map[mir.ValueID]string),
-		phiVars:       make(map[mir.ValueID]bool),
-		mutableVars:   make(map[mir.ValueID]bool),
-		mapVars:       make(map[string]bool),
-		mapTypes:      make(map[mir.ValueID]string),
-		arrayLengths:  make(map[mir.ValueID]int),
-		sourceMap:     make(map[string]int),
-		lineMap:       make(map[int]string),
-		valueTypes:    make(map[mir.ValueID]string),
-		errors:        []string{},
-		stringsToFree:    make(map[mir.ValueID]bool),
-		promisesToFree:   make(map[mir.ValueID]bool),
+		module:            module,
+		optLevel:          optLevel,
+		debugInfo:         debugInfo,
+		sourceFile:        sourceFile,
+		variables:         make(map[mir.ValueID]string),
+		phiVars:           make(map[mir.ValueID]bool),
+		mutableVars:       make(map[mir.ValueID]bool),
+		mapVars:           make(map[string]bool),
+		mapTypes:          make(map[mir.ValueID]string),
+		arrayLengths:      make(map[mir.ValueID]int),
+		sourceMap:         make(map[string]int),
+		lineMap:           make(map[int]string),
+		valueTypes:        make(map[mir.ValueID]string),
+		errors:            []string{},
+		stringsToFree:     make(map[mir.ValueID]bool),
+		promisesToFree:    make(map[mir.ValueID]bool),
 		tempStringsToFree: []string{},
-		returnedValueID:  mir.InvalidValue,
+		returnedValueID:   mir.InvalidValue,
+		declaredVariables: make(map[mir.ValueID]bool),
 	}
 }
 
@@ -314,7 +317,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 		}
 		return nil
 	}
-	
+
 	// Warn if this is a stdlib function that should be an intrinsic but isn't implemented
 	if g.isStdFunction(fn.Name) && !g.hasRuntimeImplementation(fn.Name) {
 		// This is a stdlib function without a runtime implementation
@@ -599,10 +602,10 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				if inst, found := instructionMap[id]; found {
 					if inst.Op == "const" && len(inst.Operands) > 0 {
 						// Check if it's a string literal (either by type or by literal value)
-						isString := inst.Type == "string" || 
-							(inst.Operands[0].Kind == mir.OperandLiteral && 
-							 strings.HasPrefix(inst.Operands[0].Literal, "\"") && 
-							 strings.HasSuffix(inst.Operands[0].Literal, "\""))
+						isString := inst.Type == "string" ||
+							(inst.Operands[0].Kind == mir.OperandLiteral &&
+								strings.HasPrefix(inst.Operands[0].Literal, "\"") &&
+								strings.HasSuffix(inst.Operands[0].Literal, "\""))
 						if isString && inst.Operands[0].Kind == mir.OperandLiteral {
 							isStringConst = true
 							// Initialize string constant at declaration
@@ -1120,7 +1123,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				return nil
 			}
-			
+
 			// Special-case async I/O functions - they return Promise<T>
 			if funcName == "std.io.read_line_async" || funcName == "io.read_line_async" {
 				if inst.ID != mir.InvalidValue {
@@ -1132,7 +1135,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				return nil
 			}
-			
+
 			if funcName == "std.os.read_file_async" || funcName == "os.read_file_async" {
 				if inst.ID != mir.InvalidValue && len(inst.Operands) >= 2 {
 					varName := g.getVariableName(inst.ID)
@@ -1147,7 +1150,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				return nil
 			}
-			
+
 			if funcName == "std.os.write_file_async" || funcName == "os.write_file_async" {
 				if inst.ID != mir.InvalidValue && len(inst.Operands) >= 3 {
 					varName := g.getVariableName(inst.ID)
@@ -1162,7 +1165,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				return nil
 			}
-			
+
 			if funcName == "std.os.append_file_async" || funcName == "os.append_file_async" {
 				if inst.ID != mir.InvalidValue && len(inst.Operands) >= 3 {
 					varName := g.getVariableName(inst.ID)
@@ -1440,12 +1443,12 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
 								secondVar := fmt.Sprintf("_second_%d", inst.ID)
 								nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
-								
+
 								g.output.WriteString(fmt.Sprintf("  int32_t %s, %s, %s, %s, %s, %s, %s;\n",
 									yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
 								g.output.WriteString(fmt.Sprintf("  omni_time_from_unix(%s, &%s, &%s, &%s, &%s, &%s, &%s, &%s);\n",
 									timestamp, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
-								
+
 								// Create Time struct from the extracted fields
 								g.output.WriteString(fmt.Sprintf("  %s = omni_struct_create();\n", varName))
 								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"year\", %s);\n", varName, yearVar))
@@ -1467,12 +1470,12 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
 								secondVar := fmt.Sprintf("_second_%d", inst.ID)
 								nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
-								
+
 								g.output.WriteString(fmt.Sprintf("  int32_t %s, %s, %s, %s, %s, %s, %s;\n",
 									yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
 								g.output.WriteString(fmt.Sprintf("  omni_time_from_string(%s, &%s, &%s, &%s, &%s, &%s, &%s, &%s);\n",
 									timeStr, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
-								
+
 								g.output.WriteString(fmt.Sprintf("  %s = omni_struct_create();\n", varName))
 								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"year\", %s);\n", varName, yearVar))
 								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"month\", %s);\n", varName, monthVar))
@@ -1493,7 +1496,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
 							secondVar := fmt.Sprintf("_second_%d", inst.ID)
 							nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
-							
+
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"year\");\n", yearVar, timeStruct))
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"month\");\n", monthVar, timeStruct))
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"day\");\n", dayVar, timeStruct))
@@ -1513,7 +1516,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
 							secondVar := fmt.Sprintf("_second_%d", inst.ID)
 							nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
-							
+
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"year\");\n", yearVar, timeStruct))
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"month\");\n", monthVar, timeStruct))
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"day\");\n", dayVar, timeStruct))
@@ -1537,7 +1540,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
 							secondVar := fmt.Sprintf("_second_%d", inst.ID)
 							nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
-							
+
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"year\");\n", yearVar, timeStruct))
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"month\");\n", monthVar, timeStruct))
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"day\");\n", dayVar, timeStruct))
@@ -1552,7 +1555,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							durationStruct := g.getOperandValue(inst.Operands[1])
 							secondsVar := fmt.Sprintf("_seconds_%d", inst.ID)
 							nanosecondsVar := fmt.Sprintf("_nanoseconds_%d", inst.ID)
-							
+
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"seconds\");\n", secondsVar, durationStruct))
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"nanoseconds\");\n", nanosecondsVar, durationStruct))
 							g.output.WriteString(fmt.Sprintf("  %s = omni_duration_to_string(%s, %s);\n",
@@ -1606,7 +1609,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			if !isMap {
 				isMap = g.isMapVariable(target)
 			}
-			
+
 			if isMap {
 				// Map indexing - need to determine key and value types from map type
 				mapType := "map<string,int>" // Default
@@ -1643,14 +1646,14 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				if elementType == "" {
 					elementType = inst.Type
 				}
-				
+
 				// Check if result type is a struct (array of structs)
 				resultType := inst.Type
 				if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" {
 					resultType = storedType
 				}
 				isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
-				
+
 				if isStruct {
 					// For struct arrays, the element is already a pointer, so just index
 					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
@@ -1667,7 +1670,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					}
 					if arrayLength >= 0 {
 						// Use bounds checking for string arrays
-						g.output.WriteString(fmt.Sprintf("  if (%s < 0 || %s >= %d) { fprintf(stderr, \"Array index out of bounds: %%d (length: %%d)\\n\", %s, %d); exit(1); }\n", 
+						g.output.WriteString(fmt.Sprintf("  if (%s < 0 || %s >= %d) { fprintf(stderr, \"Array index out of bounds: %%d (length: %%d)\\n\", %s, %d); exit(1); }\n",
 							index, index, arrayLength, index, arrayLength))
 					}
 					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
@@ -1682,7 +1685,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					}
 					if arrayLength >= 0 {
 						// Use runtime function with bounds checking
-						g.output.WriteString(fmt.Sprintf("  %s = omni_array_get_int(%s, %s, %d);\n", 
+						g.output.WriteString(fmt.Sprintf("  %s = omni_array_get_int(%s, %s, %d);\n",
 							varName, target, index, arrayLength))
 					} else {
 						// Length unknown (might be parameter) - still use runtime function but with -1
@@ -1702,7 +1705,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					}
 					if arrayLength >= 0 {
 						// Use bounds checking
-						g.output.WriteString(fmt.Sprintf("  if (%s < 0 || %s >= %d) { fprintf(stderr, \"Array index out of bounds: %%d (length: %%d)\\n\", %s, %d); exit(1); }\n", 
+						g.output.WriteString(fmt.Sprintf("  if (%s < 0 || %s >= %d) { fprintf(stderr, \"Array index out of bounds: %%d (length: %%d)\\n\", %s, %d); exit(1); }\n",
 							index, index, arrayLength, index, arrayLength))
 					}
 					g.output.WriteString(fmt.Sprintf("  %s = %s[%s];\n", varName, target, index))
@@ -1721,7 +1724,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			arrayLength := len(inst.Operands)
 			// Store array length for later use in len() and bounds checking
 			g.arrayLengths[inst.ID] = arrayLength
-			
+
 			// Extract element type from array type
 			var elementTypeStr string
 			if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
@@ -1731,10 +1734,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			} else {
 				elementTypeStr = inst.Type // fallback
 			}
-			
+
 			// Check if element type is a struct (not a primitive)
 			isStruct := !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(")
-			
+
 			if isStruct {
 				// For struct arrays, create array of pointers
 				elementType := "omni_struct_t*"
@@ -1830,7 +1833,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						// Determine field type from the value operand type
 						// Priority: 1) operand Type field (set by MIR builder - most reliable), 2) stored valueTypes, 3) lookup from module
 						fieldType := ""
-						
+
 						// First, check the operand's Type field (set by MIR builder via valueOperand)
 						// This is the most reliable source since it's set directly by the MIR builder
 						// The MIR builder sets this in valueOperand(value.ID, value.Type) where value.Type should be "string"
@@ -1841,14 +1844,14 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								g.valueTypes[fieldValueOp.Value] = fieldType
 							}
 						}
-						
+
 						// Also check stored types (should have been set when we pre-populated)
 						if fieldType == "" && fieldValueOp.Kind == mir.OperandValue {
 							if storedType, ok := g.valueTypes[fieldValueOp.Value]; ok && storedType != "" && storedType != inferTypePlaceholder {
 								fieldType = storedType
 							}
 						}
-						
+
 						// If still not found, try to look it up from the module's functions
 						// Search in reverse order (most recent functions first) to find the instruction
 						if fieldType == "" && fieldValueOp.Kind == mir.OperandValue && g.module != nil {
@@ -1897,7 +1900,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							}
 						foundTypeInLookup:
 						}
-						
+
 						// Check if it's a literal operand (string literals)
 						if fieldValueOp.Kind == mir.OperandLiteral {
 							// Check if it's a string literal
@@ -1905,7 +1908,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								fieldType = "string"
 							}
 						}
-						
+
 						// Last resort: if we still don't have a type and it's a value operand,
 						// try to find the const instruction and check its literal or type
 						if (fieldType == "" || fieldType == "<inferred>") && fieldValueOp.Kind == mir.OperandValue && g.module != nil {
@@ -1959,7 +1962,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							}
 						foundType:
 						}
-						
+
 						// Before defaulting to int, do one final check - maybe the type wasn't found
 						// but we can still infer it from the const instruction's literal
 						if (fieldType == "" || fieldType == "<inferred>") && fieldValueOp.Kind == mir.OperandValue && g.module != nil {
@@ -1995,13 +1998,13 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							}
 						finalTypeFound:
 						}
-						
+
 						// Default to int if still no type, but warn about it
 						if fieldType == "" || fieldType == "<inferred>" {
 							g.errors = append(g.errors, fmt.Sprintf("could not infer type for struct field '%s' in struct.init, defaulting to int (this may cause incorrect behavior)", fieldName))
 							fieldType = "int"
 						}
-						
+
 						// Use appropriate setter based on field type
 						switch fieldType {
 						case "string":
@@ -2043,7 +2046,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						// This might be the struct type name, skip it
 						continue
 					}
-					
+
 					fieldValue := g.getOperandValue(fieldValueOp)
 					// Determine field type from the value operand
 					fieldType := ""
@@ -2054,19 +2057,19 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							fieldType = storedType
 						}
 					}
-					
+
 					// Default to int if type not found
 					if fieldType == "" {
 						fieldType = "int"
 					}
-					
+
 					// Use generic field name based on position
 					fieldIndex := i
 					if inst.Operands[0].Kind == mir.OperandLiteral {
 						fieldIndex = i - 1 // Adjust if first operand was type name
 					}
 					fieldName := fmt.Sprintf("field%d", fieldIndex)
-					
+
 					// Use appropriate setter based on field type
 					switch fieldType {
 					case "string":
@@ -2096,7 +2099,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			// The type checker should have already substituted type parameters for generic structs
 			// (e.g., Box<int>.value should have inst.Type = "int", not "T")
 			fieldType := inst.Type
-			
+
 			// If type is not set or is a placeholder, try to infer it
 			if fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder {
 				// Try to get the struct type and look up the field
@@ -2114,7 +2117,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						}
 					}
 				}
-				
+
 				// Check operand type as fallback
 				if (fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder) && len(inst.Operands) > 0 {
 					if inst.Operands[0].Type != "" && inst.Operands[0].Type != inferTypePlaceholder {
@@ -2122,13 +2125,13 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						// The real field type should come from inst.Type set by the type checker
 					}
 				}
-				
+
 				// Last resort: default to int (but this should rarely happen if type checker is working correctly)
 				if fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder {
 					fieldType = "int"
 				}
 			}
-			
+
 			// Ensure we strip any generic syntax that might have leaked through
 			// The type should already be the concrete type (e.g., "int" not "T" or "Box<int>")
 			if strings.Contains(fieldType, "<") {
@@ -2141,7 +2144,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					fieldType = strings.TrimSpace(fieldType)
 				}
 			}
-			
+
 			// Use appropriate getter based on field type
 			switch fieldType {
 			case "string":
@@ -2253,7 +2256,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				resultType = storedType
 			}
 			isStruct := !g.isPrimitiveType(resultType) && !strings.Contains(resultType, "<") && !strings.Contains(resultType, "(")
-			
+
 			// Store the type for later use
 			if isStruct {
 				g.valueTypes[inst.ID] = resultType
@@ -2511,15 +2514,15 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		if len(inst.Operands) >= 1 {
 			promiseVar := g.getOperandValue(inst.Operands[0])
 			varName := g.getVariableName(inst.ID)
-			
+
 			// Ensure variable is declared if it wasn't declared at the top
 			// This can happen if the await instruction wasn't collected in allVariables
 			// We'll determine the type first, then check if we need to declare it
-			
+
 			// Determine the await function based on result type
 			// The inst.Type should already be the unwrapped type (e.g., "string" not "Promise<string>")
 			resultType := inst.Type
-			
+
 			// If type is empty or unknown, try to infer from the operand's promise type
 			if resultType == "" || resultType == "<inferred>" || resultType == "<infer>" || resultType == inferTypePlaceholder {
 				// Try to get type from operand's promise type
@@ -2548,7 +2551,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					}
 				}
 			}
-			
+
 			// Determine C type for the result
 			cType := "int32_t" // default
 			switch resultType {
@@ -2561,7 +2564,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			case "bool":
 				cType = "int32_t"
 			}
-			
+
 			// Check if variable was declared at the top of the function
 			// If not, declare it inline before assignment
 			// We check by seeing if the variable name exists in g.variables for this ID
@@ -2575,11 +2578,11 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			// Better approach: track declared variables in a set during declaration phase,
 			// then check that set here. But for now, let's just always declare await variables
 			// inline to be safe, since they might not have been collected.
-			
+
 			// Check if variable was already declared at the top of the function
 			// If not, declare it inline with initialization
 			needsDeclaration := !g.declaredVariables[inst.ID]
-			
+
 			switch resultType {
 			case "int":
 				if needsDeclaration {
@@ -2879,15 +2882,15 @@ func (g *CGenerator) isMapVariable(varName string) bool {
 func (g *CGenerator) mapType(omniType string) string {
 	// Normalize the type string (trim whitespace)
 	omniType = strings.TrimSpace(omniType)
-	
+
 	// Handle <infer> type - default to int
 	// Also handle "infer" (without brackets) which can come from array element extraction
 	// Check for various forms of infer type
-	if omniType == "<infer>" || omniType == inferTypePlaceholder || omniType == "infer" || omniType == "" || 
+	if omniType == "<infer>" || omniType == inferTypePlaceholder || omniType == "infer" || omniType == "" ||
 		omniType == "<inferred>" || strings.HasPrefix(omniType, "<infer") {
 		return "int32_t"
 	}
-	
+
 	// Handle function types: (param1, param2) -> returnType
 	if strings.Contains(omniType, ") -> ") {
 		return g.mapFunctionType(omniType)
@@ -2959,7 +2962,7 @@ func (g *CGenerator) mapType(omniType string) string {
 		return "void*"
 	default:
 		// Check again for infer types that might have been missed
-		if omniType == "<infer>" || omniType == inferTypePlaceholder || omniType == "infer" || omniType == "" || 
+		if omniType == "<infer>" || omniType == inferTypePlaceholder || omniType == "infer" || omniType == "" ||
 			omniType == "<inferred>" || strings.HasPrefix(omniType, "<infer") {
 			return "int32_t"
 		}
@@ -3709,43 +3712,43 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 	// Only include functions that actually exist in omni_rt.h
 	runtimeImplMap := map[string]string{
 		// I/O functions
-		"std.io.print":   "omni_print_string",
-		"std.io.println": "omni_println_string",
-		"io.print":       "omni_print_string",
-		"io.println":     "omni_println_string",
+		"std.io.print":     "omni_print_string",
+		"std.io.println":   "omni_println_string",
+		"io.print":         "omni_print_string",
+		"io.println":       "omni_println_string",
 		"std.io.read_line": "omni_read_line",
 		"io.read_line":     "omni_read_line",
-		
+
 		// String functions
 		"std.string.length":        "omni_strlen",
 		"std.string.concat":        "omni_strcat",
 		"std.string.substring":     "omni_substring",
-		"std.string.char_at":        "omni_char_at",
-		"std.string.starts_with":    "omni_starts_with",
-		"std.string.ends_with":      "omni_ends_with",
-		"std.string.contains":       "omni_contains",
-		"std.string.index_of":       "omni_index_of",
-		"std.string.last_index_of":  "omni_last_index_of",
-		"std.string.trim":           "omni_trim",
-		"std.string.to_upper":       "omni_to_upper",
-		"std.string.to_lower":       "omni_to_lower",
-		"std.string.equals":         "omni_string_equals",
-		"std.string.compare":        "omni_string_compare",
-		"string.length":             "omni_strlen",
-		"string.concat":             "omni_strcat",
-		"string.substring":          "omni_substring",
-		"string.char_at":            "omni_char_at",
-		"string.starts_with":        "omni_starts_with",
-		"string.ends_with":          "omni_ends_with",
-		"string.contains":           "omni_contains",
-		"string.index_of":           "omni_index_of",
-		"string.last_index_of":      "omni_last_index_of",
-		"string.trim":               "omni_trim",
-		"string.to_upper":           "omni_to_upper",
-		"string.to_lower":           "omni_to_lower",
-		"string.equals":             "omni_string_equals",
-		"string.compare":            "omni_string_compare",
-		
+		"std.string.char_at":       "omni_char_at",
+		"std.string.starts_with":   "omni_starts_with",
+		"std.string.ends_with":     "omni_ends_with",
+		"std.string.contains":      "omni_contains",
+		"std.string.index_of":      "omni_index_of",
+		"std.string.last_index_of": "omni_last_index_of",
+		"std.string.trim":          "omni_trim",
+		"std.string.to_upper":      "omni_to_upper",
+		"std.string.to_lower":      "omni_to_lower",
+		"std.string.equals":        "omni_string_equals",
+		"std.string.compare":       "omni_string_compare",
+		"string.length":            "omni_strlen",
+		"string.concat":            "omni_strcat",
+		"string.substring":         "omni_substring",
+		"string.char_at":           "omni_char_at",
+		"string.starts_with":       "omni_starts_with",
+		"string.ends_with":         "omni_ends_with",
+		"string.contains":          "omni_contains",
+		"string.index_of":          "omni_index_of",
+		"string.last_index_of":     "omni_last_index_of",
+		"string.trim":              "omni_trim",
+		"string.to_upper":          "omni_to_upper",
+		"string.to_lower":          "omni_to_lower",
+		"string.equals":            "omni_string_equals",
+		"string.compare":           "omni_string_compare",
+
 		// Math functions (only those with runtime implementations)
 		"std.math.abs":       "omni_abs",
 		"std.math.max":       "omni_max",
@@ -3801,46 +3804,46 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"math.tanh":          "omni_tanh",
 		"math.cbrt":          "omni_cbrt",
 		"math.trunc":         "omni_trunc",
-		
+
 		// Type conversion functions
 		"std.int_to_string":   "omni_int_to_string",
 		"std.float_to_string": "omni_float_to_string",
-		"std.bool_to_string": "omni_bool_to_string",
+		"std.bool_to_string":  "omni_bool_to_string",
 		"std.string_to_int":   "omni_string_to_int",
 		"std.string_to_float": "omni_string_to_float",
 		"std.string_to_bool":  "omni_string_to_bool",
-		
+
 		// Logging functions
 		"std.log.debug":     "omni_log_debug",
 		"std.log.info":      "omni_log_info",
 		"std.log.warn":      "omni_log_warn",
 		"std.log.error":     "omni_log_error",
 		"std.log.set_level": "omni_log_set_level",
-		
+
 		// File operations
-		"std.file.open":   "omni_file_open",
-		"std.file.close":  "omni_file_close",
-		"std.file.read":   "omni_file_read",
-		"std.file.write":  "omni_file_write",
-		"std.file.seek":   "omni_file_seek",
-		"std.file.tell":   "omni_file_tell",
-		"std.file.exists": "omni_file_exists",
-		"std.file.size":   "omni_file_size",
-		"file.open":       "omni_file_open",
-		"file.close":      "omni_file_close",
-		"file.read":       "omni_file_read",
-		"file.write":      "omni_file_write",
-		"file.seek":       "omni_file_seek",
-		"file.tell":       "omni_file_tell",
-		"file.exists":    "omni_file_exists",
-		"file.size":       "omni_file_size",
+		"std.file.open":      "omni_file_open",
+		"std.file.close":     "omni_file_close",
+		"std.file.read":      "omni_file_read",
+		"std.file.write":     "omni_file_write",
+		"std.file.seek":      "omni_file_seek",
+		"std.file.tell":      "omni_file_tell",
+		"std.file.exists":    "omni_file_exists",
+		"std.file.size":      "omni_file_size",
+		"file.open":          "omni_file_open",
+		"file.close":         "omni_file_close",
+		"file.read":          "omni_file_read",
+		"file.write":         "omni_file_write",
+		"file.seek":          "omni_file_seek",
+		"file.tell":          "omni_file_tell",
+		"file.exists":        "omni_file_exists",
+		"file.size":          "omni_file_size",
 		"std.os.read_file":   "omni_read_file",
 		"std.os.write_file":  "omni_write_file",
 		"std.os.append_file": "omni_append_file",
 		"os.read_file":       "omni_read_file",
-		"os.write_file":     "omni_write_file",
-		"os.append_file":    "omni_append_file",
-		
+		"os.write_file":      "omni_write_file",
+		"os.append_file":     "omni_append_file",
+
 		// System operations
 		"std.os.exit":     "omni_exit",
 		"std.os.getenv":   "omni_getenv",
@@ -3870,7 +3873,7 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"os.exists":       "omni_exists",
 		"os.is_file":      "omni_is_file",
 		"os.is_dir":       "omni_is_dir",
-		
+
 		// Testing functions
 		"std.test.start": "omni_test_start",
 		"std.test.end":   "omni_test_end",
@@ -3878,7 +3881,7 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.assert_eq":  "omni_assert_eq_int", // Note: type-specific versions exist
 		"test.start":     "omni_test_start",
 		"test.end":       "omni_test_end",
-		
+
 		// String validation functions
 		"std.string.is_alpha": "omni_string_is_alpha",
 		"std.string.is_digit": "omni_string_is_digit",
@@ -3892,7 +3895,7 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"string.is_ascii":     "omni_string_is_ascii",
 		"string.is_upper":     "omni_string_is_upper",
 		"string.is_lower":     "omni_string_is_lower",
-		
+
 		// String encoding/escaping functions
 		"std.string.encode_base64": "omni_encode_base64",
 		"std.string.decode_base64": "omni_decode_base64",
@@ -3910,63 +3913,63 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"string.unescape_html":     "omni_unescape_html",
 		"string.escape_json":       "omni_escape_json",
 		"string.escape_shell":      "omni_escape_shell",
-		
+
 		// Regex functions
-		"std.string.matches":        "omni_string_matches",
-		"std.string.find_match":     "omni_string_find_match",
+		"std.string.matches":          "omni_string_matches",
+		"std.string.find_match":       "omni_string_find_match",
 		"std.string.find_all_matches": "omni_string_find_all_matches",
-		"std.string.replace_regex":  "omni_string_replace_regex",
-		"string.matches":             "omni_string_matches",
-		"string.find_match":         "omni_string_find_match",
-		"string.find_all_matches":   "omni_string_find_all_matches",
-		"string.replace_regex":      "omni_string_replace_regex",
-		
+		"std.string.replace_regex":    "omni_string_replace_regex",
+		"string.matches":              "omni_string_matches",
+		"string.find_match":           "omni_string_find_match",
+		"string.find_all_matches":     "omni_string_find_all_matches",
+		"string.replace_regex":        "omni_string_replace_regex",
+
 		// Time functions
-		"std.time.now":              "omni_time_now_unix",
-		"std.time.unix_timestamp":   "omni_time_now_unix",
-		"std.time.unix_nano":        "omni_time_now_unix_nano",
-		"std.time.sleep_seconds":   "omni_time_sleep_seconds",
+		"std.time.now":                "omni_time_now_unix",
+		"std.time.unix_timestamp":     "omni_time_now_unix",
+		"std.time.unix_nano":          "omni_time_now_unix_nano",
+		"std.time.sleep_seconds":      "omni_time_sleep_seconds",
 		"std.time.sleep_milliseconds": "omni_time_sleep_milliseconds",
-		"std.time.time_zone_offset": "omni_time_zone_offset",
-		"std.time.time_zone_name":   "omni_time_zone_name",
-		"std.time.time_from_unix":   "omni_time_from_unix",
-		"std.time.time_to_unix":     "omni_time_to_unix",
-		"std.time.time_to_string":   "omni_time_to_string",
-		"std.time.time_from_string": "omni_time_from_string",
-		"std.time.time_to_unix_nano": "omni_time_to_unix_nano",
+		"std.time.time_zone_offset":   "omni_time_zone_offset",
+		"std.time.time_zone_name":     "omni_time_zone_name",
+		"std.time.time_from_unix":     "omni_time_from_unix",
+		"std.time.time_to_unix":       "omni_time_to_unix",
+		"std.time.time_to_string":     "omni_time_to_string",
+		"std.time.time_from_string":   "omni_time_from_string",
+		"std.time.time_to_unix_nano":  "omni_time_to_unix_nano",
 		"std.time.duration_to_string": "omni_duration_to_string",
-		"time.now":                  "omni_time_now_unix",
-		"time.unix_timestamp":       "omni_time_now_unix",
-		"time.unix_nano":            "omni_time_now_unix_nano",
-		"time.sleep_seconds":        "omni_time_sleep_seconds",
-		"time.sleep_milliseconds":   "omni_time_sleep_milliseconds",
-		"time.time_zone_offset":     "omni_time_zone_offset",
-		"time.time_zone_name":       "omni_time_zone_name",
-		"time.time_from_unix":       "omni_time_from_unix",
-		"time.time_to_unix":         "omni_time_to_unix",
-		"time.time_to_string":       "omni_time_to_string",
-		"time.time_from_string":     "omni_time_from_string",
-		"time.time_to_unix_nano":    "omni_time_to_unix_nano",
-		"time.duration_to_string":   "omni_duration_to_string",
-		
+		"time.now":                    "omni_time_now_unix",
+		"time.unix_timestamp":         "omni_time_now_unix",
+		"time.unix_nano":              "omni_time_now_unix_nano",
+		"time.sleep_seconds":          "omni_time_sleep_seconds",
+		"time.sleep_milliseconds":     "omni_time_sleep_milliseconds",
+		"time.time_zone_offset":       "omni_time_zone_offset",
+		"time.time_zone_name":         "omni_time_zone_name",
+		"time.time_from_unix":         "omni_time_from_unix",
+		"time.time_to_unix":           "omni_time_to_unix",
+		"time.time_to_string":         "omni_time_to_string",
+		"time.time_from_string":       "omni_time_from_string",
+		"time.time_to_unix_nano":      "omni_time_to_unix_nano",
+		"time.duration_to_string":     "omni_duration_to_string",
+
 		// Command-line argument functions
-		"std.os.args":            "omni_args_get",
-		"std.os.args_count":      "omni_args_count",
-		"std.os.has_flag":        "omni_args_has_flag",
-		"std.os.get_flag":        "omni_args_get_flag",
-		"std.os.positional_arg":  "omni_args_positional",
-		"os.args":                "omni_args_get",
-		"os.args_count":          "omni_args_count",
-		"os.has_flag":            "omni_args_has_flag",
-		"os.get_flag":            "omni_args_get_flag",
-		"os.positional_arg":      "omni_args_positional",
-		
+		"std.os.args":           "omni_args_get",
+		"std.os.args_count":     "omni_args_count",
+		"std.os.has_flag":       "omni_args_has_flag",
+		"std.os.get_flag":       "omni_args_get_flag",
+		"std.os.positional_arg": "omni_args_positional",
+		"os.args":               "omni_args_get",
+		"os.args_count":         "omni_args_count",
+		"os.has_flag":           "omni_args_has_flag",
+		"os.get_flag":           "omni_args_get_flag",
+		"os.positional_arg":     "omni_args_positional",
+
 		// Process ID functions
 		"std.os.getpid":  "omni_getpid",
 		"std.os.getppid": "omni_getppid",
 		"os.getpid":      "omni_getpid",
 		"os.getppid":     "omni_getppid",
-		
+
 		// Collections functions
 		"std.collections.keys":   "omni_map_keys_string_int",
 		"std.collections.values": "omni_map_values_string_int",
@@ -3974,12 +3977,12 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.collections.merge":  "omni_map_merge_string_int",
 		// Set functions
 		"std.collections.set_create":       "omni_set_create",
-		"std.collections.set_add":           "omni_set_add",
-		"std.collections.set_remove":        "omni_set_remove",
-		"std.collections.set_contains":      "omni_set_contains",
-		"std.collections.set_size":          "omni_set_size",
-		"std.collections.set_clear":         "omni_set_clear",
-		"std.collections.set_union":         "omni_set_union",
+		"std.collections.set_add":          "omni_set_add",
+		"std.collections.set_remove":       "omni_set_remove",
+		"std.collections.set_contains":     "omni_set_contains",
+		"std.collections.set_size":         "omni_set_size",
+		"std.collections.set_clear":        "omni_set_clear",
+		"std.collections.set_union":        "omni_set_union",
 		"std.collections.set_intersection": "omni_set_intersection",
 		"std.collections.set_difference":   "omni_set_difference",
 		// Queue functions
@@ -3992,67 +3995,67 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.collections.queue_clear":    "omni_queue_clear",
 		// Stack functions
 		"std.collections.stack_create":   "omni_stack_create",
-		"std.collections.stack_push":      "omni_stack_push",
-		"std.collections.stack_pop":       "omni_stack_pop",
-		"std.collections.stack_peek":      "omni_stack_peek",
-		"std.collections.stack_is_empty":  "omni_stack_is_empty",
-		"std.collections.stack_size":      "omni_stack_size",
-		"std.collections.stack_clear":     "omni_stack_clear",
+		"std.collections.stack_push":     "omni_stack_push",
+		"std.collections.stack_pop":      "omni_stack_pop",
+		"std.collections.stack_peek":     "omni_stack_peek",
+		"std.collections.stack_is_empty": "omni_stack_is_empty",
+		"std.collections.stack_size":     "omni_stack_size",
+		"std.collections.stack_clear":    "omni_stack_clear",
 		// Priority queue functions
-		"std.collections.priority_queue_create":    "omni_priority_queue_create",
-		"std.collections.priority_queue_insert":     "omni_priority_queue_insert",
+		"std.collections.priority_queue_create":      "omni_priority_queue_create",
+		"std.collections.priority_queue_insert":      "omni_priority_queue_insert",
 		"std.collections.priority_queue_extract_max": "omni_priority_queue_extract_max",
-		"std.collections.priority_queue_peek":       "omni_priority_queue_peek",
-		"std.collections.priority_queue_is_empty":   "omni_priority_queue_is_empty",
-		"std.collections.priority_queue_size":       "omni_priority_queue_size",
+		"std.collections.priority_queue_peek":        "omni_priority_queue_peek",
+		"std.collections.priority_queue_is_empty":    "omni_priority_queue_is_empty",
+		"std.collections.priority_queue_size":        "omni_priority_queue_size",
 		// Linked list functions
 		"std.collections.linked_list_create":   "omni_linked_list_create",
 		"std.collections.linked_list_append":   "omni_linked_list_append",
 		"std.collections.linked_list_prepend":  "omni_linked_list_prepend",
 		"std.collections.linked_list_insert":   "omni_linked_list_insert",
-		"std.collections.linked_list_remove":  "omni_linked_list_remove",
-		"std.collections.linked_list_get":     "omni_linked_list_get",
+		"std.collections.linked_list_remove":   "omni_linked_list_remove",
+		"std.collections.linked_list_get":      "omni_linked_list_get",
 		"std.collections.linked_list_set":      "omni_linked_list_set",
-		"std.collections.linked_list_size":    "omni_linked_list_size",
+		"std.collections.linked_list_size":     "omni_linked_list_size",
 		"std.collections.linked_list_is_empty": "omni_linked_list_is_empty",
-		"std.collections.linked_list_clear":   "omni_linked_list_clear",
+		"std.collections.linked_list_clear":    "omni_linked_list_clear",
 		// Binary tree functions
 		"std.collections.binary_tree_create":   "omni_binary_tree_create",
 		"std.collections.binary_tree_insert":   "omni_binary_tree_insert",
 		"std.collections.binary_tree_search":   "omni_binary_tree_search",
 		"std.collections.binary_tree_remove":   "omni_binary_tree_remove",
-		"std.collections.binary_tree_size":    "omni_binary_tree_size",
+		"std.collections.binary_tree_size":     "omni_binary_tree_size",
 		"std.collections.binary_tree_is_empty": "omni_binary_tree_is_empty",
 		"std.collections.binary_tree_clear":    "omni_binary_tree_clear",
 		// Network functions
-		"std.network.ip_parse":         "omni_ip_parse",
-		"std.network.ip_is_valid":      "omni_ip_is_valid",
-		"std.network.ip_is_private":    "omni_ip_is_private",
-		"std.network.ip_is_loopback":   "omni_ip_is_loopback",
-		"std.network.ip_to_string":     "omni_ip_to_string",
-		"std.network.url_parse":        "omni_url_parse",
-		"std.network.url_to_string":    "omni_url_to_string",
-		"std.network.url_is_valid":     "omni_url_is_valid",
-		"std.network.dns_lookup":       "omni_dns_lookup",
-		"std.network.dns_reverse_lookup": "omni_dns_reverse_lookup",
-		"std.network.http_get":         "omni_http_get",
-		"std.network.http_post":        "omni_http_post",
-		"std.network.http_put":         "omni_http_put",
-		"std.network.http_delete":      "omni_http_delete",
-		"std.network.http_request":      "omni_http_request",
-		"std.network.socket_create":    "omni_socket_create",
-		"std.network.socket_connect":   "omni_socket_connect",
-		"std.network.socket_bind":      "omni_socket_bind",
-		"std.network.socket_listen":    "omni_socket_listen",
-		"std.network.socket_accept":    "omni_socket_accept",
-		"std.network.socket_send":       "omni_socket_send",
-		"std.network.socket_receive":    "omni_socket_receive",
-		"std.network.socket_close":     "omni_socket_close",
+		"std.network.ip_parse":             "omni_ip_parse",
+		"std.network.ip_is_valid":          "omni_ip_is_valid",
+		"std.network.ip_is_private":        "omni_ip_is_private",
+		"std.network.ip_is_loopback":       "omni_ip_is_loopback",
+		"std.network.ip_to_string":         "omni_ip_to_string",
+		"std.network.url_parse":            "omni_url_parse",
+		"std.network.url_to_string":        "omni_url_to_string",
+		"std.network.url_is_valid":         "omni_url_is_valid",
+		"std.network.dns_lookup":           "omni_dns_lookup",
+		"std.network.dns_reverse_lookup":   "omni_dns_reverse_lookup",
+		"std.network.http_get":             "omni_http_get",
+		"std.network.http_post":            "omni_http_post",
+		"std.network.http_put":             "omni_http_put",
+		"std.network.http_delete":          "omni_http_delete",
+		"std.network.http_request":         "omni_http_request",
+		"std.network.socket_create":        "omni_socket_create",
+		"std.network.socket_connect":       "omni_socket_connect",
+		"std.network.socket_bind":          "omni_socket_bind",
+		"std.network.socket_listen":        "omni_socket_listen",
+		"std.network.socket_accept":        "omni_socket_accept",
+		"std.network.socket_send":          "omni_socket_send",
+		"std.network.socket_receive":       "omni_socket_receive",
+		"std.network.socket_close":         "omni_socket_close",
 		"std.network.network_is_connected": "omni_network_is_connected",
-		"std.network.network_get_local_ip":  "omni_network_get_local_ip",
-		"std.network.network_ping":          "omni_network_ping",
+		"std.network.network_get_local_ip": "omni_network_get_local_ip",
+		"std.network.network_ping":         "omni_network_ping",
 	}
-	
+
 	_, exists := runtimeImplMap[funcName]
 	return exists
 }
@@ -4064,7 +4067,7 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 	if !g.hasRuntimeImplementation(funcName) {
 		return false
 	}
-	
+
 	// List of functions that are provided by the runtime
 	// NOTE: This list should only include functions that:
 	// 1. Have actual runtime implementations (checked by hasRuntimeImplementation)
@@ -4112,35 +4115,35 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.math.round":           true,
 		"std.math.gcd":             true,
 		"std.math.lcm":             true,
-		"std.math.factorial": true,
-		"math.abs":           true,
-		"math.max":           true,
-		"math.min":           true,
-		"math.pow":           true,
-		"math.sqrt":          true,
-		"math.floor":         true,
-		"math.ceil":          true,
-		"math.round":         true,
-		"math.gcd":           true,
-		"math.lcm":           true,
-		"math.factorial":     true,
-		"std.os.exit":        true,
-		"os.exit":            true,
-		"std.os.read_file":   true,
-		"std.os.write_file":  true,
-		"std.os.append_file": true,
-		"os.read_file":       true,
-		"os.write_file":      true,
-		"os.append_file":     true,
+		"std.math.factorial":       true,
+		"math.abs":                 true,
+		"math.max":                 true,
+		"math.min":                 true,
+		"math.pow":                 true,
+		"math.sqrt":                true,
+		"math.floor":               true,
+		"math.ceil":                true,
+		"math.round":               true,
+		"math.gcd":                 true,
+		"math.lcm":                 true,
+		"math.factorial":           true,
+		"std.os.exit":              true,
+		"os.exit":                  true,
+		"std.os.read_file":         true,
+		"std.os.write_file":        true,
+		"std.os.append_file":       true,
+		"os.read_file":             true,
+		"os.write_file":            true,
+		"os.append_file":           true,
 		// File operations
-		"file.open":         true,
-		"file.close":        true,
-		"file.read":         true,
-		"file.write":        true,
-		"file.seek":         true,
-		"file.tell":         true,
-		"file.exists":       true,
-		"file.size":         true,
+		"file.open":           true,
+		"file.close":          true,
+		"file.read":           true,
+		"file.write":          true,
+		"file.seek":           true,
+		"file.tell":           true,
+		"file.exists":         true,
+		"file.size":           true,
 		"std.int_to_string":   true,
 		"std.float_to_string": true,
 		"std.bool_to_string":  true,
@@ -4151,90 +4154,90 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.log.info":        true,
 		"std.log.warn":        true,
 		"std.log.error":       true,
-		"std.log.set_level":  true,
+		"std.log.set_level":   true,
 		"std.test.start":      true,
 		"std.test.end":        true,
 		"std.assert":          true,
 		"test.start":          true,
 		"test.end":            true,
 		// Collections functions
-		"std.collections.keys":   true,
-		"std.collections.values": true,
-		"std.collections.copy":   true,
-		"std.collections.merge":  true,
-		"std.collections.set_create":       true,
-		"std.collections.set_add":           true,
-		"std.collections.set_remove":        true,
-		"std.collections.set_contains":      true,
-		"std.collections.set_size":          true,
-		"std.collections.set_clear":         true,
-		"std.collections.set_union":         true,
-		"std.collections.set_intersection": true,
-		"std.collections.set_difference":   true,
-		"std.collections.queue_create":   true,
-		"std.collections.queue_enqueue":  true,
-		"std.collections.queue_dequeue":  true,
-		"std.collections.queue_peek":     true,
-		"std.collections.queue_is_empty": true,
-		"std.collections.queue_size":     true,
-		"std.collections.queue_clear":    true,
-		"std.collections.stack_create":   true,
-		"std.collections.stack_push":     true,
-		"std.collections.stack_pop":      true,
-		"std.collections.stack_peek":     true,
-		"std.collections.stack_is_empty": true,
-		"std.collections.stack_size":     true,
-		"std.collections.stack_clear":    true,
-		"std.collections.priority_queue_create":    true,
-		"std.collections.priority_queue_insert":     true,
+		"std.collections.keys":                       true,
+		"std.collections.values":                     true,
+		"std.collections.copy":                       true,
+		"std.collections.merge":                      true,
+		"std.collections.set_create":                 true,
+		"std.collections.set_add":                    true,
+		"std.collections.set_remove":                 true,
+		"std.collections.set_contains":               true,
+		"std.collections.set_size":                   true,
+		"std.collections.set_clear":                  true,
+		"std.collections.set_union":                  true,
+		"std.collections.set_intersection":           true,
+		"std.collections.set_difference":             true,
+		"std.collections.queue_create":               true,
+		"std.collections.queue_enqueue":              true,
+		"std.collections.queue_dequeue":              true,
+		"std.collections.queue_peek":                 true,
+		"std.collections.queue_is_empty":             true,
+		"std.collections.queue_size":                 true,
+		"std.collections.queue_clear":                true,
+		"std.collections.stack_create":               true,
+		"std.collections.stack_push":                 true,
+		"std.collections.stack_pop":                  true,
+		"std.collections.stack_peek":                 true,
+		"std.collections.stack_is_empty":             true,
+		"std.collections.stack_size":                 true,
+		"std.collections.stack_clear":                true,
+		"std.collections.priority_queue_create":      true,
+		"std.collections.priority_queue_insert":      true,
 		"std.collections.priority_queue_extract_max": true,
-		"std.collections.priority_queue_peek":       true,
-		"std.collections.priority_queue_is_empty":   true,
-		"std.collections.priority_queue_size":       true,
-		"std.collections.linked_list_create":   true,
-		"std.collections.linked_list_append":   true,
-		"std.collections.linked_list_prepend":  true,
-		"std.collections.linked_list_insert":   true,
-		"std.collections.linked_list_remove":  true,
-		"std.collections.linked_list_get":     true,
-		"std.collections.linked_list_set":      true,
-		"std.collections.linked_list_size":    true,
-		"std.collections.linked_list_is_empty": true,
-		"std.collections.linked_list_clear":   true,
-		"std.collections.binary_tree_create":   true,
-		"std.collections.binary_tree_insert":   true,
-		"std.collections.binary_tree_search":   true,
-		"std.collections.binary_tree_remove":   true,
-		"std.collections.binary_tree_size":    true,
-		"std.collections.binary_tree_is_empty": true,
-		"std.collections.binary_tree_clear":    true,
+		"std.collections.priority_queue_peek":        true,
+		"std.collections.priority_queue_is_empty":    true,
+		"std.collections.priority_queue_size":        true,
+		"std.collections.linked_list_create":         true,
+		"std.collections.linked_list_append":         true,
+		"std.collections.linked_list_prepend":        true,
+		"std.collections.linked_list_insert":         true,
+		"std.collections.linked_list_remove":         true,
+		"std.collections.linked_list_get":            true,
+		"std.collections.linked_list_set":            true,
+		"std.collections.linked_list_size":           true,
+		"std.collections.linked_list_is_empty":       true,
+		"std.collections.linked_list_clear":          true,
+		"std.collections.binary_tree_create":         true,
+		"std.collections.binary_tree_insert":         true,
+		"std.collections.binary_tree_search":         true,
+		"std.collections.binary_tree_remove":         true,
+		"std.collections.binary_tree_size":           true,
+		"std.collections.binary_tree_is_empty":       true,
+		"std.collections.binary_tree_clear":          true,
 		// Network functions
-		"std.network.ip_parse":         true,
-		"std.network.ip_is_valid":      true,
-		"std.network.ip_is_private":    true,
-		"std.network.ip_is_loopback":   true,
-		"std.network.ip_to_string":     true,
-		"std.network.url_parse":        true,
-		"std.network.url_to_string":    true,
-		"std.network.url_is_valid":     true,
-		"std.network.dns_lookup":       true,
-		"std.network.dns_reverse_lookup": true,
-		"std.network.http_get":         true,
-		"std.network.http_post":        true,
-		"std.network.http_put":         true,
-		"std.network.http_delete":      true,
-		"std.network.http_request":      true,
-		"std.network.socket_create":    true,
-		"std.network.socket_connect":   true,
-		"std.network.socket_bind":      true,
-		"std.network.socket_listen":    true,
-		"std.network.socket_accept":    true,
-		"std.network.socket_send":       true,
-		"std.network.socket_receive":    true,
-		"std.network.socket_close":     true,
+		"std.network.ip_parse":             true,
+		"std.network.ip_is_valid":          true,
+		"std.network.ip_is_private":        true,
+		"std.network.ip_is_loopback":       true,
+		"std.network.ip_to_string":         true,
+		"std.network.url_parse":            true,
+		"std.network.url_to_string":        true,
+		"std.network.url_is_valid":         true,
+		"std.network.dns_lookup":           true,
+		"std.network.dns_reverse_lookup":   true,
+		"std.network.http_get":             true,
+		"std.network.http_post":            true,
+		"std.network.http_put":             true,
+		"std.network.http_delete":          true,
+		"std.network.http_request":         true,
+		"std.network.socket_create":        true,
+		"std.network.socket_connect":       true,
+		"std.network.socket_bind":          true,
+		"std.network.socket_listen":        true,
+		"std.network.socket_accept":        true,
+		"std.network.socket_send":          true,
+		"std.network.socket_receive":       true,
+		"std.network.socket_close":         true,
 		"std.network.network_is_connected": true,
-		"std.network.network_get_local_ip":  true,
-		"std.network.network_ping":          true,
+		"std.network.network_get_local_ip": true,
+		"std.network.network_ping":         true,
 	}
 
 	return runtimeFunctions[funcName]
@@ -4242,45 +4245,45 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 
 // isStdFunction checks if a function name looks like a standard library function
 func (g *CGenerator) isStdFunction(funcName string) bool {
-	return strings.HasPrefix(funcName, "std.") || 
-		   strings.HasPrefix(funcName, "io.") ||
-		   strings.HasPrefix(funcName, "math.") ||
-		   strings.HasPrefix(funcName, "string.") ||
-		   strings.HasPrefix(funcName, "array.") ||
-		   strings.HasPrefix(funcName, "os.") ||
-		   strings.HasPrefix(funcName, "collections.") ||
-		   strings.HasPrefix(funcName, "file.") ||
-		   strings.HasPrefix(funcName, "test.") ||
-		   strings.HasPrefix(funcName, "network.")
+	return strings.HasPrefix(funcName, "std.") ||
+		strings.HasPrefix(funcName, "io.") ||
+		strings.HasPrefix(funcName, "math.") ||
+		strings.HasPrefix(funcName, "string.") ||
+		strings.HasPrefix(funcName, "array.") ||
+		strings.HasPrefix(funcName, "os.") ||
+		strings.HasPrefix(funcName, "collections.") ||
+		strings.HasPrefix(funcName, "file.") ||
+		strings.HasPrefix(funcName, "test.") ||
+		strings.HasPrefix(funcName, "network.")
 }
 
 // isStringReturningFunction checks if a function returns a heap-allocated string
 // that needs to be freed by the caller
 func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 	stringReturningFunctions := map[string]bool{
-		"std.io.read_line":        true,
-		"io.read_line":            true,
-		"std.string.concat":       true,
-		"std.string.substring":    true,
-		"std.string.trim":         true,
-		"std.string.to_upper":     true,
-		"std.string.to_lower":     true,
-		"std.int_to_string":       true,
-		"std.float_to_string":     true,
-		"std.bool_to_string":      true,
-		"std.os.read_file":        true,
-		"os.read_file":            true,
-		"omni_read_line":          true,
-		"omni_strcat":             true,
-		"omni_substring":          true,
-		"omni_trim":               true,
-		"omni_to_upper":            true,
-		"omni_to_lower":            true,
-		"omni_int_to_string":      true,
-		"omni_float_to_string":    true,
-		"omni_bool_to_string":     true,
-		"omni_read_file":          true,
-		"omni_await_string":       true,
+		"std.io.read_line":     true,
+		"io.read_line":         true,
+		"std.string.concat":    true,
+		"std.string.substring": true,
+		"std.string.trim":      true,
+		"std.string.to_upper":  true,
+		"std.string.to_lower":  true,
+		"std.int_to_string":    true,
+		"std.float_to_string":  true,
+		"std.bool_to_string":   true,
+		"std.os.read_file":     true,
+		"os.read_file":         true,
+		"omni_read_line":       true,
+		"omni_strcat":          true,
+		"omni_substring":       true,
+		"omni_trim":            true,
+		"omni_to_upper":        true,
+		"omni_to_lower":        true,
+		"omni_int_to_string":   true,
+		"omni_float_to_string": true,
+		"omni_bool_to_string":  true,
+		"omni_read_file":       true,
+		"omni_await_string":    true,
 	}
 	return stringReturningFunctions[funcName]
 }
@@ -4352,7 +4355,7 @@ func (g *CGenerator) getMapPutFunction(keyType, valueType string) string {
 	if valueType == "bool" {
 		valueType = "bool"
 	}
-	
+
 	if keyType == "string" {
 		switch valueType {
 		case "int":
@@ -4385,11 +4388,11 @@ func (g *CGenerator) extractGenericType(typeStr string) (baseName string, typeAr
 	if !strings.Contains(typeStr, "<") || !strings.HasSuffix(typeStr, ">") {
 		return typeStr, nil
 	}
-	
+
 	lessPos := strings.Index(typeStr, "<")
 	baseName = typeStr[:lessPos]
 	inner := typeStr[lessPos+1 : len(typeStr)-1] // Remove "<" and ">"
-	
+
 	// Split by comma, but handle nested generics
 	typeArgs = g.splitGenericArgs(inner)
 	return baseName, typeArgs
@@ -4400,7 +4403,7 @@ func (g *CGenerator) splitGenericArgs(s string) []string {
 	var args []string
 	var current strings.Builder
 	depth := 0
-	
+
 	for _, r := range s {
 		switch r {
 		case '<':
@@ -4420,11 +4423,11 @@ func (g *CGenerator) splitGenericArgs(s string) []string {
 			current.WriteRune(r)
 		}
 	}
-	
+
 	if current.Len() > 0 {
 		args = append(args, strings.TrimSpace(current.String()))
 	}
-	
+
 	return args
 }
 
@@ -4437,7 +4440,7 @@ func (g *CGenerator) getMapGetFunction(keyType, valueType string) string {
 	if valueType == "bool" {
 		valueType = "bool"
 	}
-	
+
 	if keyType == "string" {
 		switch valueType {
 		case "int":
@@ -4499,16 +4502,16 @@ func (g *CGenerator) writeMain() {
 			break
 		}
 	}
-	
+
 	g.output.WriteString("int main(int argc, char** argv) {\n")
 	g.output.WriteString("    omni_args_init(argc, argv);\n")
-	
+
 	// Handle Promise return types (async main) - unwrap to inner type
 	if strings.HasPrefix(mainReturnType, "Promise<") {
 		innerType := mainReturnType[8 : len(mainReturnType)-1]
 		mainReturnType = innerType
 	}
-	
+
 	// Handle different return types
 	if mainReturnType == "void" {
 		g.output.WriteString("    omni_main();\n")
@@ -4529,6 +4532,6 @@ func (g *CGenerator) writeMain() {
 		}
 		g.output.WriteString("    return result;\n")
 	}
-	
+
 	g.output.WriteString("}\n")
 }

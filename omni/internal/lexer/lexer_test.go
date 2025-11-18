@@ -62,82 +62,82 @@ func TestEvilLexerCases(t *testing.T) {
 		// 1. Unterminated constructs
 		{
 			name:          "unterminated_nested_block_comment",
-			input:          "/* nested /* comment",
-			expectError:    true,
-			errorContains:  "unterminated block comment",
+			input:         "/* nested /* comment",
+			expectError:   true,
+			errorContains: "unterminated block comment",
 		},
 		{
 			name:          "unterminated_string_interpolation_no_brace",
-			input:          `"hello ${foo`,
-			expectError:    true,
-			errorContains:  "unterminated string interpolation",
+			input:         `"hello ${foo`,
+			expectError:   true,
+			errorContains: "unterminated string interpolation",
 		},
 		{
-			name:          "unterminated_string_interpolation_no_quote",
-			input:          `"hello ${foo}"`,
-			expectError:    false, // This should be valid
-			expectTokens:   true,
+			name:         "unterminated_string_interpolation_no_quote",
+			input:        `"hello ${foo}"`,
+			expectError:  false, // This should be valid
+			expectTokens: true,
 		},
 		{
 			name:          "unterminated_char_literal",
-			input:          "'",
-			expectError:    true,
-			errorContains:  "unterminated char literal",
+			input:         "'",
+			expectError:   true,
+			errorContains: "unterminated char literal",
 		},
 		{
 			name:          "unterminated_char_escape",
-			input:          "'\\",
-			expectError:    true,
-			errorContains:  "unterminated escape sequence",
+			input:         "'\\",
+			expectError:   true,
+			errorContains: "unterminated escape sequence",
 		},
 		// 2. Numeric edge cases
 		{
 			name:          "float_exponent_no_digits_plus",
-			input:          "1e+ foo",
-			expectError:    true,
-			errorContains:  "exponent must be followed by at least one digit",
+			input:         "1e+ foo",
+			expectError:   true,
+			errorContains: "exponent must be followed by at least one digit",
 		},
 		{
 			name:          "float_exponent_no_digits_minus",
-			input:          "2E-",
-			expectError:    true,
-			errorContains:  "exponent must be followed by at least one digit",
+			input:         "2E-",
+			expectError:   true,
+			errorContains: "exponent must be followed by at least one digit",
 		},
 		{
 			name:          "float_underscore_before_dot",
-			input:          "123_.5",
-			expectError:    true,
-			errorContains:  "numeric literal cannot end with underscore",
+			input:         "123_.5",
+			expectError:   true,
+			errorContains: "numeric literal cannot end with underscore",
 		},
 		{
-			name:          "float_underscore_after_dot",
-			input:          "123._5",
-			expectError:    false, // This might be valid, depends on spec
-			expectTokens:   true,
+			name:         "float_underscore_after_dot",
+			input:        "123._5",
+			expectError:  false, // This might be valid, depends on spec
+			expectTokens: true,
 		},
 		{
 			name:          "hex_leading_underscore",
-			input:          "0x_dead",
-			expectError:    true,
-			errorContains:  "hex literal cannot start with underscore",
+			input:         "0x_dead",
+			expectError:   true,
+			errorContains: "hex literal cannot start with underscore",
 		},
 		{
 			name:          "hex_adjacent_underscores",
-			input:          "0x__dead",
-			expectError:    true,
-			errorContains:  "hex literal cannot have adjacent underscores",
+			input:         "0x__dead",
+			expectError:   true,
+			errorContains: "hex literal cannot have adjacent underscores",
 		},
 		{
 			name:          "binary_adjacent_underscores",
-			input:          "0b__01",
-			expectError:    true,
-			errorContains:  "binary literal cannot have adjacent underscores",
+			input:         "0b__01",
+			expectError:   true,
+			errorContains: "binary literal cannot have adjacent underscores",
 		},
 		{
-			name:          "large_number_performance",
-			input:          "999999999999999999999999",
-			expectError:    false,
-			expectTokens:   true,
+			name:         "large_number_performance",
+			input:        "999999999999999999999999",
+			expectError:  false,
+			expectTokens: true,
 			validateTokens: func(t *testing.T, tokens []lexer.Token) {
 				if len(tokens) < 2 {
 					t.Fatalf("expected at least 2 tokens (number + EOF), got %d", len(tokens))
@@ -172,10 +172,10 @@ func TestEvilLexerCases(t *testing.T) {
 		},
 		// 4. Strings/interpolation
 		{
-			name:          "interpolation_unterminated_quote",
-			input:          `"${ "unterminated" }"`,
-			expectError:    false, // Should be valid - the inner quote is escaped or part of expression
-			expectTokens:   true,
+			name:         "interpolation_unterminated_quote",
+			input:        `"${ "unterminated" }"`,
+			expectError:  false, // Should be valid - the inner quote is escaped or part of expression
+			expectTokens: true,
 		},
 		{
 			name:         "interpolation_multiple",
@@ -281,7 +281,7 @@ func TestEvilLexerCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tokens, err := lexer.LexAll("test.omni", tt.input)
-			
+
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("expected error containing %q, got nil", tt.errorContains)
@@ -292,17 +292,17 @@ func TestEvilLexerCases(t *testing.T) {
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			if tt.expectTokens && len(tokens) == 0 {
 				t.Error("expected tokens but got none")
 				return
 			}
-			
+
 			if tt.validateTokens != nil {
 				tt.validateTokens(t, tokens)
 			}

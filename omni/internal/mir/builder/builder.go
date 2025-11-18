@@ -41,7 +41,7 @@ func BuildModule(mod *ast.Module) (*mir.Module, error) {
 type moduleBuilder struct {
 	module       *mir.Module
 	signatures   map[string]FunctionSignature
-	lambdas      []*mir.Function // Collect lambda functions
+	lambdas      []*mir.Function              // Collect lambda functions
 	structFields map[string]map[string]string // struct type name -> field name -> field type
 }
 
@@ -547,7 +547,7 @@ func (fb *functionBuilder) lowerRangeFor(stmt *ast.ForStmt) error {
 		// Fallback to int for unknown types
 		elementType = "int"
 	}
-	
+
 	itemID := fb.fn.NextValue()
 	itemInst := mir.Instruction{
 		ID:   itemID,
@@ -960,14 +960,14 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		// new Type allocates memory for Type and returns a pointer to it
 		targetType := typeExprToString(e.Type)
 		pointerType := "*" + targetType
-		
+
 		// Call malloc to allocate memory (size 1 for now - should calculate actual size)
 		id := fb.fn.NextValue()
 		operands := []mir.Operand{
 			{Kind: mir.OperandLiteral, Literal: "malloc"},
 			{Kind: mir.OperandLiteral, Literal: "1"}, // Size placeholder
 		}
-		
+
 		mallocInst := mir.Instruction{
 			ID:       id,
 			Op:       "call",
@@ -975,19 +975,19 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 			Operands: operands,
 		}
 		fb.block.Instructions = append(fb.block.Instructions, mallocInst)
-		
+
 		// Cast the void* result to the target pointer type
 		castID := fb.fn.NextValue()
 		castInst := mir.Instruction{
-			ID:    castID,
-			Op:    "cast",
-			Type:  pointerType,
+			ID:   castID,
+			Op:   "cast",
+			Type: pointerType,
 			Operands: []mir.Operand{
 				{Kind: mir.OperandValue, Value: id},
 			},
 		}
 		fb.block.Instructions = append(fb.block.Instructions, castInst)
-		
+
 		return mirValue{ID: castID, Type: pointerType}, nil
 	case *ast.DeleteExpr:
 		// Implement actual memory deallocation
@@ -996,14 +996,14 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		if err != nil {
 			return mirValue{}, err
 		}
-		
+
 		// Call free to deallocate memory
 		id := fb.fn.NextValue()
 		operands := []mir.Operand{
 			{Kind: mir.OperandLiteral, Literal: "free"},
 			valueOperand(targetValue.ID, targetValue.Type),
 		}
-		
+
 		freeInst := mir.Instruction{
 			ID:       id,
 			Op:       "call",
@@ -1011,7 +1011,7 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 			Operands: operands,
 		}
 		fb.block.Instructions = append(fb.block.Instructions, freeInst)
-		
+
 		// Return void (no value)
 		return mirValue{ID: mir.InvalidValue, Type: "void"}, nil
 	case *ast.LambdaExpr:
@@ -1431,7 +1431,7 @@ func (fb *functionBuilder) emitMemberAccess(expr *ast.MemberExpr) (mirValue, err
 					fieldType = ft
 				}
 			}
-			
+
 			id := fb.fn.NextValue()
 			inst := mir.Instruction{
 				ID:   id,

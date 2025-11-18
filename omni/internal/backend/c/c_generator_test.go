@@ -1056,9 +1056,9 @@ func TestCGenerator(t *testing.T) {
 
 		// Test function call with different return types
 		testCases := []struct {
-			op       string
+			op         string
 			returnType string
-			funcName string
+			funcName   string
 		}{
 			{"call", "int", "add"},
 			{"call.void", "void", "println"},
@@ -1160,8 +1160,8 @@ func TestCGenerator(t *testing.T) {
 		// Test various stdlib function calls via "call" instruction
 		stdlibTests := []struct {
 			returnType string
-			funcName string
-			needsArg bool
+			funcName   string
+			needsArg   bool
 		}{
 			{"void", "std.io.println", true},
 			{"string", "std.io.read_line", false},
@@ -1329,8 +1329,8 @@ func TestCGenerator(t *testing.T) {
 
 		// Test log operations
 		logTests := []struct {
-			op       string
-			message  string
+			op      string
+			message string
 		}{
 			{"std.log.debug", "\"debug message\""},
 			{"std.log.info", "\"info message\""},
@@ -1518,28 +1518,28 @@ func TestCGenerator(t *testing.T) {
 
 		// Test OperandValue with different types
 		testCases := []struct {
-			operand mir.Operand
-			valueType string
+			operand          mir.Operand
+			valueType        string
 			expectedContains string
 		}{
 			{
-				operand: mir.Operand{Kind: mir.OperandValue, Value: 1, Type: "string"},
-				valueType: "string",
+				operand:          mir.Operand{Kind: mir.OperandValue, Value: 1, Type: "string"},
+				valueType:        "string",
 				expectedContains: "v1",
 			},
 			{
-				operand: mir.Operand{Kind: mir.OperandValue, Value: 2, Type: "int"},
-				valueType: "int",
+				operand:          mir.Operand{Kind: mir.OperandValue, Value: 2, Type: "int"},
+				valueType:        "int",
 				expectedContains: "omni_int_to_string",
 			},
 			{
-				operand: mir.Operand{Kind: mir.OperandValue, Value: 3, Type: "float"},
-				valueType: "float",
+				operand:          mir.Operand{Kind: mir.OperandValue, Value: 3, Type: "float"},
+				valueType:        "float",
 				expectedContains: "omni_float_to_string",
 			},
 			{
-				operand: mir.Operand{Kind: mir.OperandValue, Value: 4, Type: "bool"},
-				valueType: "bool",
+				operand:          mir.Operand{Kind: mir.OperandValue, Value: 4, Type: "bool"},
+				valueType:        "bool",
 				expectedContains: "omni_bool_to_string",
 			},
 		}
@@ -1561,7 +1561,7 @@ func TestCGenerator(t *testing.T) {
 
 		// Test OperandLiteral
 		literalTests := []struct {
-			operand mir.Operand
+			operand          mir.Operand
 			expectedContains string
 		}{
 			{mir.Operand{Kind: mir.OperandLiteral, Literal: "\"hello\"", Type: "string"}, "\"hello\""},
@@ -1605,15 +1605,15 @@ func TestCGenerator(t *testing.T) {
 		generator := NewCGenerator(module)
 
 		testCases := []struct {
-			name string
-			params []mir.Param
-			returnType string
+			name             string
+			params           []mir.Param
+			returnType       string
 			expectedContains string
 		}{
 			{
-				name: "simple",
-				params: []mir.Param{{Name: "x", Type: "int", ID: 0}},
-				returnType: "(int) -> int",
+				name:             "simple",
+				params:           []mir.Param{{Name: "x", Type: "int", ID: 0}},
+				returnType:       "(int) -> int",
 				expectedContains: "int32_t (*simple(",
 			},
 			{
@@ -1622,7 +1622,7 @@ func TestCGenerator(t *testing.T) {
 					{Name: "a", Type: "int", ID: 0},
 					{Name: "b", Type: "string", ID: 1},
 				},
-				returnType: "(int, string) -> void",
+				returnType:       "(int, string) -> void",
 				expectedContains: "void (*multiple_params(",
 			},
 		}
@@ -1640,8 +1640,8 @@ func TestCGenerator(t *testing.T) {
 
 		// Test declaring variables with different types
 		testCases := []struct {
-			varName string
-			varType string
+			varName          string
+			varType          string
 			expectedContains string
 		}{
 			{"v1", "int", "int32_t v1"},
@@ -2104,8 +2104,8 @@ func TestCGenerator(t *testing.T) {
 
 		// Create map with different key/value types
 		mapTests := []struct {
-			mapType string
-			keyType string
+			mapType   string
+			keyType   string
 			valueType string
 		}{
 			{"map<string,int>", "string", "int"},
@@ -2150,7 +2150,7 @@ func TestCGenerator(t *testing.T) {
 
 		// Test array indexing with different element types
 		arrayTests := []struct {
-			arrayType string
+			arrayType   string
 			elementType string
 		}{
 			{"array<int>", "int"},
@@ -2435,7 +2435,7 @@ func TestCGenerator(t *testing.T) {
 
 		// Test member access with different field types
 		memberTests := []struct {
-			fieldType string
+			fieldType    string
 			expectedFunc string
 		}{
 			{"string", "omni_struct_get_string_field"},
@@ -2656,7 +2656,7 @@ func TestCGenerator(t *testing.T) {
 		// Test await with different Promise types
 		awaitTests := []struct {
 			promiseType string
-			resultType string
+			resultType  string
 		}{
 			{"Promise<int>", "int"},
 			{"Promise<string>", "string"},
@@ -2920,7 +2920,7 @@ func TestCGenerator(t *testing.T) {
 					ReturnType: "int",
 					Blocks: []*mir.BasicBlock{
 						{
-							Name: "entry",
+							Name:         "entry",
 							Instructions: []mir.Instruction{},
 							Terminator: mir.Terminator{
 								Op: "ret",
@@ -2980,7 +2980,7 @@ func TestCGenerator(t *testing.T) {
 
 		// Test void return (not main)
 		term := &mir.Terminator{
-			Op:      "ret",
+			Op:       "ret",
 			Operands: []mir.Operand{},
 		}
 
@@ -3000,7 +3000,7 @@ func TestCGenerator(t *testing.T) {
 
 		// Test void return for main (omni_main)
 		term := &mir.Terminator{
-			Op:      "ret",
+			Op:       "ret",
 			Operands: []mir.Operand{},
 		}
 
@@ -3064,7 +3064,7 @@ func TestCGenerator(t *testing.T) {
 
 		// Test unknown terminator (should error)
 		term := &mir.Terminator{
-			Op:      "unknown",
+			Op:       "unknown",
 			Operands: []mir.Operand{},
 		}
 
@@ -3310,7 +3310,7 @@ func TestCGenerator(t *testing.T) {
 
 	t.Run("GenerateSourceMap", func(t *testing.T) {
 		generator := NewCGeneratorWithDebug(module, "O0", true, "test.omni")
-		
+
 		// Generate some code first
 		if len(module.Functions) > 0 {
 			generator.generateFunction(module.Functions[0])
@@ -3662,7 +3662,7 @@ func TestCGenerator(t *testing.T) {
 
 	t.Run("GenerateSourceMap", func(t *testing.T) {
 		generator := NewCGeneratorWithDebug(module, "O0", true, "test.omni")
-		
+
 		// Generate some code to create source map entries
 		generator.generateInstruction(&mir.Instruction{
 			ID:   1,
@@ -3692,14 +3692,14 @@ func TestCGenerator(t *testing.T) {
 							Name: "entry",
 							Instructions: []mir.Instruction{
 								{
-									ID:   1,
-									Op:   "closure.create", // Unsupported
-									Type: "void",
+									ID:       1,
+									Op:       "closure.create", // Unsupported
+									Type:     "void",
 									Operands: []mir.Operand{},
 								},
 							},
 							Terminator: mir.Terminator{
-								Op: "ret",
+								Op:       "ret",
 								Operands: []mir.Operand{},
 							},
 						},

@@ -485,8 +485,8 @@ func TestForStmtClassic(t *testing.T) {
 func TestForStmtRange(t *testing.T) {
 	// Test range for loop
 	forStmt := &ForStmt{
-		IsRange: true,
-		Target:  &IdentifierExpr{Name: "item"},
+		IsRange:  true,
+		Target:   &IdentifierExpr{Name: "item"},
 		Iterable: &IdentifierExpr{Name: "items"},
 		Body:     &BlockStmt{},
 	}
@@ -1273,7 +1273,7 @@ func TestASTPrinterModule(t *testing.T) {
 		},
 		Decls: []Decl{
 			&FuncDecl{
-				Name: "main",
+				Name:   "main",
 				Return: &TypeExpr{Name: "int"},
 				Body: &BlockStmt{
 					Statements: []Stmt{
@@ -1448,7 +1448,7 @@ func TestASTPrinterControlFlow(t *testing.T) {
 	module := &Module{
 		Decls: []Decl{
 			&FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &TypeExpr{Name: "int"},
 				Body: &BlockStmt{
 					Statements: []Stmt{
@@ -1466,8 +1466,8 @@ func TestASTPrinterControlFlow(t *testing.T) {
 							},
 						},
 						&ForStmt{
-							IsRange: true,
-							Target:  &IdentifierExpr{Name: "item"},
+							IsRange:  true,
+							Target:   &IdentifierExpr{Name: "item"},
 							Iterable: &IdentifierExpr{Name: "items"},
 							Body: &BlockStmt{
 								Statements: []Stmt{
@@ -1503,7 +1503,7 @@ func TestASTPrinterTryCatch(t *testing.T) {
 	module := &Module{
 		Decls: []Decl{
 			&FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &TypeExpr{Name: "int"},
 				Body: &BlockStmt{
 					Statements: []Stmt{
@@ -1598,7 +1598,7 @@ func TestASTComplexNestedStructures(t *testing.T) {
 	module := &Module{
 		Decls: []Decl{
 			&FuncDecl{
-				Name: "complex",
+				Name:       "complex",
 				TypeParams: []TypeParam{{Name: "T"}},
 				Params: []Param{
 					{Name: "x", Type: &TypeExpr{Name: "T"}},

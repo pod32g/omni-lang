@@ -280,7 +280,7 @@ func normalizeOutput(output []byte) string {
 func runVMWithCoverage(testFile string, cliArgs ...string) (string, string, error) {
 	coverageFile := filepath.Join(os.TempDir(), fmt.Sprintf("coverage_%s.json", testFile))
 	defer os.Remove(coverageFile)
-	
+
 	args := append([]string{"--coverage", "--coverage-output", coverageFile, testFile}, cliArgs...)
 	cmd := buildVMCommand(args...)
 	output, err := cmd.Output()
@@ -291,13 +291,13 @@ func runVMWithCoverage(testFile string, cliArgs ...string) (string, string, erro
 	if len(result) > 0 && result[len(result)-1] == '\n' {
 		result = result[:len(result)-1]
 	}
-	
+
 	// Read coverage data
 	coverageData, err := os.ReadFile(coverageFile)
 	if err != nil {
 		return result, "", nil // Coverage file might not exist if no std functions were called
 	}
-	
+
 	return result, string(coverageData), nil
 }
 
@@ -310,18 +310,18 @@ func TestCoverageGeneration(t *testing.T) {
 	if result != "0" {
 		t.Errorf("Expected result 0, got %s", result)
 	}
-	
+
 	// Verify coverage JSON is valid
 	if coverageJSON == "" {
 		t.Skip("No coverage data generated (may be expected if no std functions called)")
 		return
 	}
-	
+
 	var coverageData coverage.CoverageData
 	if err := json.Unmarshal([]byte(coverageJSON), &coverageData); err != nil {
 		t.Fatalf("Failed to parse coverage JSON: %v", err)
 	}
-	
+
 	if len(coverageData.Entries) == 0 {
 		t.Log("Coverage data generated but no entries found")
 	} else {
@@ -340,10 +340,10 @@ func TestCoverageThreshold(t *testing.T) {
 		"std_file_comprehensive.omni",
 		"std_os_comprehensive.omni",
 	}
-	
+
 	coverageFile := filepath.Join(os.TempDir(), "coverage_all.json")
 	defer os.Remove(coverageFile)
-	
+
 	// Run all tests and collect coverage
 	for _, testFile := range testFiles {
 		_, _, err := runVMWithCoverage(testFile)
@@ -351,13 +351,13 @@ func TestCoverageThreshold(t *testing.T) {
 			t.Logf("Warning: Test %s failed: %v", testFile, err)
 		}
 	}
-	
+
 	// Parse coverage data
 	coverageData, err := coverage.ParseCoverageFile(coverageFile)
 	if err != nil {
 		// Coverage file might not exist - try to generate it by running tests again
 		t.Logf("Coverage file not found, running tests to generate coverage...")
-		
+
 		// Run a comprehensive test to generate coverage
 		args := []string{"--coverage", "--coverage-output", coverageFile, "std_io_comprehensive.omni"}
 		cmd := buildVMCommand(args...)
@@ -365,35 +365,35 @@ func TestCoverageThreshold(t *testing.T) {
 			t.Skipf("Could not generate coverage: %v", err)
 			return
 		}
-		
+
 		coverageData, err = coverage.ParseCoverageFile(coverageFile)
 		if err != nil {
 			t.Skipf("Could not parse coverage file: %v", err)
 			return
 		}
 	}
-	
+
 	// Parse std library
 	stdPath := "../../std"
 	funcsByFile, err := coverage.ParseStdLibrary(stdPath)
 	if err != nil {
 		t.Fatalf("Failed to parse std library: %v", err)
 	}
-	
+
 	// Match coverage to functions
 	matches := coverage.MatchCoverageToFunctions(coverageData, funcsByFile)
-	
+
 	// Calculate statistics
 	stats := coverage.CalculateCoverage(matches)
-	
+
 	// Check threshold
 	threshold := 60.0
 	meetsThreshold, message := coverage.CheckCoverageThreshold(stats, threshold)
-	
+
 	t.Log(message)
 	t.Logf("Function Coverage: %.2f%% (%d/%d)", stats.GetFunctionCoveragePercentage(), stats.CoveredFunctions, stats.TotalFunctions)
 	t.Logf("Line Coverage: %.2f%% (%d/%d)", stats.GetLineCoveragePercentage(), stats.CoveredLines, stats.TotalLines)
-	
+
 	if !meetsThreshold {
 		t.Errorf("Coverage threshold not met: %.2f%% < %.2f%%", stats.GetFunctionCoveragePercentage(), threshold)
 	}

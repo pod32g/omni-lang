@@ -10,10 +10,10 @@ import (
 
 func main() {
 	var (
-		analyzeCmd   = flag.NewFlagSet("analyze", flag.ExitOnError)
-		reportCmd    = flag.NewFlagSet("report", flag.ExitOnError)
-		checkCmd     = flag.NewFlagSet("check", flag.ExitOnError)
-		formatFlag   = reportCmd.String("format", "text", "output format (text|html)")
+		analyzeCmd    = flag.NewFlagSet("analyze", flag.ExitOnError)
+		reportCmd     = flag.NewFlagSet("report", flag.ExitOnError)
+		checkCmd      = flag.NewFlagSet("check", flag.ExitOnError)
+		formatFlag    = reportCmd.String("format", "text", "output format (text|html)")
 		thresholdFlag = checkCmd.Float64("threshold", 60.0, "coverage threshold percentage")
 	)
 
@@ -176,4 +176,3 @@ func runCheck(coveragePath, stdPath string, threshold float64) error {
 
 	return nil
 }
-

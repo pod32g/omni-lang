@@ -297,7 +297,7 @@ func TestLowerIfStmt(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "int"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -340,7 +340,7 @@ func TestLowerForStmtRange(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "void"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -356,8 +356,8 @@ func TestLowerForStmtRange(t *testing.T) {
 							},
 						},
 						&ast.ForStmt{
-							IsRange: true,
-							Target:  &ast.IdentifierExpr{Name: "item"},
+							IsRange:  true,
+							Target:   &ast.IdentifierExpr{Name: "item"},
 							Iterable: &ast.IdentifierExpr{Name: "items"},
 							Body: &ast.BlockStmt{
 								Statements: []ast.Stmt{
@@ -389,7 +389,7 @@ func TestLowerForStmtClassic(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "void"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -435,7 +435,7 @@ func TestLowerWhileStmt(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "void"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -468,7 +468,7 @@ func TestLowerBreakContinueStmt(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "void"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -502,7 +502,7 @@ func TestLowerTryStmt(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "int"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -550,7 +550,7 @@ func TestLowerIncrementStmt(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "void"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -587,7 +587,7 @@ func TestEmitBinaryExpr(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "int"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -619,7 +619,7 @@ func TestEmitUnaryExpr(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "int"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -650,7 +650,7 @@ func TestEmitCallExpr(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "void"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -689,7 +689,7 @@ func TestEmitMemberAccess(t *testing.T) {
 				},
 			},
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "int"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -731,7 +731,7 @@ func TestEmitArrayLiteral(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "array", Args: []*ast.TypeExpr{{Name: "int"}}},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -765,7 +765,7 @@ func TestEmitMapLiteral(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "map", Args: []*ast.TypeExpr{{Name: "string"}, {Name: "int"}}},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -807,7 +807,7 @@ func TestEmitStructLiteral(t *testing.T) {
 				},
 			},
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "Point"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -841,7 +841,7 @@ func TestEmitIndexAccess(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "int"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -925,7 +925,7 @@ func TestEmitCast(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "int"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -956,7 +956,7 @@ func TestEmitStringInterpolation(t *testing.T) {
 	module := &ast.Module{
 		Decls: []ast.Decl{
 			&ast.FuncDecl{
-				Name: "test",
+				Name:   "test",
 				Return: &ast.TypeExpr{Name: "string"},
 				Body: &ast.BlockStmt{
 					Statements: []ast.Stmt{
@@ -1033,7 +1033,7 @@ func TestEmitAllBinaryOps(t *testing.T) {
 		module := &ast.Module{
 			Decls: []ast.Decl{
 				&ast.FuncDecl{
-					Name: "test",
+					Name:   "test",
 					Return: &ast.TypeExpr{Name: "int"},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{
@@ -1069,7 +1069,7 @@ func TestEmitAllUnaryOps(t *testing.T) {
 		module := &ast.Module{
 			Decls: []ast.Decl{
 				&ast.FuncDecl{
-					Name: "test",
+					Name:   "test",
 					Return: &ast.TypeExpr{Name: "int"},
 					Body: &ast.BlockStmt{
 						Statements: []ast.Stmt{

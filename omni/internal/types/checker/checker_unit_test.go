@@ -34,8 +34,8 @@ func TestTypeParameterManagement(t *testing.T) {
 func TestTypeInference(t *testing.T) {
 	// Test type inference through let declarations
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -55,8 +55,8 @@ func TestTypeInference(t *testing.T) {
 			src:  `let x: int = 42`,
 		},
 		{
-			name: "type mismatch should error",
-			src:  `let x: string = 42`,
+			name:      "type mismatch should error",
+			src:       `let x: string = 42`,
 			shouldErr: true,
 		},
 	}
@@ -80,8 +80,8 @@ func TestTypeInference(t *testing.T) {
 
 func TestGenericTypeInference(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -120,8 +120,8 @@ func TestGenericTypeInference(t *testing.T) {
 
 func TestExpressionTypeChecking(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -133,8 +133,8 @@ func TestExpressionTypeChecking(t *testing.T) {
 			src:  `let x = "hello" + "world"`,
 		},
 		{
-			name: "binary addition mismatch",
-			src:  `func main(): void { let x = 1 + "hello" }`,
+			name:      "binary addition mismatch",
+			src:       `func main(): void { let x = 1 + "hello" }`,
 			shouldErr: true,
 		},
 		{
@@ -146,8 +146,8 @@ func TestExpressionTypeChecking(t *testing.T) {
 			src:  `let x = true && false`,
 		},
 		{
-			name: "logical operator type error",
-			src:  `let x = 1 && 2`,
+			name:      "logical operator type error",
+			src:       `let x = 1 && 2`,
 			shouldErr: true,
 		},
 		{
@@ -160,12 +160,12 @@ func TestExpressionTypeChecking(t *testing.T) {
 		},
 		{
 			name: "array indexing",
-			src:  `let arr = [1, 2, 3]
+			src: `let arr = [1, 2, 3]
 			       let x = arr[0]`,
 		},
 		{
 			name: "array indexing with wrong type",
-			src:  `let arr = [1, 2, 3]
+			src: `let arr = [1, 2, 3]
 			       let x = arr["0"]`,
 			shouldErr: true,
 		},
@@ -190,8 +190,8 @@ func TestExpressionTypeChecking(t *testing.T) {
 
 func TestFunctionCallChecking(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -213,7 +213,7 @@ func TestFunctionCallChecking(t *testing.T) {
 		},
 		{
 			name: "builtin len function",
-			src:  `let arr = [1, 2, 3]
+			src: `let arr = [1, 2, 3]
 			       let x = len(arr)`,
 		},
 	}
@@ -237,8 +237,8 @@ func TestFunctionCallChecking(t *testing.T) {
 
 func TestStructFieldAccess(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -285,17 +285,17 @@ func TestStructFieldAccess(t *testing.T) {
 
 func TestControlFlowChecking(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
 			name: "if statement with bool condition",
-			src: `func main(): void { if true { let x = 1 } }`,
+			src:  `func main(): void { if true { let x = 1 } }`,
 		},
 		{
-			name: "if statement with non-bool condition",
-			src: `func main(): void { if 1 { let x = 1 } }`,
+			name:      "if statement with non-bool condition",
+			src:       `func main(): void { if 1 { let x = 1 } }`,
 			shouldErr: true,
 		},
 		{
@@ -307,33 +307,33 @@ for x in arr { }
 		},
 		{
 			name: "for loop classic",
-			src: `func main(): void { for i: int = 0; i < 10; i++ { } }`,
+			src:  `func main(): void { for i: int = 0; i < 10; i++ { } }`,
 		},
 		{
 			name: "while loop",
-			src: `func main(): void { while true { } }`,
+			src:  `func main(): void { while true { } }`,
 		},
 		{
-			name: "while loop non-bool condition",
-			src: `func main(): void { while 1 { } }`,
+			name:      "while loop non-bool condition",
+			src:       `func main(): void { while 1 { } }`,
 			shouldErr: true,
 		},
 		{
 			name: "break in loop",
-			src: `func main(): void { for i: int = 0; i < 10; i++ { break } }`,
+			src:  `func main(): void { for i: int = 0; i < 10; i++ { break } }`,
 		},
 		{
-			name: "break outside loop",
-			src: `func main(): void { break }`,
+			name:      "break outside loop",
+			src:       `func main(): void { break }`,
 			shouldErr: true,
 		},
 		{
 			name: "continue in loop",
-			src: `func main(): void { for i: int = 0; i < 10; i++ { continue } }`,
+			src:  `func main(): void { for i: int = 0; i < 10; i++ { continue } }`,
 		},
 		{
-			name: "continue outside loop",
-			src: `func main(): void { continue }`,
+			name:      "continue outside loop",
+			src:       `func main(): void { continue }`,
 			shouldErr: true,
 		},
 	}
@@ -357,36 +357,36 @@ for x in arr { }
 
 func TestReturnStatementChecking(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
 			name: "return with correct type",
-			src: `func test(): int { return 42 }`,
+			src:  `func test(): int { return 42 }`,
 		},
 		{
-			name: "return with wrong type",
-			src: `func test(): int { return "hello" }`,
+			name:      "return with wrong type",
+			src:       `func test(): int { return "hello" }`,
 			shouldErr: true,
 		},
 		{
 			name: "return void function",
-			src: `func test(): void { return }`,
+			src:  `func test(): void { return }`,
 		},
 		{
-			name: "return void function with value",
-			src: `func test(): void { return 42 }`,
+			name:      "return void function with value",
+			src:       `func test(): void { return 42 }`,
 			shouldErr: true,
 		},
 		{
-			name: "return in non-function",
-			src: `func main(): void { return 42 }`,
+			name:      "return in non-function",
+			src:       `func main(): void { return 42 }`,
 			shouldErr: true,
 		},
 		{
 			name: "inferred return type",
-			src: `func test() { return 42 }`,
+			src:  `func test() { return 42 }`,
 		},
 	}
 
@@ -409,8 +409,8 @@ func TestReturnStatementChecking(t *testing.T) {
 
 func TestOptionalTypes(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -422,13 +422,13 @@ func TestOptionalTypes(t *testing.T) {
 			src:  `let x: int? = null`,
 		},
 		{
-			name: "non-optional cannot be null",
-			src:  `func main(): void { let x: int = null }`,
+			name:      "non-optional cannot be null",
+			src:       `func main(): void { let x: int = null }`,
 			shouldErr: true,
 		},
 		{
 			name: "optional widening",
-			src:  `let x: int? = 42
+			src: `let x: int? = 42
 			       let y: int? = x`,
 		},
 	}
@@ -452,8 +452,8 @@ func TestOptionalTypes(t *testing.T) {
 
 func TestUnionTypes(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -465,13 +465,13 @@ func TestUnionTypes(t *testing.T) {
 			src:  `let x: int | string = "hello"`,
 		},
 		{
-			name: "union type mismatch",
-			src:  `let x: int | string = true`,
+			name:      "union type mismatch",
+			src:       `let x: int | string = true`,
 			shouldErr: true,
 		},
 		{
 			name: "union type ordering",
-			src:  `let x: int | string = 42
+			src: `let x: int | string = 42
 			       let y: string | int = x`,
 		},
 	}
@@ -495,13 +495,13 @@ func TestUnionTypes(t *testing.T) {
 
 func TestAsyncAwait(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
 			name: "async function",
-			src: `async func test(): int { return 42 }`,
+			src:  `async func test(): int { return 42 }`,
 		},
 		{
 			name: "await in async function",
@@ -539,8 +539,8 @@ func TestAsyncAwait(t *testing.T) {
 
 func TestTypeAliases(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -574,8 +574,8 @@ func TestTypeAliases(t *testing.T) {
 
 func TestLambdaExpressions(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -614,8 +614,8 @@ func TestLambdaExpressions(t *testing.T) {
 
 func TestAssignmentChecking(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -642,8 +642,8 @@ func TestAssignmentChecking(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "assignment to undefined",
-			src:  `func main(): void { x = 42 }`,
+			name:      "assignment to undefined",
+			src:       `func main(): void { x = 42 }`,
 			shouldErr: true,
 		},
 	}
@@ -667,8 +667,8 @@ func TestAssignmentChecking(t *testing.T) {
 
 func TestIncrementDecrement(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -722,8 +722,8 @@ func TestIncrementDecrement(t *testing.T) {
 
 func TestStringInterpolation(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -732,7 +732,7 @@ func TestStringInterpolation(t *testing.T) {
 		},
 		{
 			name: "string interpolation with expression",
-			src:  `let x = 42
+			src: `let x = 42
 			       let y = "Value: ${x}"`,
 		},
 	}
@@ -756,8 +756,8 @@ func TestStringInterpolation(t *testing.T) {
 
 func TestArrayLiterals(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -769,8 +769,8 @@ func TestArrayLiterals(t *testing.T) {
 			src:  `let arr: array<int> = [1, 2, 3]`,
 		},
 		{
-			name: "empty array literal",
-			src:  `let arr = []`,
+			name:      "empty array literal",
+			src:       `let arr = []`,
 			shouldErr: true,
 		},
 		{
@@ -778,8 +778,8 @@ func TestArrayLiterals(t *testing.T) {
 			src:  `let arr: array<int> = []`,
 		},
 		{
-			name: "array literal type mismatch",
-			src:  `let arr = [1, 2, "three"]`,
+			name:      "array literal type mismatch",
+			src:       `let arr = [1, 2, "three"]`,
 			shouldErr: true,
 		},
 	}
@@ -803,8 +803,8 @@ func TestArrayLiterals(t *testing.T) {
 
 func TestMapLiterals(t *testing.T) {
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -816,13 +816,13 @@ func TestMapLiterals(t *testing.T) {
 			src:  `let m: map<string, int> = {"key": 42}`,
 		},
 		{
-			name: "map literal type mismatch key",
-			src:  `let m = {"key": 42, 123: 456}`,
+			name:      "map literal type mismatch key",
+			src:       `let m = {"key": 42, 123: 456}`,
 			shouldErr: true,
 		},
 		{
-			name: "map literal type mismatch value",
-			src:  `let m = {"key": 42, "other": "value"}`,
+			name:      "map literal type mismatch value",
+			src:       `let m = {"key": 42, "other": "value"}`,
 			shouldErr: true,
 		},
 	}
@@ -1007,8 +1007,8 @@ func TestBinaryExprOperators(t *testing.T) {
 			src:  `let x = 5 >> 2`,
 		},
 		{
-			name: "bitwise on float",
-			src:  `let x = 5.0 & 3.0`,
+			name:      "bitwise on float",
+			src:       `let x = 5.0 & 3.0`,
 			shouldErr: true,
 		},
 		{
@@ -1317,8 +1317,8 @@ func TestCastExpressions(t *testing.T) {
 			src:  `let x = "42" as int`,
 		},
 		{
-			name: "cast incompatible types",
-			src:  `let x = "hello" as int`,
+			name:      "cast incompatible types",
+			src:       `let x = "hello" as int`,
 			shouldErr: true,
 		},
 	}
@@ -1434,13 +1434,12 @@ func TestIndexExpressions(t *testing.T) {
 	}
 }
 
-
 // Test helper functions indirectly through type checking
 func TestArrayElementTypeHelper(t *testing.T) {
 	// Test array element type extraction through array operations
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -1486,8 +1485,8 @@ func TestArrayElementTypeHelper(t *testing.T) {
 func TestMapTypesHelper(t *testing.T) {
 	// Test map type extraction through map operations
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -1533,8 +1532,8 @@ func TestMapTypesHelper(t *testing.T) {
 func TestPromiseInnerTypeHelper(t *testing.T) {
 	// Test Promise inner type extraction through async operations
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -1581,8 +1580,8 @@ func TestPromiseInnerTypeHelper(t *testing.T) {
 func TestNumericTypeHelpers(t *testing.T) {
 	// Test numeric type checking through arithmetic operations
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -1638,8 +1637,8 @@ func TestNumericTypeHelpers(t *testing.T) {
 func TestSymbolManagementHelpers(t *testing.T) {
 	// Test symbol declaration and lookup through variable declarations
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -1697,8 +1696,8 @@ func TestSymbolManagementHelpers(t *testing.T) {
 func TestStdSymbolHelpers(t *testing.T) {
 	// Test std symbol detection through std library calls
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -1744,8 +1743,8 @@ func TestStdSymbolHelpers(t *testing.T) {
 func TestTypeExpressionHelpers(t *testing.T) {
 	// Test type expression helpers through various type annotations
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -1801,8 +1800,8 @@ func TestTypeExpressionHelpers(t *testing.T) {
 func TestControlFlowHelpers(t *testing.T) {
 	// Test control flow through various statements
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{
@@ -1886,8 +1885,8 @@ func TestControlFlowHelpers(t *testing.T) {
 func TestErrorHandlingHelpers(t *testing.T) {
 	// Test error handling through try-catch
 	tests := []struct {
-		name     string
-		src      string
+		name      string
+		src       string
 		shouldErr bool
 	}{
 		{

@@ -192,9 +192,9 @@ func (s *ExprStmt) stmt()            {}
 // The parser must enforce this invariant.
 type ForStmt struct {
 	SpanInfo  lexer.Span
-	Init      Stmt // optional - only used when IsRange is false
-	Condition Expr // optional - only used when IsRange is false
-	Post      Stmt // optional - only used when IsRange is false
+	Init      Stmt            // optional - only used when IsRange is false
+	Condition Expr            // optional - only used when IsRange is false
+	Post      Stmt            // optional - only used when IsRange is false
 	Target    *IdentifierExpr // only used when IsRange is true
 	Iterable  Expr            // only used when IsRange is true
 	Body      *BlockStmt
@@ -284,7 +284,7 @@ func (s *ThrowStmt) stmt()            {}
 type TypeAliasDecl struct {
 	SpanInfo   lexer.Span
 	Name       string
-	TypeParams []string // For generic type aliases
+	TypeParams []string  // For generic type aliases
 	Type       *TypeExpr // Pointer to avoid copying and allow updates to propagate
 }
 
@@ -478,6 +478,7 @@ type StructLiteralField struct {
 type StructLiteralExpr struct {
 	SpanInfo lexer.Span
 	TypeName string
+	TypeArgs []*TypeExpr
 	Fields   []StructLiteralField
 }
 

@@ -67,7 +67,6 @@ func TestCreateZipPackage(t *testing.T) {
 	}
 }
 
-
 func TestPackageTypeConstants(t *testing.T) {
 	// Test package type constants
 	if PackageTypeTarGz != "tar.gz" {
@@ -123,29 +122,29 @@ func TestPackageConfig(t *testing.T) {
 func TestCreatePackageDryRun(t *testing.T) {
 	// Create temporary directory structure
 	tmpDir := t.TempDir()
-	
+
 	// Create test files
 	runtimeDir := filepath.Join(tmpDir, "runtime")
 	binDir := filepath.Join(tmpDir, "bin")
 	stdDir := filepath.Join(tmpDir, "std")
 	examplesDir := filepath.Join(tmpDir, "examples")
-	
+
 	os.MkdirAll(runtimeDir, 0755)
 	os.MkdirAll(binDir, 0755)
 	os.MkdirAll(stdDir, 0755)
 	os.MkdirAll(examplesDir, 0755)
-	
+
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.c"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.h"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(binDir, "omnic"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(stdDir, "test.omni"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(examplesDir, "hello.omni"), []byte("test"), 0644)
-	
+
 	// Change to temp directory
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
-	
+
 	config := PackageConfig{
 		OutputPath:   filepath.Join(tmpDir, "test.tar.gz"),
 		PackageType:  PackageTypeTarGz,
@@ -156,12 +155,12 @@ func TestCreatePackageDryRun(t *testing.T) {
 		Architecture: "amd64",
 		DryRun:       true,
 	}
-	
+
 	err := CreatePackage(config)
 	if err != nil {
 		t.Errorf("CreatePackage failed in dry-run mode: %v", err)
 	}
-	
+
 	// Package file should not exist in dry-run mode
 	if _, err := os.Stat(config.OutputPath); err == nil {
 		t.Error("Expected package file not to exist in dry-run mode")
@@ -170,28 +169,28 @@ func TestCreatePackageDryRun(t *testing.T) {
 
 func TestCreatePackageWithManifest(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create test files
 	runtimeDir := filepath.Join(tmpDir, "runtime")
 	binDir := filepath.Join(tmpDir, "bin")
 	stdDir := filepath.Join(tmpDir, "std")
 	examplesDir := filepath.Join(tmpDir, "examples")
-	
+
 	os.MkdirAll(runtimeDir, 0755)
 	os.MkdirAll(binDir, 0755)
 	os.MkdirAll(stdDir, 0755)
 	os.MkdirAll(examplesDir, 0755)
-	
+
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.c"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.h"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(binDir, "omnic"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(stdDir, "test.omni"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(examplesDir, "hello.omni"), []byte("test"), 0644)
-	
+
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
-	
+
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
 	config := PackageConfig{
 		OutputPath:   filepath.Join(tmpDir, "test.tar.gz"),
@@ -204,12 +203,12 @@ func TestCreatePackageWithManifest(t *testing.T) {
 		DryRun:       true,
 		ManifestPath: manifestPath,
 	}
-	
+
 	err := CreatePackage(config)
 	if err != nil {
 		t.Errorf("CreatePackage failed with manifest: %v", err)
 	}
-	
+
 	// Manifest should exist
 	if _, err := os.Stat(manifestPath); err != nil {
 		t.Errorf("Expected manifest file to exist: %v", err)
@@ -218,11 +217,11 @@ func TestCreatePackageWithManifest(t *testing.T) {
 
 func TestCreatePackageDryRunWithChecksum(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
-	
+
 	config := PackageConfig{
 		OutputPath:   filepath.Join(tmpDir, "test.tar.gz"),
 		PackageType:  PackageTypeTarGz,
@@ -232,7 +231,7 @@ func TestCreatePackageDryRunWithChecksum(t *testing.T) {
 		DryRun:       true,
 		Checksum:     true,
 	}
-	
+
 	err := CreatePackage(config)
 	if err == nil {
 		t.Error("Expected error when checksum is requested in dry-run mode")
@@ -247,7 +246,7 @@ func TestCreatePackageUnsupportedType(t *testing.T) {
 		Platform:     "linux",
 		Architecture: "amd64",
 	}
-	
+
 	err := CreatePackage(config)
 	if err == nil {
 		t.Error("Expected error for unsupported package type")
@@ -256,28 +255,28 @@ func TestCreatePackageUnsupportedType(t *testing.T) {
 
 func TestSimulatePackage(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create test files
 	runtimeDir := filepath.Join(tmpDir, "runtime")
 	binDir := filepath.Join(tmpDir, "bin")
 	stdDir := filepath.Join(tmpDir, "std")
 	examplesDir := filepath.Join(tmpDir, "examples")
-	
+
 	os.MkdirAll(runtimeDir, 0755)
 	os.MkdirAll(binDir, 0755)
 	os.MkdirAll(stdDir, 0755)
 	os.MkdirAll(examplesDir, 0755)
-	
+
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.c"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.h"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(binDir, "omnic"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(stdDir, "test.omni"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(examplesDir, "hello.omni"), []byte("test"), 0644)
-	
+
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
-	
+
 	entries := []PackageEntry{}
 	recorder := func(src, archive string, size int64) {
 		entries = append(entries, PackageEntry{
@@ -286,7 +285,7 @@ func TestSimulatePackage(t *testing.T) {
 			Size:    size,
 		})
 	}
-	
+
 	// Test tar.gz simulation
 	config := PackageConfig{
 		PackageType:  PackageTypeTarGz,
@@ -294,16 +293,16 @@ func TestSimulatePackage(t *testing.T) {
 		IncludeDebug: false,
 		IncludeSrc:   false,
 	}
-	
+
 	err := simulatePackage(config, recorder)
 	if err != nil {
 		t.Errorf("simulatePackage failed for tar.gz: %v", err)
 	}
-	
+
 	if len(entries) == 0 {
 		t.Error("Expected entries to be recorded")
 	}
-	
+
 	// Test zip simulation
 	config.PackageType = PackageTypeZip
 	entries = []PackageEntry{}
@@ -311,11 +310,11 @@ func TestSimulatePackage(t *testing.T) {
 	if err != nil {
 		t.Errorf("simulatePackage failed for zip: %v", err)
 	}
-	
+
 	if len(entries) == 0 {
 		t.Error("Expected entries to be recorded")
 	}
-	
+
 	// Test unsupported type
 	config.PackageType = PackageType("unknown")
 	err = simulatePackage(config, recorder)
@@ -327,28 +326,28 @@ func TestSimulatePackage(t *testing.T) {
 func TestWriteManifest(t *testing.T) {
 	tmpDir := t.TempDir()
 	manifestPath := filepath.Join(tmpDir, "manifest.json")
-	
+
 	entries := []PackageEntry{
 		{Source: "test1.txt", Archive: "archive/test1.txt", Size: 100},
 		{Source: "test2.txt", Archive: "archive/test2.txt", Size: 200},
 	}
-	
+
 	err := writeManifest(manifestPath, entries)
 	if err != nil {
 		t.Errorf("writeManifest failed: %v", err)
 	}
-	
+
 	// Check that manifest file exists
 	if _, err := os.Stat(manifestPath); err != nil {
 		t.Errorf("Expected manifest file to exist: %v", err)
 	}
-	
+
 	// Read and verify manifest content
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Errorf("Failed to read manifest: %v", err)
 	}
-	
+
 	if !strings.Contains(string(data), "test1.txt") {
 		t.Error("Expected manifest to contain test1.txt")
 	}
@@ -356,29 +355,29 @@ func TestWriteManifest(t *testing.T) {
 
 func TestWriteChecksum(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.txt")
 	os.WriteFile(testFile, []byte("test content"), 0644)
-	
+
 	checksumPath := filepath.Join(tmpDir, "test.txt.sha256")
-	
+
 	err := writeChecksum(checksumPath, testFile)
 	if err != nil {
 		t.Errorf("writeChecksum failed: %v", err)
 	}
-	
+
 	// Check that checksum file exists
 	if _, err := os.Stat(checksumPath); err != nil {
 		t.Errorf("Expected checksum file to exist: %v", err)
 	}
-	
+
 	// Read and verify checksum content
 	data, err := os.ReadFile(checksumPath)
 	if err != nil {
 		t.Errorf("Failed to read checksum: %v", err)
 	}
-	
+
 	// Checksum should be in format: "hash  filename"
 	if !strings.Contains(string(data), "test.txt") {
 		t.Error("Expected checksum to contain filename")
@@ -389,20 +388,20 @@ func TestAddFileToTar(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
 	os.WriteFile(testFile, []byte("test content"), 0644)
-	
+
 	archivePath := filepath.Join(tmpDir, "test.tar.gz")
 	file, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("Failed to create archive: %v", err)
 	}
 	defer file.Close()
-	
+
 	gzWriter := gzip.NewWriter(file)
 	defer gzWriter.Close()
-	
+
 	tarWriter := tar.NewWriter(gzWriter)
 	defer tarWriter.Close()
-	
+
 	entries := []PackageEntry{}
 	recorder := func(src, archive string, size int64) {
 		entries = append(entries, PackageEntry{
@@ -411,12 +410,12 @@ func TestAddFileToTar(t *testing.T) {
 			Size:    size,
 		})
 	}
-	
+
 	err = addFileToTar(tarWriter, testFile, "archive/test.txt", recorder)
 	if err != nil {
 		t.Errorf("addFileToTar failed: %v", err)
 	}
-	
+
 	if len(entries) == 0 {
 		t.Error("Expected entry to be recorded")
 	}
@@ -426,17 +425,17 @@ func TestAddFileToZip(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.txt")
 	os.WriteFile(testFile, []byte("test content"), 0644)
-	
+
 	archivePath := filepath.Join(tmpDir, "test.zip")
 	file, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("Failed to create archive: %v", err)
 	}
 	defer file.Close()
-	
+
 	zipWriter := zip.NewWriter(file)
 	defer zipWriter.Close()
-	
+
 	entries := []PackageEntry{}
 	recorder := func(src, archive string, size int64) {
 		entries = append(entries, PackageEntry{
@@ -445,12 +444,12 @@ func TestAddFileToZip(t *testing.T) {
 			Size:    size,
 		})
 	}
-	
+
 	err = addFileToZip(zipWriter, testFile, "archive/test.txt", recorder)
 	if err != nil {
 		t.Errorf("addFileToZip failed: %v", err)
 	}
-	
+
 	if len(entries) == 0 {
 		t.Error("Expected entry to be recorded")
 	}
@@ -460,25 +459,25 @@ func TestAddDirectoryToTar(t *testing.T) {
 	tmpDir := t.TempDir()
 	testDir := filepath.Join(tmpDir, "testdir")
 	os.MkdirAll(testDir, 0755)
-	
+
 	os.WriteFile(filepath.Join(testDir, "file1.txt"), []byte("content1"), 0644)
 	os.WriteFile(filepath.Join(testDir, "file2.txt"), []byte("content2"), 0644)
 	os.MkdirAll(filepath.Join(testDir, "subdir"), 0755)
 	os.WriteFile(filepath.Join(testDir, "subdir", "file3.txt"), []byte("content3"), 0644)
-	
+
 	archivePath := filepath.Join(tmpDir, "test.tar.gz")
 	file, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("Failed to create archive: %v", err)
 	}
 	defer file.Close()
-	
+
 	gzWriter := gzip.NewWriter(file)
 	defer gzWriter.Close()
-	
+
 	tarWriter := tar.NewWriter(gzWriter)
 	defer tarWriter.Close()
-	
+
 	entries := []PackageEntry{}
 	recorder := func(src, archive string, size int64) {
 		entries = append(entries, PackageEntry{
@@ -487,12 +486,12 @@ func TestAddDirectoryToTar(t *testing.T) {
 			Size:    size,
 		})
 	}
-	
+
 	err = addDirectoryToTar(tarWriter, testDir, "archive/testdir", recorder)
 	if err != nil {
 		t.Errorf("addDirectoryToTar failed: %v", err)
 	}
-	
+
 	// Should have entries for files and directories
 	if len(entries) == 0 {
 		t.Error("Expected entries to be recorded")
@@ -503,22 +502,22 @@ func TestAddDirectoryToZip(t *testing.T) {
 	tmpDir := t.TempDir()
 	testDir := filepath.Join(tmpDir, "testdir")
 	os.MkdirAll(testDir, 0755)
-	
+
 	os.WriteFile(filepath.Join(testDir, "file1.txt"), []byte("content1"), 0644)
 	os.WriteFile(filepath.Join(testDir, "file2.txt"), []byte("content2"), 0644)
 	os.MkdirAll(filepath.Join(testDir, "subdir"), 0755)
 	os.WriteFile(filepath.Join(testDir, "subdir", "file3.txt"), []byte("content3"), 0644)
-	
+
 	archivePath := filepath.Join(tmpDir, "test.zip")
 	file, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("Failed to create archive: %v", err)
 	}
 	defer file.Close()
-	
+
 	zipWriter := zip.NewWriter(file)
 	defer zipWriter.Close()
-	
+
 	entries := []PackageEntry{}
 	recorder := func(src, archive string, size int64) {
 		entries = append(entries, PackageEntry{
@@ -527,12 +526,12 @@ func TestAddDirectoryToZip(t *testing.T) {
 			Size:    size,
 		})
 	}
-	
+
 	err = addDirectoryToZip(zipWriter, testDir, "archive/testdir", recorder)
 	if err != nil {
 		t.Errorf("addDirectoryToZip failed: %v", err)
 	}
-	
+
 	// Should have entries for files and directories
 	if len(entries) == 0 {
 		t.Error("Expected entries to be recorded")
@@ -541,34 +540,34 @@ func TestAddDirectoryToZip(t *testing.T) {
 
 func TestAddFileOrDirToTar(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Test with file
 	testFile := filepath.Join(tmpDir, "test.txt")
 	os.WriteFile(testFile, []byte("test content"), 0644)
-	
+
 	archivePath := filepath.Join(tmpDir, "test.tar.gz")
 	file, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("Failed to create archive: %v", err)
 	}
 	defer file.Close()
-	
+
 	gzWriter := gzip.NewWriter(file)
 	defer gzWriter.Close()
-	
+
 	tarWriter := tar.NewWriter(gzWriter)
 	defer tarWriter.Close()
-	
+
 	err = addFileOrDirToTar(tarWriter, testFile, "archive/test.txt", nil)
 	if err != nil {
 		t.Errorf("addFileOrDirToTar failed for file: %v", err)
 	}
-	
+
 	// Test with directory
 	testDir := filepath.Join(tmpDir, "testdir")
 	os.MkdirAll(testDir, 0755)
 	os.WriteFile(filepath.Join(testDir, "file.txt"), []byte("content"), 0644)
-	
+
 	err = addFileOrDirToTar(tarWriter, testDir, "archive/testdir", nil)
 	if err != nil {
 		t.Errorf("addFileOrDirToTar failed for directory: %v", err)
@@ -587,7 +586,7 @@ func TestGetDefaultPackageName(t *testing.T) {
 		{"1.0.0", "darwin", "arm64", PackageTypeZip, "omni-lang-1.0.0-darwin-arm64.zip"},
 		{"2.0.0", "windows", "x86_64", PackageTypeZip, "omni-lang-2.0.0-windows-x86_64.zip"},
 	}
-	
+
 	for _, tc := range testCases {
 		result := GetDefaultPackageName(tc.version, tc.platform, tc.arch, tc.packageType)
 		if result != tc.expected {
@@ -599,28 +598,28 @@ func TestGetDefaultPackageName(t *testing.T) {
 
 func TestCreatePackageWithChecksum(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create test files
 	runtimeDir := filepath.Join(tmpDir, "runtime")
 	binDir := filepath.Join(tmpDir, "bin")
 	stdDir := filepath.Join(tmpDir, "std")
 	examplesDir := filepath.Join(tmpDir, "examples")
-	
+
 	os.MkdirAll(runtimeDir, 0755)
 	os.MkdirAll(binDir, 0755)
 	os.MkdirAll(stdDir, 0755)
 	os.MkdirAll(examplesDir, 0755)
-	
+
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.c"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.h"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(binDir, "omnic"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(stdDir, "test.omni"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(examplesDir, "hello.omni"), []byte("test"), 0644)
-	
+
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
-	
+
 	packagePath := filepath.Join(tmpDir, "test.tar.gz")
 	config := PackageConfig{
 		OutputPath:   packagePath,
@@ -633,24 +632,24 @@ func TestCreatePackageWithChecksum(t *testing.T) {
 		DryRun:       true,
 		Checksum:     false, // Can't test checksum in dry-run, but test the path
 	}
-	
+
 	err := CreatePackage(config)
 	if err != nil {
 		t.Errorf("CreatePackage failed: %v", err)
 	}
-	
+
 	// Test checksum path generation
 	config.Checksum = true
 	config.ChecksumPath = filepath.Join(tmpDir, "custom.sha256")
 	config.DryRun = false
-	
+
 	// This will fail because files don't exist in the right place, but we can test the path logic
 	_ = CreatePackage(config)
 }
 
 func TestCreatePackageWithDebugAndSrc(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create test files including debug and src directories
 	runtimeDir := filepath.Join(tmpDir, "runtime")
 	binDir := filepath.Join(tmpDir, "bin")
@@ -659,7 +658,7 @@ func TestCreatePackageWithDebugAndSrc(t *testing.T) {
 	debugDir := filepath.Join(tmpDir, "debug")
 	srcDir := filepath.Join(tmpDir, "internal")
 	cmdDir := filepath.Join(tmpDir, "cmd")
-	
+
 	os.MkdirAll(runtimeDir, 0755)
 	os.MkdirAll(binDir, 0755)
 	os.MkdirAll(stdDir, 0755)
@@ -667,7 +666,7 @@ func TestCreatePackageWithDebugAndSrc(t *testing.T) {
 	os.MkdirAll(debugDir, 0755)
 	os.MkdirAll(srcDir, 0755)
 	os.MkdirAll(cmdDir, 0755)
-	
+
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.c"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.h"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(binDir, "omnic"), []byte("test"), 0644)
@@ -678,11 +677,11 @@ func TestCreatePackageWithDebugAndSrc(t *testing.T) {
 	os.WriteFile(filepath.Join(cmdDir, "main.go"), []byte("package main"), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "go.mod"), []byte("module test"), 0644)
 	os.WriteFile(filepath.Join(tmpDir, "Makefile"), []byte("all:"), 0644)
-	
+
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
-	
+
 	config := PackageConfig{
 		OutputPath:   filepath.Join(tmpDir, "test.tar.gz"),
 		PackageType:  PackageTypeTarGz,
@@ -693,7 +692,7 @@ func TestCreatePackageWithDebugAndSrc(t *testing.T) {
 		Architecture: "amd64",
 		DryRun:       true,
 	}
-	
+
 	err := CreatePackage(config)
 	if err != nil {
 		t.Errorf("CreatePackage failed with debug and src: %v", err)
@@ -702,20 +701,20 @@ func TestCreatePackageWithDebugAndSrc(t *testing.T) {
 
 func TestAddFileToTarError(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	archivePath := filepath.Join(tmpDir, "test.tar.gz")
 	file, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("Failed to create archive: %v", err)
 	}
 	defer file.Close()
-	
+
 	gzWriter := gzip.NewWriter(file)
 	defer gzWriter.Close()
-	
+
 	tarWriter := tar.NewWriter(gzWriter)
 	defer tarWriter.Close()
-	
+
 	// Test with non-existent file
 	err = addFileToTar(tarWriter, "nonexistent.txt", "archive/nonexistent.txt", nil)
 	if err == nil {
@@ -725,17 +724,17 @@ func TestAddFileToTarError(t *testing.T) {
 
 func TestAddFileToZipError(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	archivePath := filepath.Join(tmpDir, "test.zip")
 	file, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("Failed to create archive: %v", err)
 	}
 	defer file.Close()
-	
+
 	zipWriter := zip.NewWriter(file)
 	defer zipWriter.Close()
-	
+
 	// Test with non-existent file
 	err = addFileToZip(zipWriter, "nonexistent.txt", "archive/nonexistent.txt", nil)
 	if err == nil {
@@ -755,7 +754,7 @@ func TestWriteManifestError(t *testing.T) {
 func TestWriteChecksumError(t *testing.T) {
 	tmpDir := t.TempDir()
 	checksumPath := filepath.Join(tmpDir, "checksum.sha256")
-	
+
 	// Test with non-existent package file
 	err := writeChecksum(checksumPath, "nonexistent.tar.gz")
 	if err == nil {
@@ -767,28 +766,28 @@ func TestCreatePackageOutputDirectory(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputDir := filepath.Join(tmpDir, "output", "subdir")
 	packagePath := filepath.Join(outputDir, "test.tar.gz")
-	
+
 	// Create test files
 	runtimeDir := filepath.Join(tmpDir, "runtime")
 	binDir := filepath.Join(tmpDir, "bin")
 	stdDir := filepath.Join(tmpDir, "std")
 	examplesDir := filepath.Join(tmpDir, "examples")
-	
+
 	os.MkdirAll(runtimeDir, 0755)
 	os.MkdirAll(binDir, 0755)
 	os.MkdirAll(stdDir, 0755)
 	os.MkdirAll(examplesDir, 0755)
-	
+
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.c"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(runtimeDir, "omni_rt.h"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(binDir, "omnic"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(stdDir, "test.omni"), []byte("test"), 0644)
 	os.WriteFile(filepath.Join(examplesDir, "hello.omni"), []byte("test"), 0644)
-	
+
 	oldWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(oldWd)
-	
+
 	config := PackageConfig{
 		OutputPath:   packagePath,
 		PackageType:  PackageTypeTarGz,
@@ -797,13 +796,13 @@ func TestCreatePackageOutputDirectory(t *testing.T) {
 		Architecture: "amd64",
 		DryRun:       true,
 	}
-	
+
 	// This should create the output directory (even in dry-run, the directory creation happens)
 	err := CreatePackage(config)
 	if err != nil {
 		t.Errorf("CreatePackage failed: %v", err)
 	}
-	
+
 	// In dry-run mode, the directory might not be created, but the function should handle it
 	// Check if directory exists (it should be created before the dry-run check)
 	_ = outputDir
