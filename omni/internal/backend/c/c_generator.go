@@ -2286,11 +2286,50 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 			}
 
-			// Special handling for known HTTPResponse fields
-			// Always use the correct getter based on field name, regardless of declaredVariables
-			// This ensures we use the right type even if the variable was declared with wrong type at top
-			if fieldName == "body" || fieldName == "status_text" {
-				// HTTPResponse.body and status_text are strings - always use string getter
+			// Special handling for HTTPResponse struct - use direct field access
+			// Check if the struct variable is an HTTPResponse type
+			structType := ""
+			if inst.Operands[0].Kind == mir.OperandValue {
+				if storedType, ok := g.valueTypes[inst.Operands[0].Value]; ok && storedType != "" {
+					structType = storedType
+				}
+			}
+			isHTTPResponse := strings.Contains(structType, "HTTPResponse") || strings.Contains(structVar, "http_response")
+			
+			if isHTTPResponse {
+				// HTTPResponse is a concrete struct - use direct field access
+				if fieldName == "status_code" {
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->status_code;\n", varName, structVar))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = %s->status_code;\n", varName, structVar))
+					}
+					g.valueTypes[inst.ID] = "int"
+				} else if fieldName == "body" {
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->body;\n", varName, structVar))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  const char* %s = %s->body;\n", varName, structVar))
+					}
+					g.valueTypes[inst.ID] = "string"
+				} else if fieldName == "status_text" {
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->status_text;\n", varName, structVar))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  const char* %s = %s->status_text;\n", varName, structVar))
+					}
+					g.valueTypes[inst.ID] = "string"
+				} else {
+					// Unknown field - fall back to generic accessor (shouldn't happen)
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field((omni_struct_t*)%s, \"%s\");\n", varName, structVar, fieldName))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field((omni_struct_t*)%s, \"%s\");\n", varName, structVar, fieldName))
+					}
+					g.valueTypes[inst.ID] = "int"
+				}
+			} else if fieldName == "body" || fieldName == "status_text" {
+				// Generic struct with body/status_text fields - use generic getter
 				if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
 					g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
 				} else {
@@ -2298,7 +2337,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				g.valueTypes[inst.ID] = "string"
 			} else if fieldName == "status_code" {
-				// HTTPResponse.status_code is int - always use int getter
+				// Generic struct with status_code field - use generic getter
 				if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
 					g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
 				} else {
