@@ -3610,7 +3610,7 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_assert"
 	case "std.panic":
 		return "omni_panic"
-	case "std.int_to_string":
+	case "std.int_to_string", "std.string.int_to_string":
 		return "omni_int_to_string"
 	case "std.float_to_string":
 		return "omni_float_to_string"
@@ -3806,9 +3806,10 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"math.trunc":         "omni_trunc",
 
 		// Type conversion functions
-		"std.int_to_string":   "omni_int_to_string",
-		"std.float_to_string": "omni_float_to_string",
-		"std.bool_to_string":  "omni_bool_to_string",
+		"std.int_to_string":      "omni_int_to_string",
+		"std.string.int_to_string": "omni_int_to_string",
+		"std.float_to_string":     "omni_float_to_string",
+		"std.bool_to_string":      "omni_bool_to_string",
 		"std.string_to_int":   "omni_string_to_int",
 		"std.string_to_float": "omni_string_to_float",
 		"std.string_to_bool":  "omni_string_to_bool",
@@ -4144,9 +4145,10 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"file.tell":           true,
 		"file.exists":         true,
 		"file.size":           true,
-		"std.int_to_string":   true,
-		"std.float_to_string": true,
-		"std.bool_to_string":  true,
+		"std.int_to_string":        true,
+		"std.string.int_to_string": true,
+		"std.float_to_string":      true,
+		"std.bool_to_string":       true,
 		"std.string_to_int":   true,
 		"std.string_to_float": true,
 		"std.string_to_bool":  true,
