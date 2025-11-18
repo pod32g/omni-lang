@@ -511,6 +511,19 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				if inst.Op == "call" && strings.HasPrefix(inst.Type, "Promise<") {
 					varType = "omni_promise_t*"
 				}
+				// Special case for member access - infer type from field name for known structs
+				if inst.Op == "member" && len(inst.Operands) >= 2 {
+					fieldName := inst.Operands[1].Literal
+					// Special handling for known HTTPResponse fields
+					if fieldName == "body" || fieldName == "status_text" {
+						varType = "const char*"
+					} else if fieldName == "status_code" {
+						varType = "int32_t"
+					} else if inst.Type != "" && inst.Type != inferTypePlaceholder {
+						// Use inst.Type if available
+						varType = g.mapType(inst.Type)
+					}
+				}
 				// Special case for index - check if indexing into struct array
 				if inst.Op == "index" && len(inst.Operands) >= 2 {
 					// Check the target array type
@@ -2218,7 +2231,15 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			// Determine field type from instruction type
 			// The type checker should have already substituted type parameters for generic structs
 			// (e.g., Box<int>.value should have inst.Type = "int", not "T")
+			// Special handling for known HTTPResponse fields - use field name to infer type
 			fieldType := inst.Type
+			if (fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder) && fieldName == "body" {
+				fieldType = "string"
+			} else if (fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder) && fieldName == "status_text" {
+				fieldType = "string"
+			} else if (fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder) && fieldName == "status_code" {
+				fieldType = "int"
+			}
 
 			// If type is not set or is a placeholder, try to infer it
 			if fieldType == "" || fieldType == "<inferred>" || fieldType == inferTypePlaceholder {
