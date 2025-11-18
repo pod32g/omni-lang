@@ -3993,7 +3993,8 @@ static omni_http_response_t* omni_http_via_libcurl(const char* method, const cha
     return resp;
 }
 #else
-static int32_t omni_http_has_libcurl() {
+// Helper function to check for libcurl availability (unused when libcurl not available)
+__attribute__((unused)) static int32_t omni_http_has_libcurl() {
     return 0;
 }
 #endif
@@ -4048,6 +4049,7 @@ static int omni_http_parse_url(const char* url, char* host, int* port, char* pat
 // Perform HTTP request using raw sockets
 static omni_http_response_t* omni_http_via_socket(const char* method, const char* url,
                                                    omni_map_t* headers, const char* body) {
+    (void)headers; // Headers not yet implemented in raw socket version
     char host[256];
     int port;
     char path[512];
@@ -4125,7 +4127,7 @@ static omni_http_response_t* omni_http_via_socket(const char* method, const char
     while ((received = recv(sock, response_buffer + total_received, 
                             sizeof(response_buffer) - total_received - 1, 0)) > 0) {
         total_received += received;
-        if (total_received >= sizeof(response_buffer) - 1) break;
+        if (total_received >= (ssize_t)(sizeof(response_buffer) - 1)) break;
     }
     
 #ifdef _WIN32
