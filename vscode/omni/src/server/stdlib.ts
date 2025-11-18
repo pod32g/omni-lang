@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { Connection, WorkspaceFolder } from 'vscode-languageserver/node';
 
 export interface StdFunction {
   name: string;
@@ -23,27 +24,80 @@ export interface StdLibrary {
 }
 
 // Find the standard library directory
-function findStdDirectory(): string | null {
-  // Try to find std directory relative to extension
+function findStdDirectory(
+  connection: Connection | null,
+  workspaceFolders: WorkspaceFolder[] | null
+): string | null {
+  const possiblePaths: string[] = [];
+  const triedPaths: string[] = [];
+
+  // First, try paths relative to workspace root (most reliable)
+  if (workspaceFolders && workspaceFolders.length > 0) {
+    for (const folder of workspaceFolders) {
+      // Convert URI to filesystem path
+      let workspacePath = folder.uri;
+      if (workspacePath.startsWith('file://')) {
+        workspacePath = workspacePath.substring(7);
+      }
+      // Handle Windows paths
+      if (process.platform === 'win32' && workspacePath.startsWith('/')) {
+        workspacePath = workspacePath.substring(1);
+      }
+      
+      const workspaceStdPath = path.join(workspacePath, 'omni/std');
+      possiblePaths.push(workspaceStdPath);
+    }
+  }
+
+  // Try environment variable path
+  if (process.env.OMNI_STD_PATH) {
+    possiblePaths.push(process.env.OMNI_STD_PATH);
+  }
+
+  // Try paths relative to current working directory
+  possiblePaths.push(
+    path.join(process.cwd(), 'omni/std'),
+    path.join(process.cwd(), '../omni/std'),
+    path.join(process.cwd(), '../../omni/std')
+  );
+
+  // Try paths relative to extension directory (when installed)
   // When compiled, __dirname will be in dist/server/
-  // We need to go up to find the omni/std directory
-  const possiblePaths = [
+  possiblePaths.push(
     path.join(__dirname, '../../../../omni/std'),
     path.join(__dirname, '../../../omni/std'),
     path.join(__dirname, '../../../../../omni/std'),
-    path.join(process.cwd(), 'omni/std'),
-    path.join(process.cwd(), '../omni/std'),
-    // Try relative to workspace if available
-    ...(process.env.OMNI_STD_PATH ? [process.env.OMNI_STD_PATH] : []),
-  ];
+    path.join(__dirname, '../../../../../../omni/std')
+  );
 
+  // Try paths relative to node_modules (if extension is installed)
+  if (__dirname.includes('node_modules')) {
+    const nodeModulesIndex = __dirname.indexOf('node_modules');
+    const extensionRoot = path.join(__dirname.substring(0, nodeModulesIndex), 'omni/std');
+    possiblePaths.push(extensionRoot);
+  }
+
+  // Try each path
   for (const stdPath of possiblePaths) {
+    triedPaths.push(stdPath);
     try {
-      if (fs.existsSync(stdPath) && fs.statSync(stdPath).isDirectory()) {
-        return stdPath;
+      const normalizedPath = path.normalize(stdPath);
+      if (fs.existsSync(normalizedPath) && fs.statSync(normalizedPath).isDirectory()) {
+        if (connection) {
+          connection.console.log(`Found standard library at: ${normalizedPath}`);
+        }
+        return normalizedPath;
       }
     } catch (e) {
-      // Ignore errors
+      // Ignore errors, continue trying
+    }
+  }
+
+  // Log all tried paths if connection is available
+  if (connection) {
+    connection.console.warn('Standard library directory not found. Tried paths:');
+    for (const triedPath of triedPaths) {
+      connection.console.warn(`  - ${triedPath}`);
     }
   }
 
@@ -56,10 +110,45 @@ function parseFunctionSignature(
   moduleName: string,
   fullModuleName: string
 ): StdFunction | null {
+  // Normalize whitespace - replace newlines and multiple spaces with single space
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  
   // Match: async? func functionName(params):returnType
   // or: func functionName(params)
+  // Try more flexible regex that handles multi-line signatures
   const funcRegex = /(async\s+)?func\s+(\w+)\s*\(([^)]*)\)\s*:?\s*([^{]*?)\s*\{/;
-  const match = text.match(funcRegex);
+  let match = normalized.match(funcRegex);
+  
+  // If no match on normalized text, try original text (might have complex formatting)
+  if (!match) {
+    // Try to find function declaration across multiple lines
+    const lines = text.split('\n');
+    let funcLine = '';
+    let inParams = false;
+    let parenCount = 0;
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!funcLine && trimmed.match(/(async\s+)?func\s+\w/)) {
+        funcLine = trimmed;
+        inParams = trimmed.includes('(');
+        parenCount = (trimmed.match(/\(/g) || []).length - (trimmed.match(/\)/g) || []).length;
+        if (parenCount === 0 && trimmed.includes(')')) {
+          // Single line function
+          match = trimmed.match(funcRegex);
+          break;
+        }
+      } else if (funcLine && inParams) {
+        funcLine += ' ' + trimmed;
+        parenCount += (trimmed.match(/\(/g) || []).length - (trimmed.match(/\)/g) || []).length;
+        if (parenCount === 0 && trimmed.includes(')')) {
+          // Found closing paren
+          match = funcLine.match(funcRegex);
+          break;
+        }
+      }
+    }
+  }
   
   if (!match) {
     return null;
@@ -67,26 +156,60 @@ function parseFunctionSignature(
 
   const isAsync = !!match[1];
   const name = match[2];
-  const paramsStr = match[3].trim();
-  const returnType = match[4].trim() || 'void';
+  const paramsStr = (match[3] || '').trim();
+  const returnType = (match[4] || '').trim() || 'void';
 
-  // Parse parameters
+  // Parse parameters - handle union types, generics, and complex types
   const parameters: Array<{ name: string; type: string }> = [];
   if (paramsStr) {
-    const paramParts = paramsStr.split(',').map(p => p.trim());
+    // Split by comma, but be careful with nested generics/unions
+    const paramParts: string[] = [];
+    let currentParam = '';
+    let depth = 0;
+    let inString = false;
+    
+    for (let i = 0; i < paramsStr.length; i++) {
+      const char = paramsStr[i];
+      if (char === '"' || char === "'") {
+        inString = !inString;
+        currentParam += char;
+      } else if (!inString) {
+        if (char === '<' || char === '[' || char === '(') {
+          depth++;
+          currentParam += char;
+        } else if (char === '>' || char === ']' || char === ')') {
+          depth--;
+          currentParam += char;
+        } else if (char === ',' && depth === 0) {
+          paramParts.push(currentParam.trim());
+          currentParam = '';
+        } else {
+          currentParam += char;
+        }
+      } else {
+        currentParam += char;
+      }
+    }
+    if (currentParam.trim()) {
+      paramParts.push(currentParam.trim());
+    }
+    
     for (const param of paramParts) {
-      if (!param) continue;
+      const trimmed = param.trim();
+      if (!trimmed) continue;
+      
       // Handle parameter with type: "name:type" or "name: type"
-      const paramMatch = param.match(/^(\w+)\s*:\s*(.+)$/);
+      // Support complex types like "name: string | int" or "name: array<int>"
+      const paramMatch = trimmed.match(/^(\w+)\s*:\s*(.+)$/);
       if (paramMatch) {
         parameters.push({
           name: paramMatch[1],
           type: paramMatch[2].trim(),
         });
       } else {
-        // Parameter without explicit type
+        // Parameter without explicit type (shouldn't happen in OmniLang, but handle gracefully)
         parameters.push({
-          name: param,
+          name: trimmed,
           type: 'unknown',
         });
       }
@@ -181,22 +304,32 @@ function parseStdFile(filePath: string, moduleName: string, fullModuleName: stri
       }
     }
   } catch (error) {
-    console.error(`Failed to parse ${filePath}: ${error}`);
+    // Error will be logged by caller if connection is available
+    throw error;
   }
 
   return functions;
 }
 
 // Parse standard library directory
-export async function parseStandardLibrary(): Promise<StdLibrary> {
-  const stdDir = findStdDirectory();
+export async function parseStandardLibrary(
+  connection: Connection | null = null,
+  workspaceFolders: WorkspaceFolder[] | null = null
+): Promise<StdLibrary> {
+  const stdDir = findStdDirectory(connection, workspaceFolders);
   
   if (!stdDir) {
-    console.warn('Standard library directory not found');
+    if (connection) {
+      connection.console.warn('Standard library directory not found - autocomplete for std functions will not work');
+    }
     return {
       modules: new Map(),
       functions: new Map(),
     };
+  }
+
+  if (connection) {
+    connection.console.log(`Parsing standard library from: ${stdDir}`);
   }
 
   const modules = new Map<string, StdModule>();
@@ -237,8 +370,15 @@ export async function parseStandardLibrary(): Promise<StdLibrary> {
     for (const file of files) {
       const filePath = path.join(modulePath, file);
       const fullModuleName = `std.${moduleDir}`;
-      const fileFunctions = parseStdFile(filePath, moduleDir, fullModuleName);
-      moduleFunctions.push(...fileFunctions);
+      try {
+        const fileFunctions = parseStdFile(filePath, moduleDir, fullModuleName);
+        moduleFunctions.push(...fileFunctions);
+      } catch (error) {
+        if (connection) {
+          connection.console.error(`Failed to parse ${filePath}: ${error}`);
+        }
+        // Continue with other files
+      }
     }
 
     const module: StdModule = {
@@ -254,6 +394,12 @@ export async function parseStandardLibrary(): Promise<StdLibrary> {
       // Also index by short name for module-scoped access
       functions.set(`${moduleDir}.${func.name}`, func);
     });
+  }
+
+  if (connection) {
+    connection.console.log(
+      `Standard library parsed successfully: ${modules.size} modules, ${functions.size} functions`
+    );
   }
 
   return { modules, functions };

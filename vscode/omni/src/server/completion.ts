@@ -65,9 +65,14 @@ export function handleCompletion(
   const moduleMatch = textBefore.match(/std\.(\w+)\.$/);
   if (moduleMatch) {
     const moduleName = moduleMatch[1];
-    if (stdLibrary) {
-      const module = stdLibrary.modules.get(moduleName);
-      if (module) {
+    if (stdLibrary && stdLibrary.modules) {
+      // Try both "io" and "std.io" keys
+      let module = stdLibrary.modules.get(moduleName);
+      if (!module) {
+        module = stdLibrary.modules.get(`std.${moduleName}`);
+      }
+      
+      if (module && module.functions && module.functions.length > 0) {
         for (const func of module.functions) {
           const item: CompletionItem = {
             label: func.name,
@@ -177,16 +182,20 @@ export function handleCompletion(
   }
 
   // Standard library functions (if no prefix filter)
-  if (stdLibrary && (!wordBefore || wordBefore.length < 2)) {
-    for (const [fullName, func] of stdLibrary.functions) {
-      if (!wordBefore || func.name.startsWith(wordBefore)) {
-        items.push({
-          label: func.name,
-          kind: CompletionItemKind.Function,
-          detail: formatFunctionSignature(func),
-          documentation: func.documentation || `Function: ${func.fullName}`,
-          insertText: func.name + '(',
-        });
+  // Only show if stdLibrary is properly initialized and has functions
+  if (stdLibrary && stdLibrary.functions && stdLibrary.functions.size > 0) {
+    // Only show std functions if wordBefore is short or empty (to avoid too many completions)
+    if (!wordBefore || wordBefore.length < 2) {
+      for (const [fullName, func] of stdLibrary.functions) {
+        if (!wordBefore || func.name.startsWith(wordBefore)) {
+          items.push({
+            label: func.name,
+            kind: CompletionItemKind.Function,
+            detail: formatFunctionSignature(func),
+            documentation: func.documentation || `Function: ${func.fullName}`,
+            insertText: func.name + '(',
+          });
+        }
       }
     }
   }

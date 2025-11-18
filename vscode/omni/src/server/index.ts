@@ -34,15 +34,29 @@ const symbolTables = new Map<string, SymbolTable>();
 // Initialize standard library on server startup
 let stdLibraryInitialized = false;
 
-async function initializeStdLibrary() {
+async function initializeStdLibrary(workspaceFolders: any[] | null = null) {
   if (stdLibraryInitialized) {
     return stdLibrary;
   }
   
   try {
-    stdLibrary = await parseStandardLibrary();
+    stdLibrary = await parseStandardLibrary(connection, workspaceFolders);
     stdLibraryInitialized = true;
-    connection.console.log('Standard library parsed successfully');
+    
+    // Log detailed information about what was loaded
+    if (stdLibrary && stdLibrary.modules && stdLibrary.functions) {
+      const moduleCount = stdLibrary.modules.size;
+      const functionCount = stdLibrary.functions.size;
+      if (moduleCount > 0 && functionCount > 0) {
+        connection.console.log(
+          `Standard library initialized: ${moduleCount} modules, ${functionCount} functions available for autocomplete`
+        );
+      } else {
+        connection.console.warn(
+          'Standard library initialized but no modules/functions found - autocomplete may not work'
+        );
+      }
+    }
   } catch (error) {
     connection.console.error(`Failed to parse standard library: ${error}`);
     stdLibrary = { modules: new Map(), functions: new Map() };
@@ -53,14 +67,17 @@ async function initializeStdLibrary() {
 
 // When the server starts, initialize
 connection.onInitialize(async (params) => {
-  // Use workspace root from initialization options if available
+  // Get workspace folders from params
+  const workspaceFolders = params.workspaceFolders || null;
+  
+  // Use workspace root from initialization options if available (fallback)
   const workspaceRoot = (params.initializationOptions as any)?.workspaceRoot;
-  if (workspaceRoot) {
+  if (workspaceRoot && !workspaceFolders) {
     const path = require('path');
     process.env.OMNI_STD_PATH = path.join(workspaceRoot, 'omni/std');
   }
   
-  await initializeStdLibrary();
+  await initializeStdLibrary(workspaceFolders);
   
   const result: InitializeResult = {
     capabilities: {
