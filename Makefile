@@ -14,7 +14,7 @@ LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
 .SHELLFLAGS := -eu -o pipefail -c
 
 .ONESHELL:
-.PHONY: all fmt lint test build bench clean gen build-rust package release
+.PHONY: all fmt lint test build bench clean gen build-rust build-vscode package release
 
 all: build
 
@@ -56,7 +56,23 @@ build-rust:
 		echo "Cargo not found, skipping Rust build (Cranelift backend will be unavailable)"; \
 	fi
 
-build-all: build
+build-vscode:
+	@echo "Building VS Code extension..."
+	@if command -v npm >/dev/null 2>&1; then \
+		cd vscode/omni && \
+		echo "Building VS Code extension version: $(VERSION) (built $(BUILD_TIME))" && \
+		if command -v jq >/dev/null 2>&1; then \
+			jq --arg version "$(VERSION)" '.version = $$version' package.json > package.json.tmp && mv package.json.tmp package.json; \
+		else \
+			sed -i.bak "s/\"version\": \".*\"/\"version\": \"$(VERSION)\"/" package.json || sed -i '' "s/\"version\": \".*\"/\"version\": \"$(VERSION)\"/" package.json || true; \
+		fi && \
+		npm run compile && \
+		echo "VS Code extension built successfully"; \
+	else \
+		echo "npm not found, skipping VS Code extension build"; \
+	fi
+
+build-all: build build-vscode
 
 clean:
 	rm -rf $(BIN_DIR)
