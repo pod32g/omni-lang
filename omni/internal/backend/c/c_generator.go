@@ -1252,6 +1252,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						if funcName == "omni_http_get" && len(inst.Operands) >= 2 {
 							url := g.getOperandValue(inst.Operands[1])
 							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_get(%s);\n", varName, url))
+							g.valueTypes[inst.ID] = inst.Type
 						} else if funcName == "omni_http_post" && len(inst.Operands) >= 3 {
 							url := g.getOperandValue(inst.Operands[1])
 							body := g.getOperandValue(inst.Operands[2])
@@ -1266,6 +1267,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						} else if funcName == "omni_http_request" && len(inst.Operands) >= 2 {
 							req := g.getOperandValue(inst.Operands[1])
 							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_request(%s);\n", varName, req))
+							g.valueTypes[inst.ID] = inst.Type
 						}
 					} else if funcName == "omni_ip_to_string" && inst.Type == "string" {
 						// IP to string conversion
@@ -1565,17 +1567,58 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								g.stringsToFree[inst.ID] = true
 							}
 						} else {
-							// Regular function call - assign to already declared variable
-							g.output.WriteString(fmt.Sprintf("  %s = %s(",
-								varName, cFuncName))
-							// Add arguments
-							for i, arg := range inst.Operands[1:] {
-								if i > 0 {
-									g.output.WriteString(", ")
+							// Regular function call - check if we need to declare the variable
+							// For HTTP functions that return structs, we need special handling
+							if (funcName == "omni_http_get" || funcName == "omni_http_post" || funcName == "omni_http_put" || funcName == "omni_http_delete" || funcName == "omni_http_request") && inst.Type != "" {
+								// HTTP functions return omni_http_response_t* - declare inline
+								if funcName == "omni_http_get" && len(inst.Operands) >= 2 {
+									url := g.getOperandValue(inst.Operands[1])
+									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_get(%s);\n", varName, url))
+									g.valueTypes[inst.ID] = inst.Type
+								} else if funcName == "omni_http_post" && len(inst.Operands) >= 3 {
+									url := g.getOperandValue(inst.Operands[1])
+									body := g.getOperandValue(inst.Operands[2])
+									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_post(%s, %s);\n", varName, url, body))
+									g.valueTypes[inst.ID] = inst.Type
+								} else if funcName == "omni_http_put" && len(inst.Operands) >= 3 {
+									url := g.getOperandValue(inst.Operands[1])
+									body := g.getOperandValue(inst.Operands[2])
+									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_put(%s, %s);\n", varName, url, body))
+									g.valueTypes[inst.ID] = inst.Type
+								} else if funcName == "omni_http_delete" && len(inst.Operands) >= 2 {
+									url := g.getOperandValue(inst.Operands[1])
+									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_delete(%s);\n", varName, url))
+									g.valueTypes[inst.ID] = inst.Type
+								} else if funcName == "omni_http_request" && len(inst.Operands) >= 2 {
+									req := g.getOperandValue(inst.Operands[1])
+									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_request(%s);\n", varName, req))
+									g.valueTypes[inst.ID] = inst.Type
+								} else {
+									// Fallback: assign to already declared variable
+									g.output.WriteString(fmt.Sprintf("  %s = %s(",
+										varName, cFuncName))
+									// Add arguments
+									for i, arg := range inst.Operands[1:] {
+										if i > 0 {
+											g.output.WriteString(", ")
+										}
+										g.output.WriteString(g.getOperandValue(arg))
+									}
+									g.output.WriteString(");\n")
 								}
-								g.output.WriteString(g.getOperandValue(arg))
+							} else {
+								// Regular function call - assign to already declared variable
+								g.output.WriteString(fmt.Sprintf("  %s = %s(",
+									varName, cFuncName))
+								// Add arguments
+								for i, arg := range inst.Operands[1:] {
+									if i > 0 {
+										g.output.WriteString(", ")
+									}
+									g.output.WriteString(g.getOperandValue(arg))
+								}
+								g.output.WriteString(");\n")
 							}
-							g.output.WriteString(");\n")
 							// Track strings that need freeing if this function returns a heap-allocated string
 							if g.isStringReturningFunction(funcName) && inst.Type == "string" {
 								g.stringsToFree[inst.ID] = true
