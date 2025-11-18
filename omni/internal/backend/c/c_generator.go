@@ -1183,6 +1183,57 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 
 			cFuncName := g.mapFunctionName(funcName)
 
+			// Special case for HTTP functions - they always return HTTPResponse struct
+			isHTTPFunc := funcName == "std.network.http_get" || funcName == "std.network.http_post" || funcName == "std.network.http_put" || funcName == "std.network.http_delete" || funcName == "std.network.http_request" ||
+				cFuncName == "omni_http_get" || cFuncName == "omni_http_post" || cFuncName == "omni_http_put" || cFuncName == "omni_http_delete" || cFuncName == "omni_http_request"
+			if isHTTPFunc && inst.ID != mir.InvalidValue {
+				varName := g.getVariableName(inst.ID)
+				if (funcName == "std.network.http_get" || cFuncName == "omni_http_get") && len(inst.Operands) >= 2 {
+					url := g.getOperandValue(inst.Operands[1])
+					g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_get(%s);\n", varName, url))
+					if inst.Type != "" {
+						g.valueTypes[inst.ID] = inst.Type
+					} else {
+						g.valueTypes[inst.ID] = "HTTPResponse"
+					}
+				} else if (funcName == "std.network.http_post" || cFuncName == "omni_http_post") && len(inst.Operands) >= 3 {
+					url := g.getOperandValue(inst.Operands[1])
+					body := g.getOperandValue(inst.Operands[2])
+					g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_post(%s, %s);\n", varName, url, body))
+					if inst.Type != "" {
+						g.valueTypes[inst.ID] = inst.Type
+					} else {
+						g.valueTypes[inst.ID] = "HTTPResponse"
+					}
+				} else if (funcName == "std.network.http_put" || cFuncName == "omni_http_put") && len(inst.Operands) >= 3 {
+					url := g.getOperandValue(inst.Operands[1])
+					body := g.getOperandValue(inst.Operands[2])
+					g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_put(%s, %s);\n", varName, url, body))
+					if inst.Type != "" {
+						g.valueTypes[inst.ID] = inst.Type
+					} else {
+						g.valueTypes[inst.ID] = "HTTPResponse"
+					}
+				} else if (funcName == "std.network.http_delete" || cFuncName == "omni_http_delete") && len(inst.Operands) >= 2 {
+					url := g.getOperandValue(inst.Operands[1])
+					g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_delete(%s);\n", varName, url))
+					if inst.Type != "" {
+						g.valueTypes[inst.ID] = inst.Type
+					} else {
+						g.valueTypes[inst.ID] = "HTTPResponse"
+					}
+				} else if (funcName == "std.network.http_request" || cFuncName == "omni_http_request") && len(inst.Operands) >= 2 {
+					req := g.getOperandValue(inst.Operands[1])
+					g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_request(%s);\n", varName, req))
+					if inst.Type != "" {
+						g.valueTypes[inst.ID] = inst.Type
+					} else {
+						g.valueTypes[inst.ID] = "HTTPResponse"
+					}
+				}
+				return nil
+			}
+
 			// Handle void function calls differently
 			if inst.Type == "void" {
 				g.output.WriteString(fmt.Sprintf("  %s(", cFuncName))
@@ -1246,8 +1297,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							urlStr := g.getOperandValue(inst.Operands[1])
 							g.output.WriteString(fmt.Sprintf("  omni_url_t* %s = omni_url_parse(%s);\n", varName, urlStr))
 						}
-					} else if (funcName == "std.network.http_get" || funcName == "std.network.http_post" || funcName == "std.network.http_put" || funcName == "std.network.http_delete" || funcName == "std.network.http_request" ||
-						cFuncName == "omni_http_get" || cFuncName == "omni_http_post" || cFuncName == "omni_http_put" || cFuncName == "omni_http_delete" || cFuncName == "omni_http_request") && inst.Type != "" {
+					} else if funcName == "std.network.http_get" || funcName == "std.network.http_post" || funcName == "std.network.http_put" || funcName == "std.network.http_delete" || funcName == "std.network.http_request" ||
+						cFuncName == "omni_http_get" || cFuncName == "omni_http_post" || cFuncName == "omni_http_put" || cFuncName == "omni_http_delete" || cFuncName == "omni_http_request" {
 						// HTTP functions return omni_http_response_t*
 						varName := g.getVariableName(inst.ID)
 						if (funcName == "std.network.http_get" || cFuncName == "omni_http_get") && len(inst.Operands) >= 2 {
@@ -1574,9 +1625,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							// Regular function call - check if we need to declare the variable
 							// For HTTP functions that return structs, we need special handling
 							// Check both OmniLang function names and C function names
-							isHTTPFunc := (funcName == "std.network.http_get" || funcName == "std.network.http_post" || funcName == "std.network.http_put" || funcName == "std.network.http_delete" || funcName == "std.network.http_request") ||
-								(cFuncName == "omni_http_get" || cFuncName == "omni_http_post" || cFuncName == "omni_http_put" || cFuncName == "omni_http_delete" || cFuncName == "omni_http_request")
-							if isHTTPFunc && inst.Type != "" {
+							isHTTPFunc := funcName == "std.network.http_get" || funcName == "std.network.http_post" || funcName == "std.network.http_put" || funcName == "std.network.http_delete" || funcName == "std.network.http_request" ||
+								cFuncName == "omni_http_get" || cFuncName == "omni_http_post" || cFuncName == "omni_http_put" || cFuncName == "omni_http_delete" || cFuncName == "omni_http_request"
+							if isHTTPFunc {
 								// HTTP functions return omni_http_response_t* - declare inline
 								if (funcName == "std.network.http_get" || cFuncName == "omni_http_get") && len(inst.Operands) >= 2 {
 									url := g.getOperandValue(inst.Operands[1])
@@ -2195,21 +2246,58 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 			}
 
-			// Use appropriate getter based on field type
-			switch fieldType {
-			case "string":
-				g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
-				g.valueTypes[inst.ID] = "string"
-			case "float", "double":
-				g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_float_field(%s, \"%s\");\n", varName, structVar, fieldName))
-				g.valueTypes[inst.ID] = fieldType
-			case "bool":
-				g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_bool_field(%s, \"%s\");\n", varName, structVar, fieldName))
-				g.valueTypes[inst.ID] = "bool"
-			default:
-				// Default to int
-				g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
-				g.valueTypes[inst.ID] = "int"
+			// Special handling for known HTTPResponse fields
+			// Check if variable is already declared - if so, just assign; otherwise declare
+			if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+				// Variable already declared at top - just assign
+				if fieldName == "body" || fieldName == "status_text" {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
+					g.valueTypes[inst.ID] = "string"
+				} else if fieldName == "status_code" {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+					g.valueTypes[inst.ID] = "int"
+				} else {
+					// Use appropriate getter based on field type
+					switch fieldType {
+					case "string":
+						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
+						g.valueTypes[inst.ID] = "string"
+					case "float", "double":
+						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_float_field(%s, \"%s\");\n", varName, structVar, fieldName))
+						g.valueTypes[inst.ID] = fieldType
+					case "bool":
+						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_bool_field(%s, \"%s\");\n", varName, structVar, fieldName))
+						g.valueTypes[inst.ID] = "bool"
+					default:
+						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+						g.valueTypes[inst.ID] = "int"
+					}
+				}
+			} else {
+				// Variable not declared - declare inline
+				if fieldName == "body" || fieldName == "status_text" {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
+					g.valueTypes[inst.ID] = "string"
+				} else if fieldName == "status_code" {
+					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+					g.valueTypes[inst.ID] = "int"
+				} else {
+					// Use appropriate getter based on field type
+					switch fieldType {
+					case "string":
+						g.output.WriteString(fmt.Sprintf("  const char* %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
+						g.valueTypes[inst.ID] = "string"
+					case "float", "double":
+						g.output.WriteString(fmt.Sprintf("  double %s = omni_struct_get_float_field(%s, \"%s\");\n", varName, structVar, fieldName))
+						g.valueTypes[inst.ID] = fieldType
+					case "bool":
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_bool_field(%s, \"%s\");\n", varName, structVar, fieldName))
+						g.valueTypes[inst.ID] = "bool"
+					default:
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+						g.valueTypes[inst.ID] = "int"
+					}
+				}
 			}
 		}
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte":
