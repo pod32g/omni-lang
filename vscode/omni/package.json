@@ -2,7 +2,8 @@
   "name": "omni-vscode",
   "displayName": "OmniLang",
   "description": "VS Code support for the Omni programming language.",
-  "version": "v0.5.3-70-g75afc96-dirty",
+  "icon": "icon.png",
+  "version": "v0.5.3-71-g526d431-dirty",
   "publisher": "omni-lang",
   "repository": {
     "type": "git",
