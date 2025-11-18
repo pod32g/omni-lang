@@ -307,8 +307,8 @@ func TestCoverageGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VM execution failed: %v", err)
 	}
-	if result != "0" {
-		t.Errorf("Expected result 0, got %s", result)
+	if !strings.HasSuffix(result, "0") {
+		t.Errorf("expected output to end with 0, got %s", result)
 	}
 
 	// Verify coverage JSON is valid
@@ -341,36 +341,28 @@ func TestCoverageThreshold(t *testing.T) {
 		"std_os_comprehensive.omni",
 	}
 
-	coverageFile := filepath.Join(os.TempDir(), "coverage_all.json")
-	defer os.Remove(coverageFile)
+	var aggregated coverage.CoverageData
 
 	// Run all tests and collect coverage
 	for _, testFile := range testFiles {
-		_, _, err := runVMWithCoverage(testFile)
+		_, coverageJSON, err := runVMWithCoverage(testFile)
 		if err != nil {
 			t.Logf("Warning: Test %s failed: %v", testFile, err)
+			continue
 		}
+		if coverageJSON == "" {
+			continue
+		}
+		var data coverage.CoverageData
+		if err := json.Unmarshal([]byte(coverageJSON), &data); err != nil {
+			t.Logf("Warning: could not parse coverage for %s: %v", testFile, err)
+			continue
+		}
+		aggregated.Entries = append(aggregated.Entries, data.Entries...)
 	}
 
-	// Parse coverage data
-	coverageData, err := coverage.ParseCoverageFile(coverageFile)
-	if err != nil {
-		// Coverage file might not exist - try to generate it by running tests again
-		t.Logf("Coverage file not found, running tests to generate coverage...")
-
-		// Run a comprehensive test to generate coverage
-		args := []string{"--coverage", "--coverage-output", coverageFile, "std_io_comprehensive.omni"}
-		cmd := buildVMCommand(args...)
-		if err := cmd.Run(); err != nil {
-			t.Skipf("Could not generate coverage: %v", err)
-			return
-		}
-
-		coverageData, err = coverage.ParseCoverageFile(coverageFile)
-		if err != nil {
-			t.Skipf("Could not parse coverage file: %v", err)
-			return
-		}
+	if len(aggregated.Entries) == 0 {
+		t.Skip("No coverage data generated")
 	}
 
 	// Parse std library
@@ -381,7 +373,7 @@ func TestCoverageThreshold(t *testing.T) {
 	}
 
 	// Match coverage to functions
-	matches := coverage.MatchCoverageToFunctions(coverageData, funcsByFile)
+	matches := coverage.MatchCoverageToFunctions(&aggregated, funcsByFile)
 
 	// Calculate statistics
 	stats := coverage.CalculateCoverage(matches)

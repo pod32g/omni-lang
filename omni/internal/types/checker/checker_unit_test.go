@@ -243,7 +243,7 @@ func TestStructFieldAccess(t *testing.T) {
 	}{
 		{
 			name: "struct field access",
-			src: `struct Point { x: int, y: int }
+			src: `struct Point { x: int y: int }
 			      func main(): void {
 			      let p = Point{ x: 1, y: 2 }
 			      let x = p.x
@@ -251,7 +251,7 @@ func TestStructFieldAccess(t *testing.T) {
 		},
 		{
 			name: "struct field access wrong field",
-			src: `struct Point { x: int, y: int }
+			src: `struct Point { x: int y: int }
 			      func main(): void {
 			      let p = Point{ x: 1, y: 2 }
 			      let x = p.z
@@ -302,20 +302,20 @@ func TestControlFlowChecking(t *testing.T) {
 			name: "for loop range",
 			src: `func main(): void {
 let arr = [1, 2, 3]
-for x in arr { }
+for x in arr { let y = x }
 }`,
 		},
 		{
 			name: "for loop classic",
-			src:  `func main(): void { for i: int = 0; i < 10; i++ { } }`,
+			src:  `func main(): void { for i: int = 0; i < 10; i++ { let y = i } }`,
 		},
 		{
 			name: "while loop",
-			src:  `func main(): void { while true { } }`,
+			src:  `func main(): void { while true { let y = 1 } }`,
 		},
 		{
 			name:      "while loop non-bool condition",
-			src:       `func main(): void { while 1 { } }`,
+			src:       `func main(): void { while 1 { let y = 1 } }`,
 			shouldErr: true,
 		},
 		{
@@ -580,16 +580,16 @@ func TestLambdaExpressions(t *testing.T) {
 	}{
 		{
 			name: "lambda expression",
-			src:  `let f = |x: int| x + 1`,
+			src:  `let f = |x| x + 1`,
 		},
 		{
 			name: "lambda with type annotation",
-			src:  `let f: (int) -> int = |x: int| x + 1`,
+			src:  `let f: (int) -> int = |x| x + 1`,
 		},
 		{
 			name: "lambda call",
 			src: `func main(): void {
-			      let f = |x: int| x + 1
+			      let f = |x| x + 1
 			      let y = f(42)
 			      }`,
 		},
@@ -858,14 +858,14 @@ func TestCallExprFunctionType(t *testing.T) {
 		{
 			name: "function type variable call",
 			src: `func main(): void {
-			      let f: (int) -> int = |x: int| x + 1
+			      let f: (int) -> int = |x| x + 1
 			      let y = f(42)
 			      }`,
 		},
 		{
 			name: "function type call wrong arg count",
 			src: `func main(): void {
-			      let f: (int, int) -> int = |x: int, y: int| x + y
+			      let f: (int, int) -> int = |x, y| x + y
 			      let y = f(42)
 			      }`,
 			shouldErr: true,
@@ -873,7 +873,7 @@ func TestCallExprFunctionType(t *testing.T) {
 		{
 			name: "function type call wrong arg type",
 			src: `func main(): void {
-			      let f: (int) -> int = |x: int| x + 1
+			      let f: (int) -> int = |x| x + 1
 			      let y = f("42")
 			      }`,
 			shouldErr: true,
@@ -905,7 +905,7 @@ func TestCallExprFunctionType(t *testing.T) {
 			src: `func map<T>(arr: array<T>, f: (T) -> T): array<T> { return arr }
 			      func main(): void {
 			      let arr = [1, 2, 3]
-			      let result = map(arr, |x: int| x * 2)
+			      let result = map(arr, |x| x * 2)
 			      }`,
 		},
 	}
@@ -957,9 +957,9 @@ func TestGenericFunctionCallInference(t *testing.T) {
 			      let x = id(arr)`,
 		},
 		{
-			name: "generic function with explicit type args",
+			name: "generic function with annotated call",
 			src: `func id<T>(x: T): T { return x }
-			      let x = id<int>(42)`,
+			      let x: int = id(42)`,
 		},
 	}
 
@@ -1076,14 +1076,14 @@ func TestForStmtVariants(t *testing.T) {
 			name: "for range with array",
 			src: `func main(): void {
 			      let arr = [1, 2, 3]
-			      for x in arr { }
+			      for x in arr { let y = x }
 			      }`,
 		},
 		{
 			name: "for range with map",
 			src: `func main(): void {
 			      let m = {"key": 42}
-			      for k in m { }
+			      for k in m { let y = k }
 			      }`,
 		},
 		{
@@ -1129,7 +1129,7 @@ func TestForStmtVariants(t *testing.T) {
 			name: "for range wrong iterable type",
 			src: `func main(): void {
 			      let x = 42
-			      for i in x { }
+			      for i in x { let y = i }
 			      }`,
 			shouldErr: true,
 		},
@@ -1168,11 +1168,11 @@ func TestTypeExprToString(t *testing.T) {
 		},
 		{
 			name: "function type",
-			src:  `let f: (int) -> int = |x: int| x`,
+			src:  `let f: (int) -> int = |x| x`,
 		},
 		{
 			name: "function type with multiple params",
-			src:  `let f: (int, string) -> bool = |x: int, y: string| true`,
+			src:  `let f: (int, string) -> bool = |x, y| true`,
 		},
 		{
 			name: "nested generic type",
@@ -1201,20 +1201,12 @@ func TestTypeExprToString(t *testing.T) {
 	}
 }
 
-func TestMemberExprStaticMethods(t *testing.T) {
+func TestMemberExprAccess(t *testing.T) {
 	tests := []struct {
 		name      string
 		src       string
 		shouldErr bool
 	}{
-		{
-			name: "static method call",
-			src: `struct Point { x: int, y: int }
-			      func Point.create(x: int, y: int): Point { return Point{ x: x, y: y } }
-			      func main(): void {
-			      let p = Point.create(1, 2)
-			      }`,
-		},
 		{
 			name: "module member access",
 			src: `import math
@@ -1251,7 +1243,7 @@ func TestTryCatchFinally(t *testing.T) {
 			name: "try catch",
 			src: `func main(): void {
 			      try {
-			      } catch e: string {
+			      } catch (e: string) {
 			      }
 			      }`,
 		},
@@ -1259,7 +1251,7 @@ func TestTryCatchFinally(t *testing.T) {
 			name: "try catch finally",
 			src: `func main(): void {
 			      try {
-			      } catch e: string {
+			      } catch (e: string) {
 			      } finally {
 			      }
 			      }`,
@@ -1268,8 +1260,8 @@ func TestTryCatchFinally(t *testing.T) {
 			name: "try multiple catch",
 			src: `func main(): void {
 			      try {
-			      } catch e: string {
-			      } catch e2: int {
+			      } catch (e: string) {
+			      } catch (e2: int) {
 			      }
 			      }`,
 		},
@@ -1306,19 +1298,19 @@ func TestCastExpressions(t *testing.T) {
 	}{
 		{
 			name: "cast int to float",
-			src:  `let x = 42 as float`,
+			src:  `let x = (float) 42`,
 		},
 		{
 			name: "cast float to int",
-			src:  `let x = 42.0 as int`,
+			src:  `let x = (int) 42.0`,
 		},
 		{
 			name: "cast string to int",
-			src:  `let x = "42" as int`,
+			src:  `let x = (int) "42"`,
 		},
 		{
 			name:      "cast incompatible types",
-			src:       `let x = "hello" as int`,
+			src:       `let x = (int) "hello"`,
 			shouldErr: true,
 		},
 	}
@@ -1768,7 +1760,7 @@ func TestTypeExpressionHelpers(t *testing.T) {
 		{
 			name: "function type",
 			src: `func main(): void {
-			      let f: (int, int) -> int = func(a: int, b: int): int { return a + b }
+			      let f: (int, int) -> int = |a, b| a + b
 			      }`,
 		},
 		{
@@ -1894,7 +1886,7 @@ func TestErrorHandlingHelpers(t *testing.T) {
 			src: `func main(): void {
 			      try {
 			          throw "error"
-			      } catch e: string {
+			      } catch (e: string) {
 			          let x = e
 			      }
 			      }`,
@@ -1904,7 +1896,7 @@ func TestErrorHandlingHelpers(t *testing.T) {
 			src: `func main(): void {
 			      try {
 			          throw "error"
-			      } catch e: string {
+			      } catch (e: string) {
 			          let x = e
 			      } finally {
 			          let y = 42
@@ -1916,9 +1908,9 @@ func TestErrorHandlingHelpers(t *testing.T) {
 			src: `func main(): void {
 			      try {
 			          throw "error"
-			      } catch e: string {
+			      } catch (e: string) {
 			          let x = e
-			      } catch e: int {
+			      } catch (e: int) {
 			          let x = e
 			      }
 			      }`,

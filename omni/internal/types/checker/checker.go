@@ -516,8 +516,10 @@ func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
 	}
 	valueType := typeInfer
 	if decl.Value != nil {
-		// Special handling for lambda expressions with expected function type
-		if lambda, ok := decl.Value.(*ast.LambdaExpr); ok && expectedType != typeInfer && expectedType != "" {
+		// Special handling for empty array literals with an annotated target type
+		if arrayType, ok := c.resolveEmptyArrayLiteral(decl.Value, expectedType); ok {
+			valueType = arrayType
+		} else if lambda, ok := decl.Value.(*ast.LambdaExpr); ok && expectedType != typeInfer && expectedType != "" {
 			// Check if expected type is a function type (contains ") -> ")
 			if strings.Contains(expectedType, ") -> ") {
 				// Parse expected function type to get parameter types
@@ -715,16 +717,47 @@ func (c *Checker) checkBindingStmt(stmt *ast.BindingStmt) {
 	}
 	valueType := typeInfer
 	if stmt.Value != nil {
-		valueType = c.checkExpr(stmt.Value)
+		// Handle empty array literals when a declared type is available
+		if arrayType, ok := c.resolveEmptyArrayLiteral(stmt.Value, declaredType); ok {
+			valueType = arrayType
+		} else if lambda, ok := stmt.Value.(*ast.LambdaExpr); ok && declaredType != typeInfer && declaredType != "" {
+			if strings.Contains(declaredType, ") -> ") {
+				expectedParamTypes := c.parseFunctionTypeParams(declaredType)
+				if expectedParamTypes != nil && len(expectedParamTypes) == len(lambda.Params) {
+					valueType = c.checkLambdaWithTypes(lambda, expectedParamTypes)
+				} else {
+					valueType = c.checkExpr(stmt.Value)
+				}
+			} else {
+				valueType = c.checkExpr(stmt.Value)
+			}
+		} else {
+			valueType = c.checkExpr(stmt.Value)
+		}
 	}
 	finalType := declaredType
 	if declaredType == typeInfer {
 		finalType = valueType
-		} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, declaredType) {
-			c.report(stmt.Span(), fmt.Sprintf("type mismatch: cannot assign %s to %s", valueType, declaredType),
-				fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
+	} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, declaredType) {
+		c.report(stmt.Span(), fmt.Sprintf("type mismatch: cannot assign %s to %s", valueType, declaredType),
+			fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
 	}
 	c.declare(stmt.Name, finalType, stmt.Mutable, stmt.Span())
+}
+
+// resolveEmptyArrayLiteral allows empty array literals to take on an expected type context.
+func (c *Checker) resolveEmptyArrayLiteral(expr ast.Expr, expectedType string) (string, bool) {
+	if expectedType == "" || expectedType == typeInfer {
+		return "", false
+	}
+	arr, ok := expr.(*ast.ArrayLiteralExpr)
+	if !ok || len(arr.Elements) != 0 {
+		return "", false
+	}
+	if _, ok := arrayElementType(expectedType); !ok {
+		return "", false
+	}
+	return expectedType, true
 }
 
 func (c *Checker) checkForStmt(stmt *ast.ForStmt) {
@@ -1199,7 +1232,6 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 		return c.checkLambdaWithTypes(e, paramTypes)
 	case *ast.CastExpr:
 		// Type cast expression: (type) expression
-		// Check that the target type is valid
 		targetType := c.checkTypeExpr(e.Type)
 		if targetType == typeError {
 			return typeError
@@ -1211,9 +1243,13 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			return typeError
 		}
 
-		// For now, allow all casts (in a full implementation, we'd check compatibility)
-		// TODO: Add proper type compatibility checking
-		return targetType
+		if canCastBetweenTypes(exprType, targetType) {
+			return targetType
+		}
+
+		c.report(e.Span(), fmt.Sprintf("cannot cast %s to %s", exprType, targetType),
+			"use an explicit conversion helper or adjust the expression type")
+		return typeError
 	case *ast.StringInterpolationExpr:
 		// String interpolation always returns string type
 		// Check each part to ensure expressions are valid
@@ -1238,9 +1274,14 @@ func (c *Checker) checkBinaryExpr(expr *ast.BinaryExpr) string {
 
 	switch expr.Op {
 	case "+":
-		// Handle string concatenation (string + string, string + int, int + string)
-		if leftType == "string" || rightType == "string" {
+		// Handle string concatenation when the left operand is a string
+		if leftType == "string" {
 			return "string"
+		}
+		if rightType == "string" {
+			c.report(expr.Span(), "string concatenation requires a string on the left-hand side",
+				fmt.Sprintf("convert %s to string before adding", leftType))
+			return typeError
 		}
 		// Handle numeric addition
 		if !isNumeric(leftType) || !isNumeric(rightType) {
@@ -2143,6 +2184,19 @@ func isInteger(typ string) bool {
 	default:
 		return false
 	}
+}
+
+func canCastBetweenTypes(from, to string) bool {
+	if from == to {
+		return true
+	}
+	if isNumeric(from) && isNumeric(to) {
+		return true
+	}
+	if strings.HasPrefix(from, "*") && strings.HasPrefix(to, "*") {
+		return true
+	}
+	return false
 }
 
 func (c *Checker) typesEqual(a, b string) bool {

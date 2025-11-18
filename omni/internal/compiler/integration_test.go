@@ -81,7 +81,7 @@ func main() {
     let z:int = x + y  // Type error: string assigned to int
 }`,
 			wantErr:  true,
-			errorMsg: "cannot assign string to int",
+			errorMsg: "string concatenation requires a string on the left-hand side",
 		},
 		{
 			name: "undefined_identifier",

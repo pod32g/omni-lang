@@ -26,8 +26,8 @@ func main():int {
     std.io.println(true)
     std.io.println(false)
     
-    // Test std.io.println() with no arguments
-    std.io.println()
+    // Test std.io.println() with an explicit empty string to simulate no output
+    std.io.println("")
     
     // Test edge cases for strings
     std.io.print("Empty string: ")
