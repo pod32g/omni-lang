@@ -555,13 +555,32 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				// Default: use the instruction type
 				if varType == "" {
 					// Handle <infer> type - try to infer from context or use default
-					if inst.Type == "<infer>" || inst.Type == inferTypePlaceholder {
-						// Try to get type from valueTypes map
-						if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" && storedType != "<infer>" && storedType != inferTypePlaceholder {
-							varType = g.mapType(storedType)
+					if inst.Type == "<infer>" || inst.Type == inferTypePlaceholder || inst.Type == "" {
+						// For member access, try to infer from field name if it's a known struct field
+						if inst.Op == "member" && len(inst.Operands) >= 2 {
+							fieldName := inst.Operands[1].Literal
+							// Special handling for known HTTPResponse fields
+							if fieldName == "body" || fieldName == "status_text" {
+								varType = "const char*"
+							} else if fieldName == "status_code" {
+								varType = "int32_t"
+							} else {
+								// Try to get type from valueTypes map
+								if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" && storedType != "<infer>" && storedType != inferTypePlaceholder {
+									varType = g.mapType(storedType)
+								} else {
+									// Default to int if we can't infer
+									varType = "int32_t"
+								}
+							}
 						} else {
-							// Default to int if we can't infer
-							varType = "int32_t"
+							// Try to get type from valueTypes map
+							if storedType, ok := g.valueTypes[inst.ID]; ok && storedType != "" && storedType != "<infer>" && storedType != inferTypePlaceholder {
+								varType = g.mapType(storedType)
+							} else {
+								// Default to int if we can't infer
+								varType = "int32_t"
+							}
 						}
 					} else {
 						varType = g.mapType(inst.Type)
@@ -2247,8 +2266,25 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			}
 
 			// Special handling for known HTTPResponse fields
-			// Check if variable is already declared - if so, just assign; otherwise declare
-			if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+			// Always use the correct getter based on field name, regardless of declaredVariables
+			// This ensures we use the right type even if the variable was declared with wrong type at top
+			if fieldName == "body" || fieldName == "status_text" {
+				// HTTPResponse.body and status_text are strings - always use string getter
+				if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
+				} else {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
+				}
+				g.valueTypes[inst.ID] = "string"
+			} else if fieldName == "status_code" {
+				// HTTPResponse.status_code is int - always use int getter
+				if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+				} else {
+					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+				}
+				g.valueTypes[inst.ID] = "int"
+			} else if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
 				// Variable already declared at top - just assign
 				if fieldName == "body" || fieldName == "status_text" {
 					g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
