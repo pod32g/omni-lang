@@ -3905,3 +3905,216 @@ int32_t omni_network_ping(const char* host) {
     // Stub: would need ICMP ping implementation
     return 0;
 }
+
+// ============================================================================
+// Coverage Tracking Infrastructure
+// ============================================================================
+
+#define OMNI_COVERAGE_MAX_ENTRIES 10000
+#define OMNI_COVERAGE_MAX_FUNCTION_NAME 256
+#define OMNI_COVERAGE_MAX_FILE_PATH 512
+
+typedef struct {
+    char function_name[OMNI_COVERAGE_MAX_FUNCTION_NAME];
+    char file_path[OMNI_COVERAGE_MAX_FILE_PATH];
+    int32_t line_number;
+    int32_t call_count;
+} omni_coverage_entry_t;
+
+static struct {
+    omni_coverage_entry_t entries[OMNI_COVERAGE_MAX_ENTRIES];
+    int32_t count;
+    int32_t enabled;
+#ifdef _WIN32
+    CRITICAL_SECTION mutex;
+    int mutex_initialized;
+#else
+    pthread_mutex_t mutex;
+#endif
+} omni_coverage_state = {
+    .count = 0,
+    .enabled = 0,
+#ifdef _WIN32
+    .mutex_initialized = 0
+#else
+    .mutex = PTHREAD_MUTEX_INITIALIZER
+#endif
+};
+
+void omni_coverage_init(void) {
+#ifdef _WIN32
+    if (!omni_coverage_state.mutex_initialized) {
+        InitializeCriticalSection(&omni_coverage_state.mutex);
+        omni_coverage_state.mutex_initialized = 1;
+    }
+    EnterCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_lock(&omni_coverage_state.mutex);
+#endif
+    
+    omni_coverage_state.count = 0;
+    omni_coverage_state.enabled = 1;
+    
+#ifdef _WIN32
+    LeaveCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_unlock(&omni_coverage_state.mutex);
+#endif
+}
+
+void omni_coverage_set_enabled(int32_t enabled) {
+#ifdef _WIN32
+    if (!omni_coverage_state.mutex_initialized) {
+        InitializeCriticalSection(&omni_coverage_state.mutex);
+        omni_coverage_state.mutex_initialized = 1;
+    }
+    EnterCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_lock(&omni_coverage_state.mutex);
+#endif
+    
+    omni_coverage_state.enabled = enabled;
+    
+#ifdef _WIN32
+    LeaveCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_unlock(&omni_coverage_state.mutex);
+#endif
+}
+
+int32_t omni_coverage_is_enabled(void) {
+    return omni_coverage_state.enabled;
+}
+
+void omni_coverage_record(const char* function_name, const char* file_path, int32_t line_number) {
+    if (!omni_coverage_state.enabled || !function_name) {
+        return;
+    }
+    
+#ifdef _WIN32
+    if (!omni_coverage_state.mutex_initialized) {
+        InitializeCriticalSection(&omni_coverage_state.mutex);
+        omni_coverage_state.mutex_initialized = 1;
+    }
+    EnterCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_lock(&omni_coverage_state.mutex);
+#endif
+    
+    // Check if entry already exists
+    int32_t found = 0;
+    for (int32_t i = 0; i < omni_coverage_state.count; i++) {
+        if (strcmp(omni_coverage_state.entries[i].function_name, function_name) == 0 &&
+            (file_path == NULL || strcmp(omni_coverage_state.entries[i].file_path, file_path) == 0) &&
+            omni_coverage_state.entries[i].line_number == line_number) {
+            omni_coverage_state.entries[i].call_count++;
+            found = 1;
+            break;
+        }
+    }
+    
+    // Add new entry if not found and we have space
+    if (!found && omni_coverage_state.count < OMNI_COVERAGE_MAX_ENTRIES) {
+        omni_coverage_entry_t* entry = &omni_coverage_state.entries[omni_coverage_state.count];
+        strncpy(entry->function_name, function_name, OMNI_COVERAGE_MAX_FUNCTION_NAME - 1);
+        entry->function_name[OMNI_COVERAGE_MAX_FUNCTION_NAME - 1] = '\0';
+        
+        if (file_path) {
+            strncpy(entry->file_path, file_path, OMNI_COVERAGE_MAX_FILE_PATH - 1);
+            entry->file_path[OMNI_COVERAGE_MAX_FILE_PATH - 1] = '\0';
+        } else {
+            entry->file_path[0] = '\0';
+        }
+        
+        entry->line_number = line_number;
+        entry->call_count = 1;
+        omni_coverage_state.count++;
+    }
+    
+#ifdef _WIN32
+    LeaveCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_unlock(&omni_coverage_state.mutex);
+#endif
+}
+
+void omni_coverage_reset(void) {
+#ifdef _WIN32
+    if (!omni_coverage_state.mutex_initialized) {
+        InitializeCriticalSection(&omni_coverage_state.mutex);
+        omni_coverage_state.mutex_initialized = 1;
+    }
+    EnterCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_lock(&omni_coverage_state.mutex);
+#endif
+    
+    omni_coverage_state.count = 0;
+    
+#ifdef _WIN32
+    LeaveCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_unlock(&omni_coverage_state.mutex);
+#endif
+}
+
+char* omni_coverage_export(void) {
+    // Estimate buffer size: each entry needs ~200 bytes for JSON
+    size_t buffer_size = 1024 + (omni_coverage_state.count * 300);
+    char* json = malloc(buffer_size);
+    if (!json) {
+        return NULL;
+    }
+    
+#ifdef _WIN32
+    if (!omni_coverage_state.mutex_initialized) {
+        InitializeCriticalSection(&omni_coverage_state.mutex);
+        omni_coverage_state.mutex_initialized = 1;
+    }
+    EnterCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_lock(&omni_coverage_state.mutex);
+#endif
+    
+    size_t pos = 0;
+    pos += snprintf(json + pos, buffer_size - pos, "{\"entries\":[");
+    
+    for (int32_t i = 0; i < omni_coverage_state.count; i++) {
+        if (i > 0) {
+            pos += snprintf(json + pos, buffer_size - pos, ",");
+        }
+        omni_coverage_entry_t* entry = &omni_coverage_state.entries[i];
+        pos += snprintf(json + pos, buffer_size - pos,
+            "{\"function\":\"%s\",\"file\":\"%s\",\"line\":%d,\"count\":%d}",
+            entry->function_name,
+            entry->file_path,
+            entry->line_number,
+            entry->call_count);
+        
+        if (pos >= buffer_size - 100) {
+            // Resize buffer if needed
+            buffer_size *= 2;
+            char* new_json = realloc(json, buffer_size);
+            if (!new_json) {
+                free(json);
+#ifdef _WIN32
+                LeaveCriticalSection(&omni_coverage_state.mutex);
+#else
+                pthread_mutex_unlock(&omni_coverage_state.mutex);
+#endif
+                return NULL;
+            }
+            json = new_json;
+        }
+    }
+    
+    pos += snprintf(json + pos, buffer_size - pos, "]}");
+    
+#ifdef _WIN32
+    LeaveCriticalSection(&omni_coverage_state.mutex);
+#else
+    pthread_mutex_unlock(&omni_coverage_state.mutex);
+#endif
+    
+    return json;
+}

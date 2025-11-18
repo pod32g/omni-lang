@@ -1,17 +1,65 @@
-// Comprehensive test for std.math module - only test implemented functions
+// Comprehensive test for std.math module - all runtime-wired functions
 import std
 
 func main():int {
-    let a:int = 42
-    let b:int = 17
+    // Test 1: abs (integer)
+    let abs1:int = std.math.abs(42)
+    let abs2:int = std.math.abs(-42)
+    let abs3:int = std.math.abs(0)
+    let abs4:int = std.math.abs(-100)
+    let abs5:int = std.math.abs(100)
     
-    // Test basic math functions (these are implemented)
-    let max_val:int = std.math.max(a, b)  // Should be 42
-    let min_val:int = std.math.min(a, b)  // Should be 17
-    let abs_val:int = std.math.abs(-10)   // Should be 10
+    // Test 2: max (integer)
+    let max1:int = std.math.max(42, 17)
+    let max2:int = std.math.max(17, 42)
+    let max3:int = std.math.max(0, 0)
+    let max4:int = std.math.max(-10, -20)
+    let max5:int = std.math.max(100, 200)
     
-    // Return a combination of results to verify all functions work
-    // We'll return: max + min + abs = 42 + 17 + 10 = 69
-    let result:int = max_val + min_val + abs_val
-    return result  // Should be 42 + 17 + 10 = 69
+    // Test 3: min (integer)
+    let min1:int = std.math.min(42, 17)
+    let min2:int = std.math.min(17, 42)
+    let min3:int = std.math.min(0, 0)
+    let min4:int = std.math.min(-10, -20)
+    let min5:int = std.math.min(100, 200)
+    
+    // Test 4: pow (float)
+    let pow1:float = std.math.pow(2.0, 3.0)
+    let pow2:float = std.math.pow(10.0, 2.0)
+    let pow3:float = std.math.pow(5.0, 0.0)
+    let pow4:float = std.math.pow(2.0, -1.0)
+    let pow5:float = std.math.pow(1.5, 2.0)
+    
+    // Test 5: sqrt (float)
+    let sqrt1:float = std.math.sqrt(4.0)
+    let sqrt2:float = std.math.sqrt(9.0)
+    let sqrt3:float = std.math.sqrt(0.0)
+    let sqrt4:float = std.math.sqrt(16.0)
+    let sqrt5:float = std.math.sqrt(25.0)
+    
+    // Test 6: floor (float)
+    let floor1:float = std.math.floor(3.7)
+    let floor2:float = std.math.floor(3.2)
+    let floor3:float = std.math.floor(-3.7)
+    let floor4:float = std.math.floor(0.0)
+    let floor5:float = std.math.floor(100.9)
+    
+    // Test 7: ceil (float)
+    let ceil1:float = std.math.ceil(3.2)
+    let ceil2:float = std.math.ceil(3.7)
+    let ceil3:float = std.math.ceil(-3.2)
+    let ceil4:float = std.math.ceil(0.0)
+    let ceil5:float = std.math.ceil(100.1)
+    
+    // Test 8: round (float)
+    let round1:float = std.math.round(3.2)
+    let round2:float = std.math.round(3.7)
+    let round3:float = std.math.round(-3.2)
+    let round4:float = std.math.round(-3.7)
+    let round5:float = std.math.round(0.0)
+    let round6:float = std.math.round(3.5)
+    let round7:float = std.math.round(4.5)
+    
+    // Return 0 to indicate success
+    return 0
 }

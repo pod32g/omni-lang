@@ -2,6 +2,7 @@ package vm
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -43,7 +44,20 @@ var (
 	promiseCounter int
 	promises       = make(map[int]*Promise)
 	eventLoop      = make(chan func(), 100) // Event loop channel
+
+	// Coverage tracking
+	coverageMu      sync.RWMutex
+	coverageEnabled bool
+	coverageData    = make(map[string]*coverageEntry)
 )
+
+// coverageEntry tracks coverage for a function
+type coverageEntry struct {
+	FunctionName string `json:"function"`
+	FilePath     string `json:"file"`
+	LineNumber   int    `json:"line"`
+	CallCount    int    `json:"count"`
+}
 
 // Promise represents an async operation that may complete in the future
 type Promise struct {
@@ -1279,7 +1293,16 @@ func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (
 			// In a real implementation, this would need to load and execute the imported module
 			return Result{Type: "int", Value: 0}, nil
 		}
+		// Record coverage for std library functions that aren't intrinsics
+		if strings.HasPrefix(callee, "std.") {
+			recordCoverage(callee, "", 0)
+		}
 		return Result{}, fmt.Errorf("callee %q not found", callee)
+	}
+
+	// Record coverage for std library functions
+	if strings.HasPrefix(callee, "std.") {
+		recordCoverage(callee, "", 0)
 	}
 	args := make([]Result, 0, len(fn.Params))
 	for _, op := range inst.Operands[1:] {
@@ -1312,9 +1335,74 @@ func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (
 	return execFunction(funcs, fn, args)
 }
 
+// recordCoverage records a function call for coverage tracking
+func recordCoverage(functionName, filePath string, lineNumber int) {
+	coverageMu.Lock()
+	defer coverageMu.Unlock()
+
+	if !coverageEnabled {
+		return
+	}
+
+	key := fmt.Sprintf("%s:%s:%d", functionName, filePath, lineNumber)
+	if entry, exists := coverageData[key]; exists {
+		entry.CallCount++
+	} else {
+		coverageData[key] = &coverageEntry{
+			FunctionName: functionName,
+			FilePath:     filePath,
+			LineNumber:   lineNumber,
+			CallCount:    1,
+		}
+	}
+}
+
+// SetCoverageEnabled enables or disables coverage tracking
+func SetCoverageEnabled(enabled bool) {
+	coverageMu.Lock()
+	defer coverageMu.Unlock()
+	coverageEnabled = enabled
+}
+
+// IsCoverageEnabled returns whether coverage tracking is enabled
+func IsCoverageEnabled() bool {
+	coverageMu.RLock()
+	defer coverageMu.RUnlock()
+	return coverageEnabled
+}
+
+// ResetCoverage clears all coverage data
+func ResetCoverage() {
+	coverageMu.Lock()
+	defer coverageMu.Unlock()
+	coverageData = make(map[string]*coverageEntry)
+}
+
+// ExportCoverage exports coverage data as JSON
+func ExportCoverage() ([]byte, error) {
+	coverageMu.RLock()
+	defer coverageMu.RUnlock()
+
+	entries := make([]*coverageEntry, 0, len(coverageData))
+	for _, entry := range coverageData {
+		entries = append(entries, entry)
+	}
+
+	data := map[string]interface{}{
+		"entries": entries,
+	}
+
+	return json.Marshal(data)
+}
+
 // execIntrinsic handles intrinsic function calls like std.io.println.
 // Returns (result, handled) where handled indicates if the function was an intrinsic.
 func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bool) {
+	// Record coverage for std library functions
+	if strings.HasPrefix(callee, "std.") {
+		recordCoverage(callee, "", 0) // File path and line number not available in VM
+	}
+
 	switch callee {
 	case "len":
 		// Builtin len function for arrays

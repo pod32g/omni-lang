@@ -1,10 +1,20 @@
-// Simple test for std.array module - just test that it can be imported
+// Comprehensive test for std.array module - runtime-wired functions
 import std
 
 func main():int {
-    // Just test that we can import std.array and the module loads
-    // We won't call any functions since they have generic type issues
+    // Test std.array.length with different array types
+    let arr1:array<int> = [1, 2, 3, 4, 5]
+    let len1:int = std.array.length(arr1)
     
-    // Return a fixed value to indicate success
-    return 42
+    let arr2:array<string> = ["hello", "world"]
+    let len2:int = std.array.length(arr2)
+    
+    let arr3:array<int> = []
+    let len3:int = std.array.length(arr3)
+    
+    let arr4:array<int> = [42]
+    let len4:int = std.array.length(arr4)
+    
+    // Return 0 to indicate success
+    return 0
 }

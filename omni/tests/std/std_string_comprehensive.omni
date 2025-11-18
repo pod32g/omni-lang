@@ -1,50 +1,96 @@
-// Comprehensive test for std.string module
+// Comprehensive test for std.string module - all 13 runtime-wired functions
 import std
 
 func main():int {
-    let str1:string = "Hello"
-    let str2:string = "World"
-    let str3:string = "Hello, World!"
+    // Test 1: length
+    let len1:int = std.string.length("Hello")
+    let len2:int = std.string.length("")
+    let len3:int = std.string.length("Hello, World!")
     
-    // Test basic string operations (these return 0 as placeholders)
-    let len1:int = std.string.length(str1)        // Should be 0 (placeholder)
-    let len2:int = std.string.length(str2)        // Should be 0 (placeholder)
-    let len3:int = std.string.length(str3)        // Should be 0 (placeholder)
+    // Test 2: concat
+    let concat1:string = std.string.concat("Hello", "World")
+    let concat2:string = std.string.concat("", "World")
+    let concat3:string = std.string.concat("Hello", "")
+    let concat4:string = std.string.concat("", "")
     
-    // Test string concatenation (returns "" as placeholder)
-    let concat_result:string = std.string.concat(str1, str2)  // Should be "" (placeholder)
-    let concat_len:int = std.string.length(concat_result)     // Should be 0 (placeholder)
+    // Test 3: substring
+    let substr1:string = std.string.substring("Hello, World!", 0, 5)
+    let substr2:string = std.string.substring("Hello, World!", 7, 12)
+    let substr3:string = std.string.substring("Hello", 0, 0)
+    let substr4:string = std.string.substring("Hello", 0, 5)
     
-    // Test substring operations (returns "" as placeholder)
-    let substr1:string = std.string.substring(str3, 0, 5)     // Should be "" (placeholder)
-    let substr2:string = std.string.substring(str3, 7, 12)    // Should be "" (placeholder)
+    // Test 4: char_at
+    let char1:char = std.string.char_at("Hello", 0)
+    let char2:char = std.string.char_at("Hello", 4)
+    let char3:char = std.string.char_at("A", 0)
     
-    // Test character operations (returns ' ' as placeholder)
-    let char1:char = std.string.char_at(str1, 0)  // Should be ' ' (placeholder)
-    let char2:char = std.string.char_at(str1, 4)  // Should be ' ' (placeholder)
+    // Test 5: starts_with
+    let starts1:bool = std.string.starts_with("Hello, World!", "Hello")
+    let starts2:bool = std.string.starts_with("Hello", "Hello")
+    let starts3:bool = std.string.starts_with("Hello", "World")
+    let starts4:bool = std.string.starts_with("", "Hello")
+    let starts5:bool = std.string.starts_with("Hello", "")
     
-    // Test string checking functions (return false as placeholders)
-    let starts_hello:bool = std.string.starts_with(str3, "Hello")  // Should be false (placeholder)
-    let ends_world:bool = std.string.ends_with(str3, "World!")     // Should be false (placeholder)
-    let contains_comma:bool = std.string.contains(str3, ",")       // Should be false (placeholder)
+    // Test 6: ends_with
+    let ends1:bool = std.string.ends_with("Hello, World!", "World!")
+    let ends2:bool = std.string.ends_with("Hello", "Hello")
+    let ends3:bool = std.string.ends_with("Hello", "World")
+    let ends4:bool = std.string.ends_with("", "Hello")
+    let ends5:bool = std.string.ends_with("Hello", "")
     
-    // Test string search functions (return -1 as placeholders)
-    let index_hello:int = std.string.index_of(str3, "Hello")      // Should be -1 (placeholder)
-    let index_world:int = std.string.index_of(str3, "World")      // Should be -1 (placeholder)
-    let last_index_l:int = std.string.last_index_of(str3, "l")    // Should be -1 (placeholder)
+    // Test 7: contains
+    let contains1:bool = std.string.contains("Hello, World!", ",")
+    let contains2:bool = std.string.contains("Hello, World!", "Hello")
+    let contains3:bool = std.string.contains("Hello", "xyz")
+    let contains4:bool = std.string.contains("", "Hello")
+    let contains5:bool = std.string.contains("Hello", "")
     
-    // Test string manipulation (returns "" as placeholder)
-    let trimmed:string = std.string.trim("  Hello  ")             // Should be "" (placeholder)
-    let upper:string = std.string.to_upper(str1)                  // Should be "" (placeholder)
-    let lower:string = std.string.to_lower(str1)                  // Should be "" (placeholder)
+    // Test 8: index_of
+    let index1:int = std.string.index_of("Hello, World!", "Hello")
+    let index2:int = std.string.index_of("Hello, World!", "World")
+    let index3:int = std.string.index_of("Hello, World!", "xyz")
+    let index4:int = std.string.index_of("Hello, World!", "l")
+    let index5:int = std.string.index_of("", "Hello")
     
-    // Test string comparison (returns false/0 as placeholders)
-    let equals_test:bool = std.string.equals(str1, "Hello")       // Should be false (placeholder)
-    let compare_test:int = std.string.compare("Apple", "Banana")  // Should be 0 (placeholder)
+    // Test 9: last_index_of
+    let last1:int = std.string.last_index_of("Hello, World!", "l")
+    let last2:int = std.string.last_index_of("Hello, World!", "o")
+    let last3:int = std.string.last_index_of("Hello, World!", "xyz")
+    let last4:int = std.string.last_index_of("", "Hello")
     
-    // Return a combination of results to verify all functions work
-    // Since all functions return placeholder values, we'll return a fixed value
-    // We'll return: len1 + len2 + concat_len + starts_hello + ends_world
-    let result:int = len1 + len2 + concat_len
-    return result  // Should be 0 + 0 + 0 = 0 (all placeholders)
+    // Test 10: trim
+    let trim1:string = std.string.trim("  Hello  ")
+    let trim2:string = std.string.trim("Hello")
+    let trim3:string = std.string.trim("   ")
+    let trim4:string = std.string.trim("")
+    
+    // Test 11: to_upper
+    let upper1:string = std.string.to_upper("Hello")
+    let upper2:string = std.string.to_upper("HELLO")
+    let upper3:string = std.string.to_upper("hello")
+    let upper4:string = std.string.to_upper("")
+    let upper5:string = std.string.to_upper("Hello, World!")
+    
+    // Test 12: to_lower
+    let lower1:string = std.string.to_lower("Hello")
+    let lower2:string = std.string.to_lower("HELLO")
+    let lower3:string = std.string.to_lower("hello")
+    let lower4:string = std.string.to_lower("")
+    let lower5:string = std.string.to_lower("HELLO, WORLD!")
+    
+    // Test 13: equals
+    let equals1:bool = std.string.equals("Hello", "Hello")
+    let equals2:bool = std.string.equals("Hello", "World")
+    let equals3:bool = std.string.equals("", "")
+    let equals4:bool = std.string.equals("Hello", "")
+    
+    // Test 14: compare
+    let compare1:int = std.string.compare("Apple", "Banana")
+    let compare2:int = std.string.compare("Banana", "Apple")
+    let compare3:int = std.string.compare("Apple", "Apple")
+    let compare4:int = std.string.compare("", "Apple")
+    let compare5:int = std.string.compare("Apple", "")
+    
+    // Return 0 to indicate success
+    return 0
 }

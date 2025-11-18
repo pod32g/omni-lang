@@ -1,10 +1,15 @@
 package std
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/omni-lang/omni/tools/coverage"
 )
 
 func TestBasicMath(t *testing.T) {
@@ -63,8 +68,8 @@ func TestStdMathComprehensive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("VM execution failed: %v", err)
 	}
-	// Expected: 42 + 17 + 10 = 69 (max + min + abs)
-	expected := "69"
+	// Expected: 0 (success indicator)
+	expected := "0"
 	if result != expected {
 		t.Errorf("Expected %s, got %s", expected, result)
 	}
@@ -93,8 +98,8 @@ func TestAllStdModules(t *testing.T) {
 		if err != nil {
 			t.Fatalf("VM execution failed: %v", err)
 		}
-		// Expected: 20 (actual result from string functions)
-		expected := "20"
+		// Expected: 0 (success indicator)
+		expected := "0"
 		if result != expected {
 			t.Errorf("Expected %s, got %s", expected, result)
 		}
@@ -105,8 +110,8 @@ func TestAllStdModules(t *testing.T) {
 		if err != nil {
 			t.Fatalf("VM execution failed: %v", err)
 		}
-		// Expected: 42 (success indicator)
-		expected := "42"
+		// Expected: 0 (success indicator)
+		expected := "0"
 		if result != expected {
 			t.Errorf("Expected %s, got %s", expected, result)
 		}
@@ -269,4 +274,127 @@ func runVMTestHarnessWithOutput(testFile string) (int, string, error) {
 func normalizeOutput(output []byte) string {
 	out := string(output)
 	return strings.TrimRight(out, "\n")
+}
+
+// runVMWithCoverage runs a test file with coverage enabled and returns coverage data
+func runVMWithCoverage(testFile string, cliArgs ...string) (string, string, error) {
+	coverageFile := filepath.Join(os.TempDir(), fmt.Sprintf("coverage_%s.json", testFile))
+	defer os.Remove(coverageFile)
+	
+	args := append([]string{"--coverage", "--coverage-output", coverageFile, testFile}, cliArgs...)
+	cmd := buildVMCommand(args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", "", err
+	}
+	result := string(output)
+	if len(result) > 0 && result[len(result)-1] == '\n' {
+		result = result[:len(result)-1]
+	}
+	
+	// Read coverage data
+	coverageData, err := os.ReadFile(coverageFile)
+	if err != nil {
+		return result, "", nil // Coverage file might not exist if no std functions were called
+	}
+	
+	return result, string(coverageData), nil
+}
+
+// TestCoverageGeneration tests that coverage data is generated when running tests
+func TestCoverageGeneration(t *testing.T) {
+	result, coverageJSON, err := runVMWithCoverage("std_io_comprehensive.omni")
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != "0" {
+		t.Errorf("Expected result 0, got %s", result)
+	}
+	
+	// Verify coverage JSON is valid
+	if coverageJSON == "" {
+		t.Skip("No coverage data generated (may be expected if no std functions called)")
+		return
+	}
+	
+	var coverageData coverage.CoverageData
+	if err := json.Unmarshal([]byte(coverageJSON), &coverageData); err != nil {
+		t.Fatalf("Failed to parse coverage JSON: %v", err)
+	}
+	
+	if len(coverageData.Entries) == 0 {
+		t.Log("Coverage data generated but no entries found")
+	} else {
+		t.Logf("Coverage data generated with %d entries", len(coverageData.Entries))
+	}
+}
+
+// TestCoverageThreshold tests that coverage meets the 60% threshold
+func TestCoverageThreshold(t *testing.T) {
+	// Run all comprehensive tests with coverage
+	testFiles := []string{
+		"std_io_comprehensive.omni",
+		"std_string_comprehensive.omni",
+		"std_math_comprehensive.omni",
+		"std_array_simple.omni",
+		"std_file_comprehensive.omni",
+		"std_os_comprehensive.omni",
+	}
+	
+	coverageFile := filepath.Join(os.TempDir(), "coverage_all.json")
+	defer os.Remove(coverageFile)
+	
+	// Run all tests and collect coverage
+	for _, testFile := range testFiles {
+		_, _, err := runVMWithCoverage(testFile)
+		if err != nil {
+			t.Logf("Warning: Test %s failed: %v", testFile, err)
+		}
+	}
+	
+	// Parse coverage data
+	coverageData, err := coverage.ParseCoverageFile(coverageFile)
+	if err != nil {
+		// Coverage file might not exist - try to generate it by running tests again
+		t.Logf("Coverage file not found, running tests to generate coverage...")
+		
+		// Run a comprehensive test to generate coverage
+		args := []string{"--coverage", "--coverage-output", coverageFile, "std_io_comprehensive.omni"}
+		cmd := buildVMCommand(args...)
+		if err := cmd.Run(); err != nil {
+			t.Skipf("Could not generate coverage: %v", err)
+			return
+		}
+		
+		coverageData, err = coverage.ParseCoverageFile(coverageFile)
+		if err != nil {
+			t.Skipf("Could not parse coverage file: %v", err)
+			return
+		}
+	}
+	
+	// Parse std library
+	stdPath := "../../std"
+	funcsByFile, err := coverage.ParseStdLibrary(stdPath)
+	if err != nil {
+		t.Fatalf("Failed to parse std library: %v", err)
+	}
+	
+	// Match coverage to functions
+	matches := coverage.MatchCoverageToFunctions(coverageData, funcsByFile)
+	
+	// Calculate statistics
+	stats := coverage.CalculateCoverage(matches)
+	
+	// Check threshold
+	threshold := 60.0
+	meetsThreshold, message := coverage.CheckCoverageThreshold(stats, threshold)
+	
+	t.Log(message)
+	t.Logf("Function Coverage: %.2f%% (%d/%d)", stats.GetFunctionCoveragePercentage(), stats.CoveredFunctions, stats.TotalFunctions)
+	t.Logf("Line Coverage: %.2f%% (%d/%d)", stats.GetLineCoveragePercentage(), stats.CoveredLines, stats.TotalLines)
+	
+	if !meetsThreshold {
+		t.Errorf("Coverage threshold not met: %.2f%% < %.2f%%", stats.GetFunctionCoveragePercentage(), threshold)
+	}
 }

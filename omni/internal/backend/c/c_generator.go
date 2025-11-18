@@ -44,6 +44,8 @@ type CGenerator struct {
 	tempStringsToFree []string
 	// Track the value ID that is being returned (to exclude from cleanup)
 	returnedValueID mir.ValueID
+	// Track which variables were declared at the top of the function
+	declaredVariables map[mir.ValueID]bool
 }
 
 // NewCGenerator creates a new C code generator
@@ -261,12 +263,10 @@ func (g *CGenerator) writeFunctionDeclarations() {
 		funcName := g.mapFunctionName(fn.Name)
 		if fn.Name == "main" {
 			funcName = "omni_main"
-			returnType = "int32_t" // Always use int32_t for omni_main to match runtime
-		}
-		
-		// For async functions (Promise<T>), the function should return omni_promise_t*
-		// The Promise is created at the call site, but the function itself returns the promise
-		if strings.HasPrefix(fn.ReturnType, "Promise<") {
+			returnType = "int32_t" // Always use int32_t for omni_main to match runtime (even if async)
+		} else if strings.HasPrefix(fn.ReturnType, "Promise<") {
+			// For async functions (Promise<T>), the function should return omni_promise_t*
+			// The Promise is created at the call site, but the function itself returns the promise
 			returnType = "omni_promise_t*"
 		}
 
@@ -338,12 +338,16 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	funcName := g.mapFunctionName(fn.Name)
 	if fn.Name == "main" {
 		funcName = "omni_main"
-		returnType = "int32_t" // Always use int32_t for omni_main to match runtime
-	}
-	
-	// For async functions (Promise<T>), the function should return omni_promise_t*
-	// The function body will create a promise and return it
-	if strings.HasPrefix(fn.ReturnType, "Promise<") {
+		// For async main, we need to await the promise and return int32_t
+		// The runtime expects omni_main to return int32_t, not a promise
+		if strings.HasPrefix(fn.ReturnType, "Promise<") {
+			returnType = "int32_t"
+		} else {
+			returnType = "int32_t" // Always use int32_t for omni_main to match runtime
+		}
+	} else if strings.HasPrefix(fn.ReturnType, "Promise<") {
+		// For async functions (Promise<T>), the function should return omni_promise_t*
+		// The function body will create a promise and return it
 		returnType = "omni_promise_t*"
 	}
 
@@ -386,6 +390,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	g.promisesToFree = make(map[mir.ValueID]bool)
 	g.tempStringsToFree = []string{}
 	g.returnedValueID = mir.InvalidValue
+	g.declaredVariables = make(map[mir.ValueID]bool)
 
 	// Map parameter SSA values to their names
 	for _, param := range fn.Params {
@@ -426,10 +431,9 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						}
 					}
 				}
-				// Special case for await - always use string for async I/O operations
+				// Special case for await - determine type from inst.Type or operand's Promise type
 				if inst.Op == "await" {
-					// For async I/O operations, the result is typically a string
-					// Check the actual type from inst.Type, but default to string
+					// First check inst.Type (should be the unwrapped type)
 					if inst.Type == "string" {
 						varType = "const char*"
 					} else if inst.Type == "int" {
@@ -438,10 +442,71 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						varType = "int32_t"
 					} else if inst.Type == "float" || inst.Type == "double" {
 						varType = "double"
-					} else {
+					} else if strings.HasPrefix(inst.Type, "Promise<") {
+						// If type is still Promise, extract inner type
+						innerType := inst.Type[8 : len(inst.Type)-1]
+						if innerType == "string" {
+							varType = "const char*"
+						} else if innerType == "int" {
+							varType = "int32_t"
+						} else if innerType == "bool" {
+							varType = "int32_t"
+						} else if innerType == "float" || innerType == "double" {
+							varType = "double"
+						} else {
+							varType = "int32_t" // Default fallback
+						}
+					} else if len(inst.Operands) > 0 {
+						// Try to infer from the operand's Promise type
+						if inst.Operands[0].Kind == mir.OperandValue {
+							operandID := inst.Operands[0].Value
+							if operandInst, found := instructionMap[operandID]; found {
+								if strings.HasPrefix(operandInst.Type, "Promise<") {
+									innerType := operandInst.Type[8 : len(operandInst.Type)-1]
+									if innerType == "string" {
+										varType = "const char*"
+									} else if innerType == "int" {
+										varType = "int32_t"
+									} else if innerType == "bool" {
+										varType = "int32_t"
+									} else if innerType == "float" || innerType == "double" {
+										varType = "double"
+									} else {
+										varType = "int32_t"
+									}
+								} else if operandInst.Type != "" && operandInst.Type != inferTypePlaceholder {
+									// Operand type might be the unwrapped type already
+									varType = g.mapType(operandInst.Type)
+								}
+							}
+						}
+						// Also check operand's Type field
+						if varType == "" && inst.Operands[0].Type != "" && inst.Operands[0].Type != inferTypePlaceholder {
+							if strings.HasPrefix(inst.Operands[0].Type, "Promise<") {
+								innerType := inst.Operands[0].Type[8 : len(inst.Operands[0].Type)-1]
+								if innerType == "string" {
+									varType = "const char*"
+								} else if innerType == "int" {
+									varType = "int32_t"
+								} else if innerType == "bool" {
+									varType = "int32_t"
+								} else if innerType == "float" || innerType == "double" {
+									varType = "double"
+								} else {
+									varType = "int32_t"
+								}
+							}
+						}
+					}
+					// If still not determined, default based on common async I/O patterns
+					if varType == "" {
 						// Default to string for await (most common case for async I/O)
 						varType = "const char*"
 					}
+				}
+				// Special case for async function calls - they return Promise
+				if inst.Op == "call" && strings.HasPrefix(inst.Type, "Promise<") {
+					varType = "omni_promise_t*"
 				}
 				// Special case for index - check if indexing into struct array
 				if inst.Op == "index" && len(inst.Operands) >= 2 {
@@ -549,6 +614,8 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				if !isStringConst {
 					g.output.WriteString(fmt.Sprintf("  %s %s;\n", varType, varName))
 				}
+				// Mark this variable as declared
+				g.declaredVariables[id] = true
 			}
 		}
 	}
@@ -646,6 +713,9 @@ func (g *CGenerator) generateBlock(block *mir.BasicBlock, fn *mir.Function) erro
 	// Generate block label if it's not the entry block
 	if block.Name != "entry" {
 		g.output.WriteString(fmt.Sprintf("  %s:\n", block.Name))
+		// Add empty statement after label to avoid C23 warning about label followed by declaration
+		// This ensures compatibility with older C standards
+		g.output.WriteString("  ;\n")
 	}
 
 	// Pre-populate valueTypes for this block's instructions
@@ -1125,12 +1195,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				varName := g.getVariableName(inst.ID)
 				// Check if the result type is a Promise (async function)
 				if strings.HasPrefix(inst.Type, "Promise<") {
-					// Extract inner type from Promise<T>
-					innerType := inst.Type[8 : len(inst.Type)-1] // Remove "Promise<" and ">"
-					// Call the function and wrap result in Promise
-					tempVar := fmt.Sprintf("_temp_%d", inst.ID)
-					g.output.WriteString(fmt.Sprintf("  %s %s = %s(",
-						g.mapType(innerType), tempVar, cFuncName))
+					// Async functions already return omni_promise_t*, so just assign (variable already declared)
+					g.output.WriteString(fmt.Sprintf("  %s = %s(", varName, cFuncName))
 					// Add arguments
 					for i, arg := range inst.Operands[1:] {
 						if i > 0 {
@@ -1139,24 +1205,12 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						g.output.WriteString(g.getOperandValue(arg))
 					}
 					g.output.WriteString(");\n")
-					// Wrap the result in a Promise based on inner type
-					switch innerType {
-					case "int":
-						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_int(%s);\n", varName, tempVar))
-					case "string":
-						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_string(%s);\n", varName, tempVar))
-						// Track the promise for cleanup
+					// Store the Promise type in valueTypes so await can find it
+					g.valueTypes[inst.ID] = inst.Type
+					// Track promises for cleanup (especially string promises)
+					innerType := inst.Type[8 : len(inst.Type)-1] // Extract inner type
+					if innerType == "string" {
 						g.promisesToFree[inst.ID] = true
-					case "float", "double":
-						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_float(%s);\n", varName, tempVar))
-					case "bool":
-						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_bool(%s);\n", varName, tempVar))
-					default:
-						// For user-defined types, we cannot create promises yet
-						g.errors = append(g.errors, fmt.Sprintf("cannot create promise for user-defined type: %s in async call to %s", innerType, funcName))
-						// Still emit code to prevent compilation errors, but it will be wrong
-						g.output.WriteString(fmt.Sprintf("  // ERROR: Cannot create promise for type %s, using int (WRONG)\n", innerType))
-						g.output.WriteString(fmt.Sprintf("  %s = omni_promise_create_int(%s); // WRONG TYPE\n", varName, tempVar))
 					}
 				} else if strings.Contains(inst.Type, ") -> ") {
 					// Generate function pointer variable declaration
@@ -2458,43 +2512,135 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			promiseVar := g.getOperandValue(inst.Operands[0])
 			varName := g.getVariableName(inst.ID)
 			
+			// Ensure variable is declared if it wasn't declared at the top
+			// This can happen if the await instruction wasn't collected in allVariables
+			// We'll determine the type first, then check if we need to declare it
+			
 			// Determine the await function based on result type
 			// The inst.Type should already be the unwrapped type (e.g., "string" not "Promise<string>")
 			resultType := inst.Type
 			
-			// If type is empty or unknown, try to infer from the instruction type
-			if resultType == "" || resultType == "<inferred>" {
+			// If type is empty or unknown, try to infer from the operand's promise type
+			if resultType == "" || resultType == "<inferred>" || resultType == "<infer>" || resultType == inferTypePlaceholder {
 				// Try to get type from operand's promise type
 				if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandValue {
 					operandID := inst.Operands[0].Value
 					if storedType, ok := g.valueTypes[operandID]; ok {
 						// Extract inner type from Promise<T>
 						if strings.HasPrefix(storedType, "Promise<") && strings.HasSuffix(storedType, ">") {
-							resultType = storedType[len("Promise<") : len(storedType)-1]
+							innerType := storedType[len("Promise<") : len(storedType)-1]
+							// Only use it if it's not an infer placeholder
+							if innerType != "<infer>" && innerType != "<inferred>" && innerType != inferTypePlaceholder && innerType != "" {
+								resultType = innerType
+							}
+						}
+					}
+					// Also check the operand's type field
+					if resultType == "" || resultType == "<inferred>" || resultType == "<infer>" || resultType == inferTypePlaceholder {
+						if inst.Operands[0].Type != "" && inst.Operands[0].Type != inferTypePlaceholder {
+							if strings.HasPrefix(inst.Operands[0].Type, "Promise<") && strings.HasSuffix(inst.Operands[0].Type, ">") {
+								innerType := inst.Operands[0].Type[len("Promise<") : len(inst.Operands[0].Type)-1]
+								if innerType != "<infer>" && innerType != "<inferred>" && innerType != inferTypePlaceholder && innerType != "" {
+									resultType = innerType
+								}
+							}
 						}
 					}
 				}
 			}
 			
+			// Determine C type for the result
+			cType := "int32_t" // default
 			switch resultType {
 			case "int":
-				g.output.WriteString(fmt.Sprintf("  %s = omni_await_int(%s);\n", varName, promiseVar))
+				cType = "int32_t"
 			case "string":
-				g.output.WriteString(fmt.Sprintf("  %s = omni_await_string(%s);\n", varName, promiseVar))
+				cType = "const char*"
+			case "float", "double":
+				cType = "double"
+			case "bool":
+				cType = "int32_t"
+			}
+			
+			// Check if variable was declared at the top of the function
+			// If not, declare it inline before assignment
+			// We check by seeing if the variable name exists in g.variables for this ID
+			// But actually, g.variables is populated during getVariableName, so we need a different check
+			// We'll use a simple heuristic: if the variable wasn't in allVariables during declaration,
+			// we need to declare it now. We can track this by checking if we've output a declaration.
+			// Actually, a simpler approach: always check if we need to declare by looking at the
+			// instruction's presence in the initial variable collection. Since we can't access
+			// allVariables here, we'll use a workaround: declare inline if the variable
+			// assignment would be the first use (which we can't easily detect).
+			// Better approach: track declared variables in a set during declaration phase,
+			// then check that set here. But for now, let's just always declare await variables
+			// inline to be safe, since they might not have been collected.
+			
+			// Check if variable was already declared at the top of the function
+			// If not, declare it inline with initialization
+			needsDeclaration := !g.declaredVariables[inst.ID]
+			
+			switch resultType {
+			case "int":
+				if needsDeclaration {
+					g.output.WriteString(fmt.Sprintf("  %s %s = omni_await_int(%s);\n", cType, varName, promiseVar))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_await_int(%s);\n", varName, promiseVar))
+				}
+			case "string":
+				if needsDeclaration {
+					g.output.WriteString(fmt.Sprintf("  %s %s = omni_await_string(%s);\n", cType, varName, promiseVar))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_await_string(%s);\n", varName, promiseVar))
+				}
 				// Track this string for cleanup (omni_await_string returns heap-allocated string)
 				g.stringsToFree[inst.ID] = true
 			case "float", "double":
-				g.output.WriteString(fmt.Sprintf("  %s = omni_await_float(%s);\n", varName, promiseVar))
+				if needsDeclaration {
+					g.output.WriteString(fmt.Sprintf("  %s %s = omni_await_float(%s);\n", cType, varName, promiseVar))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_await_float(%s);\n", varName, promiseVar))
+				}
 			case "bool":
-				g.output.WriteString(fmt.Sprintf("  %s = omni_await_bool(%s);\n", varName, promiseVar))
+				if needsDeclaration {
+					g.output.WriteString(fmt.Sprintf("  %s %s = omni_await_bool(%s);\n", cType, varName, promiseVar))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_await_bool(%s);\n", varName, promiseVar))
+				}
 			default:
-				// For user-defined types, we cannot await them yet
-				// Fail loudly instead of silently defaulting to string
-				g.errors = append(g.errors, fmt.Sprintf("cannot await Promise<%s>: user-defined types are not supported in await expressions", resultType))
-				// Still emit code to prevent compilation errors, but it will be wrong
-				g.output.WriteString(fmt.Sprintf("  // ERROR: Cannot await user-defined type %s, defaulting to int (WRONG)\n", resultType))
-				g.output.WriteString(fmt.Sprintf("  %s = omni_await_int(%s); // WRONG TYPE\n", varName, promiseVar))
-				resultType = "int" // Store as int to prevent further type errors
+				// Check if resultType is still an infer placeholder - this means we couldn't determine the type
+				needsDecl := !g.declaredVariables[inst.ID]
+				if resultType == "<infer>" || resultType == "<inferred>" || resultType == inferTypePlaceholder || resultType == "" {
+					// Try one more time to get it from the function signature if this is awaiting a direct call
+					// For now, we'll need to fail with a more helpful error
+					g.errors = append(g.errors, fmt.Sprintf("cannot await Promise: type could not be inferred. Ensure async functions have explicit return types (e.g., async func f():int instead of async func f())"))
+					// Default to int as a fallback to allow compilation to continue
+					g.output.WriteString(fmt.Sprintf("  // ERROR: Type inference failed, defaulting to int\n"))
+					if needsDecl {
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_await_int(%s); // INFERRED TYPE\n", varName, promiseVar))
+						g.declaredVariables[inst.ID] = true
+					} else {
+						g.output.WriteString(fmt.Sprintf("  %s = omni_await_int(%s); // INFERRED TYPE\n", varName, promiseVar))
+					}
+					resultType = "int"
+				} else {
+					// For user-defined types, we cannot await them yet
+					// Fail loudly instead of silently defaulting to string
+					g.errors = append(g.errors, fmt.Sprintf("cannot await Promise<%s>: user-defined types are not supported in await expressions", resultType))
+					// Still emit code to prevent compilation errors, but it will be wrong
+					g.output.WriteString(fmt.Sprintf("  // ERROR: Cannot await user-defined type %s, defaulting to int (WRONG)\n", resultType))
+					if needsDecl {
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_await_int(%s); // WRONG TYPE\n", varName, promiseVar))
+						g.declaredVariables[inst.ID] = true
+					} else {
+						g.output.WriteString(fmt.Sprintf("  %s = omni_await_int(%s); // WRONG TYPE\n", varName, promiseVar))
+					}
+					resultType = "int" // Store as int to prevent further type errors
+				}
 			}
 			// Store the result type
 			g.valueTypes[inst.ID] = resultType
@@ -2509,7 +2655,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 }
 
 // generateTerminator generates C code for a terminator
-func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string, returnType string) error {
+// funcName is the C function name (e.g., "omni_main")
+// originalReturnType is the original MIR return type (e.g., "Promise<int>" or "int")
+func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string, originalReturnType string) error {
 	switch term.Op {
 	case "ret":
 		// Handle return statement
@@ -2519,9 +2667,27 @@ func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string, r
 				g.returnedValueID = term.Operands[0].Value
 			}
 			value := g.getOperandValue(term.Operands[0])
-			// For async functions (Promise<T>), wrap the return value in a promise
-			if strings.HasPrefix(returnType, "Promise<") {
-				innerType := returnType[8 : len(returnType)-1] // Extract inner type from Promise<T>
+			// Special case: async main returns int32_t directly (no promise wrapping)
+			// The value is already the unwrapped type (int), not a promise
+			if funcName == "omni_main" && strings.HasPrefix(originalReturnType, "Promise<") {
+				// For async main, don't create a promise - just return the value as int32_t
+				innerType := originalReturnType[8 : len(originalReturnType)-1] // Extract inner type
+				switch innerType {
+				case "int":
+					g.output.WriteString(fmt.Sprintf("  return %s;\n", value))
+				case "string":
+					g.output.WriteString(fmt.Sprintf("  // String return from main not supported, return 0\n"))
+					g.output.WriteString("  return 0;\n")
+				case "float", "double":
+					g.output.WriteString(fmt.Sprintf("  return (int32_t)%s;\n", value))
+				case "bool":
+					g.output.WriteString(fmt.Sprintf("  return %s ? 0 : 1;\n", value))
+				default:
+					g.output.WriteString(fmt.Sprintf("  return %s; // Fallback\n", value))
+				}
+			} else if strings.HasPrefix(originalReturnType, "Promise<") {
+				// For async functions (Promise<T>), wrap the return value in a promise
+				innerType := originalReturnType[8 : len(originalReturnType)-1] // Extract inner type from Promise<T>
 				// Determine the promise creation function based on inner type
 				var promiseFunc string
 				switch innerType {
@@ -2545,7 +2711,7 @@ func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string, r
 				g.output.WriteString(fmt.Sprintf("  return %s(%s);\n", promiseFunc, value))
 			} else {
 				// For string return types, exclude the returned value from cleanup
-				if returnType == "string" || returnType == "const char*" || returnType == "char*" {
+				if originalReturnType == "string" || originalReturnType == "const char*" || originalReturnType == "char*" {
 					// The returned string is owned by the caller, don't free it
 					if term.Operands[0].Kind == mir.OperandValue {
 						delete(g.stringsToFree, term.Operands[0].Value)
@@ -4337,6 +4503,12 @@ func (g *CGenerator) writeMain() {
 	g.output.WriteString("int main(int argc, char** argv) {\n")
 	g.output.WriteString("    omni_args_init(argc, argv);\n")
 	
+	// Handle Promise return types (async main) - unwrap to inner type
+	if strings.HasPrefix(mainReturnType, "Promise<") {
+		innerType := mainReturnType[8 : len(mainReturnType)-1]
+		mainReturnType = innerType
+	}
+	
 	// Handle different return types
 	if mainReturnType == "void" {
 		g.output.WriteString("    omni_main();\n")
@@ -4348,14 +4520,14 @@ func (g *CGenerator) writeMain() {
 		g.output.WriteString("    return 0;\n")
 	} else {
 		// For int, float, bool, etc., use the mapped C type
-		cReturnType := g.mapType(mainReturnType)
-		g.output.WriteString(fmt.Sprintf("    %s result = omni_main();\n", cReturnType))
+		// omni_main always returns int32_t (even for async main)
+		g.output.WriteString("    int32_t result = omni_main();\n")
 		if mainReturnType == "float" || mainReturnType == "double" {
-			g.output.WriteString("    printf(\"OmniLang program result: %f\\n\", result);\n")
+			g.output.WriteString("    printf(\"OmniLang program result: %f\\n\", (double)result);\n")
 		} else {
-			g.output.WriteString("    printf(\"OmniLang program result: %d\\n\", (int)result);\n")
+			g.output.WriteString("    printf(\"OmniLang program result: %d\\n\", result);\n")
 		}
-		g.output.WriteString("    return (int)result;\n")
+		g.output.WriteString("    return result;\n")
 	}
 	
 	g.output.WriteString("}\n")

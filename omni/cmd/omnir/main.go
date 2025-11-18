@@ -26,19 +26,21 @@ var (
 
 func main() {
 	var (
-		version    = flag.Bool("version", false, "print version and exit")
-		versionAlt = flag.Bool("v", false, "alias for -version")
-		verbose    = flag.Bool("verbose", false, "enable verbose output")
-		verboseAlt = flag.Bool("V", false, "alias for -verbose")
-		backend    = flag.String("backend", "vm", "execution backend (vm|c)")
-		backendAlt = flag.String("b", "", "alias for -backend")
-		stats      = flag.Bool("stats", false, "print execution duration summary")
-		stdinSrc   = flag.Bool("stdin", false, "read OmniLang source from stdin")
-		watch      = flag.Bool("watch", false, "watch program file and rerun on changes")
-		watchShort = flag.Bool("w", false, "alias for -watch")
-		testMode   = flag.Bool("test", false, "run using the built-in testing harness (vm backend only)")
-		help       = flag.Bool("help", false, "show help and exit")
-		showHelp   = flag.Bool("h", false, "show help and exit")
+		version         = flag.Bool("version", false, "print version and exit")
+		versionAlt      = flag.Bool("v", false, "alias for -version")
+		verbose         = flag.Bool("verbose", false, "enable verbose output")
+		verboseAlt      = flag.Bool("V", false, "alias for -verbose")
+		backend         = flag.String("backend", "vm", "execution backend (vm|c)")
+		backendAlt      = flag.String("b", "", "alias for -backend")
+		stats           = flag.Bool("stats", false, "print execution duration summary")
+		stdinSrc        = flag.Bool("stdin", false, "read OmniLang source from stdin")
+		watch           = flag.Bool("watch", false, "watch program file and rerun on changes")
+		watchShort      = flag.Bool("w", false, "alias for -watch")
+		testMode        = flag.Bool("test", false, "run using the built-in testing harness (vm backend only)")
+		coverage        = flag.Bool("coverage", false, "enable coverage tracking for standard library functions")
+		coverageOutput  = flag.String("coverage-output", "", "file path to write coverage data (JSON format)")
+		help            = flag.Bool("help", false, "show help and exit")
+		showHelp        = flag.Bool("h", false, "show help and exit")
 	)
 	flag.Parse()
 
@@ -114,6 +116,12 @@ func main() {
 		defer cleanup()
 	}
 
+	// Enable coverage tracking if requested
+	if *coverage {
+		vm.SetCoverageEnabled(true)
+		vm.ResetCoverage()
+	}
+
 	if *testMode {
 		if *watch || *watchShort {
 			logger.ErrorString("--test cannot be combined with --watch")
@@ -127,7 +135,7 @@ func main() {
 			logger.ErrorString("--test mode does not support forwarding program arguments")
 			os.Exit(2)
 		}
-		code := runTests(program, *verbose || *verboseAlt, *stats)
+		code := runTests(program, *verbose || *verboseAlt, *stats, *coverage, *coverageOutput)
 		if code != 0 {
 			logger.ErrorString(fmt.Sprintf("%d test(s) failed", code))
 		}
@@ -139,14 +147,14 @@ func main() {
 			logger.ErrorString("watch mode is not supported with --stdin")
 			os.Exit(2)
 		}
-		if err := watchAndRun(program, programArgs, *backend, *verbose || *verboseAlt, *stats); err != nil {
+		if err := watchAndRun(program, programArgs, *backend, *verbose || *verboseAlt, *stats, *coverage, *coverageOutput); err != nil {
 			logger.ErrorString(err.Error())
 			os.Exit(1)
 		}
 		return
 	}
 
-	if err := runProgram(program, programArgs, *backend, *verbose || *verboseAlt, *stats); err != nil {
+	if err := runProgram(program, programArgs, *backend, *verbose || *verboseAlt, *stats, *coverage, *coverageOutput); err != nil {
 		logger.ErrorString(err.Error())
 		os.Exit(1)
 	}
@@ -168,6 +176,10 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "        print execution duration summary\n")
 	fmt.Fprintf(os.Stderr, "  -test\n")
 	fmt.Fprintf(os.Stderr, "        execute using the OmniLang test harness (vm backend only)\n")
+	fmt.Fprintf(os.Stderr, "  -coverage\n")
+	fmt.Fprintf(os.Stderr, "        enable coverage tracking for standard library functions\n")
+	fmt.Fprintf(os.Stderr, "  -coverage-output string\n")
+	fmt.Fprintf(os.Stderr, "        file path to write coverage data (JSON format)\n")
 	fmt.Fprintf(os.Stderr, "  -stdin\n")
 	fmt.Fprintf(os.Stderr, "        read source code from standard input\n")
 	fmt.Fprintf(os.Stderr, "  -watch, -w\n")
@@ -181,7 +193,7 @@ func showUsage() {
 	fmt.Fprintf(os.Stderr, "  omnir --watch hello.omni          # Automatically rerun on file changes\n")
 }
 
-func runTests(program string, verbose bool, stats bool) int {
+func runTests(program string, verbose bool, stats bool, coverageEnabled bool, coverageOutput string) int {
 	start := time.Now()
 	result, err := runner.Execute(program, nil, verbose)
 	code := 0
@@ -199,6 +211,28 @@ func runTests(program string, verbose bool, stats bool) int {
 		}
 	}
 
+	// Export coverage data if enabled
+	if coverageEnabled {
+		coverageData, err := vm.ExportCoverage()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to export coverage: %v\n", err)
+		} else if coverageOutput != "" {
+			if err := os.WriteFile(coverageOutput, coverageData, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to write coverage file: %v\n", err)
+			} else if verbose {
+				fmt.Fprintf(os.Stderr, "Coverage data written to %s\n", coverageOutput)
+			}
+		} else {
+			// Write to default location
+			defaultPath := "coverage.json"
+			if err := os.WriteFile(defaultPath, coverageData, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to write coverage file: %v\n", err)
+			} else if verbose {
+				fmt.Fprintf(os.Stderr, "Coverage data written to %s\n", defaultPath)
+			}
+		}
+	}
+
 	if stats {
 		elapsed := time.Since(start).Round(time.Millisecond)
 		fmt.Fprintf(os.Stderr, "Test run completed in %s (failures=%d)\n", elapsed, code)
@@ -206,10 +240,32 @@ func runTests(program string, verbose bool, stats bool) int {
 	return code
 }
 
-func runProgram(program string, args []string, backend string, verbose bool, stats bool) error {
+func runProgram(program string, args []string, backend string, verbose bool, stats bool, coverageEnabled bool, coverageOutput string) error {
 	switch backend {
 	case "vm":
-		return runner.Run(program, args, verbose)
+		err := runner.Run(program, args, verbose)
+		// Export coverage data if enabled
+		if coverageEnabled {
+			coverageData, exportErr := vm.ExportCoverage()
+			if exportErr != nil {
+				fmt.Fprintf(os.Stderr, "failed to export coverage: %v\n", exportErr)
+			} else if coverageOutput != "" {
+				if writeErr := os.WriteFile(coverageOutput, coverageData, 0644); writeErr != nil {
+					fmt.Fprintf(os.Stderr, "failed to write coverage file: %v\n", writeErr)
+				} else if verbose {
+					fmt.Fprintf(os.Stderr, "Coverage data written to %s\n", coverageOutput)
+				}
+			} else {
+				// Write to default location
+				defaultPath := "coverage.json"
+				if writeErr := os.WriteFile(defaultPath, coverageData, 0644); writeErr != nil {
+					fmt.Fprintf(os.Stderr, "failed to write coverage file: %v\n", writeErr)
+				} else if verbose {
+					fmt.Fprintf(os.Stderr, "Coverage data written to %s\n", defaultPath)
+				}
+			}
+		}
+		return err
 	case "c":
 		return runNative(program, args, verbose, stats)
 	default:
@@ -301,7 +357,7 @@ func writeStdinProgram() (string, func(), error) {
 	return path, cleanup, nil
 }
 
-func watchAndRun(program string, args []string, backend string, verbose bool, stats bool) error {
+func watchAndRun(program string, args []string, backend string, verbose bool, stats bool, coverageEnabled bool, coverageOutput string) error {
 	abs, err := filepath.Abs(program)
 	if err != nil {
 		return fmt.Errorf("resolve program path: %w", err)
@@ -327,7 +383,7 @@ func watchAndRun(program string, args []string, backend string, verbose bool, st
 	logger.InfoFields("Watching file for changes", logging.String("file", abs))
 
 	runOnce := func() {
-		if err := runProgram(program, args, backend, verbose, stats); err != nil {
+		if err := runProgram(program, args, backend, verbose, stats, coverageEnabled, coverageOutput); err != nil {
 			logger.ErrorString(err.Error())
 		}
 	}

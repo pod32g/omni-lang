@@ -426,4 +426,12 @@ int32_t omni_getppid(void);
 // Entry point
 int32_t omni_main();
 
+// Coverage tracking functions
+void omni_coverage_init(void);
+void omni_coverage_record(const char* function_name, const char* file_path, int32_t line_number);
+char* omni_coverage_export(void);  // Returns JSON string, caller must free
+void omni_coverage_reset(void);
+int32_t omni_coverage_is_enabled(void);
+void omni_coverage_set_enabled(int32_t enabled);
+
 #endif // OMNI_RT_H

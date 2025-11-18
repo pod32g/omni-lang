@@ -1,33 +1,68 @@
-// Comprehensive test for std.io module
+// Comprehensive test for std.io module - all runtime-wired functions
 import std
 
 func main():int {
-    // Test string printing functions
+    // Test std.io.print with various types
     std.io.print("Hello ")
+    std.io.print("")
+    std.io.print(42)
+    std.io.print(-42)
+    std.io.print(0)
+    std.io.print(3.14159)
+    std.io.print(-3.14159)
+    std.io.print(0.0)
+    std.io.print(true)
+    std.io.print(false)
+    
+    // Test std.io.println with various types
     std.io.println("World!")
+    std.io.println("")
+    std.io.println(100)
+    std.io.println(-100)
+    std.io.println(0)
+    std.io.println(2.71828)
+    std.io.println(-2.71828)
+    std.io.println(0.0)
+    std.io.println(true)
+    std.io.println(false)
     
-    // Test integer printing
-    let num:int = 42
-    std.io.print("Number: ")
-    std.io.println(num)
+    // Test std.io.println() with no arguments
+    std.io.println()
     
-    // Test float printing
-    let float_num:float = 3.14159
-    std.io.print("Float: ")
-    std.io.println(float_num)
+    // Test edge cases for strings
+    std.io.print("Empty string: ")
+    std.io.println("")
+    std.io.print("Special chars: ")
+    std.io.println("!@#$%^&*()")
+    std.io.print("Newline test: ")
+    std.io.println("line1\nline2")
+    std.io.print("Tab test: ")
+    std.io.println("col1\tcol2")
     
-    // Test boolean printing
-    let bool_val:bool = true
-    std.io.print("Boolean: ")
-    std.io.println(bool_val)
+    // Test edge cases for integers
+    std.io.print("Large int: ")
+    std.io.println(2147483647)
+    std.io.print("Small int: ")
+    std.io.println(-2147483648)
     
-    // Test mixed output
-    std.io.print("Mixed: ")
-    std.io.print(100)
-    std.io.print(" + ")
-    std.io.print(0.5)
-    std.io.print(" = ")
-    std.io.println(100.5 - 0.5)
+    // Test edge cases for floats
+    std.io.print("Large float: ")
+    std.io.println(1.7976931348623157e+308)
+    std.io.print("Small float: ")
+    std.io.println(-1.7976931348623157e+308)
+    std.io.print("Zero float: ")
+    std.io.println(0.0)
+    
+    // Test mixed output sequences
+    std.io.print("Test ")
+    std.io.print(1)
+    std.io.print(": ")
+    std.io.println("passed")
+    
+    std.io.print("Test ")
+    std.io.print(2)
+    std.io.print(": ")
+    std.io.println("passed")
     
     // Return 0 to indicate success
     return 0

@@ -375,3 +375,364 @@ func TestVerifyFunctionBlockWithValidReturn(t *testing.T) {
 		t.Errorf("verifyFunction failed: %v", err)
 	}
 }
+
+// Additional tests for verification functions
+
+func TestVerifyInstructionComparison(t *testing.T) {
+	tests := []struct {
+		name        string
+		instruction mir.Instruction
+		expectError bool
+	}{
+		{
+			name: "valid comparison with 2 operands",
+			instruction: mir.Instruction{
+				Op:   "cmp.eq",
+				Type: "bool",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+					{Kind: mir.OperandValue, Value: 1},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "comparison with insufficient operands",
+			instruction: mir.Instruction{
+				Op:   "cmp.eq",
+				Type: "bool",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "logical and with 2 operands",
+			instruction: mir.Instruction{
+				Op:   "and",
+				Type: "bool",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+					{Kind: mir.OperandValue, Value: 1},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "logical or with 2 operands",
+			instruction: mir.Instruction{
+				Op:   "or",
+				Type: "bool",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+					{Kind: mir.OperandValue, Value: 1},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "unsupported instruction",
+			instruction: mir.Instruction{
+				Op:   "invalid_op",
+				Type: "int",
+				Operands: []mir.Operand{},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := verifyInstruction(tt.instruction)
+			if tt.expectError && err == nil {
+				t.Error("expected error but got none")
+			} else if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyInstructionPHI(t *testing.T) {
+	tests := []struct {
+		name        string
+		instruction mir.Instruction
+		expectError bool
+	}{
+		{
+			name: "valid PHI with 2 operands",
+			instruction: mir.Instruction{
+				Op:   "phi",
+				Type: "int",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+					{Kind: mir.OperandLiteral, Literal: "block1"},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "PHI with odd number of operands",
+			instruction: mir.Instruction{
+				Op:   "phi",
+				Type: "int",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "PHI with insufficient operands",
+			instruction: mir.Instruction{
+				Op:   "phi",
+				Type: "int",
+				Operands: []mir.Operand{},
+			},
+			expectError: true,
+		},
+		{
+			name: "PHI with 4 operands (2 pairs)",
+			instruction: mir.Instruction{
+				Op:   "phi",
+				Type: "int",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+					{Kind: mir.OperandLiteral, Literal: "block1"},
+					{Kind: mir.OperandValue, Value: 1},
+					{Kind: mir.OperandLiteral, Literal: "block2"},
+				},
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := verifyInstruction(tt.instruction)
+			if tt.expectError && err == nil {
+				t.Error("expected error but got none")
+			} else if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyTerminatorBR(t *testing.T) {
+	blocks := map[string]struct{}{
+		"block1": {},
+		"block2": {},
+	}
+
+	tests := []struct {
+		name        string
+		terminator  mir.Terminator
+		expectError bool
+	}{
+		{
+			name: "valid branch with 1 operand",
+			terminator: mir.Terminator{
+				Op: "br",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandLiteral, Literal: "block1"},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "branch with wrong operand count",
+			terminator: mir.Terminator{
+				Op:       "br",
+				Operands: []mir.Operand{},
+			},
+			expectError: true,
+		},
+		{
+			name: "branch to non-existent block",
+			terminator: mir.Terminator{
+				Op: "br",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandLiteral, Literal: "nonexistent"},
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := verifyTerminator(tt.terminator, blocks)
+			if tt.expectError && err == nil {
+				t.Error("expected error but got none")
+			} else if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyTerminatorCBR(t *testing.T) {
+	blocks := map[string]struct{}{
+		"block1": {},
+		"block2": {},
+	}
+
+	tests := []struct {
+		name        string
+		terminator  mir.Terminator
+		expectError bool
+	}{
+		{
+			name: "valid conditional branch",
+			terminator: mir.Terminator{
+				Op: "cbr",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+					{Kind: mir.OperandLiteral, Literal: "block1"},
+					{Kind: mir.OperandLiteral, Literal: "block2"},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "conditional branch with wrong operand count",
+			terminator: mir.Terminator{
+				Op: "cbr",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "conditional branch with invalid condition",
+			terminator: mir.Terminator{
+				Op: "cbr",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandLiteral, Literal: "true"},
+					{Kind: mir.OperandLiteral, Literal: "block1"},
+					{Kind: mir.OperandLiteral, Literal: "block2"},
+				},
+			},
+			expectError: false, // Literal is also acceptable
+		},
+		{
+			name: "conditional branch to non-existent block",
+			terminator: mir.Terminator{
+				Op: "cbr",
+				Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: 0},
+					{Kind: mir.OperandLiteral, Literal: "nonexistent"},
+					{Kind: mir.OperandLiteral, Literal: "block2"},
+				},
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := verifyTerminator(tt.terminator, blocks)
+			if tt.expectError && err == nil {
+				t.Error("expected error but got none")
+			} else if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyBlockOperand(t *testing.T) {
+	blocks := map[string]struct{}{
+		"block1": {},
+		"block2": {},
+	}
+
+	tests := []struct {
+		name        string
+		operand     mir.Operand
+		expectError bool
+	}{
+		{
+			name: "valid block operand",
+			operand: mir.Operand{
+				Kind:    mir.OperandLiteral,
+				Literal: "block1",
+			},
+			expectError: false,
+		},
+		{
+			name: "block operand with value kind",
+			operand: mir.Operand{
+				Kind:  mir.OperandValue,
+				Value: 0,
+			},
+			expectError: true,
+		},
+		{
+			name: "block operand with empty literal",
+			operand: mir.Operand{
+				Kind:    mir.OperandLiteral,
+				Literal: "",
+			},
+			expectError: true,
+		},
+		{
+			name: "block operand to non-existent block",
+			operand: mir.Operand{
+				Kind:    mir.OperandLiteral,
+				Literal: "nonexistent",
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := verifyBlockOperand(tt.operand, blocks)
+			if tt.expectError && err == nil {
+				t.Error("expected error but got none")
+			} else if !tt.expectError && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyFunctionDuplicateBlockNames(t *testing.T) {
+	function := &mir.Function{
+		Name:       "test_func",
+		ReturnType: "void",
+		Params:     []mir.Param{},
+		Blocks: []*mir.BasicBlock{
+			{
+				Name:         "entry",
+				Instructions: []mir.Instruction{},
+				Terminator: mir.Terminator{
+					Op:       "ret",
+					Operands: []mir.Operand{},
+				},
+			},
+			{
+				Name:         "entry",
+				Instructions: []mir.Instruction{},
+				Terminator: mir.Terminator{
+					Op:       "ret",
+					Operands: []mir.Operand{},
+				},
+			},
+		},
+	}
+
+	err := verifyFunction(function)
+	if err == nil {
+		t.Error("expected error for duplicate block names")
+	}
+
+	expectedError := "mir verifier: function test_func has duplicate block name \"entry\""
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
+}
