@@ -4,6 +4,11 @@
 #include <stdint.h>
 #include <stdio.h>
 
+// Optional libcurl support for HTTP client
+#ifdef HAVE_LIBCURL
+#include <curl/curl.h>
+#endif
+
 // OmniLang Runtime Library
 // This provides the runtime support for OmniLang programs
 

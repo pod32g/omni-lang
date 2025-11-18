@@ -90,7 +90,7 @@
 
 ### 3.3 Standard Library Expansion (0.5 weeks)
 - [ ] File I/O operations
-- [ ] Networking support
+- [x] Networking support (DNS, HTTP client with libcurl/raw socket fallback, network utilities)
 - [ ] Collections and algorithms
 
 **Success Criteria**: All language features documented and tested, LSP working

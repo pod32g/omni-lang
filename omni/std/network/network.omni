@@ -135,7 +135,7 @@ func url_is_valid(url_str:string):bool {
 // ============================================================================
 
 // dns_lookup performs a DNS lookup for a hostname
-// [PARTIAL] Stub implementation - would need getaddrinfo
+// [IMPLEMENTED] Implemented in runtime using getaddrinfo (supports IPv4 and IPv6)
 func dns_lookup(hostname:string):array<IPAddress> {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -143,7 +143,7 @@ func dns_lookup(hostname:string):array<IPAddress> {
 }
 
 // dns_reverse_lookup performs a reverse DNS lookup for an IP address
-// [PARTIAL] Stub implementation - would need getnameinfo
+// [IMPLEMENTED] Implemented in runtime using getnameinfo
 func dns_reverse_lookup(ip:IPAddress):string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -155,7 +155,7 @@ func dns_reverse_lookup(ip:IPAddress):string {
 // ============================================================================
 
 // http_get performs an HTTP GET request
-// [PARTIAL] Stub implementation - would need HTTP library like libcurl
+// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
 func http_get(url:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -169,7 +169,7 @@ func http_get(url:string):HTTPResponse {
 }
 
 // http_post performs an HTTP POST request
-// [PARTIAL] Stub implementation - would need HTTP library like libcurl
+// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
 func http_post(url:string, body:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -183,7 +183,7 @@ func http_post(url:string, body:string):HTTPResponse {
 }
 
 // http_put performs an HTTP PUT request
-// [PARTIAL] Stub implementation - would need HTTP library like libcurl
+// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
 func http_put(url:string, body:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -197,7 +197,7 @@ func http_put(url:string, body:string):HTTPResponse {
 }
 
 // http_delete performs an HTTP DELETE request
-// [PARTIAL] Stub implementation - would need HTTP library like libcurl
+// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
 func http_delete(url:string):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -211,7 +211,7 @@ func http_delete(url:string):HTTPResponse {
 }
 
 // http_request performs a custom HTTP request
-// [PARTIAL] Stub implementation - would need HTTP library like libcurl
+// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
 func http_request(req:HTTPRequest):HTTPResponse {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -364,7 +364,7 @@ func socket_close(socket:int):bool {
 // ============================================================================
 
 // network_is_connected checks if the network is connected
-// [PARTIAL] Stub implementation - would need network interface checking
+// [IMPLEMENTED] Implemented in runtime (platform-specific network interface checking)
 func network_is_connected():bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -372,7 +372,7 @@ func network_is_connected():bool {
 }
 
 // network_get_local_ip returns the local IP address
-// [PARTIAL] Stub implementation - returns localhost
+// [IMPLEMENTED] Implemented in runtime (returns first non-loopback IPv4 address)
 func network_get_local_ip():IPAddress {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
@@ -384,7 +384,7 @@ func network_get_local_ip():IPAddress {
 }
 
 // network_ping pings a host
-// [PARTIAL] Stub implementation - would need ICMP ping
+// [IMPLEMENTED] Implemented in runtime (ICMP on Windows, TCP fallback on POSIX)
 func network_ping(host:string):bool {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.

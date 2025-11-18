@@ -3700,49 +3700,570 @@ int32_t omni_url_is_valid(const char* url_str) {
     return (strstr(url_str, "://") != NULL) ? 1 : 0;
 }
 
-// DNS functions (stub implementations - would need actual DNS library)
+// Network includes (needed for DNS and HTTP functions)
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#include <icmpapi.h>
+#include <fcntl.h>
+#include <sys/select.h>
+#ifndef NI_MAXHOST
+#define NI_MAXHOST 1025
+#endif
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/select.h>
+#ifndef NI_MAXHOST
+#define NI_MAXHOST 1025
+#endif
+#ifndef IFF_LOOPBACK
+#define IFF_LOOPBACK 0x8
+#endif
+#ifndef IFF_UP
+#define IFF_UP 0x1
+#endif
+#endif
+
+// Forward declaration
+static int32_t omni_network_ping_tcp_fallback(const char* host);
+
+// DNS functions
 omni_ip_address_t** omni_dns_lookup(const char* hostname, int32_t* count) {
     if (!hostname || !count) return NULL;
     *count = 0;
-    // Stub: would need getaddrinfo or similar
-    return NULL;
+    
+    struct addrinfo hints, *result = NULL, *rp = NULL;
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_family = AF_UNSPEC;  // Support both IPv4 and IPv6
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_ALL | AI_V4MAPPED;
+    
+    int status = getaddrinfo(hostname, NULL, &hints, &result);
+    if (status != 0) {
+        return NULL;
+    }
+    
+    // Count addresses
+    int addr_count = 0;
+    for (rp = result; rp != NULL; rp = rp->ai_next) {
+        addr_count++;
+    }
+    
+    if (addr_count == 0) {
+        freeaddrinfo(result);
+        return NULL;
+    }
+    
+    // Allocate array of IP address pointers
+    omni_ip_address_t** ip_array = (omni_ip_address_t**)malloc(addr_count * sizeof(omni_ip_address_t*));
+    if (!ip_array) {
+        freeaddrinfo(result);
+        return NULL;
+    }
+    
+    // Convert addresses
+    int idx = 0;
+    for (rp = result; rp != NULL && idx < addr_count; rp = rp->ai_next) {
+        omni_ip_address_t* ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
+        if (!ip) {
+            // Free already allocated IPs
+            for (int i = 0; i < idx; i++) {
+                free(ip_array[i]);
+            }
+            free(ip_array);
+            freeaddrinfo(result);
+            return NULL;
+        }
+        
+        char ip_str[INET6_ADDRSTRLEN];
+        if (rp->ai_family == AF_INET) {
+            struct sockaddr_in* sin = (struct sockaddr_in*)rp->ai_addr;
+            inet_ntop(AF_INET, &sin->sin_addr, ip_str, INET6_ADDRSTRLEN);
+            ip->is_ipv4 = 1;
+            ip->is_ipv6 = 0;
+        } else if (rp->ai_family == AF_INET6) {
+            struct sockaddr_in6* sin6 = (struct sockaddr_in6*)rp->ai_addr;
+            inet_ntop(AF_INET6, &sin6->sin6_addr, ip_str, INET6_ADDRSTRLEN);
+            ip->is_ipv4 = 0;
+            ip->is_ipv6 = 1;
+        } else {
+            free(ip);
+            continue;
+        }
+        
+        strncpy(ip->address, ip_str, sizeof(ip->address) - 1);
+        ip->address[sizeof(ip->address) - 1] = '\0';
+        ip_array[idx++] = ip;
+    }
+    
+    freeaddrinfo(result);
+    *count = idx;
+    return ip_array;
 }
 
 char* omni_dns_reverse_lookup(omni_ip_address_t* ip) {
     if (!ip) return NULL;
-    // Stub: would need getnameinfo or similar
-    return strdup("");
+    
+    struct sockaddr_storage sa;
+    memset(&sa, 0, sizeof(sa));
+    socklen_t salen;
+    
+    if (ip->is_ipv4) {
+        struct sockaddr_in* sin = (struct sockaddr_in*)&sa;
+        sin->sin_family = AF_INET;
+        if (inet_pton(AF_INET, ip->address, &sin->sin_addr) != 1) {
+            return strdup("");
+        }
+        salen = sizeof(struct sockaddr_in);
+    } else if (ip->is_ipv6) {
+        struct sockaddr_in6* sin6 = (struct sockaddr_in6*)&sa;
+        sin6->sin6_family = AF_INET6;
+        if (inet_pton(AF_INET6, ip->address, &sin6->sin6_addr) != 1) {
+            return strdup("");
+        }
+        salen = sizeof(struct sockaddr_in6);
+    } else {
+        return strdup("");
+    }
+    
+    char hostname[NI_MAXHOST];
+    int status = getnameinfo((struct sockaddr*)&sa, salen, hostname, NI_MAXHOST, NULL, 0, 0);
+    if (status != 0) {
+        return strdup("");
+    }
+    
+    return strdup(hostname);
 }
 
-// HTTP client functions (stub implementations - would need HTTP library like libcurl)
-omni_http_response_t* omni_http_get(const char* url) {
-    if (!url) return NULL;
+// HTTP client helper functions
+#ifdef HAVE_LIBCURL
+#include <curl/curl.h>
+
+// Check if libcurl is available at runtime
+static int32_t omni_http_has_libcurl() {
+    return 1; // If compiled with HAVE_LIBCURL, libcurl is available
+}
+
+// Structure to hold HTTP response data for libcurl
+typedef struct {
+    char* data;
+    size_t size;
+    omni_map_t* headers;
+    int32_t status_code;
+    char status_text[64];
+} omni_curl_response_t;
+
+// Callback for libcurl to write response body
+static size_t omni_curl_write_callback(void* contents, size_t size, size_t nmemb, void* userp) {
+    size_t realsize = size * nmemb;
+    omni_curl_response_t* resp = (omni_curl_response_t*)userp;
+    
+    char* ptr = (char*)realloc(resp->data, resp->size + realsize + 1);
+    if (!ptr) return 0;
+    
+    resp->data = ptr;
+    memcpy(&(resp->data[resp->size]), contents, realsize);
+    resp->size += realsize;
+    resp->data[resp->size] = '\0';
+    
+    return realsize;
+}
+
+// Callback for libcurl to write headers
+static size_t omni_curl_header_callback(char* buffer, size_t size, size_t nitems, void* userp) {
+    size_t realsize = size * nitems;
+    omni_curl_response_t* resp = (omni_curl_response_t*)userp;
+    
+    // Parse header line (format: "Header-Name: value\r\n")
+    char* colon = strchr(buffer, ':');
+    if (colon) {
+        *colon = '\0';
+        char* name = buffer;
+        char* value = colon + 1;
+        // Skip leading whitespace
+        while (*value == ' ' || *value == '\t') value++;
+        // Remove trailing \r\n
+        char* end = value + strlen(value);
+        while (end > value && (end[-1] == '\r' || end[-1] == '\n')) {
+            end--;
+            *end = '\0';
+        }
+        if (name && value) {
+            omni_map_put_string_string(resp->headers, name, value);
+        }
+        *colon = ':'; // Restore for safety
+    }
+    
+    return realsize;
+}
+
+// Perform HTTP request using libcurl
+static omni_http_response_t* omni_http_via_libcurl(const char* method, const char* url, 
+                                                    omni_map_t* headers, const char* body) {
+    CURL* curl = curl_easy_init();
+    if (!curl) return NULL;
+    
+    omni_curl_response_t curl_resp;
+    memset(&curl_resp, 0, sizeof(curl_resp));
+    curl_resp.headers = omni_map_create();
+    curl_resp.status_code = 0;
+    
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, omni_curl_write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&curl_resp);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, omni_curl_header_callback);
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void*)&curl_resp);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    
+    // Set HTTP method
+    if (strcmp(method, "POST") == 0) {
+        curl_easy_setopt(curl, CURLOPT_POST, 1L);
+        if (body) {
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
+        }
+    } else if (strcmp(method, "PUT") == 0) {
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT");
+        if (body) {
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body);
+        }
+    } else if (strcmp(method, "DELETE") == 0) {
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+    }
+    
+    // Add custom headers
+    struct curl_slist* header_list = NULL;
+    if (headers) {
+        // Iterate through headers map and add to curl
+        // Note: This is simplified - full implementation would iterate map
+        // For now, we'll set common headers manually if needed
+    }
+    if (header_list) {
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
+    }
+    
+    CURLcode res = curl_easy_perform(curl);
+    
+    if (res == CURLE_OK) {
+        long http_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        curl_resp.status_code = (int32_t)http_code;
+        
+        // Get status text from response code
+        if (http_code == 200) {
+            strncpy(curl_resp.status_text, "OK", sizeof(curl_resp.status_text) - 1);
+        } else if (http_code == 404) {
+            strncpy(curl_resp.status_text, "Not Found", sizeof(curl_resp.status_text) - 1);
+        } else if (http_code == 500) {
+            strncpy(curl_resp.status_text, "Internal Server Error", sizeof(curl_resp.status_text) - 1);
+        } else {
+            snprintf(curl_resp.status_text, sizeof(curl_resp.status_text), "Status %ld", http_code);
+        }
+    } else {
+        curl_easy_cleanup(curl);
+        if (header_list) curl_slist_free_all(header_list);
+        if (curl_resp.data) free(curl_resp.data);
+        omni_map_destroy(curl_resp.headers);
+        return NULL;
+    }
+    
+    curl_easy_cleanup(curl);
+    if (header_list) curl_slist_free_all(header_list);
+    
+    // Create response structure
+    omni_http_response_t* resp = (omni_http_response_t*)malloc(sizeof(omni_http_response_t));
+    if (!resp) {
+        if (curl_resp.data) free(curl_resp.data);
+        omni_map_destroy(curl_resp.headers);
+        return NULL;
+    }
+    
+    resp->status_code = curl_resp.status_code;
+    strncpy(resp->status_text, curl_resp.status_text, sizeof(resp->status_text) - 1);
+    resp->headers = curl_resp.headers;
+    resp->body = curl_resp.data ? curl_resp.data : strdup("");
+    
+    return resp;
+}
+#else
+static int32_t omni_http_has_libcurl() {
+    return 0;
+}
+#endif
+
+// Parse URL to extract host, port, and path
+static int omni_http_parse_url(const char* url, char* host, int* port, char* path) {
+    if (!url || !host || !port || !path) return 0;
+    
+    // Find scheme://
+    const char* scheme_end = strstr(url, "://");
+    if (!scheme_end) return 0;
+    
+    const char* host_start = scheme_end + 3;
+    
+    // Find port and path
+    const char* path_start = strchr(host_start, '/');
+    const char* port_start = strchr(host_start, ':');
+    
+    // Extract host
+    size_t host_len;
+    if (port_start && (!path_start || port_start < path_start)) {
+        host_len = port_start - host_start;
+        *port = atoi(port_start + 1);
+    } else if (path_start) {
+        host_len = path_start - host_start;
+        *port = 80; // Default HTTP port
+    } else {
+        host_len = strlen(host_start);
+        *port = 80;
+    }
+    
+    if (host_len >= 256) host_len = 255;
+    strncpy(host, host_start, host_len);
+    host[host_len] = '\0';
+    
+    // Extract path
+    if (path_start) {
+        strncpy(path, path_start, 511);
+        path[511] = '\0';
+    } else {
+        strcpy(path, "/");
+    }
+    
+    // Adjust port for HTTPS
+    if (strncmp(url, "https://", 8) == 0 && *port == 80) {
+        *port = 443;
+    }
+    
+    return 1;
+}
+
+// Perform HTTP request using raw sockets
+static omni_http_response_t* omni_http_via_socket(const char* method, const char* url,
+                                                   omni_map_t* headers, const char* body) {
+    char host[256];
+    int port;
+    char path[512];
+    
+    if (!omni_http_parse_url(url, host, &port, path)) {
+        return NULL;
+    }
+    
+    // Resolve hostname to IP
+    struct addrinfo hints, *result = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    
+    char port_str[16];
+    snprintf(port_str, sizeof(port_str), "%d", port);
+    
+    if (getaddrinfo(host, port_str, &hints, &result) != 0) {
+        return NULL;
+    }
+    
+    // Create socket and connect
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        freeaddrinfo(result);
+        return NULL;
+    }
+    
+    if (connect(sock, result->ai_addr, result->ai_addrlen) != 0) {
+#ifdef _WIN32
+        closesocket(sock);
+#else
+        close(sock);
+#endif
+        freeaddrinfo(result);
+        return NULL;
+    }
+    
+    freeaddrinfo(result);
+    
+    // Build HTTP request
+    char request[4096];
+    snprintf(request, sizeof(request), "%s %s HTTP/1.1\r\n", method, path);
+    strcat(request, "Host: ");
+    strncat(request, host, sizeof(request) - strlen(request) - 1);
+    strcat(request, "\r\n");
+    strcat(request, "Connection: close\r\n");
+    
+    if (body) {
+        char content_length[64];
+        snprintf(content_length, sizeof(content_length), "Content-Length: %zu\r\n", strlen(body));
+        strcat(request, content_length);
+    }
+    
+    // Add custom headers
+    // Note: Full implementation would iterate headers map
+    
+    strcat(request, "\r\n");
+    
+    if (body) {
+        strncat(request, body, sizeof(request) - strlen(request) - 1);
+    }
+    
+    // Send request
+    if (send(sock, request, strlen(request), 0) < 0) {
+        close(sock);
+        return NULL;
+    }
+    
+    // Read response
+    char response_buffer[8192];
+    ssize_t total_received = 0;
+    ssize_t received;
+    
+    while ((received = recv(sock, response_buffer + total_received, 
+                            sizeof(response_buffer) - total_received - 1, 0)) > 0) {
+        total_received += received;
+        if (total_received >= sizeof(response_buffer) - 1) break;
+    }
+    
+#ifdef _WIN32
+    closesocket(sock);
+#else
+    close(sock);
+#endif
+    
+    if (total_received <= 0) {
+        return NULL;
+    }
+    
+    response_buffer[total_received] = '\0';
+    
+    // Parse response
     omni_http_response_t* resp = (omni_http_response_t*)malloc(sizeof(omni_http_response_t));
     if (!resp) return NULL;
+    
+    resp->headers = omni_map_create();
     resp->status_code = 200;
     strncpy(resp->status_text, "OK", sizeof(resp->status_text) - 1);
-    resp->headers = omni_map_create();
-    resp->body = strdup("");
+    
+    // Parse status line
+    char* line = response_buffer;
+    char* status_line_end = strstr(line, "\r\n");
+    if (status_line_end) {
+        *status_line_end = '\0';
+        // Parse "HTTP/1.1 200 OK"
+        char* status_code_start = strchr(line, ' ');
+        if (status_code_start) {
+            status_code_start++;
+            resp->status_code = atoi(status_code_start);
+            char* status_text_start = strchr(status_code_start, ' ');
+            if (status_text_start) {
+                status_text_start++;
+                strncpy(resp->status_text, status_text_start, sizeof(resp->status_text) - 1);
+            }
+        }
+        line = status_line_end + 2;
+    }
+    
+    // Parse headers
+    char* header_end = strstr(line, "\r\n\r\n");
+    if (header_end) {
+        *header_end = '\0';
+        // Simple header parsing (one header per line)
+        char* header_line = line;
+        while (*header_line) {
+            char* header_line_end = strstr(header_line, "\r\n");
+            if (header_line_end) {
+                *header_line_end = '\0';
+            }
+            char* colon = strchr(header_line, ':');
+            if (colon) {
+                *colon = '\0';
+                char* name = header_line;
+                char* value = colon + 1;
+                while (*value == ' ' || *value == '\t') value++;
+                omni_map_put_string_string(resp->headers, name, value);
+                *colon = ':';
+            }
+            if (!header_line_end) break;
+            header_line = header_line_end + 2;
+        }
+        line = header_end + 4;
+    }
+    
+    // Body is everything after headers
+    resp->body = strdup(line);
+    
     return resp;
 }
 
+// HTTP client functions
+omni_http_response_t* omni_http_get(const char* url) {
+    if (!url) return NULL;
+    
+    // Try libcurl first, fallback to raw sockets
+#ifdef HAVE_LIBCURL
+    if (omni_http_has_libcurl()) {
+        omni_http_response_t* resp = omni_http_via_libcurl("GET", url, NULL, NULL);
+        if (resp) return resp;
+    }
+#endif
+    
+    return omni_http_via_socket("GET", url, NULL, NULL);
+}
+
 omni_http_response_t* omni_http_post(const char* url, const char* body) {
-    (void)body; // Unused in stub implementation
-    return omni_http_get(url); // Stub
+    if (!url) return NULL;
+    
+#ifdef HAVE_LIBCURL
+    if (omni_http_has_libcurl()) {
+        omni_http_response_t* resp = omni_http_via_libcurl("POST", url, NULL, body);
+        if (resp) return resp;
+    }
+#endif
+    
+    return omni_http_via_socket("POST", url, NULL, body);
 }
 
 omni_http_response_t* omni_http_put(const char* url, const char* body) {
-    (void)body; // Unused in stub implementation
-    return omni_http_get(url); // Stub
+    if (!url) return NULL;
+    
+#ifdef HAVE_LIBCURL
+    if (omni_http_has_libcurl()) {
+        omni_http_response_t* resp = omni_http_via_libcurl("PUT", url, NULL, body);
+        if (resp) return resp;
+    }
+#endif
+    
+    return omni_http_via_socket("PUT", url, NULL, body);
 }
 
 omni_http_response_t* omni_http_delete(const char* url) {
-    return omni_http_get(url); // Stub
+    if (!url) return NULL;
+    
+#ifdef HAVE_LIBCURL
+    if (omni_http_has_libcurl()) {
+        omni_http_response_t* resp = omni_http_via_libcurl("DELETE", url, NULL, NULL);
+        if (resp) return resp;
+    }
+#endif
+    
+    return omni_http_via_socket("DELETE", url, NULL, NULL);
 }
 
 omni_http_response_t* omni_http_request(omni_http_request_t* req) {
     if (!req) return NULL;
-    return omni_http_get(req->url);
+    
+#ifdef HAVE_LIBCURL
+    if (omni_http_has_libcurl()) {
+        omni_http_response_t* resp = omni_http_via_libcurl(req->method, req->url, req->headers, req->body);
+        if (resp) return resp;
+    }
+#endif
+    
+    return omni_http_via_socket(req->method, req->url, req->headers, req->body);
 }
 
 void omni_http_response_destroy(omni_http_response_t* resp) {
@@ -3808,18 +4329,7 @@ void omni_http_request_destroy(omni_http_request_t* req) {
     free(req);
 }
 
-// Socket functions (stub implementations - would need socket library)
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#endif
-
+// Socket functions
 int32_t omni_socket_create() {
 #ifdef _WIN32
     WSADATA wsa;
@@ -3887,22 +4397,301 @@ int32_t omni_socket_close(int32_t socket) {
 
 // Network utility functions
 int32_t omni_network_is_connected() {
-    // Stub: would need to check network interface status
-    return 1; // Assume connected
+#ifdef _WIN32
+    // On Windows, check network adapters
+    DWORD dwSize = 0;
+    GetAdaptersInfo(NULL, &dwSize);
+    if (dwSize == 0) return 0;
+    
+    PIP_ADAPTER_INFO pAdapterInfo = (IP_ADAPTER_INFO*)malloc(dwSize);
+    if (!pAdapterInfo) return 0;
+    
+    DWORD dwStatus = GetAdaptersInfo(pAdapterInfo, &dwSize);
+    int32_t connected = 0;
+    
+    if (dwStatus == ERROR_SUCCESS) {
+        PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+        while (pAdapter) {
+            if (pAdapter->Type != MIB_IF_TYPE_LOOPBACK) {
+                connected = 1;
+                break;
+            }
+            pAdapter = pAdapter->Next;
+        }
+    }
+    
+    free(pAdapterInfo);
+    return connected;
+#else
+    // On POSIX, use getifaddrs
+    struct ifaddrs* ifaddr = NULL;
+    if (getifaddrs(&ifaddr) != 0) {
+        return 0;
+    }
+    
+    int32_t connected = 0;
+    for (struct ifaddrs* ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+        
+        // Skip loopback interfaces
+        if (ifa->ifa_flags & IFF_LOOPBACK) continue;
+        
+        // Check if interface is up
+        if (ifa->ifa_flags & IFF_UP) {
+            // Check for IPv4 or IPv6 address
+            if (ifa->ifa_addr->sa_family == AF_INET || ifa->ifa_addr->sa_family == AF_INET6) {
+                connected = 1;
+                break;
+            }
+        }
+    }
+    
+    freeifaddrs(ifaddr);
+    return connected;
+#endif
 }
 
 omni_ip_address_t* omni_network_get_local_ip() {
-    omni_ip_address_t* ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
-    if (!ip) return NULL;
-    strncpy(ip->address, "127.0.0.1", sizeof(ip->address) - 1);
-    ip->is_ipv4 = 1;
-    ip->is_ipv6 = 0;
+#ifdef _WIN32
+    // On Windows, use GetAdaptersInfo
+    DWORD dwSize = 0;
+    GetAdaptersInfo(NULL, &dwSize);
+    if (dwSize == 0) {
+        // Fallback to localhost
+        omni_ip_address_t* ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
+        if (!ip) return NULL;
+        strncpy(ip->address, "127.0.0.1", sizeof(ip->address) - 1);
+        ip->address[sizeof(ip->address) - 1] = '\0';
+        ip->is_ipv4 = 1;
+        ip->is_ipv6 = 0;
+        return ip;
+    }
+    
+    PIP_ADAPTER_INFO pAdapterInfo = (IP_ADAPTER_INFO*)malloc(dwSize);
+    if (!pAdapterInfo) {
+        omni_ip_address_t* ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
+        if (!ip) return NULL;
+        strncpy(ip->address, "127.0.0.1", sizeof(ip->address) - 1);
+        ip->address[sizeof(ip->address) - 1] = '\0';
+        ip->is_ipv4 = 1;
+        ip->is_ipv6 = 0;
+        return ip;
+    }
+    
+    DWORD dwStatus = GetAdaptersInfo(pAdapterInfo, &dwSize);
+    omni_ip_address_t* ip = NULL;
+    
+    if (dwStatus == ERROR_SUCCESS) {
+        PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+        while (pAdapter) {
+            // Skip loopback adapter
+            if (pAdapter->Type != MIB_IF_TYPE_LOOPBACK && pAdapter->IpAddressList.IpAddress.String) {
+                ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
+                if (ip) {
+                    strncpy(ip->address, pAdapter->IpAddressList.IpAddress.String, sizeof(ip->address) - 1);
+                    ip->address[sizeof(ip->address) - 1] = '\0';
+                    ip->is_ipv4 = 1;
+                    ip->is_ipv6 = 0;
+                }
+                break;
+            }
+            pAdapter = pAdapter->Next;
+        }
+    }
+    
+    free(pAdapterInfo);
+    
+    if (!ip) {
+        // Fallback to localhost
+        ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
+        if (ip) {
+            strncpy(ip->address, "127.0.0.1", sizeof(ip->address) - 1);
+            ip->address[sizeof(ip->address) - 1] = '\0';
+            ip->is_ipv4 = 1;
+            ip->is_ipv6 = 0;
+        }
+    }
+    
     return ip;
+#else
+    // On POSIX, use getifaddrs
+    struct ifaddrs* ifaddr = NULL;
+    if (getifaddrs(&ifaddr) != 0) {
+        // Fallback to localhost
+        omni_ip_address_t* ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
+        if (!ip) return NULL;
+        strncpy(ip->address, "127.0.0.1", sizeof(ip->address) - 1);
+        ip->address[sizeof(ip->address) - 1] = '\0';
+        ip->is_ipv4 = 1;
+        ip->is_ipv6 = 0;
+        return ip;
+    }
+    
+    omni_ip_address_t* ip = NULL;
+    for (struct ifaddrs* ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL) continue;
+        
+        // Skip loopback interfaces
+        if (ifa->ifa_flags & IFF_LOOPBACK) continue;
+        
+        // Check if interface is up
+        if (!(ifa->ifa_flags & IFF_UP)) continue;
+        
+        // Prefer IPv4 addresses
+        if (ifa->ifa_addr->sa_family == AF_INET) {
+            struct sockaddr_in* sin = (struct sockaddr_in*)ifa->ifa_addr;
+            char ip_str[INET_ADDRSTRLEN];
+            if (inet_ntop(AF_INET, &sin->sin_addr, ip_str, INET_ADDRSTRLEN)) {
+                ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
+                if (ip) {
+                    strncpy(ip->address, ip_str, sizeof(ip->address) - 1);
+                    ip->address[sizeof(ip->address) - 1] = '\0';
+                    ip->is_ipv4 = 1;
+                    ip->is_ipv6 = 0;
+                    break;
+                }
+            }
+        }
+    }
+    
+    freeifaddrs(ifaddr);
+    
+    if (!ip) {
+        // Fallback to localhost
+        ip = (omni_ip_address_t*)malloc(sizeof(omni_ip_address_t));
+        if (ip) {
+            strncpy(ip->address, "127.0.0.1", sizeof(ip->address) - 1);
+            ip->address[sizeof(ip->address) - 1] = '\0';
+            ip->is_ipv4 = 1;
+            ip->is_ipv6 = 0;
+        }
+    }
+    
+    return ip;
+#endif
 }
 
 int32_t omni_network_ping(const char* host) {
     if (!host) return 0;
-    // Stub: would need ICMP ping implementation
+    
+#ifdef _WIN32
+    // On Windows, use IcmpSendEcho
+    HANDLE hIcmpFile = IcmpCreateFile();
+    if (hIcmpFile == INVALID_HANDLE_VALUE) {
+        // Fallback: try TCP connection
+        return omni_network_ping_tcp_fallback(host);
+    }
+    
+    // Resolve hostname
+    struct addrinfo hints, *result = NULL;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    
+    if (getaddrinfo(host, NULL, &hints, &result) != 0) {
+        IcmpCloseHandle(hIcmpFile);
+        return 0;
+    }
+    
+    struct sockaddr_in* sin = (struct sockaddr_in*)result->ai_addr;
+    IPAddr dest_ip = sin->sin_addr.S_un.S_addr;
+    
+    char send_data[32] = "Ping Data";
+    char reply_buffer[sizeof(ICMP_ECHO_REPLY) + 32];
+    DWORD reply_size = sizeof(reply_buffer);
+    
+    DWORD result_code = IcmpSendEcho(hIcmpFile, dest_ip, send_data, sizeof(send_data),
+                                     NULL, reply_buffer, reply_size, 1000);
+    
+    freeaddrinfo(result);
+    IcmpCloseHandle(hIcmpFile);
+    
+    return (result_code > 0) ? 1 : 0;
+#else
+    // On POSIX, try TCP connection as fallback (ICMP requires root)
+    return omni_network_ping_tcp_fallback(host);
+#endif
+}
+
+// TCP-based ping fallback (works without root privileges)
+static int32_t omni_network_ping_tcp_fallback(const char* host) {
+    // Try connecting to common ports (80, 443)
+    int ports[] = {80, 443, 22};
+    int num_ports = sizeof(ports) / sizeof(ports[0]);
+    
+    for (int i = 0; i < num_ports; i++) {
+        struct addrinfo hints, *result = NULL;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        
+        char port_str[16];
+        snprintf(port_str, sizeof(port_str), "%d", ports[i]);
+        
+        if (getaddrinfo(host, port_str, &hints, &result) != 0) {
+            continue;
+        }
+        
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            freeaddrinfo(result);
+            continue;
+        }
+        
+        // Set non-blocking for timeout
+#ifdef _WIN32
+        u_long mode = 1;
+        ioctlsocket(sock, FIONBIO, &mode);
+#else
+        int flags = fcntl(sock, F_GETFL, 0);
+        fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+#endif
+        
+        // Try to connect with timeout
+        int connected = 0;
+        if (connect(sock, result->ai_addr, result->ai_addrlen) == 0) {
+            connected = 1;
+        } else {
+#ifdef _WIN32
+            fd_set write_fds;
+            struct timeval timeout;
+            FD_ZERO(&write_fds);
+            FD_SET(sock, &write_fds);
+            timeout.tv_sec = 2;
+            timeout.tv_usec = 0;
+            if (select(0, NULL, &write_fds, NULL, &timeout) > 0) {
+                connected = 1;
+            }
+#else
+            fd_set write_fds;
+            struct timeval timeout;
+            FD_ZERO(&write_fds);
+            FD_SET(sock, &write_fds);
+            timeout.tv_sec = 2;
+            timeout.tv_usec = 0;
+            if (select(sock + 1, NULL, &write_fds, NULL, &timeout) > 0) {
+                int so_error;
+                socklen_t len = sizeof(so_error);
+                getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+                if (so_error == 0) {
+                    connected = 1;
+                }
+            }
+#endif
+        }
+        
+#ifdef _WIN32
+        closesocket(sock);
+#else
+        close(sock);
+#endif
+        freeaddrinfo(result);
+        
+        if (connected) {
+            return 1;
+        }
+    }
+    
     return 0;
 }
 

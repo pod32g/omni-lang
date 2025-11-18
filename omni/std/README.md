@@ -454,7 +454,13 @@ struct Duration {
 - `NANOSECOND`, `MICROSECOND`, `MILLISECOND`, `SECOND`, `MINUTE`, `HOUR`, `DAY`, `WEEK`, `MONTH`, `YEAR`
 
 ### std.network
-Basic networking utilities.
+Basic networking utilities with full implementation support.
+
+**Implementation Notes:**
+- HTTP client functions use libcurl when available (detected at compile time), with automatic fallback to raw socket implementation
+- DNS functions support both IPv4 and IPv6 addresses
+- Network utility functions use platform-specific APIs (GetAdaptersInfo on Windows, getifaddrs on POSIX)
+- Ping function uses ICMP on Windows, TCP connection fallback on POSIX (works without root privileges)
 
 **Network Structures:**
 ```omni

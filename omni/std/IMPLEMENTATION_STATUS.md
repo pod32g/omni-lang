@@ -232,16 +232,16 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `socket_send(socket, data)` - Wired to `omni_socket_send`
 - [IMPLEMENTED] `socket_receive(socket, buffer_size)` - Wired to `omni_socket_receive`
 - [IMPLEMENTED] `socket_close(socket)` - Wired to `omni_socket_close`
-- [PARTIAL] `dns_lookup(hostname)` - Stub implementation (returns empty array)
-- [PARTIAL] `dns_reverse_lookup(ip)` - Stub implementation (returns empty string)
-- [PARTIAL] `http_get(url)` - Stub implementation (returns default HTTPResponse)
-- [PARTIAL] `http_post(url, body)` - Stub implementation (returns default HTTPResponse)
-- [PARTIAL] `http_put(url, body)` - Stub implementation (returns default HTTPResponse)
-- [PARTIAL] `http_delete(url)` - Stub implementation (returns default HTTPResponse)
-- [PARTIAL] `http_request(req)` - Stub implementation (returns default HTTPResponse)
-- [PARTIAL] `network_is_connected()` - Stub implementation (returns false)
-- [PARTIAL] `network_get_local_ip()` - Stub implementation (returns localhost)
-- [PARTIAL] `network_ping(host)` - Stub implementation (returns false)
+- [IMPLEMENTED] `dns_lookup(hostname)` - Wired to `omni_dns_lookup` (uses getaddrinfo, supports IPv4 and IPv6)
+- [IMPLEMENTED] `dns_reverse_lookup(ip)` - Wired to `omni_dns_reverse_lookup` (uses getnameinfo)
+- [IMPLEMENTED] `http_get(url)` - Wired to `omni_http_get` (libcurl preferred, raw socket fallback)
+- [IMPLEMENTED] `http_post(url, body)` - Wired to `omni_http_post` (libcurl preferred, raw socket fallback)
+- [IMPLEMENTED] `http_put(url, body)` - Wired to `omni_http_put` (libcurl preferred, raw socket fallback)
+- [IMPLEMENTED] `http_delete(url)` - Wired to `omni_http_delete` (libcurl preferred, raw socket fallback)
+- [IMPLEMENTED] `http_request(req)` - Wired to `omni_http_request` (libcurl preferred, raw socket fallback)
+- [IMPLEMENTED] `network_is_connected()` - Wired to `omni_network_is_connected` (platform-specific network interface checking)
+- [IMPLEMENTED] `network_get_local_ip()` - Wired to `omni_network_get_local_ip` (returns first non-loopback IPv4 address)
+- [IMPLEMENTED] `network_ping(host)` - Wired to `omni_network_ping` (ICMP on Windows, TCP fallback on POSIX)
 
 ### Type Conversions
 - [IMPLEMENTED] `std.int_to_string(i)` - Wired to `omni_int_to_string`

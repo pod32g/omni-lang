@@ -79,8 +79,15 @@ build-rust:
 build-runtime:
 	@mkdir -p runtime/posix
 	@if command -v gcc >/dev/null 2>&1; then \
-		gcc -shared -fPIC -o runtime/posix/libomni_rt.so runtime/omni_rt.c -lm; \
-		echo "Runtime library built successfully"; \
+		CURL_CFLAGS=$$(pkg-config --cflags libcurl 2>/dev/null || echo ""); \
+		CURL_LIBS=$$(pkg-config --libs libcurl 2>/dev/null || echo ""); \
+		if pkg-config --exists libcurl 2>/dev/null; then \
+			gcc -shared -fPIC -DHAVE_LIBCURL $$CURL_CFLAGS -o runtime/posix/libomni_rt.so runtime/omni_rt.c -lm $$CURL_LIBS; \
+			echo "Runtime library built successfully with libcurl support"; \
+		else \
+			gcc -shared -fPIC -o runtime/posix/libomni_rt.so runtime/omni_rt.c -lm; \
+			echo "Runtime library built successfully (without libcurl - install libcurl-dev for HTTP support)"; \
+		fi; \
 	else \
 		echo "GCC not found, skipping runtime build"; \
 	fi
