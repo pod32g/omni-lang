@@ -365,13 +365,15 @@ build-vscode-extension:
   before_script:
     # Fix IPv6 connectivity issues and install dependencies
     - if ! grep -q '::ffff:0:0/96' /etc/gai.conf 2>/dev/null; then echo 'precedence ::ffff:0:0/96 100' >> /etc/gai.conf; fi
-    - apt-get update || (sleep 5 && apt-get update) || true
-    - apt-get install -y --no-install-recommends libsecret-1-dev pkg-config build-essential python3 || true
-    # Install npm dependencies, allowing keytar to fail (it's optional for credential storage)
+    - apt-get update || (sleep 5 && apt-get update) || (sleep 10 && apt-get update) || true
+    - apt-get install -y --no-install-recommends libsecret-1-dev pkg-config build-essential python3 make g++ || true
+    # Install npm dependencies
+    # keytar is an optional dependency for credential storage, we can skip it if it fails
     - cd vscode/omni
-    - npm ci --ignore-scripts || npm ci --ignore-scripts --legacy-peer-deps || true
-    # Try to build keytar separately, but don't fail if it doesn't work
-    - npm rebuild keytar || echo "keytar build failed, continuing without it (optional dependency)"
+    - npm ci --ignore-scripts 2>&1 | tee npm-install.log || true
+    # Try to build native dependencies, but don't fail if keytar fails
+    - npm rebuild 2>&1 | grep -v keytar || true
+    - npm rebuild keytar 2>&1 || echo "keytar build failed (optional for credential storage), continuing..."
     - cd ../..
   script:
     - cd vscode/omni
