@@ -6,7 +6,7 @@ VERSION := $(shell git describe --tags --always --dirty)
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S')
 LDFLAGS := -ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME)"
 
-.PHONY: all fmt lint test build bench clean gen build-rust package release run-omnic perf perf-baseline perf-report prepare-release
+.PHONY: all fmt lint test build bench clean gen build-rust build-vscode package release run-omnic perf perf-baseline perf-report prepare-release
 
 all: build
 
@@ -76,6 +76,24 @@ build-rust:
 		echo "Cargo not found, skipping Rust build"; \
 	fi
 
+build-vscode:
+	@echo "Building VS Code extension..."
+	@if command -v npm >/dev/null 2>&1; then \
+		cd ../vscode/omni && \
+		VERSION=$$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0-dev") && \
+		BUILD_TIME=$$(date -u '+%Y-%m-%d_%H:%M:%S') && \
+		echo "Building VS Code extension version: $$VERSION (built $$BUILD_TIME)" && \
+		if command -v jq >/dev/null 2>&1; then \
+			jq --arg version "$$VERSION" '.version = $$version' package.json > package.json.tmp && mv package.json.tmp package.json; \
+		else \
+			sed -i.bak "s/\"version\": \".*\"/\"version\": \"$$VERSION\"/" package.json || sed -i '' "s/\"version\": \".*\"/\"version\": \"$$VERSION\"/" package.json || true; \
+		fi && \
+		npm run compile && \
+		echo "VS Code extension built successfully"; \
+	else \
+		echo "npm not found, skipping VS Code extension build"; \
+	fi
+
 build-runtime:
 	@mkdir -p runtime/posix
 	@if command -v gcc >/dev/null 2>&1; then \
@@ -92,7 +110,7 @@ build-runtime:
 		echo "GCC not found, skipping runtime build"; \
 	fi
 
-build-all: build
+build-all: build build-vscode
 
 clean:
 	rm -rf bin
