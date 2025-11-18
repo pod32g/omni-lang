@@ -67,7 +67,8 @@ build-vscode:
 			sed -i.bak "s/\"version\": \".*\"/\"version\": \"$(VERSION)\"/" package.json || sed -i '' "s/\"version\": \".*\"/\"version\": \"$(VERSION)\"/" package.json || true; \
 		fi && \
 		npm run compile && \
-		echo "VS Code extension built successfully"; \
+		npx vsce package --no-dependencies && \
+		echo "VS Code extension built successfully: vscode/omni/*.vsix"; \
 	else \
 		echo "npm not found, skipping VS Code extension build"; \
 	fi
