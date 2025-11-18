@@ -1246,25 +1246,29 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							urlStr := g.getOperandValue(inst.Operands[1])
 							g.output.WriteString(fmt.Sprintf("  omni_url_t* %s = omni_url_parse(%s);\n", varName, urlStr))
 						}
-					} else if (funcName == "omni_http_get" || funcName == "omni_http_post" || funcName == "omni_http_put" || funcName == "omni_http_delete" || funcName == "omni_http_request") && inst.Type != "" && strings.Contains(inst.Type, "HTTPResponse") {
+					} else if (funcName == "std.network.http_get" || funcName == "std.network.http_post" || funcName == "std.network.http_put" || funcName == "std.network.http_delete" || funcName == "std.network.http_request" ||
+						cFuncName == "omni_http_get" || cFuncName == "omni_http_post" || cFuncName == "omni_http_put" || cFuncName == "omni_http_delete" || cFuncName == "omni_http_request") && inst.Type != "" {
 						// HTTP functions return omni_http_response_t*
 						varName := g.getVariableName(inst.ID)
-						if funcName == "omni_http_get" && len(inst.Operands) >= 2 {
+						if (funcName == "std.network.http_get" || cFuncName == "omni_http_get") && len(inst.Operands) >= 2 {
 							url := g.getOperandValue(inst.Operands[1])
 							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_get(%s);\n", varName, url))
 							g.valueTypes[inst.ID] = inst.Type
-						} else if funcName == "omni_http_post" && len(inst.Operands) >= 3 {
+						} else if (funcName == "std.network.http_post" || cFuncName == "omni_http_post") && len(inst.Operands) >= 3 {
 							url := g.getOperandValue(inst.Operands[1])
 							body := g.getOperandValue(inst.Operands[2])
 							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_post(%s, %s);\n", varName, url, body))
-						} else if funcName == "omni_http_put" && len(inst.Operands) >= 3 {
+							g.valueTypes[inst.ID] = inst.Type
+						} else if (funcName == "std.network.http_put" || cFuncName == "omni_http_put") && len(inst.Operands) >= 3 {
 							url := g.getOperandValue(inst.Operands[1])
 							body := g.getOperandValue(inst.Operands[2])
 							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_put(%s, %s);\n", varName, url, body))
-						} else if funcName == "omni_http_delete" && len(inst.Operands) >= 2 {
+							g.valueTypes[inst.ID] = inst.Type
+						} else if (funcName == "std.network.http_delete" || cFuncName == "omni_http_delete") && len(inst.Operands) >= 2 {
 							url := g.getOperandValue(inst.Operands[1])
 							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_delete(%s);\n", varName, url))
-						} else if funcName == "omni_http_request" && len(inst.Operands) >= 2 {
+							g.valueTypes[inst.ID] = inst.Type
+						} else if (funcName == "std.network.http_request" || cFuncName == "omni_http_request") && len(inst.Operands) >= 2 {
 							req := g.getOperandValue(inst.Operands[1])
 							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_request(%s);\n", varName, req))
 							g.valueTypes[inst.ID] = inst.Type
@@ -1569,27 +1573,30 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						} else {
 							// Regular function call - check if we need to declare the variable
 							// For HTTP functions that return structs, we need special handling
-							if (funcName == "omni_http_get" || funcName == "omni_http_post" || funcName == "omni_http_put" || funcName == "omni_http_delete" || funcName == "omni_http_request") && inst.Type != "" {
+							// Check both OmniLang function names and C function names
+							isHTTPFunc := (funcName == "std.network.http_get" || funcName == "std.network.http_post" || funcName == "std.network.http_put" || funcName == "std.network.http_delete" || funcName == "std.network.http_request") ||
+								(cFuncName == "omni_http_get" || cFuncName == "omni_http_post" || cFuncName == "omni_http_put" || cFuncName == "omni_http_delete" || cFuncName == "omni_http_request")
+							if isHTTPFunc && inst.Type != "" {
 								// HTTP functions return omni_http_response_t* - declare inline
-								if funcName == "omni_http_get" && len(inst.Operands) >= 2 {
+								if (funcName == "std.network.http_get" || cFuncName == "omni_http_get") && len(inst.Operands) >= 2 {
 									url := g.getOperandValue(inst.Operands[1])
 									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_get(%s);\n", varName, url))
 									g.valueTypes[inst.ID] = inst.Type
-								} else if funcName == "omni_http_post" && len(inst.Operands) >= 3 {
+								} else if (funcName == "std.network.http_post" || cFuncName == "omni_http_post") && len(inst.Operands) >= 3 {
 									url := g.getOperandValue(inst.Operands[1])
 									body := g.getOperandValue(inst.Operands[2])
 									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_post(%s, %s);\n", varName, url, body))
 									g.valueTypes[inst.ID] = inst.Type
-								} else if funcName == "omni_http_put" && len(inst.Operands) >= 3 {
+								} else if (funcName == "std.network.http_put" || cFuncName == "omni_http_put") && len(inst.Operands) >= 3 {
 									url := g.getOperandValue(inst.Operands[1])
 									body := g.getOperandValue(inst.Operands[2])
 									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_put(%s, %s);\n", varName, url, body))
 									g.valueTypes[inst.ID] = inst.Type
-								} else if funcName == "omni_http_delete" && len(inst.Operands) >= 2 {
+								} else if (funcName == "std.network.http_delete" || cFuncName == "omni_http_delete") && len(inst.Operands) >= 2 {
 									url := g.getOperandValue(inst.Operands[1])
 									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_delete(%s);\n", varName, url))
 									g.valueTypes[inst.ID] = inst.Type
-								} else if funcName == "omni_http_request" && len(inst.Operands) >= 2 {
+								} else if (funcName == "std.network.http_request" || cFuncName == "omni_http_request") && len(inst.Operands) >= 2 {
 									req := g.getOperandValue(inst.Operands[1])
 									g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_request(%s);\n", varName, req))
 									g.valueTypes[inst.ID] = inst.Type
