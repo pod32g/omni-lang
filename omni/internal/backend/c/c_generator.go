@@ -2294,7 +2294,24 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					structType = storedType
 				}
 			}
-			isHTTPResponse := strings.Contains(structType, "HTTPResponse") || strings.Contains(structVar, "http_response")
+			// Check if this is an HTTPResponse by checking the variable's stored type
+			// HTTP functions return HTTPResponse type, which gets stored in valueTypes
+			isHTTPResponse := strings.Contains(structType, "HTTPResponse")
+			
+			// Also check the operand's type field if structType wasn't found
+			if !isHTTPResponse && inst.Operands[0].Type != "" {
+				isHTTPResponse = strings.Contains(inst.Operands[0].Type, "HTTPResponse")
+			}
+			
+			// Last resort: if accessing known HTTPResponse fields, assume it's HTTPResponse
+			// This is a heuristic but should be safe since these field names are specific to HTTPResponse
+			if !isHTTPResponse && (fieldName == "status_code" || fieldName == "body" || fieldName == "status_text") {
+				// If we're accessing HTTPResponse-specific fields and the type wasn't found,
+				// it's likely an HTTPResponse (this is safe because these field names are unique to HTTPResponse)
+				if inst.Operands[0].Kind == mir.OperandValue {
+					isHTTPResponse = true
+				}
+			}
 			
 			if isHTTPResponse {
 				// HTTPResponse is a concrete struct - use direct field access
