@@ -7,8 +7,8 @@ func lcm(a:int, b:int):int {
 }
 
 func gcd(a:int, b:int):int {
-    let x:int = abs(a)
-    let y:int = abs(b)
+    var x:int = abs(a)
+    var y:int = abs(b)
     while y != 0 {
         let temp:int = y
         y = x % y

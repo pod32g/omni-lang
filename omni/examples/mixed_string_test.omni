@@ -1,6 +1,9 @@
-func main(): string {
+import std
+
+func main(): int {
     let num: int = 42
     let text: string = "The answer is "
     let result: string = text + num
-    return result
+    std.io.println(result)
+    return 0
 }

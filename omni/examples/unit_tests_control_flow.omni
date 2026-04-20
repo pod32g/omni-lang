@@ -7,8 +7,8 @@ import std
 func test_if_else_statements(): int {
     std.test.start("If/Else Statements")
     
-    let x: int = 10
-    let y: int = 5
+    var x: int = 10
+    var y: int = 5
     
     // Test basic if statement
     if x > y {
@@ -51,14 +51,14 @@ func test_for_loops(): int {
     std.test.start("For Loops")
     
     // Test basic for loop
-    let sum: int = 0
+    var sum: int = 0
     for i: int = 1; i <= 5; i = i + 1 {
         sum = sum + i
     }
     std.assert.eq(sum, 15, "Sum of 1 to 5 should be 15")
     
     // Test for loop with different step
-    let even_sum: int = 0
+    var even_sum: int = 0
     for i: int = 2; i <= 10; i = i + 2 {
         even_sum = even_sum + i
     }
@@ -66,14 +66,14 @@ func test_for_loops(): int {
     
     // Test for loop with array
     let numbers: array<int> = [1, 2, 3, 4, 5]
-    let array_sum: int = 0
+    var array_sum: int = 0
     for i: int = 0; i < std.array.length(numbers); i = i + 1 {
         array_sum = array_sum + numbers[i]
     }
     std.assert.eq(array_sum, 15, "Sum of array elements should be 15")
     
     // Test nested for loops
-    let nested_sum: int = 0
+    var nested_sum: int = 0
     for i: int = 1; i <= 3; i = i + 1 {
         for j: int = 1; j <= 2; j = j + 1 {
             nested_sum = nested_sum + i * j
@@ -90,8 +90,8 @@ func test_while_loops(): int {
     std.test.start("While Loops")
     
     // Test basic while loop
-    let counter: int = 0
-    let sum: int = 0
+    var counter: int = 0
+    var sum: int = 0
     while counter < 5 {
         sum = sum + counter
         counter = counter + 1
@@ -99,8 +99,8 @@ func test_while_loops(): int {
     std.assert.eq(sum, 10, "Sum of 0 to 4 should be 10")
     
     // Test while loop with condition
-    let num: int = 10
-    let factorial: int = 1
+    var num: int = 10
+    var factorial: int = 1
     while num > 0 {
         factorial = factorial * num
         num = num - 1
@@ -109,8 +109,8 @@ func test_while_loops(): int {
     
     // Test while loop with array
     let numbers: array<int> = [1, 2, 3, 4, 5]
-    let index: int = 0
-    let array_sum: int = 0
+    var index: int = 0
+    var array_sum: int = 0
     while index < std.array.length(numbers) {
         array_sum = array_sum + numbers[index]
         index = index + 1
@@ -126,7 +126,7 @@ func test_break_continue(): int {
     std.test.start("Break and Continue Statements")
     
     // Test break statement
-    let sum: int = 0
+    var sum: int = 0
     for i: int = 1; i <= 10; i = i + 1 {
         if i > 5 {
             break
@@ -136,7 +136,7 @@ func test_break_continue(): int {
     std.assert.eq(sum, 15, "Sum should be 15 (1+2+3+4+5)")
     
     // Test continue statement
-    let odd_sum: int = 0
+    var odd_sum: int = 0
     for i: int = 1; i <= 10; i = i + 1 {
         if i % 2 == 0 {
             continue
@@ -146,8 +146,8 @@ func test_break_continue(): int {
     std.assert.eq(odd_sum, 25, "Sum of odd numbers 1 to 10 should be 25")
     
     // Test break in while loop
-    let counter: int = 0
-    let result: int = 0
+    var counter: int = 0
+    var result: int = 0
     while counter < 10 {
         counter = counter + 1
         if counter > 3 {
@@ -166,7 +166,7 @@ func test_switch_statements(): int {
     std.test.start("Switch Statements")
     
     let value: int = 3
-    let result: string = ""
+    var result: string = ""
     
     // Test switch with different cases
     if value == 1 {
@@ -183,7 +183,7 @@ func test_switch_statements(): int {
     
     // Test switch with default case
     let other_value: int = 10
-    let other_result: string = ""
+    var other_result: string = ""
     
     if other_value == 1 {
         other_result = "one"
@@ -249,7 +249,7 @@ func test_complex_control_flow(): int {
     std.test.start("Complex Control Flow Scenarios")
     
     // Test nested loops with conditions
-    let result: int = 0
+    var result: int = 0
     for i: int = 1; i <= 3; i = i + 1 {
         for j: int = 1; j <= 3; j = j + 1 {
             if i + j > 4 {
@@ -261,8 +261,8 @@ func test_complex_control_flow(): int {
     std.assert.eq(result, 14, "Complex nested loop result should be 14")
     
     // Test loop with multiple conditions
-    let sum: int = 0
-    let i: int = 1
+    var sum: int = 0
+    var i: int = 1
     while i <= 10 && sum < 20 {
         sum = sum + i
         i = i + 1
@@ -270,8 +270,8 @@ func test_complex_control_flow(): int {
     std.assert.eq(sum, 21, "Loop with multiple conditions should sum to 21")
     
     // Test conditional loop
-    let num: int = 100
-    let steps: int = 0
+    var num: int = 100
+    var steps: int = 0
     while num > 1 {
         if num % 2 == 0 {
             num = num / 2
@@ -294,8 +294,8 @@ func test_control_flow_with_arrays(): int {
     std.test.start("Control Flow with Arrays")
     
     let numbers: array<int> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    let even_sum: int = 0
-    let odd_sum: int = 0
+    var even_sum: int = 0
+    var odd_sum: int = 0
     
     // Test loop through array with conditions
     for i: int = 0; i < std.array.length(numbers); i = i + 1 {
@@ -310,7 +310,7 @@ func test_control_flow_with_arrays(): int {
     std.assert.eq(odd_sum, 25, "Sum of odd numbers should be 25")
     
     // Test finding maximum in array
-    let max_val: int = numbers[0]
+    var max_val: int = numbers[0]
     for i: int = 1; i < std.array.length(numbers); i = i + 1 {
         if numbers[i] > max_val {
             max_val = numbers[i]
@@ -319,8 +319,8 @@ func test_control_flow_with_arrays(): int {
     std.assert.eq(max_val, 10, "Maximum value in array should be 10")
     
     // Test finding first occurrence
-    let target: int = 7
-    let found_index: int = -1
+    var target: int = 7
+    var found_index: int = -1
     for i: int = 0; i < std.array.length(numbers); i = i + 1 {
         if numbers[i] == target {
             found_index = i

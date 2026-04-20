@@ -1,4 +1,4 @@
-import std.testing
+import std
 func main():int {
     var suite = std.testing.suite()
     suite = std.testing.pass(suite, "bootstraps")

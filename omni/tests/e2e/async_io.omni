@@ -1,6 +1,6 @@
 import std
 
-func main():int {
+async func main():int {
     // Test async file operations
     let content = await std.os.read_file_async("test.txt")
     std.io.println("Read: " + content)

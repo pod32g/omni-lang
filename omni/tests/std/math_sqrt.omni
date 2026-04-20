@@ -9,7 +9,7 @@ func sqrt(x:int):int {
     if x == 0 {
         return 0
     }
-    let result:int = 1
+    var result:int = 1
     while result * result <= x {
         result = result + 1
     }

@@ -6,11 +6,10 @@ func main():int {
         return -1
     }
 
-    let args = std.os.args()
-    if args[0] != "hello" {
+    if std.os.positional_arg(0, "") != "hello" {
         return -2
     }
-    if args[1] != "world" {
+    if std.os.positional_arg(1, "") != "world" {
         return -3
     }
     return 0

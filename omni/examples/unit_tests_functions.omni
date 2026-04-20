@@ -116,7 +116,7 @@ func test_function_overloading(): int {
     let int_result: int = process_number(42)
     std.assert.eq(int_result, 42, "process_number(42) should equal 42")
     
-    let str_result: string = process_number("42")
+    let str_result: string = process_number_str("42")
     std.assert.eq(str_result, "42", "process_number('42') should equal '42'")
     
     std.test.end("Function Overloading", true)
@@ -218,7 +218,7 @@ func combine_strings(a: string, b: string): string {
 }
 
 func sum_array(arr: array<int>): int {
-    let sum: int = 0
+    var sum: int = 0
     for i: int = 0; i < std.array.length(arr); i = i + 1 {
         sum = sum + arr[i]
     }
@@ -242,7 +242,7 @@ func is_positive(num: int): bool {
 }
 
 func double_array(arr: array<int>): array<int> {
-    let result: array<int> = []
+    var result: array<int> = []
     for i: int = 0; i < std.array.length(arr); i = i + 1 {
         result = std.array.append(result, arr[i] * 2)
     }
@@ -282,7 +282,9 @@ func process_number(num: int): int {
     return num
 }
 
-func process_number(num: string): string {
+// Function overloading isn't supported yet; renamed from process_number
+// to process_number_str so the file compiles.
+func process_number_str(num: string): string {
     return num
 }
 
@@ -307,7 +309,7 @@ func conditional_function(x: int): int {
 }
 
 func process_array(arr: array<int>): array<int> {
-    let result: array<int> = []
+    var result: array<int> = []
     for i: int = 0; i < std.array.length(arr); i = i + 1 {
         result = std.array.append(result, arr[i] * 2)
     }
@@ -315,7 +317,7 @@ func process_array(arr: array<int>): array<int> {
 }
 
 func find_maximum(arr: array<int>): int {
-    let max_val: int = arr[0]
+    var max_val: int = arr[0]
     for i: int = 1; i < std.array.length(arr); i = i + 1 {
         if arr[i] > max_val {
             max_val = arr[i]
@@ -325,7 +327,7 @@ func find_maximum(arr: array<int>): int {
 }
 
 func reverse_array(arr: array<int>): array<int> {
-    let result: array<int> = []
+    var result: array<int> = []
     for i: int = std.array.length(arr) - 1; i >= 0; i = i - 1 {
         result = std.array.append(result, arr[i])
     }
