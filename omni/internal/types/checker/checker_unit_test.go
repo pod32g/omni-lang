@@ -825,6 +825,28 @@ func TestMapLiterals(t *testing.T) {
 			src:       `let m = {"key": 42, "other": "value"}`,
 			shouldErr: true,
 		},
+		{
+			name: "empty map literal inferred from function parameter",
+			src: `func test(m: map<string, int>): void {}
+			      func main(): void {
+			          test({})
+			      }`,
+		},
+		{
+			name: "empty map literal inferred from function parameter with string values",
+			src: `func test(m: map<string, string>): void {}
+			      func main(): void {
+			          test({})
+			      }`,
+		},
+		{
+			name: "map literal with any value type accepts mixed types",
+			src: `let m: map<string, any> = {"key1": "value", "key2": 42, "key3": true}`,
+		},
+		{
+			name: "map literal with any value type accepts arrays",
+			src: `let m: map<string, any> = {"key1": "value", "key2": array<int>[1, 2, 3]}`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -839,6 +861,123 @@ func TestMapLiterals(t *testing.T) {
 				t.Error("expected error but got none")
 			} else if !tt.shouldErr && err != nil {
 				t.Logf("Unexpected errors (may be acceptable): %v", err)
+			}
+		})
+	}
+}
+
+func TestTypeAliasWithFunctionTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "type alias with function type and union return",
+			src: `type Handler = (int) -> int | string
+			      func test_handler(x: int): int { return x }
+			      func main(): void {
+			          let handler: Handler = test_handler
+			      }`,
+		},
+		{
+			name: "type alias with function type - exact match",
+			src: `type Handler = (int) -> int
+			      func test_handler(x: int): int { return x }
+			      func main(): void {
+			          let handler: Handler = test_handler
+			      }`,
+		},
+		{
+			name: "type alias with function type - return type in union",
+			src: `type Handler = (int) -> int | string
+			      func test_handler(x: int): int { return x }
+			      func main(): void {
+			          let handler: Handler = test_handler
+			      }`,
+		},
+		{
+			name:      "type alias with function type - return type not in union",
+			src:       `type Handler = (int) -> int | string
+			            func test_handler(x: int): float { return 1.0 }
+			            func main(): void {
+			                let handler: Handler = test_handler
+			            }`,
+			shouldErr: true,
+		},
+		{
+			name:      "type alias with function type - parameter mismatch",
+			src:       `type Handler = (int) -> int
+			            func test_handler(x: string): int { return 0 }
+			            func main(): void {
+			                let handler: Handler = test_handler
+			            }`,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Error("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("Unexpected errors: %v", err)
+			}
+		})
+	}
+}
+
+func TestFunctionTypeWithUnionReturn(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "function type assignable to union return type",
+			src: `type Handler = (int) -> int | string
+			      func test(x: int): int { return x }
+			      func main(): void {
+			          let h: Handler = test
+			      }`,
+		},
+		{
+			name: "function type with union return assignable to non-union",
+			src: `type Handler = (int) -> int
+			      func test(x: int): int | string { return x }
+			      func main(): void {
+			          let h: Handler = test
+			      }`,
+		},
+		{
+			name: "function type passed to function expecting Handler",
+			src: `type Handler = (int) -> int | string
+			      func test(x: int): int { return x }
+			      func accept_handler(h: Handler): void {}
+			      func main(): void {
+			          accept_handler(test)
+			      }`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Error("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("Unexpected errors: %v", err)
 			}
 		})
 	}

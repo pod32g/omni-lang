@@ -33,6 +33,7 @@ var keywords = map[string]Kind{
 	"true":     TokenTrue,
 	"false":    TokenFalse,
 	"null":     TokenNullLiteral,
+	"nil":      TokenNullLiteral, // Alias for null
 	"new":      TokenNew,
 	"delete":   TokenDelete,
 	"try":      TokenTry,

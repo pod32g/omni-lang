@@ -233,9 +233,194 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 					}
 				}
 			} else {
-				// For C backend, skip std imports (handled as intrinsics)
-				if debugModules {
-					logger.DebugFields("Skipping std import (handled as intrinsic)", logging.String("path", strings.Join(imp.Path, ".")))
+				// For C backend, most std imports are handled as intrinsics
+				// However, std.web contains many non-intrinsic functions that need to be compiled
+				qualified := strings.Join(imp.Path, ".")
+				// std submodules whose bodies (not just intrinsic signatures) need
+				// to be compiled into the output. Pure-intrinsic modules like
+				// std.math or std.io can stay on the "handled as intrinsic" path.
+				needsBodyLoad := qualified == "std.web" ||
+					qualified == "std" ||
+					qualified == "std.testing" ||
+					qualified == "std.math" ||
+					qualified == "std.collections"
+				if needsBodyLoad {
+					// Load std or std.web module to include its functions (many are not intrinsics)
+					if debugModules {
+						logger.DebugFields("Loading std import for C backend", logging.String("path", strings.Join(imp.Path, ".")))
+					}
+					imported, err := loader.LoadModule(imp.Path)
+					if err != nil {
+						return fmt.Errorf("load std import %s: %w", strings.Join(imp.Path, "."), err)
+					}
+
+					// If importing std, also load std submodules whose bodies are needed.
+					var webImported *ast.Module
+					var extraSubmodules []struct {
+						prefix string
+						module *ast.Module
+					}
+					if qualified == "std" {
+						webPath := []string{"std", "web"}
+						var err error
+						webImported, err = loader.LoadModule(webPath)
+						if err != nil {
+							webImported = nil
+						}
+						for _, name := range []string{"testing", "math", "collections"} {
+							sub, err := loader.LoadModule([]string{"std", name})
+							if err == nil && sub != nil {
+								extraSubmodules = append(extraSubmodules, struct {
+									prefix string
+									module *ast.Module
+								}{prefix: "std." + name, module: sub})
+							}
+						}
+					}
+
+					aliases := make([]string, 0, 2)
+					if imp.Alias != "" {
+						aliases = append(aliases, imp.Alias)
+					} else if len(imp.Path) > 0 {
+						aliases = append(aliases, imp.Path[len(imp.Path)-1])
+					}
+					additional := true
+					for _, a := range aliases {
+						if a == qualified {
+							additional = false
+							break
+						}
+					}
+					if qualified != "" && additional {
+						aliases = append(aliases, qualified)
+					}
+
+					// For std.web, also add "web" alias
+					if qualified == "std.web" {
+						aliases = append(aliases, "web")
+					}
+
+					// Append cloned declarations with namespaced names for each alias
+					for _, ns := range aliases {
+						for _, d := range imported.Decls {
+							switch decl := d.(type) {
+							case *ast.FuncDecl:
+								qname := ns + "." + decl.Name
+								if isStdFunctionRuntimeProvided(qname) {
+									continue
+								}
+								cloned := *decl
+								cloned.Name = qname
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.StructDecl:
+								cloned := *decl
+								cloned.Name = ns + "." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.EnumDecl:
+								cloned := *decl
+								cloned.Name = ns + "." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.TypeAliasDecl:
+								cloned := *decl
+								cloned.Name = ns + "." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							}
+						}
+					}
+
+					// If we loaded std.web, also add its declarations with std.web prefix
+					if webImported != nil {
+						// Collect web module types for qualification (both structs and type aliases)
+						webTypes := make(map[string]bool)
+						for _, d := range webImported.Decls {
+							if structDecl, ok := d.(*ast.StructDecl); ok {
+								webTypes[structDecl.Name] = true
+							}
+							if typeAlias, ok := d.(*ast.TypeAliasDecl); ok {
+								webTypes[typeAlias.Name] = true
+							}
+						}
+						
+						for _, d := range webImported.Decls {
+							switch decl := d.(type) {
+							case *ast.FuncDecl:
+								cloned := *decl
+								cloned.Name = "std.web." + decl.Name
+								// Update parameter types - qualify any web module types
+								for i := range cloned.Params {
+									if cloned.Params[i].Type != nil {
+										typeName := cloned.Params[i].Type.Name
+										// Check if this is a web module type (struct or type alias)
+										if webTypes[typeName] {
+											// Create a new TypeExpr with qualified name
+											newType := *cloned.Params[i].Type
+											newType.Name = "std.web." + typeName
+											cloned.Params[i].Type = &newType
+										}
+									}
+								}
+								// Update return type - qualify any web module types
+								if cloned.Return != nil {
+									returnTypeName := cloned.Return.Name
+									if webTypes[returnTypeName] {
+										// Create a new TypeExpr with qualified name
+										newReturn := *cloned.Return
+										newReturn.Name = "std.web." + returnTypeName
+										cloned.Return = &newReturn
+									}
+								}
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.StructDecl:
+								cloned := *decl
+								cloned.Name = "std.web." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.EnumDecl:
+								cloned := *decl
+								cloned.Name = "std.web." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.TypeAliasDecl:
+								cloned := *decl
+								cloned.Name = "std.web." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							}
+						}
+					}
+					// Emit declarations for any additional submodules we loaded
+					// transitively (std.testing, etc). Skip functions that are
+					// already runtime-provided intrinsics to avoid duplicate
+					// symbol errors at link time.
+					for _, sub := range extraSubmodules {
+						prefix := sub.prefix
+						for _, d := range sub.module.Decls {
+							switch decl := d.(type) {
+							case *ast.FuncDecl:
+								qname := prefix + "." + decl.Name
+								if isStdFunctionRuntimeProvided(qname) {
+									continue
+								}
+								cloned := *decl
+								cloned.Name = qname
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.StructDecl:
+								cloned := *decl
+								cloned.Name = prefix + "." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.EnumDecl:
+								cloned := *decl
+								cloned.Name = prefix + "." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							case *ast.TypeAliasDecl:
+								cloned := *decl
+								cloned.Name = prefix + "." + decl.Name
+								mod.Decls = append(mod.Decls, &cloned)
+							}
+						}
+					}
+				} else {
+					// For other std imports, skip (handled as intrinsics)
+					if debugModules {
+						logger.DebugFields("Skipping std import (handled as intrinsic)", logging.String("path", strings.Join(imp.Path, ".")))
+					}
 				}
 			}
 			continue
@@ -1037,6 +1222,47 @@ func ensureDir(path string) error {
 		return fmt.Errorf("create output directory: %w", err)
 	}
 	return nil
+}
+
+// isStdFunctionRuntimeProvided returns true when a qualified stdlib function
+// name is implemented directly in the C runtime and must not be re-emitted from
+// its Omni-level stub body (which would collide at link time).
+func isStdFunctionRuntimeProvided(qualified string) bool {
+	runtimeProvided := map[string]bool{
+		// std.array — length is runtime-provided (omni_array_length);
+		// get/set are handled at call sites with extra args.
+		"std.array.length": true,
+		// std.math — numeric intrinsics
+		"std.math.abs":       true,
+		"std.math.max":       true,
+		"std.math.min":       true,
+		"std.math.pow":       true,
+		"std.math.sqrt":      true,
+		"std.math.floor":     true,
+		"std.math.ceil":      true,
+		"std.math.round":     true,
+		"std.math.trunc":     true,
+		"std.math.cbrt":      true,
+		"std.math.gcd":       true,
+		"std.math.lcm":       true,
+		"std.math.factorial": true,
+		"std.math.sin":       true,
+		"std.math.cos":       true,
+		"std.math.tan":       true,
+		"std.math.asin":      true,
+		"std.math.acos":      true,
+		"std.math.atan":      true,
+		"std.math.atan2":     true,
+		"std.math.log":       true,
+		"std.math.log2":      true,
+		"std.math.log10":     true,
+		"std.math.exp":       true,
+		"std.math.sinh":      true,
+		"std.math.cosh":      true,
+		"std.math.tanh":      true,
+		"std.math.hypot":     true,
+	}
+	return runtimeProvided[qualified]
 }
 
 func defaultOutputPath(input, emit string) string {

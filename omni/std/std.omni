@@ -31,6 +31,9 @@ import std.time
 // Re-export network functions
 import std.network
 
+// Re-export web framework
+import std.web
+
 // Re-export logging functions
 import std.log
 
@@ -52,8 +55,6 @@ func assert(condition:bool, message:string) {
 func assert_eq<T>(actual:T, expected:T, message:string) {
     if actual != expected {
         std.io.println("Assertion failed: " + message)
-        std.io.println("Expected: " + expected)
-        std.io.println("Actual: " + actual)
         std.os.exit(1)
     }
 }

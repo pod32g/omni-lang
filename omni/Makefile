@@ -80,13 +80,11 @@ build-vscode:
 	@echo "Building VS Code extension..."
 	@if command -v npm >/dev/null 2>&1; then \
 		cd ../vscode/omni && \
-		VERSION=$$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0-dev") && \
-		BUILD_TIME=$$(date -u '+%Y-%m-%d_%H:%M:%S') && \
-		echo "Building VS Code extension version: $$VERSION (built $$BUILD_TIME)" && \
+		echo "Building VS Code extension version: $(VERSION) (built $(BUILD_TIME))" && \
 		if command -v jq >/dev/null 2>&1; then \
-			jq --arg version "$$VERSION" '.version = $$version' package.json > package.json.tmp && mv package.json.tmp package.json; \
+			jq --arg version "$(VERSION)" '.version = $$version' package.json > package.json.tmp && mv package.json.tmp package.json; \
 		else \
-			sed -i.bak "s/\"version\": \".*\"/\"version\": \"$$VERSION\"/" package.json || sed -i '' "s/\"version\": \".*\"/\"version\": \"$$VERSION\"/" package.json || true; \
+			sed -i.bak "s/\"version\": \".*\"/\"version\": \"$(VERSION)\"/" package.json || sed -i '' "s/\"version\": \".*\"/\"version\": \"$(VERSION)\"/" package.json || true; \
 		fi && \
 		npm run compile && \
 		echo "VS Code extension built successfully"; \

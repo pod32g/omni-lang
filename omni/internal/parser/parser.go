@@ -443,7 +443,8 @@ func (p *Parser) parseFuncDecl() (ast.Decl, error) {
 		}
 	}
 	var retType *ast.TypeExpr
-	if p.match(lexer.TokenColon) {
+	// Accept both `func f():T` and `func f() -> T` return-type syntax.
+	if p.match(lexer.TokenColon) || p.match(lexer.TokenArrow) {
 		t, err := p.parseTypeExpr()
 		if err != nil {
 			return nil, err
@@ -491,11 +492,20 @@ func (p *Parser) parseStmtSafe() (ast.Stmt, bool) {
 			}
 		}
 	}()
+	// Skip stray semicolons — some users come from C-style languages and
+	// sprinkle them at statement ends. Treat them as whitespace.
+	for p.peekKind() == lexer.TokenSemicolon {
+		p.advance()
+	}
 	stmt, err := p.parseStmt()
 	if err != nil {
 		p.addError(err)
 		p.synchronizeStmt()
 		return nil, false
+	}
+	// Also tolerate a trailing semicolon after the statement itself.
+	for p.peekKind() == lexer.TokenSemicolon {
+		p.advance()
 	}
 	return stmt, true
 }
@@ -962,37 +972,36 @@ func (p *Parser) parseUnary() (ast.Expr, error) {
 		}
 		return &ast.UnaryExpr{SpanInfo: lexer.Span{Start: op.Span.Start, End: expr.Span().End}, Op: op.Lexeme, Expr: expr}, nil
 	case lexer.TokenLParen:
-		// Check if this is a type cast: (type) expression
+		// Check if this is a type cast: (type) expression. A type must start
+		// with an identifier, `[`, `*`, or `(`; anything else (like `-`, `!`,
+		// a literal) is not a cast and we shouldn't attempt to parseTypeExpr
+		// because that path can panic on unexpected tokens.
 		startPos := p.current().Span.Start
 		savedPos := p.pos
 		p.advance() // consume '('
-
-		// Try to parse as a type expression
-		typeExpr, err := p.parseTypeExpr()
-		if err != nil {
-			// Not a type cast, fall back to regular expression parsing
-			p.pos = savedPos // restore position
+		switch p.peekKind() {
+		case lexer.TokenIdentifier, lexer.TokenLBracket, lexer.TokenStar, lexer.TokenLParen:
+			// Might be a type cast — try it with panic recovery so a bad guess
+			// falls back to expression parsing.
+			typeExpr, err := p.tryParseTypeExpr()
+			if err == nil && p.match(lexer.TokenRParen) {
+				expr, err := p.parseUnary()
+				if err != nil {
+					return nil, err
+				}
+				return &ast.CastExpr{
+					SpanInfo: lexer.Span{Start: startPos, End: expr.Span().End},
+					Type:     typeExpr,
+					Expr:     expr,
+				}, nil
+			}
+			p.pos = savedPos
+			return p.parsePostfix()
+		default:
+			// Parenthesized expression, not a cast.
+			p.pos = savedPos
 			return p.parsePostfix()
 		}
-
-		// Check if next token is ')'
-		if !p.match(lexer.TokenRParen) {
-			// Not a type cast, fall back to regular expression parsing
-			p.pos = savedPos // restore position
-			return p.parsePostfix()
-		}
-
-		// Parse the expression to be cast
-		expr, err := p.parseUnary()
-		if err != nil {
-			return nil, err
-		}
-
-		return &ast.CastExpr{
-			SpanInfo: lexer.Span{Start: startPos, End: expr.Span().End},
-			Type:     typeExpr,
-			Expr:     expr,
-		}, nil
 	}
 	return p.parsePostfix()
 }
@@ -1395,6 +1404,21 @@ func (p *Parser) synchronizeStmt() {
 	}
 }
 
+// tryParseTypeExpr is like parseTypeExpr but recovers from expect() panics so
+// the caller can fall back (used by the cast-vs-parenthesized-expr disambiguation).
+func (p *Parser) tryParseTypeExpr() (typ *ast.TypeExpr, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if pp, ok := r.(parsePanic); ok {
+				err = pp.diag
+				return
+			}
+			panic(r)
+		}
+	}()
+	return p.parseTypeExpr()
+}
+
 func (p *Parser) parseTypeExpr() (*ast.TypeExpr, error) {
 	// Parse the first type
 	firstType, err := p.parseSingleType()
@@ -1601,8 +1625,15 @@ func (p *Parser) parseSingleTypeWithNestedGenerics() (*ast.TypeExpr, error) {
 		return nil, p.errorAtCurrent("multiple types in parentheses must be followed by '->' for function type")
 	}
 
-	// Handle simple identifier types and qualified types (e.g., math.Point, pkg.sub.Type)
-	nameTok := p.expect(lexer.TokenIdentifier)
+	// Handle simple identifier types and qualified types (e.g., math.Point, pkg.sub.Type).
+	// `optional` is a keyword but users write `optional<int>` as a type name;
+	// accept it as an identifier here.
+	var nameTok lexer.Token
+	if p.peekKind() == lexer.TokenOptional {
+		nameTok = p.advance()
+	} else {
+		nameTok = p.expect(lexer.TokenIdentifier)
+	}
 	typeName := nameTok.Lexeme
 	startSpan := nameTok.Span
 
@@ -1739,8 +1770,15 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 		return nil, p.errorAtCurrent("multiple types in parentheses must be followed by '->' for function type")
 	}
 
-	// Handle simple identifier types and qualified types (e.g., math.Point, pkg.sub.Type)
-	nameTok := p.expect(lexer.TokenIdentifier)
+	// Handle simple identifier types and qualified types (e.g., math.Point, pkg.sub.Type).
+	// `optional` is a keyword but users write `optional<int>` as a type name;
+	// accept it as an identifier here.
+	var nameTok lexer.Token
+	if p.peekKind() == lexer.TokenOptional {
+		nameTok = p.advance()
+	} else {
+		nameTok = p.expect(lexer.TokenIdentifier)
+	}
 	typeName := nameTok.Lexeme
 	startSpan := nameTok.Span
 
@@ -1898,11 +1936,16 @@ func (p *Parser) parseQualifiedIdentifier(tok lexer.Token) (ast.Expr, error) {
 	name := tok.Lexeme
 	span := tok.Span
 
-	// Check for qualified access (e.g., std.io.println)
+	// Check for qualified access (e.g., std.io.println). Allow a small set of
+	// keyword-like lexemes as the trailing segment (e.g. assert.true,
+	// assert.false, assert.eq) so common stdlib function names parse.
 	for p.peekKind() == lexer.TokenDot {
 		p.advance() // consume the dot
 		nextTok := p.advance()
-		if nextTok.Kind != lexer.TokenIdentifier {
+		switch nextTok.Kind {
+		case lexer.TokenIdentifier, lexer.TokenTrue, lexer.TokenFalse:
+			// ok
+		default:
 			return nil, p.errorAtCurrent("expected identifier after dot")
 		}
 		name += "." + nextTok.Lexeme

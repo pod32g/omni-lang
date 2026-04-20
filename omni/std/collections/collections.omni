@@ -57,35 +57,25 @@ func clear(m:map<string, int>) {
 }
 
 // keys returns an array of all keys in the map
-// [IMPLEMENTED] Implemented in runtime
+// Stub: returns a placeholder array; full runtime support is not wired.
 func keys(m:map<string, int>):array<string> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return []
+    return [""]
 }
 
 // values returns an array of all values in the map
-// [IMPLEMENTED] Implemented in runtime
+// Stub: returns a placeholder array; full runtime support is not wired.
 func values(m:map<string, int>):array<int> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return []
+    return [0]
 }
 
-// copy creates a copy of the map
-// [IMPLEMENTED] Implemented in runtime
+// copy creates a copy of the map (returns input unchanged as placeholder)
 func copy(m:map<string, int>):map<string, int> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return {}
+    return m
 }
 
-// merge creates a new map by merging two maps
-// [IMPLEMENTED] Implemented in runtime
+// merge creates a new map by merging two maps (returns a unchanged)
 func merge(a:map<string, int>, b:map<string, int>):map<string, int> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return {}
+    return a
 }
 
 // ============================================================================
@@ -478,28 +468,24 @@ func binary_tree_clear(bt:binary_tree<int>) {
 
 // collection_to_array converts a collection to an array
 func collection_to_array(collection:any):array<int> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return []
+    // Stub; runtime not yet wired. Returns single-element placeholder.
+    return [0]
 }
 
 // collection_from_array creates a collection from an array
 func collection_from_array(arr:array<int>, collection_type:string):any {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return 0
+    // Stub; runtime not yet wired. Returns the input array as "any".
+    return arr
 }
 
 // collection_equals checks if two collections are equal
 func collection_equals(a:any, b:any):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    // Stub; runtime not yet wired.
     return false
 }
 
 // collection_copy creates a copy of a collection
 func collection_copy(collection:any):any {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return 0
+    // Stub; runtime not yet wired. Returns input unchanged.
+    return collection
 }

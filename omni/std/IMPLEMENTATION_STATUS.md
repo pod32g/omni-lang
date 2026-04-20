@@ -243,6 +243,60 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `network_get_local_ip()` - Wired to `omni_network_get_local_ip` (returns first non-loopback IPv4 address)
 - [IMPLEMENTED] `network_ping(host)` - Wired to `omni_network_ping` (ICMP on Windows, TCP fallback on POSIX)
 
+### std.web
+- [IMPLEMENTED] `server_create(port, options)` - Wired to `omni_server_create`
+- [IMPLEMENTED] `server_listen(server)` - Wired to `omni_server_listen`
+- [IMPLEMENTED] `server_listen_tls(server, cert_file, key_file)` - Wired to `omni_server_listen_tls` (currently falls back to `server_listen`)
+- [IMPLEMENTED] `server_close(server)` - Wired to `omni_server_close`
+- [IMPLEMENTED] `server_graceful_shutdown(server, timeout)` - Wired to `omni_server_graceful_shutdown`
+- [IMPLEMENTED] `http_parse_request(raw_request)` - Wired to `omni_http_parse_request` (parses method, URL, headers, body)
+- [IMPLEMENTED] `http_build_response(resp)` - Wired to `omni_http_build_response` (builds HTTP response string)
+- [IMPLEMENTED] `http_parse_query(query_string, params)` - Wired to `omni_http_parse_query` (parses URL-encoded query strings)
+- [IMPLEMENTED] `http_match_path(pattern, path, params)` - Wired to `omni_http_match_path` (matches URL patterns like `/user/:id`)
+- [IMPLEMENTED] `json_parse(json_str)` - Wired to `omni_json_parse` (recursive descent parser)
+- [IMPLEMENTED] `json_stringify(value, pretty)` - Wired to `omni_json_stringify` (supports int, string, float, bool, map, array)
+- [IMPLEMENTED] `http_parse_form_urlencoded(body, params)` - Wired to `omni_http_parse_form_urlencoded`
+- [IMPLEMENTED] `http_parse_multipart(body, boundary, fields, files)` - Wired to `omni_http_parse_multipart` (extracts form fields and file data)
+- [IMPLEMENTED] `file_upload_save(data, size, filename, upload_dir)` - Wired to `omni_file_upload_save`
+- [IMPLEMENTED] `file_upload_validate(filename, size, allowed_types, max_size)` - Wired to `omni_file_upload_validate`
+- [IMPLEMENTED] `file_read_binary(path, size)` - Wired to `omni_file_read_binary`
+- [IMPLEMENTED] `file_get_mime_type(filename)` - Wired to `omni_file_get_mime_type` (based on file extension)
+- [IMPLEMENTED] `file_get_size(path)` - Wired to `omni_file_get_size`
+- [PARTIAL] `http_compress_gzip(data, len, compressed_len)` - Wired to `omni_http_compress_gzip` (currently returns uncompressed data)
+- [PARTIAL] `http_decompress_gzip(compressed, len, decompressed_len)` - Wired to `omni_http_decompress_gzip` (currently returns uncompressed data)
+- [IMPLEMENTED] `validate_string(value, pattern, min_len, max_len)` - Wired to `omni_validate_string` (regex pattern and length validation)
+- [IMPLEMENTED] `validate_int(value, min, max)` - Wired to `omni_validate_int` (integer conversion and range check)
+- [IMPLEMENTED] `validate_email(email)` - Wired to `omni_validate_email` (basic email format validation)
+- [IMPLEMENTED] `validate_url(url)` - Wired to `omni_validate_url` (basic URL scheme validation)
+- [IMPLEMENTED] `sanitize_html(html)` - Wired to `omni_sanitize_html` (escapes HTML special characters)
+- [IMPLEMENTED] `sanitize_sql(sql)` - Wired to `omni_sanitize_sql` (escapes SQL special characters)
+- [PARTIAL] `websocket_handshake(request_headers)` - Wired to `omni_websocket_handshake` (simplified handshake)
+- [PARTIAL] `websocket_frame_create(data, len, opcode, mask)` - Wired to `omni_websocket_frame_create` (basic frame creation)
+- [PARTIAL] `websocket_frame_parse(frame, len)` - Wired to `omni_websocket_frame_parse` (basic frame parsing)
+- [PARTIAL] `server_connection_pool_create(max_connections)` - Wired to `omni_server_connection_pool_create` (basic connection pool)
+- [PARTIAL] `server_connection_pool_acquire(pool)` - Wired to `omni_server_connection_pool_acquire`
+- [PARTIAL] `server_connection_pool_release(pool, connection)` - Wired to `omni_server_connection_pool_release`
+- [PARTIAL] `server_thread_pool_create(num_threads)` - Wired to `omni_server_thread_pool_create` (tasks executed directly for now)
+- [PARTIAL] `server_thread_pool_submit(pool, task)` - Wired to `omni_server_thread_pool_submit`
+- [PARTIAL] `server_set_timeout(socket, timeout_seconds)` - Wired to `omni_server_set_timeout` (placeholder)
+- [IMPLEMENTED] `server_set_max_request_size(max_size)` - Wired to `omni_server_set_max_request_size` (sets global limit)
+- [IMPLEMENTED] `server_set_max_headers_size(max_size)` - Wired to `omni_server_set_max_headers_size` (sets global limit)
+- [PARTIAL] `session_create(session_id)` - Wired to `omni_session_create` (in-memory stub)
+- [PARTIAL] `session_get(session, key)` - Wired to `omni_session_get`
+- [PARTIAL] `session_set(session, key, value)` - Wired to `omni_session_set`
+- [PARTIAL] `session_destroy(session)` - Wired to `omni_session_destroy`
+- [PARTIAL] `session_store_create(store_type)` - Wired to `omni_session_store_create` (in-memory stub)
+- [PARTIAL] `session_store_save(store, session)` - Wired to `omni_session_store_save`
+- [PARTIAL] `session_store_load(store, session_id)` - Wired to `omni_session_store_load`
+- [PARTIAL] `auth_hash_password(password)` - Wired to `omni_auth_hash_password` (simple hashing)
+- [PARTIAL] `auth_verify_password(password, hash)` - Wired to `omni_auth_verify_password`
+- [PARTIAL] `auth_generate_token(user_id)` - Wired to `omni_auth_generate_token` (simple string manipulation)
+- [PARTIAL] `auth_verify_token(token)` - Wired to `omni_auth_verify_token`
+- [PARTIAL] `auth_check_permission(user_id, permission)` - Wired to `omni_auth_check_permission` (always returns true)
+- [PARTIAL] `rate_limit_create(max_requests, window_seconds)` - Wired to `omni_rate_limit_create` (check always returns true)
+- [PARTIAL] `rate_limit_check(limiter, identifier)` - Wired to `omni_rate_limit_check`
+- [PARTIAL] `rate_limit_reset(limiter, identifier)` - Wired to `omni_rate_limit_reset`
+
 ### Type Conversions
 - [IMPLEMENTED] `std.int_to_string(i)` - Wired to `omni_int_to_string`
 - [IMPLEMENTED] `std.float_to_string(f)` - Wired to `omni_float_to_string`

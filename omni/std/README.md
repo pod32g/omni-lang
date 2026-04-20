@@ -550,6 +550,131 @@ struct HTTPResponse {
 - HTTP methods: `HTTP_GET`, `HTTP_POST`, `HTTP_PUT`, `HTTP_DELETE`, etc.
 - Common ports: `PORT_HTTP`, `PORT_HTTPS`, `PORT_SSH`, etc.
 
+### std.web
+HTTP server framework for building web applications, similar to Express.js or Gin.
+
+**Core Structures:**
+- `Server` - HTTP server instance
+- `Context` - Request/response context with params, query, headers, body, files, state
+- `UploadedFile` - File upload information (name, filename, content_type, size, data, path)
+- `RouteGroup` - Route group for organizing routes with common prefix/middleware
+- `Middleware` - Middleware function type: `func(ctx:Context):Context`
+- `Handler` - Handler function type: `func(ctx:Context):Context`
+- `AsyncHandler` - Async handler function type: `async func(ctx:Context):Promise<Context>`
+
+**Server Lifecycle:**
+- `server_create(port:int, options:map<string, any>):Server` - Create server
+- `server_listen(server:Server):bool` - Start listening
+- `server_listen_tls(server:Server, cert_file:string, key_file:string):bool` - Start HTTPS server
+- `server_close(server:Server)` - Stop server
+- `server_graceful_shutdown(server:Server, timeout:int)` - Graceful shutdown
+
+**Routing:**
+- `server_get(server:Server, pattern:string, handler:Handler)` - GET route
+- `server_post(server:Server, pattern:string, handler:Handler)` - POST route
+- `server_put(server:Server, pattern:string, handler:Handler)` - PUT route
+- `server_delete(server:Server, pattern:string, handler:Handler)` - DELETE route
+- `server_patch(server:Server, pattern:string, handler:Handler)` - PATCH route
+- `server_all(server:Server, pattern:string, handler:Handler)` - All methods
+- `server_use(server:Server, middleware:Middleware)` - Add global middleware
+- `server_group(server:Server, prefix:string):RouteGroup` - Create route group
+
+**Context API:**
+- `context_param(ctx:Context, name:string):string` - Get path parameter
+- `context_query(ctx:Context, name:string):string` - Get query parameter
+- `context_query_all(ctx:Context):map<string, string>` - Get all query parameters
+- `context_header(ctx:Context, name:string):string` - Get request header
+- `context_set_header(ctx:Context, name:string, value:string):Context` - Set response header
+- `context_status(ctx:Context, code:int):Context` - Set status code
+- `context_json(ctx:Context, data:any):Context` - Send JSON response
+- `context_text(ctx:Context, text:string):Context` - Send text response
+- `context_html(ctx:Context, html:string):Context` - Send HTML response
+- `context_file(ctx:Context, path:string):Context` - Send file response
+- `context_redirect(ctx:Context, url:string, code:int):Context` - Redirect
+- `context_cookie(ctx:Context, name:string, value:string, options:map<string, any>):Context` - Set cookie
+- `context_get_cookie(ctx:Context, name:string):string` - Get cookie
+- `context_body(ctx:Context):string` - Get raw request body
+- `context_body_json(ctx:Context):map<string, any> | array<any>` - Get parsed JSON body
+- `context_body_form(ctx:Context):map<string, string>` - Get parsed form body
+- `context_files(ctx:Context):array<UploadedFile>` - Get uploaded files
+- `context_set_state(ctx:Context, key:string, value:any):Context` - Set state
+- `context_get_state(ctx:Context, key:string):any` - Get state
+
+**JSON Functions:**
+- `json_parse(json_str:string):any` - Parse JSON string
+- `json_stringify(value:any, pretty:bool):string` - Stringify to JSON
+
+**Form Data & File Uploads:**
+- `http_parse_form_urlencoded(body:string):map<string, string>` - Parse URL-encoded form
+- `http_parse_multipart(body:string, boundary:string):map<string, string>, array<UploadedFile>` - Parse multipart form
+- `file_upload_save(data:string, size:int, filename:string, upload_dir:string):string` - Save uploaded file
+- `file_upload_validate(filename:string, size:int, allowed_types:string, max_size:int):bool` - Validate upload
+
+**Static File Serving:**
+- `file_read_binary(path:string):array<byte>` - Read binary file
+- `file_get_mime_type(filename:string):string` - Get MIME type
+- `file_get_size(path:string):int` - Get file size
+
+**WebSocket Support:**
+- `server_websocket(server:Server, pattern:string, handler:func(Context, WebSocket):void)` - WebSocket route
+- `websocket_send(ws:WebSocket, data:string)` - Send text message
+- `websocket_send_binary(ws:WebSocket, data:array<byte>):bool` - Send binary message
+- `websocket_receive(ws:WebSocket):string` - Receive text message
+- `websocket_receive_binary(ws:WebSocket):array<byte>` - Receive binary message
+- `websocket_close(ws:WebSocket, code:int, reason:string)` - Close connection
+- `websocket_ping(ws:WebSocket):bool` - Send ping
+- `websocket_pong(ws:WebSocket):bool` - Send pong
+
+**Validation & Sanitization:**
+- `validate_string(value:string, pattern:string, min_len:int, max_len:int):bool` - Validate string
+- `validate_int(value:string, min:int, max:int):bool` - Validate integer
+- `validate_email(email:string):bool` - Validate email
+- `validate_url(url:string):bool` - Validate URL
+- `sanitize_html(html:string):string` - Sanitize HTML
+- `sanitize_sql(sql:string):string` - Sanitize SQL
+- `validate_request(ctx:Context, rules:map<string, map<string, any>>):map<string, string>` - Validate request
+
+**Built-in Middleware:**
+- `middleware_logger` - Request logging
+- `middleware_cors` - CORS headers
+- `middleware_json_parser` - JSON body parser
+- `middleware_form_parser` - Form body parser
+- `middleware_multipart_parser` - Multipart parser
+- `middleware_static_files` - Static file serving
+- `middleware_compression` - Response compression
+- `middleware_rate_limit` - Rate limiting
+- `middleware_auth` - Authentication
+- `middleware_authorization` - Authorization
+- `middleware_error_handler` - Error handling
+- `middleware_timeout` - Request timeout
+- `middleware_request_size` - Request size limit
+- `middleware_session` - Session management
+
+**Advanced Features:**
+- Connection pooling for efficient connection management
+- Thread pooling for concurrent request handling
+- Request timeouts and size limits
+- Session management with multiple storage backends
+- Authentication/authorization with password hashing and token generation
+- Rate limiting per client/IP
+- Response compression (gzip)
+- HTTPS/TLS support
+- Graceful shutdown with timeout
+
+**Implementation Notes:**
+- HTTP request parsing and response building are implemented in the C runtime
+- JSON parsing/stringifying uses a simple recursive descent parser
+- Form data parsing supports both URL-encoded and multipart formats
+- File uploads are validated by size and allowed MIME types
+- Static file serving includes automatic MIME type detection
+- WebSocket support includes handshake, frame creation, and parsing
+- Validation functions use regex patterns and basic format checks
+- Sanitization functions escape special characters to prevent XSS/SQL injection
+- Compression, TLS, sessions, auth, and rate limiting are simplified stubs for now
+- Connection and thread pooling are basic implementations
+
+For detailed documentation and examples, see `omni/std/web/README.md`.
+
 ### std.test
 Intrinsic hooks that power the standard test harness.
 
