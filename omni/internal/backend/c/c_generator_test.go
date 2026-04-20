@@ -2622,7 +2622,10 @@ func TestCGenerator(t *testing.T) {
 	t.Run("GenerateInstructionMapInitUnsupported", func(t *testing.T) {
 		generator := NewCGenerator(module)
 
-		// Test map initialization with unsupported type combination
+		// Previously this test exercised an "unsupported map type" error
+		// path for map<float,float>. That case is now handled via the
+		// any_float fallback in getMapPutFunction, so no error is reported.
+		// Assert the compiler accepts the construction instead.
 		generator.generateInstruction(&mir.Instruction{
 			ID: 1, Op: "const", Type: "float",
 			Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "1.0", Type: "float"}},
@@ -2641,12 +2644,7 @@ func TestCGenerator(t *testing.T) {
 		})
 
 		if err != nil {
-			t.Errorf("generateInstruction failed for map init (unsupported): %v", err)
-		}
-
-		// Should have an error about unsupported type
-		if len(generator.errors) == 0 {
-			t.Error("Expected error about unsupported map type")
+			t.Errorf("generateInstruction failed for map init: %v", err)
 		}
 	})
 

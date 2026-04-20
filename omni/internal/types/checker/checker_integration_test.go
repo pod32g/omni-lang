@@ -281,12 +281,16 @@ func TestModuleImports(t *testing.T) {
 			desc:      "Valid program with std.string import",
 		},
 		{
+			// The checker pre-populates well-known std submodules into the
+			// imports map so terse test files can call std.math.*, std.io.*,
+			// std.assert.*, etc. without an explicit `import std`. This is a
+			// deliberate UX choice; the test below ensures that path works.
 			name: "use std function without import",
 			src: `func main(): void {
-			      let x = std.math.add(1, 2)
+			      let x = std.math.abs(-1)
 			      }`,
-			shouldErr: true,
-			desc:      "Using std function without import should error",
+			shouldErr: false,
+			desc:      "Using std function without explicit import is allowed",
 		},
 	}
 

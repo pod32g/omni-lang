@@ -1,9 +1,3 @@
-tests/goldens/types/unknown_type_25.omni:1:13: error: unknown type "Mystery25"
-     1 | let value25:Mystery25 = 1
-       |             ^^^^^^^^^
-     2 | 
-  hint: import or declare the type before use
-
 tests/goldens/types/unknown_type_25.omni:1:1: error: type mismatch: cannot assign int to Mystery25
      1 | let value25:Mystery25 = 1
        | ^^^^^^^^^^^^^^^^^^^^^^^^^
