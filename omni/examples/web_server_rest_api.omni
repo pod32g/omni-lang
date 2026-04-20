@@ -1,0 +1,104 @@
+// REST API Example using std.web framework
+// Demonstrates a simple REST API for managing items
+
+import std.web
+
+// GET /api/items - List all items
+func list_items_handler(ctx:std.web.Context):std.web.Context {
+    // Note: In a real implementation, you would fetch items from a database
+    // For now, we'll return a simple response
+    return std.web.context_text(ctx, "List of items")
+}
+
+// GET /api/items/:id - Get item by ID
+func get_item_handler(ctx:std.web.Context):std.web.Context {
+    let id = std.web.context_param(ctx, "id")
+    
+    // Note: In a real implementation, you would check if the item exists
+    // For now, we'll return a simple response
+    return std.web.context_text(ctx, "Item ID: " + id)
+}
+
+// POST /api/items - Create new item
+func create_item_handler(ctx:std.web.Context):std.web.Context {
+    let body = std.web.context_body_json(ctx)
+    
+    // Generate ID (simplified - use UUID in production)
+    let id = std.string.int_to_string(std.time.unix_timestamp())
+    
+    // Note: In a real implementation, you would store the item
+    // For now, we'll return the body with an ID
+    std.web.context_status(ctx, 201)
+    return std.web.context_json(ctx, body)
+}
+
+// PUT /api/items/:id - Update item
+func update_item_handler(ctx:std.web.Context):std.web.Context {
+    let id = std.web.context_param(ctx, "id")
+    let body = std.web.context_body_json(ctx)
+    
+    // Note: In a real implementation, you would update the item
+    // For now, we'll return the body
+    std.web.context_status(ctx, 200)
+    return std.web.context_json(ctx, body)
+}
+
+// DELETE /api/items/:id - Delete item
+func delete_item_handler(ctx:std.web.Context):std.web.Context {
+    let id = std.web.context_param(ctx, "id")
+    
+    // Note: In a real implementation, you would delete the item
+    // For now, we'll return a success response
+    std.web.context_status(ctx, 204)
+    return std.web.context_text(ctx, "")
+}
+
+// Health check handler
+func health_handler(ctx:std.web.Context):std.web.Context {
+    return std.web.context_text(ctx, "OK")
+}
+
+// Main function
+func main():int {
+    std.io.println("=== REST API Server Example ===")
+    std.io.println("Starting server on port 8080...")
+    
+    // Create server with empty options
+    let server = std.web.server_create(8080, {})
+    
+    // API routes
+    std.web.server_get(server, "/api/items", list_items_handler)
+    std.web.server_get(server, "/api/items/:id", get_item_handler)
+    std.web.server_post(server, "/api/items", create_item_handler)
+    std.web.server_put(server, "/api/items/:id", update_item_handler)
+    std.web.server_delete(server, "/api/items/:id", delete_item_handler)
+    
+    // Health check
+    std.web.server_get(server, "/health", health_handler)
+    
+    if std.web.server_listen(server) {
+        std.io.println("REST API running at http://localhost:8080")
+        std.io.println("")
+        std.io.println("Endpoints:")
+        std.io.println("  GET    /api/items      - List all items")
+        std.io.println("  GET    /api/items/:id  - Get item by ID")
+        std.io.println("  POST   /api/items      - Create item")
+        std.io.println("  PUT    /api/items/:id  - Update item")
+        std.io.println("  DELETE /api/items/:id  - Delete item")
+        std.io.println("  GET    /health         - Health check")
+        std.io.println("")
+        std.io.println("Example requests:")
+        std.io.println("  curl http://localhost:8080/api/items")
+        std.io.println("  curl -X POST http://localhost:8080/api/items -H 'Content-Type: application/json' -d '{\"name\":\"Test Item\"}'")
+        
+        while true {
+            std.time.sleep_seconds(1.0)
+        }
+    } else {
+        std.io.println("Failed to start server")
+        return 1
+    }
+    
+    return 0
+}
+

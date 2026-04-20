@@ -1,0 +1,235 @@
+// Comprehensive HTTP Server Example using std.web framework
+// This demonstrates various features of the std.web module
+
+import std
+
+// Custom middleware: Request logger
+func logger_middleware(ctx:std.web.Context):std.web.Context {
+    std.io.println("[request] " + ctx.request.method + " " + ctx.request.url)
+    return ctx
+}
+
+// Custom middleware: Add custom header
+func add_custom_header_middleware(ctx:std.web.Context):std.web.Context {
+    std.web.context_set_header(ctx, "X-Powered-By", "OmniLang")
+    return ctx
+}
+
+// Handler: Home page
+func home_handler(ctx:std.web.Context):std.web.Context {
+    return std.web.context_html(ctx, "<html><body><h1>Welcome to OmniLang Web Server!</h1><p>Server is running.</p></body></html>")
+}
+
+// Handler: Get user by ID (path parameter)
+func get_user_handler(ctx:std.web.Context):std.web.Context {
+    let user_id = std.web.context_param(ctx, "id")
+    
+    // Simulate user data
+    let user_data: map<string, any> = {
+        "id": user_id,
+        "name": "User " + user_id,
+        "email": "user" + user_id + "@example.com"
+    }
+    
+    return std.web.context_json(ctx, user_data)
+}
+
+// Handler: Create user (POST with JSON body)
+func create_user_handler(ctx:std.web.Context):std.web.Context {
+    let body = std.web.context_body_json(ctx)
+    
+    // Note: In a real implementation, you would validate the JSON body structure
+    // For now, we'll create a simple response
+    
+    // Simulate creating user
+    std.web.context_status(ctx, 201)
+    return std.web.context_json(ctx, body)
+}
+
+// Handler: Search (query parameters)
+func search_handler(ctx:std.web.Context):std.web.Context {
+    let query = std.web.context_query(ctx, "q")
+    let limit_str = std.web.context_query(ctx, "limit")
+    
+    var limit = 10
+    if std.string.length(limit_str) > 0 {
+        limit = std.string_to_int(limit_str)
+    }
+    
+    let result1 = "Result 1 for " + query
+    let result2 = "Result 2 for " + query
+    let results: map<string, any> = {
+        "query": query,
+        "limit": limit,
+        "results": [result1, result2]
+    }
+    
+    return std.web.context_json(ctx, results)
+}
+
+// Handler: Form submission (URL-encoded)
+func submit_form_handler(ctx:std.web.Context):std.web.Context {
+    let form_data = std.web.context_body_form(ctx)
+    
+    // Note: In a real implementation, you would extract fields from form_data
+    // For now, we'll return a simple success message
+    
+    return std.web.context_text(ctx, "Form submitted successfully")
+}
+
+// Handler: File upload (multipart form)
+// Simplified: iterating UploadedFile arrays not yet fully supported by codegen
+func upload_file_handler(ctx:std.web.Context):std.web.Context {
+    let response: map<string, any> = {
+        "message": "File upload endpoint (details omitted in demo)"
+    }
+    return std.web.context_json(ctx, response)
+}
+
+// Handler: Static file serving example
+func static_file_handler(ctx:std.web.Context):std.web.Context {
+    let file_path = std.web.context_param(ctx, "file")
+    
+    // In a real app, you'd validate the path and serve from a public directory
+    // For now, just return a message
+    return std.web.context_text(ctx, "Would serve file: " + file_path)
+}
+
+// Handler: API endpoint with validation
+func api_data_handler(ctx:std.web.Context):std.web.Context {
+    let body = std.web.context_body_json(ctx)
+    
+    // Note: In a real implementation, you would validate the JSON body
+    // For now, we'll return the data as-is
+    
+    return std.web.context_json(ctx, body)
+}
+
+// Handler: Redirect example
+func redirect_handler(ctx:std.web.Context):std.web.Context {
+    return std.web.context_redirect(ctx, "/", 302)
+}
+
+// Handler: Set cookie example
+func set_cookie_handler(ctx:std.web.Context):std.web.Context {
+    let cookie_options: map<string, any> = {
+        "max_age": 3600,
+        "path": "/",
+        "secure": true
+    }
+    
+    std.web.context_cookie(ctx, "session_id", "abc123", cookie_options)
+    return std.web.context_text(ctx, "Cookie set!")
+}
+
+// Handler: Get cookie example
+func get_cookie_handler(ctx:std.web.Context):std.web.Context {
+    let session_id = std.web.context_get_cookie(ctx, "session_id")
+    
+    if std.string.length(session_id) == 0 {
+        return std.web.context_text(ctx, "No session cookie found")
+    }
+    
+    return std.web.context_text(ctx, "Session ID: " + session_id)
+}
+
+// Handler: Update user (PUT)
+func update_user_handler(ctx:std.web.Context):std.web.Context {
+    let user_id = std.web.context_param(ctx, "id")
+    let body = std.web.context_body_json(ctx)
+    std.web.context_status(ctx, 200)
+    return std.web.context_json(ctx, body)
+}
+
+// Handler: Delete user (DELETE)
+func delete_user_handler(ctx:std.web.Context):std.web.Context {
+    let user_id = std.web.context_param(ctx, "id")
+    std.web.context_status(ctx, 204)
+    return std.web.context_text(ctx, "")
+}
+
+// Handler: Error example
+func error_handler(ctx:std.web.Context):std.web.Context {
+    std.web.context_status(ctx, 500)
+    return std.web.context_text(ctx, "Internal server error")
+}
+
+// Main function
+func main():int {
+    std.io.println("=== OmniLang Web Server Example ===")
+    std.io.println("Starting server on port 8080...")
+    
+    // Create server with options
+    let server_options: map<string, any> = {
+        "max_connections": 100,
+        "timeout": 30
+    }
+    let server = std.web.server_create(8080, server_options)
+    
+    // Add global middleware
+    std.web.server_use(server, logger_middleware)
+    std.web.server_use(server, add_custom_header_middleware)
+    
+    // Basic routes
+    std.web.server_get(server, "/", home_handler)
+    std.web.server_get(server, "/redirect", redirect_handler)
+    
+    // Routes with path parameters
+    std.web.server_get(server, "/user/:id", get_user_handler)
+    std.web.server_get(server, "/static/:file", static_file_handler)
+    
+    // Routes with query parameters
+    std.web.server_get(server, "/search", search_handler)
+    
+    // POST routes
+    std.web.server_post(server, "/api/users", create_user_handler)
+    std.web.server_post(server, "/api/form", submit_form_handler)
+    std.web.server_post(server, "/api/upload", upload_file_handler)
+    std.web.server_post(server, "/api/data", api_data_handler)
+    
+    // PUT route
+    std.web.server_put(server, "/api/users/:id", update_user_handler)
+    
+    // DELETE route
+    std.web.server_delete(server, "/api/users/:id", delete_user_handler)
+    
+    // Cookie routes
+    std.web.server_get(server, "/cookie/set", set_cookie_handler)
+    std.web.server_get(server, "/cookie/get", get_cookie_handler)
+    
+    // Error route
+    std.web.server_get(server, "/error", error_handler)
+    
+    // Start server
+    if std.web.server_listen(server) {
+        std.io.println("Server listening on http://localhost:8080")
+        std.io.println("")
+        std.io.println("Available endpoints:")
+        std.io.println("  GET  /                    - Home page")
+        std.io.println("  GET  /redirect            - Redirect to home")
+        std.io.println("  GET  /user/:id            - Get user by ID")
+        std.io.println("  GET  /search?q=term       - Search with query params")
+        std.io.println("  POST /api/users           - Create user (JSON)")
+        std.io.println("  POST /api/form            - Submit form (URL-encoded)")
+        std.io.println("  POST /api/upload          - Upload file (multipart)")
+        std.io.println("  POST /api/data            - Validate data (JSON)")
+        std.io.println("  PUT  /api/users/:id      - Update user")
+        std.io.println("  DELETE /api/users/:id     - Delete user")
+        std.io.println("  GET  /cookie/set         - Set cookie")
+        std.io.println("  GET  /cookie/get         - Get cookie")
+        std.io.println("  GET  /error              - Error example")
+        std.io.println("")
+        std.io.println("Press Ctrl+C to stop")
+        
+        // Keep server running
+        while true {
+            std.time.sleep_seconds(1.0)
+        }
+    } else {
+        std.io.println("Failed to start server")
+        return 1
+    }
+    
+    return 0
+}
+

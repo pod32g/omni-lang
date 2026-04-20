@@ -1,0 +1,27 @@
+// Simple test for std.web module
+// Tests basic server creation and route registration
+
+import std
+
+// Test handler function - this tests Handler type alias matching
+func test_handler(ctx:std.web.Context):std.web.Context {
+    // Just return the context to test type checking
+    return ctx
+}
+
+func main():int {
+    // Test server creation with empty map literal
+    let server = std.web.server_create(8080, {})
+    
+    // Test that server was created (basic struct field access)
+    if server.port != 8080 {
+        return 1
+    }
+    
+    // Test route registration - this tests Handler type alias
+    // The handler function should be assignable to Handler type
+    std.web.server_get(server, "/", test_handler)
+    
+    return 0
+}
+

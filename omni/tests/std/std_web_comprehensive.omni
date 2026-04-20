@@ -1,0 +1,41 @@
+// Comprehensive test for std.web module
+// Tests Handler type matching, Context API, and middleware
+
+import std
+
+// Test Handler type - synchronous handler
+func sync_handler(ctx:std.web.Context):std.web.Context {
+    return ctx
+}
+
+// Test Handler type - handler that returns Context (should match Handler)
+func simple_handler(ctx:std.web.Context):std.web.Context {
+    return ctx
+}
+
+// Test middleware
+func logger_middleware(ctx:std.web.Context):std.web.Context {
+    return ctx
+}
+
+func main():int {
+    // Test server creation with empty options (map literal syntax may not be fully supported)
+    let server = std.web.server_create(8080, {})
+    
+    if server.port != 8080 {
+        return 1
+    }
+    
+    // Test route registration with different methods - tests Handler type matching
+    std.web.server_get(server, "/", simple_handler)
+    std.web.server_get(server, "/user/:id", sync_handler)
+    std.web.server_post(server, "/api/data", sync_handler)
+    std.web.server_put(server, "/api/update", sync_handler)
+    std.web.server_delete(server, "/api/delete", sync_handler)
+    
+    // Test middleware registration - tests Middleware type matching
+    std.web.server_use(server, logger_middleware)
+    
+    return 0
+}
+

@@ -1689,6 +1689,12 @@ int32_t omni_getppid(void) {
 // Map Implementation
 // ============================================================================
 
+// Wrapper structure for any type values
+typedef struct omni_any_value {
+    void* value;
+    int32_t type;
+} omni_any_value_t;
+
 // Simple hash map implementation for OmniLang maps
 typedef struct omni_map_entry {
     void* key;
@@ -1715,6 +1721,58 @@ static uint32_t hash_string(const char* str) {
 // Simple hash function for integers
 static uint32_t hash_int(int32_t value) {
     return (uint32_t)value;
+}
+
+// Generic dynamic array implementation
+omni_array_t* omni_array_create() {
+    omni_array_t* arr = (omni_array_t*)malloc(sizeof(omni_array_t));
+    if (!arr) return NULL;
+    
+    arr->capacity = 8; // Start with capacity of 8
+    arr->count = 0;
+    arr->items = (void**)malloc(arr->capacity * sizeof(void*));
+    if (!arr->items) {
+        free(arr);
+        return NULL;
+    }
+    
+    return arr;
+}
+
+void omni_array_destroy(omni_array_t* arr) {
+    if (!arr) return;
+    
+    // Free all items (caller is responsible for freeing item contents)
+    if (arr->items) {
+        free(arr->items);
+    }
+    free(arr);
+}
+
+void omni_array_append(omni_array_t* arr, void* item) {
+    if (!arr || !item) return;
+    
+    // Resize if needed
+    if (arr->count >= arr->capacity) {
+        int32_t new_capacity = arr->capacity * 2;
+        void** new_items = (void**)realloc(arr->items, new_capacity * sizeof(void*));
+        if (!new_items) return; // Out of memory
+        arr->items = new_items;
+        arr->capacity = new_capacity;
+    }
+    
+    arr->items[arr->count] = item;
+    arr->count++;
+}
+
+void* omni_array_get(omni_array_t* arr, int32_t index) {
+    if (!arr || index < 0 || index >= arr->count) return NULL;
+    return arr->items[index];
+}
+
+int32_t omni_array_size(omni_array_t* arr) {
+    if (!arr) return 0;
+    return arr->count;
 }
 
 omni_map_t* omni_map_create() {
@@ -2284,6 +2342,444 @@ void omni_map_put_int_bool(omni_map_t* map, int32_t key, int32_t value) {
     map->size++;
 }
 
+// Map put operations for any type support
+void omni_map_put_string_any(omni_map_t* map, const char* key, void* value, int32_t value_type) {
+    if (!map) return;
+    
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) {
+            // Update existing value - free old any value wrapper
+            if (entry->value) {
+                omni_any_value_t* old_any = (omni_any_value_t*)entry->value;
+                // Free the wrapped value based on type
+                if (old_any->type == OMNI_TYPE_STRING) {
+                    free((char*)old_any->value);
+                } else if (old_any->type == OMNI_TYPE_MAP) {
+                    omni_map_destroy((omni_map_t*)old_any->value);
+                } else if (old_any->type == OMNI_TYPE_ARRAY) {
+                    omni_array_destroy((omni_array_t*)old_any->value);
+                } else if (old_any->type == OMNI_TYPE_STRUCT) {
+                    // Struct cleanup handled by runtime
+                }
+                free(old_any);
+            }
+            // Create new any value wrapper
+            omni_any_value_t* any_val = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+            if (any_val) {
+                any_val->value = value;
+                any_val->type = value_type;
+                entry->value = any_val;
+            }
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Rehash if load factor exceeds 0.75
+    if (map->size * 4 >= map->bucket_count * 3) {
+        omni_map_rehash(map, 1); // 1 = string key
+        bucket = hash % map->bucket_count;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(strlen(key) + 1);
+    omni_any_value_t* any_val = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+    if (!entry->key || !any_val) {
+        free(entry->key);
+        free(any_val);
+        free(entry);
+        return;
+    }
+    
+    strcpy((char*)entry->key, key);
+    any_val->value = value;
+    any_val->type = value_type;
+    entry->value = any_val;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_int_any(omni_map_t* map, int32_t key, void* value, int32_t value_type) {
+    if (!map) return;
+    
+    uint32_t hash = hash_int(key);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) {
+            // Update existing value - free old any value wrapper
+            if (entry->value) {
+                omni_any_value_t* old_any = (omni_any_value_t*)entry->value;
+                if (old_any->type == OMNI_TYPE_STRING) {
+                    free((char*)old_any->value);
+                } else if (old_any->type == OMNI_TYPE_MAP) {
+                    omni_map_destroy((omni_map_t*)old_any->value);
+                } else if (old_any->type == OMNI_TYPE_ARRAY) {
+                    omni_array_destroy((omni_array_t*)old_any->value);
+                }
+                free(old_any);
+            }
+            // Create new any value wrapper
+            omni_any_value_t* any_val = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+            if (any_val) {
+                any_val->value = value;
+                any_val->type = value_type;
+                entry->value = any_val;
+            }
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Rehash if load factor exceeds 0.75
+    if (map->size * 4 >= map->bucket_count * 3) {
+        omni_map_rehash(map, 0); // 0 = int key
+        bucket = hash % map->bucket_count;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    entry->key = malloc(sizeof(int32_t));
+    omni_any_value_t* any_val = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+    if (!entry->key || !any_val) {
+        free(entry->key);
+        free(any_val);
+        free(entry);
+        return;
+    }
+    
+    *(int32_t*)entry->key = key;
+    any_val->value = value;
+    any_val->type = value_type;
+    entry->value = any_val;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+// Helper function to hash any key type
+static uint32_t hash_any_key(void* key, int32_t key_type) {
+    if (key_type == OMNI_TYPE_INT) {
+        return hash_int(*(int32_t*)key);
+    } else if (key_type == OMNI_TYPE_STRING) {
+        return hash_string((char*)key);
+    }
+    // For other types, use pointer hash
+    return (uint32_t)(uintptr_t)key;
+}
+
+// Helper function to compare any key types
+static int32_t compare_any_key(void* key1, int32_t type1, void* key2, int32_t type2) {
+    if (type1 != type2) return 0;
+    if (type1 == OMNI_TYPE_INT) {
+        return *(int32_t*)key1 == *(int32_t*)key2;
+    } else if (type1 == OMNI_TYPE_STRING) {
+        return strcmp((char*)key1, (char*)key2) == 0;
+    }
+    return key1 == key2;
+}
+
+void omni_map_put_any_string(omni_map_t* map, void* key, int32_t key_type, const char* value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_any_key(key, key_type);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        omni_any_value_t* key_any = (omni_any_value_t*)entry->key;
+        if (key_any && compare_any_key(key, key_type, key_any->value, key_any->type)) {
+            // Update existing value
+            free(entry->value);
+            entry->value = malloc(strlen(value) + 1);
+            if (entry->value) {
+                strcpy((char*)entry->value, value);
+            }
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Rehash if needed (would need to track key type for rehashing)
+    if (map->size * 4 >= map->bucket_count * 3) {
+        // For any keys, we can't easily rehash, so skip for now
+        // In a full implementation, we'd need to store key type info in the map
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    // Store key as any value wrapper
+    omni_any_value_t* key_any = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+    entry->value = malloc(strlen(value) + 1);
+    if (!key_any || !entry->value) {
+        free(key_any);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    // Copy key based on type
+    if (key_type == OMNI_TYPE_INT) {
+        key_any->value = malloc(sizeof(int32_t));
+        if (key_any->value) {
+            *(int32_t*)key_any->value = *(int32_t*)key;
+        }
+    } else if (key_type == OMNI_TYPE_STRING) {
+        key_any->value = malloc(strlen((char*)key) + 1);
+        if (key_any->value) {
+            strcpy((char*)key_any->value, (char*)key);
+        }
+    } else {
+        key_any->value = key; // For other types, just store pointer
+    }
+    key_any->type = key_type;
+    entry->key = key_any;
+    
+    strcpy((char*)entry->value, value);
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_any_int(omni_map_t* map, void* key, int32_t key_type, int32_t value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_any_key(key, key_type);
+    int32_t bucket = hash % map->bucket_count;
+    
+    // Check if key already exists
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        omni_any_value_t* key_any = (omni_any_value_t*)entry->key;
+        if (key_any && compare_any_key(key, key_type, key_any->value, key_any->type)) {
+            *(int32_t*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    // Create new entry
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    omni_any_value_t* key_any = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+    entry->value = malloc(sizeof(int32_t));
+    if (!key_any || !entry->value) {
+        free(key_any);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    if (key_type == OMNI_TYPE_INT) {
+        key_any->value = malloc(sizeof(int32_t));
+        if (key_any->value) {
+            *(int32_t*)key_any->value = *(int32_t*)key;
+        }
+    } else if (key_type == OMNI_TYPE_STRING) {
+        key_any->value = malloc(strlen((char*)key) + 1);
+        if (key_any->value) {
+            strcpy((char*)key_any->value, (char*)key);
+        }
+    } else {
+        key_any->value = key;
+    }
+    key_any->type = key_type;
+    entry->key = key_any;
+    
+    *(int32_t*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_any_float(omni_map_t* map, void* key, int32_t key_type, double value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_any_key(key, key_type);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        omni_any_value_t* key_any = (omni_any_value_t*)entry->key;
+        if (key_any && compare_any_key(key, key_type, key_any->value, key_any->type)) {
+            *(double*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    omni_any_value_t* key_any = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+    entry->value = malloc(sizeof(double));
+    if (!key_any || !entry->value) {
+        free(key_any);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    if (key_type == OMNI_TYPE_INT) {
+        key_any->value = malloc(sizeof(int32_t));
+        if (key_any->value) {
+            *(int32_t*)key_any->value = *(int32_t*)key;
+        }
+    } else if (key_type == OMNI_TYPE_STRING) {
+        key_any->value = malloc(strlen((char*)key) + 1);
+        if (key_any->value) {
+            strcpy((char*)key_any->value, (char*)key);
+        }
+    } else {
+        key_any->value = key;
+    }
+    key_any->type = key_type;
+    entry->key = key_any;
+    
+    *(double*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_any_bool(omni_map_t* map, void* key, int32_t key_type, int32_t value) {
+    if (!map) return;
+    
+    uint32_t hash = hash_any_key(key, key_type);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        omni_any_value_t* key_any = (omni_any_value_t*)entry->key;
+        if (key_any && compare_any_key(key, key_type, key_any->value, key_any->type)) {
+            *(int32_t*)entry->value = value;
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    omni_any_value_t* key_any = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+    entry->value = malloc(sizeof(int32_t));
+    if (!key_any || !entry->value) {
+        free(key_any);
+        free(entry->value);
+        free(entry);
+        return;
+    }
+    
+    if (key_type == OMNI_TYPE_INT) {
+        key_any->value = malloc(sizeof(int32_t));
+        if (key_any->value) {
+            *(int32_t*)key_any->value = *(int32_t*)key;
+        }
+    } else if (key_type == OMNI_TYPE_STRING) {
+        key_any->value = malloc(strlen((char*)key) + 1);
+        if (key_any->value) {
+            strcpy((char*)key_any->value, (char*)key);
+        }
+    } else {
+        key_any->value = key;
+    }
+    key_any->type = key_type;
+    entry->key = key_any;
+    
+    *(int32_t*)entry->value = value;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
+void omni_map_put_any_any(omni_map_t* map, void* key, int32_t key_type, void* value, int32_t value_type) {
+    if (!map) return;
+    
+    uint32_t hash = hash_any_key(key, key_type);
+    int32_t bucket = hash % map->bucket_count;
+    
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        omni_any_value_t* key_any = (omni_any_value_t*)entry->key;
+        if (key_any && compare_any_key(key, key_type, key_any->value, key_any->type)) {
+            // Update existing value - free old any value wrapper
+            if (entry->value) {
+                omni_any_value_t* old_any = (omni_any_value_t*)entry->value;
+                if (old_any->type == OMNI_TYPE_STRING) {
+                    free((char*)old_any->value);
+                } else if (old_any->type == OMNI_TYPE_MAP) {
+                    omni_map_destroy((omni_map_t*)old_any->value);
+                } else if (old_any->type == OMNI_TYPE_ARRAY) {
+                    omni_array_destroy((omni_array_t*)old_any->value);
+                }
+                free(old_any);
+            }
+            // Create new any value wrapper
+            omni_any_value_t* any_val = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+            if (any_val) {
+                any_val->value = value;
+                any_val->type = value_type;
+                entry->value = any_val;
+            }
+            return;
+        }
+        entry = entry->next;
+    }
+    
+    entry = (omni_map_entry_t*)malloc(sizeof(omni_map_entry_t));
+    if (!entry) return;
+    
+    omni_any_value_t* key_any = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+    omni_any_value_t* val_any = (omni_any_value_t*)malloc(sizeof(omni_any_value_t));
+    if (!key_any || !val_any) {
+        free(key_any);
+        free(val_any);
+        free(entry);
+        return;
+    }
+    
+    // Copy key based on type
+    if (key_type == OMNI_TYPE_INT) {
+        key_any->value = malloc(sizeof(int32_t));
+        if (key_any->value) {
+            *(int32_t*)key_any->value = *(int32_t*)key;
+        }
+    } else if (key_type == OMNI_TYPE_STRING) {
+        key_any->value = malloc(strlen((char*)key) + 1);
+        if (key_any->value) {
+            strcpy((char*)key_any->value, (char*)key);
+        }
+    } else {
+        key_any->value = key;
+    }
+    key_any->type = key_type;
+    entry->key = key_any;
+    
+    val_any->value = value;
+    val_any->type = value_type;
+    entry->value = val_any;
+    entry->next = map->buckets[bucket];
+    map->buckets[bucket] = entry;
+    map->size++;
+}
+
 // Additional map get operations
 const char* omni_map_get_string_string(omni_map_t* map, const char* key) {
     if (!map) return NULL;
@@ -2482,7 +2978,11 @@ void omni_struct_destroy(omni_struct_t* struct_ptr) {
         free(field->name);
         if (field->value_type == 0) { // string
             free((char*)field->value);
-        } else {
+        } else if (field->value_type == OMNI_TYPE_MAP && field->value) {
+            omni_map_destroy((omni_map_t*)field->value);
+        } else if (field->value_type == OMNI_TYPE_STRUCT && field->value) {
+            omni_struct_destroy((omni_struct_t*)field->value);
+        } else if (field->value) {
             free(field->value);
         }
         free(field);
@@ -2719,6 +3219,180 @@ int32_t omni_struct_get_bool_field(omni_struct_t* struct_ptr, const char* field_
     }
     
     return 0; // Field not found, return default value
+}
+
+void omni_struct_set_array_field(omni_struct_t* struct_ptr, const char* field_name, void* array_value, int32_t element_type, int32_t array_length) {
+    (void)element_type; // Unused for now
+    (void)array_length;  // Unused for now
+    if (!struct_ptr) return;
+    
+    // Check if field already exists
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            // Update existing field - free old value
+            if (field->value_type == 0) { // string
+                free((char*)field->value);
+            } else {
+                free(field->value);
+            }
+            // Store pointer to array (caller owns the array)
+            field->value = array_value;
+            field->value_type = OMNI_TYPE_ARRAY;
+            return;
+        }
+        field = field->next;
+    }
+    
+    // Create new field
+    field = (omni_struct_field_t*)malloc(sizeof(omni_struct_field_t));
+    if (!field) return;
+    
+    field->name = malloc(strlen(field_name) + 1);
+    if (!field->name) {
+        free(field);
+        return;
+    }
+    
+    strcpy(field->name, field_name);
+    field->value = array_value; // Store pointer to array (caller owns the array)
+    field->value_type = OMNI_TYPE_ARRAY;
+    field->next = struct_ptr->fields;
+    struct_ptr->fields = field;
+}
+
+void omni_struct_set_map_field(omni_struct_t* struct_ptr, const char* field_name, omni_map_t* map_value) {
+    if (!struct_ptr) return;
+    
+    // Check if field already exists
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            // Update existing field - free old value if it was a map
+            if (field->value_type == OMNI_TYPE_MAP && field->value) {
+                omni_map_destroy((omni_map_t*)field->value);
+            } else if (field->value_type == 0) { // string
+                free((char*)field->value);
+            } else if (field->value) {
+                free(field->value);
+            }
+            // Store pointer to map (caller owns the map)
+            field->value = map_value;
+            field->value_type = OMNI_TYPE_MAP;
+            return;
+        }
+        field = field->next;
+    }
+    
+    // Create new field
+    field = (omni_struct_field_t*)malloc(sizeof(omni_struct_field_t));
+    if (!field) return;
+    
+    field->name = malloc(strlen(field_name) + 1);
+    if (!field->name) {
+        free(field);
+        return;
+    }
+    
+    strcpy(field->name, field_name);
+    field->value = map_value; // Store pointer to map (caller owns the map)
+    field->value_type = OMNI_TYPE_MAP;
+    field->next = struct_ptr->fields;
+    struct_ptr->fields = field;
+}
+
+omni_struct_t* omni_struct_get_struct_field(omni_struct_t* struct_ptr, const char* field_name) {
+    if (!struct_ptr) return NULL;
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0 && field->value_type == OMNI_TYPE_STRUCT) {
+            return (omni_struct_t*)field->value;
+        }
+        field = field->next;
+    }
+    return NULL;
+}
+
+void omni_struct_set_struct_field(omni_struct_t* struct_ptr, const char* field_name, omni_struct_t* struct_value) {
+    if (!struct_ptr) return;
+    
+    // Check if field already exists
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            // Update existing field - free old value if it was a struct
+            if (field->value_type == OMNI_TYPE_STRUCT && field->value) {
+                omni_struct_destroy((omni_struct_t*)field->value);
+            } else if (field->value_type == 0) { // string
+                free((char*)field->value);
+            } else if (field->value) {
+                free(field->value);
+            }
+            // Store pointer to struct (caller owns the struct)
+            field->value = struct_value;
+            field->value_type = OMNI_TYPE_STRUCT;
+            return;
+        }
+        field = field->next;
+    }
+    
+    // Create new field
+    field = (omni_struct_field_t*)malloc(sizeof(omni_struct_field_t));
+    if (!field) return;
+    
+    field->name = malloc(strlen(field_name) + 1);
+    if (!field->name) {
+        free(field);
+        return;
+    }
+    
+    strcpy(field->name, field_name);
+    field->value = struct_value; // Store pointer to struct (caller owns the struct)
+    field->value_type = OMNI_TYPE_STRUCT;
+    field->next = struct_ptr->fields;
+    struct_ptr->fields = field;
+}
+
+void omni_struct_set_null_field(omni_struct_t* struct_ptr, const char* field_name) {
+    if (!struct_ptr) return;
+    
+    // Check if field already exists
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            // Update existing field - free old value
+            if (field->value_type == OMNI_TYPE_MAP && field->value) {
+                omni_map_destroy((omni_map_t*)field->value);
+            } else if (field->value_type == OMNI_TYPE_STRUCT && field->value) {
+                omni_struct_destroy((omni_struct_t*)field->value);
+            } else if (field->value_type == 0) { // string
+                free((char*)field->value);
+            } else if (field->value) {
+                free(field->value);
+            }
+            // Set to null
+            field->value = NULL;
+            field->value_type = 0; // Use 0 for null/void
+            return;
+        }
+        field = field->next;
+    }
+    
+    // Create new field with null value
+    field = (omni_struct_field_t*)malloc(sizeof(omni_struct_field_t));
+    if (!field) return;
+    
+    field->name = malloc(strlen(field_name) + 1);
+    if (!field->name) {
+        free(field);
+        return;
+    }
+    
+    strcpy(field->name, field_name);
+    field->value = NULL;
+    field->value_type = 0; // Use 0 for null/void
+    field->next = struct_ptr->fields;
+    struct_ptr->fields = field;
 }
 
 // Promise/Async support (simplified synchronous implementation)
@@ -4266,6 +4940,1942 @@ omni_http_response_t* omni_http_request(omni_http_request_t* req) {
 #endif
     
     return omni_http_via_socket(req->method, req->url, req->headers, req->body);
+}
+
+// HTTP server functions
+omni_http_request_t* omni_http_parse_request(const char* raw_request) {
+    if (!raw_request) return NULL;
+    
+    omni_http_request_t* req = (omni_http_request_t*)malloc(sizeof(omni_http_request_t));
+    if (!req) return NULL;
+    
+    req->headers = omni_map_create();
+    req->body = NULL;
+    memset(req->method, 0, sizeof(req->method));
+    memset(req->url, 0, sizeof(req->url));
+    
+    // Make a copy to avoid modifying the original
+    char* request = strdup(raw_request);
+    if (!request) {
+        free(req);
+        return NULL;
+    }
+    
+    // Parse request line: "METHOD /path?query HTTP/1.1\r\n"
+    char* line = request;
+    char* request_line_end = strstr(line, "\r\n");
+    if (!request_line_end) {
+        free(request);
+        omni_map_destroy(req->headers);
+        free(req);
+        return NULL;
+    }
+    
+    *request_line_end = '\0';
+    
+    // Extract method
+    char* method_end = strchr(line, ' ');
+    if (!method_end) {
+        free(request);
+        omni_map_destroy(req->headers);
+        free(req);
+        return NULL;
+    }
+    size_t method_len = method_end - line;
+    if (method_len >= sizeof(req->method)) method_len = sizeof(req->method) - 1;
+    strncpy(req->method, line, method_len);
+    req->method[method_len] = '\0';
+    
+    // Extract URL (path + query)
+    char* url_start = method_end + 1;
+    while (*url_start == ' ') url_start++;
+    char* url_end = strchr(url_start, ' ');
+    if (!url_end) {
+        free(request);
+        omni_map_destroy(req->headers);
+        free(req);
+        return NULL;
+    }
+    size_t url_len = url_end - url_start;
+    if (url_len >= sizeof(req->url)) url_len = sizeof(req->url) - 1;
+    strncpy(req->url, url_start, url_len);
+    req->url[url_len] = '\0';
+    
+    line = request_line_end + 2;
+    
+    // Parse headers
+    char* header_end = strstr(line, "\r\n\r\n");
+    if (header_end) {
+        *header_end = '\0';
+        char* header_line = line;
+        while (*header_line) {
+            char* header_line_end = strstr(header_line, "\r\n");
+            if (header_line_end) {
+                *header_line_end = '\0';
+            }
+            char* colon = strchr(header_line, ':');
+            if (colon) {
+                *colon = '\0';
+                char* name = header_line;
+                char* value = colon + 1;
+                while (*value == ' ' || *value == '\t') value++;
+                omni_map_put_string_string(req->headers, name, value);
+                *colon = ':';
+            }
+            if (!header_line_end) break;
+            header_line = header_line_end + 2;
+        }
+        line = header_end + 4;
+    }
+    
+    // Body is everything after headers
+    if (*line) {
+        req->body = strdup(line);
+    }
+    
+    free(request);
+    return req;
+}
+
+char* omni_http_build_response(omni_http_response_t* resp) {
+    if (!resp) return NULL;
+    
+    // Calculate size needed
+    size_t size = 128; // Status line
+    if (resp->headers) {
+        // Estimate header size
+        size += 512;
+    }
+    if (resp->body) {
+        size += strlen(resp->body);
+    }
+    size += 64; // Extra buffer
+    
+    char* response = (char*)malloc(size);
+    if (!response) return NULL;
+    
+    // Build status line: "HTTP/1.1 200 OK\r\n"
+    int pos = snprintf(response, size, "HTTP/1.1 %d %s\r\n", 
+                       resp->status_code, resp->status_text);
+    
+    // Add headers
+    if (resp->headers) {
+        // Iterate through headers map and add each header
+        // Note: This is a simplified version - full implementation would iterate the map
+        // For now, we'll add Content-Length if body exists
+        if (resp->body) {
+            pos += snprintf(response + pos, size - pos, "Content-Length: %zu\r\n", 
+                           strlen(resp->body));
+        }
+        // Add other headers would go here
+    }
+    
+    // End of headers
+    pos += snprintf(response + pos, size - pos, "\r\n");
+    
+    // Add body
+    if (resp->body) {
+        if (pos + strlen(resp->body) < size) {
+            strcpy(response + pos, resp->body);
+            pos += strlen(resp->body);
+        }
+    }
+    
+    return response;
+}
+
+void omni_http_parse_query(const char* query_string, omni_map_t* params) {
+    if (!query_string || !params) return;
+    
+    char* query = strdup(query_string);
+    if (!query) return;
+    
+    char* token = strtok(query, "&");
+    while (token) {
+        char* equals = strchr(token, '=');
+        if (equals) {
+            *equals = '\0';
+            char* key = token;
+            char* value = equals + 1;
+            
+            // URL decode key and value
+            char* decoded_key = omni_decode_url(key);
+            char* decoded_value = omni_decode_url(value);
+            
+            if (decoded_key && decoded_value) {
+                omni_map_put_string_string(params, decoded_key, decoded_value);
+                free(decoded_key);
+                free(decoded_value);
+            }
+            *equals = '=';
+        }
+        token = strtok(NULL, "&");
+    }
+    
+    free(query);
+}
+
+int32_t omni_http_match_path(const char* pattern, const char* path, omni_map_t* params) {
+    if (!pattern || !path || !params) return 0;
+    
+    // Simple pattern matching: /user/:id matches /user/123
+    // Supports :param, *wildcard, and ?optional
+    
+    const char* p = pattern;
+    const char* s = path;
+    
+    while (*p && *s) {
+        if (*p == ':') {
+            // Parameter: :id
+            p++; // Skip ':'
+            char param_name[64] = {0};
+            int i = 0;
+            while (*p && *p != '/' && *p != '?' && *p != '*' && i < 63) {
+                param_name[i++] = *p++;
+            }
+            param_name[i] = '\0';
+            
+            // Extract parameter value
+            char param_value[256] = {0};
+            int j = 0;
+            while (*s && *s != '/' && *s != '?' && j < 255) {
+                param_value[j++] = *s++;
+            }
+            param_value[j] = '\0';
+            
+            // Store parameter
+            omni_map_put_string_string(params, param_name, param_value);
+        } else if (*p == '*') {
+            // Wildcard: matches rest of path
+            char wildcard_value[512] = {0};
+            strncpy(wildcard_value, s, 511);
+            omni_map_put_string_string(params, "*", wildcard_value);
+            return 1; // Match
+        } else if (*p == '?') {
+            // Optional segment
+            p++; // Skip '?'
+            // Try to match optional segment
+            if (*p == '/') p++;
+            // Skip optional segment in path if present
+            if (*s == '/') {
+                while (*s && *s != '/') s++;
+                if (*s == '/') s++;
+            }
+        } else if (*p == *s) {
+            // Literal match
+            p++;
+            s++;
+        } else {
+            // Mismatch
+            return 0;
+        }
+    }
+    
+    // Both must be at end (or pattern has optional trailing parts)
+    while (*p == '?' || *p == '/') p++;
+    return (*p == '\0' && (*s == '\0' || *s == '?'));
+}
+
+// Context functions (for std.web framework)
+const char* omni_context_param(omni_struct_t* ctx, const char* name) {
+    if (!ctx || !name) return "";
+    // Stub implementation - would extract from ctx.params map
+    (void)ctx;
+    return "";
+}
+
+void* omni_context_body_json(omni_struct_t* ctx) {
+    if (!ctx) return NULL;
+    const char* body = omni_struct_get_string_field(ctx, "body");
+    if (!body || !*body) return NULL;
+    return omni_json_parse(body);
+}
+
+omni_struct_t* omni_context_text(omni_struct_t* ctx, const char* text) {
+    if (!ctx || !text) return ctx;
+    // Stub implementation - would set response body and headers
+    (void)text;
+    return ctx;
+}
+
+omni_struct_t* omni_context_json(omni_struct_t* ctx, void* data) {
+    if (!ctx) return ctx;
+    char* json_str = omni_json_stringify(data, 0, 0);
+    if (json_str) free(json_str);
+    return ctx;
+}
+
+omni_struct_t* omni_context_file(omni_struct_t* ctx, const char* path) {
+    if (!ctx || !path) return ctx;
+    int32_t size = 0;
+    char* data = omni_file_read_binary(path, &size);
+    if (data) free(data);
+    return ctx;
+}
+
+// Additional context functions (stubs)
+const char* omni_context_query(omni_struct_t* ctx, const char* name) {
+    (void)ctx; (void)name;
+    return "";
+}
+
+omni_map_t* omni_context_query_all(omni_struct_t* ctx) {
+    (void)ctx;
+    return omni_map_create();
+}
+
+const char* omni_context_header(omni_struct_t* ctx, const char* name) {
+    (void)ctx; (void)name;
+    return "";
+}
+
+void omni_context_set_header(omni_struct_t* ctx, const char* name, const char* value) {
+    (void)ctx; (void)name; (void)value;
+}
+
+void omni_context_status(omni_struct_t* ctx, int32_t code) {
+    (void)ctx; (void)code;
+}
+
+omni_struct_t* omni_context_html(omni_struct_t* ctx, const char* html) {
+    (void)html;
+    return ctx;
+}
+
+omni_struct_t* omni_context_redirect(omni_struct_t* ctx, const char* url, int32_t code) {
+    (void)url; (void)code;
+    return ctx;
+}
+
+omni_struct_t* omni_context_cookie(omni_struct_t* ctx, const char* name, const char* value, omni_map_t* options) {
+    (void)name; (void)value; (void)options;
+    return ctx;
+}
+
+const char* omni_context_get_cookie(omni_struct_t* ctx, const char* name) {
+    (void)ctx; (void)name;
+    return "";
+}
+
+const char* omni_context_body(omni_struct_t* ctx) {
+    (void)ctx;
+    return "";
+}
+
+omni_struct_t* omni_context_set_state(omni_struct_t* ctx, const char* key, void* value, int32_t value_type) {
+    (void)key; (void)value; (void)value_type;
+    return ctx;
+}
+
+void* omni_context_get_state(omni_struct_t* ctx, const char* key, int32_t* value_type) {
+    (void)ctx; (void)key;
+    if (value_type) *value_type = OMNI_TYPE_ANY;
+    return NULL;
+}
+
+// Parse request body as form-urlencoded data. Stub returns empty map.
+omni_map_t* omni_context_body_form(omni_struct_t* ctx) {
+    (void)ctx;
+    return omni_map_create();
+}
+
+// Uploaded files stub. Returns empty array.
+omni_array_t* omni_context_files(omni_struct_t* ctx) {
+    (void)ctx;
+    return omni_array_create();
+}
+
+// WebSocket stubs
+void omni_server_websocket(omni_server_t* server, const char* pattern, void* handler) {
+    (void)server; (void)pattern; (void)handler;
+}
+
+int32_t omni_websocket_send(void* conn, const char* data, int32_t len) {
+    (void)conn; (void)data; (void)len;
+    return 0;
+}
+
+int32_t omni_websocket_receive(void* conn, char* buf, int32_t max_len) {
+    (void)conn; (void)buf; (void)max_len;
+    return 0;
+}
+
+void omni_websocket_close(void* conn) {
+    (void)conn;
+}
+
+// Server routing functions (for std.web framework)
+void omni_server_get(omni_server_t* server, const char* pattern, void* handler) {
+    (void)server; (void)pattern; (void)handler;
+}
+
+void omni_server_post(omni_server_t* server, const char* pattern, void* handler) {
+    (void)server; (void)pattern; (void)handler;
+}
+
+void omni_server_put(omni_server_t* server, const char* pattern, void* handler) {
+    (void)server; (void)pattern; (void)handler;
+}
+
+void omni_server_delete(omni_server_t* server, const char* pattern, void* handler) {
+    (void)server; (void)pattern; (void)handler;
+}
+
+void omni_server_patch(omni_server_t* server, const char* pattern, void* handler) {
+    (void)server; (void)pattern; (void)handler;
+}
+
+void omni_server_all(omni_server_t* server, const char* pattern, void* handler) {
+    (void)server; (void)pattern; (void)handler;
+}
+
+void omni_server_route(omni_server_t* server, const char* method, const char* pattern, void* handler) {
+    (void)server; (void)method; (void)pattern; (void)handler;
+}
+
+omni_struct_t* omni_server_group(omni_server_t* server, const char* prefix) {
+    (void)server; (void)prefix;
+    return omni_struct_create();
+}
+
+void omni_server_use(omni_server_t* server, void* middleware) {
+    (void)server; (void)middleware;
+}
+
+void omni_server_use_before(omni_server_t* server, void* middleware) {
+    (void)server; (void)middleware;
+}
+
+void omni_server_use_after(omni_server_t* server, void* middleware) {
+    (void)server; (void)middleware;
+}
+
+void omni_group_get(omni_struct_t* group, const char* pattern, void* handler) {
+    (void)group; (void)pattern; (void)handler;
+}
+
+void omni_group_post(omni_struct_t* group, const char* pattern, void* handler) {
+    (void)group; (void)pattern; (void)handler;
+}
+
+void omni_group_use(omni_struct_t* group, void* middleware) {
+    (void)group; (void)middleware;
+}
+
+// Middleware functions (stubs)
+omni_struct_t* omni_middleware_logger(omni_struct_t* ctx) {
+    return ctx;
+}
+
+omni_struct_t* omni_middleware_cors(omni_struct_t* ctx, omni_map_t* options) {
+    (void)options;
+    return ctx;
+}
+
+omni_struct_t* omni_middleware_json_parser(omni_struct_t* ctx) {
+    return ctx;
+}
+
+omni_struct_t* omni_middleware_form_parser(omni_struct_t* ctx) {
+    return ctx;
+}
+
+omni_struct_t* omni_middleware_multipart_parser_impl(omni_struct_t* ctx) {
+    return ctx;
+}
+
+void* omni_middleware_multipart_parser(omni_struct_t* ctx, int32_t max_size) {
+    (void)ctx; (void)max_size;
+    return (void*)omni_middleware_multipart_parser_impl;
+}
+
+omni_struct_t* omni_middleware_static_impl(omni_struct_t* ctx) {
+    return ctx;
+}
+
+void* omni_middleware_static(omni_server_t* server, const char* path, const char* dir, omni_map_t* options) {
+    (void)server; (void)path; (void)dir; (void)options;
+    return (void*)omni_middleware_static_impl;
+}
+
+// Template functions (stubs)
+char* omni_template_render(const char* template, omni_map_t* data) {
+    (void)data;
+    if (!template) return NULL;
+    size_t len = strlen(template);
+    char* result = (char*)malloc(len + 1);
+    if (result) strcpy(result, template);
+    return result;
+}
+
+char* omni_template_load(const char* path) {
+    return omni_read_file(path);
+}
+
+void omni_template_cache_enable(int32_t enable) {
+    (void)enable;
+}
+
+// Validation functions (stubs)
+omni_map_t* omni_validate_request(omni_struct_t* ctx, omni_map_t* rules) {
+    (void)ctx; (void)rules;
+    return omni_map_create();
+}
+
+// Test client functions (stubs)
+void* omni_test_client_create(omni_server_t* server) {
+    (void)server;
+    return NULL;
+}
+
+void* omni_test_client_get(void* client, const char* path, omni_map_t* headers) {
+    (void)client; (void)path; (void)headers;
+    return NULL;
+}
+
+void* omni_test_client_post(void* client, const char* path, const char* body, omni_map_t* headers) {
+    (void)client; (void)path; (void)body; (void)headers;
+    return NULL;
+}
+
+int32_t omni_test_response_status(void* resp) {
+    (void)resp;
+    return 0;
+}
+
+const char* omni_test_response_body(void* resp) {
+    (void)resp;
+    return "";
+}
+
+omni_map_t* omni_test_response_headers(void* resp) {
+    (void)resp;
+    return omni_map_create();
+}
+
+void* omni_test_response_json(void* resp) {
+    (void)resp;
+    return NULL;
+}
+
+// Memory management functions (stubs)
+void omni_panic(const char* message) {
+    if (message) {
+        fprintf(stderr, "PANIC: %s\n", message);
+    } else {
+        fprintf(stderr, "PANIC: unknown error\n");
+    }
+    exit(1);
+}
+
+// Note: omni_malloc, omni_free, and omni_realloc are already defined earlier in this file
+
+// JSON parser helper structure
+typedef struct {
+    const char* json;
+    size_t pos;
+    size_t len;
+} json_parser_t;
+
+static void json_skip_whitespace(json_parser_t* parser) {
+    while (parser->pos < parser->len && 
+           (parser->json[parser->pos] == ' ' || 
+            parser->json[parser->pos] == '\t' || 
+            parser->json[parser->pos] == '\n' || 
+            parser->json[parser->pos] == '\r')) {
+        parser->pos++;
+    }
+}
+
+static void* json_parse_value(json_parser_t* parser);
+
+static void* json_parse_string(json_parser_t* parser) {
+    if (parser->json[parser->pos] != '"') return NULL;
+    parser->pos++;
+    
+    size_t start = parser->pos;
+    while (parser->pos < parser->len && parser->json[parser->pos] != '"') {
+        if (parser->json[parser->pos] == '\\' && parser->pos + 1 < parser->len) {
+            parser->pos += 2; // Skip escape sequence
+        } else {
+            parser->pos++;
+        }
+    }
+    
+    if (parser->pos >= parser->len) return NULL;
+    
+    size_t len = parser->pos - start;
+    char* str = (char*)malloc(len + 1);
+    if (!str) return NULL;
+    
+    // Copy and unescape
+    size_t j = 0;
+    for (size_t i = start; i < parser->pos; i++) {
+        if (parser->json[i] == '\\' && i + 1 < parser->pos) {
+            i++;
+            switch (parser->json[i]) {
+                case 'n': str[j++] = '\n'; break;
+                case 't': str[j++] = '\t'; break;
+                case 'r': str[j++] = '\r'; break;
+                case '\\': str[j++] = '\\'; break;
+                case '"': str[j++] = '"'; break;
+                default: str[j++] = parser->json[i]; break;
+            }
+        } else {
+            str[j++] = parser->json[i];
+        }
+    }
+    str[j] = '\0';
+    
+    parser->pos++; // Skip closing quote
+    return str;
+}
+
+static void* json_parse_number(json_parser_t* parser) {
+    size_t start = parser->pos;
+    int is_float = 0;
+    
+    if (parser->json[parser->pos] == '-') parser->pos++;
+    while (parser->pos < parser->len && 
+           (parser->json[parser->pos] >= '0' && parser->json[parser->pos] <= '9')) {
+        parser->pos++;
+    }
+    if (parser->pos < parser->len && parser->json[parser->pos] == '.') {
+        is_float = 1;
+        parser->pos++;
+        while (parser->pos < parser->len && 
+               (parser->json[parser->pos] >= '0' && parser->json[parser->pos] <= '9')) {
+            parser->pos++;
+        }
+    }
+    
+    size_t len = parser->pos - start;
+    char* num_str = (char*)malloc(len + 1);
+    if (!num_str) return NULL;
+    strncpy(num_str, parser->json + start, len);
+    num_str[len] = '\0';
+    
+    if (is_float) {
+        double* d = (double*)malloc(sizeof(double));
+        if (d) *d = atof(num_str);
+        free(num_str);
+        return d;
+    } else {
+        int32_t* i = (int32_t*)malloc(sizeof(int32_t));
+        if (i) *i = atoi(num_str);
+        free(num_str);
+        return i;
+    }
+}
+
+static void* json_parse_object(json_parser_t* parser) {
+    if (parser->json[parser->pos] != '{') return NULL;
+    parser->pos++;
+    
+    omni_map_t* map = omni_map_create();
+    if (!map) return NULL;
+    
+    json_skip_whitespace(parser);
+    
+    if (parser->json[parser->pos] == '}') {
+        parser->pos++;
+        return map;
+    }
+    
+    while (parser->pos < parser->len) {
+        json_skip_whitespace(parser);
+        
+        // Parse key
+        void* key_ptr = json_parse_string(parser);
+        if (!key_ptr) {
+            omni_map_destroy(map);
+            return NULL;
+        }
+        char* key = (char*)key_ptr;
+        
+        json_skip_whitespace(parser);
+        if (parser->json[parser->pos] != ':') {
+            free(key);
+            omni_map_destroy(map);
+            return NULL;
+        }
+        parser->pos++;
+        
+        json_skip_whitespace(parser);
+        
+        // Parse value
+        void* value = json_parse_value(parser);
+        if (!value) {
+            free(key);
+            omni_map_destroy(map);
+            return NULL;
+        }
+        
+        // Store in map (simplified - assumes string values for now)
+        if (value) {
+            char* value_str = (char*)value;
+            omni_map_put_string_string(map, key, value_str);
+            free(value_str);
+        }
+        free(key);
+        
+        json_skip_whitespace(parser);
+        if (parser->json[parser->pos] == '}') {
+            parser->pos++;
+            break;
+        }
+        if (parser->json[parser->pos] != ',') {
+            omni_map_destroy(map);
+            return NULL;
+        }
+        parser->pos++;
+    }
+    
+    return map;
+}
+
+static void* json_parse_array(json_parser_t* parser) {
+    if (parser->json[parser->pos] != '[') return NULL;
+    parser->pos++;
+    
+    omni_array_t* arr = omni_array_create();
+    if (!arr) return NULL;
+    
+    json_skip_whitespace(parser);
+    
+    if (parser->json[parser->pos] == ']') {
+        parser->pos++;
+        return arr;
+    }
+    
+    while (parser->pos < parser->len) {
+        json_skip_whitespace(parser);
+        
+        void* value = json_parse_value(parser);
+        if (!value) {
+            omni_array_destroy(arr);
+            return NULL;
+        }
+        
+        // Add to array (value is already a pointer)
+        if (value) {
+            omni_array_append(arr, value);
+        }
+        
+        json_skip_whitespace(parser);
+        if (parser->json[parser->pos] == ']') {
+            parser->pos++;
+            break;
+        }
+        if (parser->json[parser->pos] != ',') {
+            omni_array_destroy(arr);
+            return NULL;
+        }
+        parser->pos++;
+    }
+    
+    return arr;
+}
+
+static void* json_parse_value(json_parser_t* parser) {
+    json_skip_whitespace(parser);
+    
+    if (parser->pos >= parser->len) return NULL;
+    
+    char c = parser->json[parser->pos];
+    
+    if (c == '"') {
+        return json_parse_string(parser);
+    } else if (c == '{') {
+        return json_parse_object(parser);
+    } else if (c == '[') {
+        return json_parse_array(parser);
+    } else if (c == '-' || (c >= '0' && c <= '9')) {
+        return json_parse_number(parser);
+    } else if (c == 't' && parser->pos + 3 < parser->len && 
+               strncmp(parser->json + parser->pos, "true", 4) == 0) {
+        parser->pos += 4;
+        int32_t* b = (int32_t*)malloc(sizeof(int32_t));
+        if (b) *b = 1;
+        return b;
+    } else if (c == 'f' && parser->pos + 4 < parser->len && 
+               strncmp(parser->json + parser->pos, "false", 5) == 0) {
+        parser->pos += 5;
+        int32_t* b = (int32_t*)malloc(sizeof(int32_t));
+        if (b) *b = 0;
+        return b;
+    } else if (c == 'n' && parser->pos + 3 < parser->len && 
+               strncmp(parser->json + parser->pos, "null", 4) == 0) {
+        parser->pos += 4;
+        return NULL; // NULL value
+    }
+    
+    return NULL;
+}
+
+void* omni_json_parse(const char* json_str) {
+    if (!json_str) return NULL;
+    
+    json_parser_t parser;
+    parser.json = json_str;
+    parser.pos = 0;
+    parser.len = strlen(json_str);
+    
+    return json_parse_value(&parser);
+}
+
+// JSON stringifier
+static void json_stringify_value(char* buffer, size_t* pos, size_t size, void* value, int32_t value_type, int32_t pretty, int32_t indent) {
+    (void)pretty;  // Unused for now
+    (void)indent;  // Unused for now
+    if (!value) {
+        *pos += snprintf(buffer + *pos, size - *pos, "null");
+        return;
+    }
+    
+    switch (value_type) {
+        case 0: { // int
+            int32_t* i = (int32_t*)value;
+            *pos += snprintf(buffer + *pos, size - *pos, "%d", *i);
+            break;
+        }
+        case 1: { // string
+            char* str = (char*)value;
+            *pos += snprintf(buffer + *pos, size - *pos, "\"%s\"", str);
+            break;
+        }
+        case 2: { // float
+            double* d = (double*)value;
+            *pos += snprintf(buffer + *pos, size - *pos, "%.6f", *d);
+            break;
+        }
+        case 3: { // bool
+            int32_t* b = (int32_t*)value;
+            *pos += snprintf(buffer + *pos, size - *pos, *b ? "true" : "false");
+            break;
+        }
+        case 4: { // map
+            (void)value; // Map handling not yet implemented
+            // omni_map_t* map = (omni_map_t*)value;
+            *pos += snprintf(buffer + *pos, size - *pos, "{");
+            // Simplified - would iterate map
+            *pos += snprintf(buffer + *pos, size - *pos, "}");
+            break;
+        }
+        case 5: { // array
+            (void)value; // Array handling not yet implemented
+            // omni_array_t* arr = (omni_array_t*)value;
+            *pos += snprintf(buffer + *pos, size - *pos, "[");
+            // Simplified - would iterate array
+            *pos += snprintf(buffer + *pos, size - *pos, "]");
+            break;
+        }
+        default:
+            *pos += snprintf(buffer + *pos, size - *pos, "null");
+            break;
+    }
+}
+
+char* omni_json_stringify(void* value, int32_t value_type, int32_t pretty) {
+    if (!value && value_type != 0) {
+        char* result = (char*)malloc(5);
+        if (result) strcpy(result, "null");
+        return result;
+    }
+    
+    size_t size = 1024;
+    char* buffer = (char*)malloc(size);
+    if (!buffer) return NULL;
+    
+    size_t pos = 0;
+    json_stringify_value(buffer, &pos, size, value, value_type, pretty, 0);
+    buffer[pos] = '\0';
+    
+    return buffer;
+}
+
+// Form data parsing
+void omni_http_parse_form_urlencoded(const char* body, omni_map_t* params) {
+    if (!body || !params) return;
+    
+    // Same as query string parsing
+    omni_http_parse_query(body, params);
+}
+
+// Multipart form data structure for files
+typedef struct {
+    char name[256];
+    char filename[256];
+    char content_type[128];
+    int32_t size;
+    char* data;
+    char path[512];
+} omni_uploaded_file_t;
+
+void omni_http_parse_multipart(const char* body, const char* boundary, omni_map_t* fields, omni_array_t* files) {
+    if (!body || !boundary || !fields) return;
+    
+    char boundary_str[256];
+    snprintf(boundary_str, sizeof(boundary_str), "--%s", boundary);
+    
+    const char* part_start = strstr(body, boundary_str);
+    if (!part_start) return;
+    
+    part_start += strlen(boundary_str);
+    
+    while (part_start && *part_start) {
+        // Skip CRLF
+        if (*part_start == '\r') part_start++;
+        if (*part_start == '\n') part_start++;
+        
+        // Parse headers
+        const char* header_end = strstr(part_start, "\r\n\r\n");
+        if (!header_end) break;
+        
+        // Extract Content-Disposition
+        const char* disp_start = strstr(part_start, "Content-Disposition:");
+        if (disp_start && disp_start < header_end) {
+            // Parse name and filename
+            char name[256] = {0};
+            char filename[256] = {0};
+            
+            const char* name_start = strstr(disp_start, "name=\"");
+            if (name_start) {
+                name_start += 6;
+                const char* name_end = strchr(name_start, '"');
+                if (name_end) {
+                    size_t name_len = name_end - name_start;
+                    if (name_len < sizeof(name)) {
+                        strncpy(name, name_start, name_len);
+                    }
+                }
+            }
+            
+            const char* filename_start = strstr(disp_start, "filename=\"");
+            if (filename_start) {
+                filename_start += 10;
+                const char* filename_end = strchr(filename_start, '"');
+                if (filename_end) {
+                    size_t filename_len = filename_end - filename_start;
+                    if (filename_len < sizeof(filename)) {
+                        strncpy(filename, filename_start, filename_len);
+                    }
+                }
+            }
+            
+            // Extract Content-Type if present
+            char content_type[128] = {0};
+            const char* type_start = strstr(part_start, "Content-Type:");
+            if (type_start && type_start < header_end) {
+                type_start += 13;
+                while (*type_start == ' ') type_start++;
+                const char* type_end = strstr(type_start, "\r\n");
+                if (type_end) {
+                    size_t type_len = type_end - type_start;
+                    if (type_len < sizeof(content_type)) {
+                        strncpy(content_type, type_start, type_len);
+                    }
+                }
+            }
+            
+            // Get part data (between headers and next boundary)
+            const char* data_start = header_end + 4;
+            const char* data_end = strstr(data_start, boundary_str);
+            if (!data_end) {
+                // Last part - find final boundary
+                data_end = strstr(data_start, "\r\n--");
+                if (!data_end) data_end = data_start + strlen(data_start);
+            }
+            
+            size_t data_size = data_end - data_start;
+            // Remove trailing CRLF
+            while (data_size > 0 && (data_start[data_size - 1] == '\n' || data_start[data_size - 1] == '\r')) {
+                data_size--;
+            }
+            
+            if (filename[0]) {
+                // This is a file upload
+                if (files) {
+                    omni_uploaded_file_t* file = (omni_uploaded_file_t*)malloc(sizeof(omni_uploaded_file_t));
+                    if (file) {
+                        strncpy(file->name, name, sizeof(file->name) - 1);
+                        strncpy(file->filename, filename, sizeof(file->filename) - 1);
+                        strncpy(file->content_type, content_type, sizeof(file->content_type) - 1);
+                        file->size = (int32_t)data_size;
+                        file->data = (char*)malloc(data_size + 1);
+                        if (file->data) {
+                            memcpy(file->data, data_start, data_size);
+                            file->data[data_size] = '\0';
+                        }
+                        file->path[0] = '\0';
+                        omni_array_append(files, file);
+                    }
+                }
+            } else {
+                // This is a form field
+                char* value = (char*)malloc(data_size + 1);
+                if (value) {
+                    memcpy(value, data_start, data_size);
+                    value[data_size] = '\0';
+                    omni_map_put_string_string(fields, name, value);
+                    free(value);
+                }
+            }
+        }
+        
+        // Move to next part
+        part_start = strstr(part_start, boundary_str);
+        if (part_start) {
+            part_start += strlen(boundary_str);
+            // Check if this is the final boundary
+            if (part_start[0] == '-' && part_start[1] == '-') {
+                break; // End of multipart data
+            }
+        } else {
+            break;
+        }
+    }
+}
+
+char* omni_file_upload_save(const char* data, int32_t size, const char* filename, const char* upload_dir) {
+    if (!data || size <= 0 || !filename || !upload_dir) return NULL;
+    
+    // Generate unique filename if needed
+    char full_path[1024];
+    snprintf(full_path, sizeof(full_path), "%s/%s", upload_dir, filename);
+    
+    // Create directory if it doesn't exist
+    #ifdef _WIN32
+    _mkdir(upload_dir);
+    #else
+    mkdir(upload_dir, 0755);
+    #endif
+    
+    // Write file
+    FILE* f = fopen(full_path, "wb");
+    if (!f) return NULL;
+    
+    size_t written = fwrite(data, 1, size, f);
+    fclose(f);
+    
+    if (written != (size_t)size) {
+        return NULL;
+    }
+    
+    char* result = strdup(full_path);
+    return result;
+}
+
+int32_t omni_file_upload_validate(const char* filename, int32_t size, const char* allowed_types, int32_t max_size) {
+    if (!filename) return 0;
+    
+    // Check size
+    if (max_size > 0 && size > max_size) return 0;
+    
+    // Check file extension/type
+    if (allowed_types && *allowed_types) {
+        // Get file extension
+        const char* ext = strrchr(filename, '.');
+        if (!ext) return 0;
+        ext++; // Skip '.'
+        
+        // Check if extension is in allowed_types (comma-separated list)
+        char* types = strdup(allowed_types);
+        if (!types) return 0;
+        
+        char* token = strtok(types, ",");
+        int found = 0;
+        while (token) {
+            // Trim whitespace
+            while (*token == ' ') token++;
+            char* token_end = token + strlen(token) - 1;
+            while (token_end > token && *token_end == ' ') {
+                *token_end = '\0';
+                token_end--;
+            }
+            
+            if (strcasecmp(ext, token) == 0) {
+                found = 1;
+                break;
+            }
+            token = strtok(NULL, ",");
+        }
+        
+        free(types);
+        return found;
+    }
+    
+    return 1; // No restrictions
+}
+
+// Static file serving functions
+char* omni_file_read_binary(const char* path, int32_t* size) {
+    if (!path || !size) return NULL;
+    
+    FILE* f = fopen(path, "rb");
+    if (!f) return NULL;
+    
+    // Get file size
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    
+    if (file_size < 0) {
+        fclose(f);
+        return NULL;
+    }
+    
+    // Allocate buffer
+    char* buffer = (char*)malloc(file_size + 1);
+    if (!buffer) {
+        fclose(f);
+        return NULL;
+    }
+    
+    // Read file
+    size_t read_size = fread(buffer, 1, file_size, f);
+    fclose(f);
+    
+    if (read_size != (size_t)file_size) {
+        free(buffer);
+        return NULL;
+    }
+    
+    buffer[file_size] = '\0';
+    *size = (int32_t)file_size;
+    return buffer;
+}
+
+const char* omni_file_get_mime_type(const char* filename) {
+    if (!filename) return "application/octet-stream";
+    
+    const char* ext = strrchr(filename, '.');
+    if (!ext) return "application/octet-stream";
+    ext++; // Skip '.'
+    
+    // Common MIME types
+    if (strcasecmp(ext, "html") == 0 || strcasecmp(ext, "htm") == 0) {
+        return "text/html";
+    } else if (strcasecmp(ext, "css") == 0) {
+        return "text/css";
+    } else if (strcasecmp(ext, "js") == 0) {
+        return "application/javascript";
+    } else if (strcasecmp(ext, "json") == 0) {
+        return "application/json";
+    } else if (strcasecmp(ext, "png") == 0) {
+        return "image/png";
+    } else if (strcasecmp(ext, "jpg") == 0 || strcasecmp(ext, "jpeg") == 0) {
+        return "image/jpeg";
+    } else if (strcasecmp(ext, "gif") == 0) {
+        return "image/gif";
+    } else if (strcasecmp(ext, "svg") == 0) {
+        return "image/svg+xml";
+    } else if (strcasecmp(ext, "pdf") == 0) {
+        return "application/pdf";
+    } else if (strcasecmp(ext, "txt") == 0) {
+        return "text/plain";
+    } else if (strcasecmp(ext, "xml") == 0) {
+        return "application/xml";
+    } else if (strcasecmp(ext, "zip") == 0) {
+        return "application/zip";
+    } else if (strcasecmp(ext, "ico") == 0) {
+        return "image/x-icon";
+    }
+    
+    return "application/octet-stream";
+}
+
+int32_t omni_file_get_size(const char* path) {
+    if (!path) return -1;
+    
+    struct stat st;
+    if (stat(path, &st) != 0) return -1;
+    
+    if (S_ISREG(st.st_mode)) {
+        return (int32_t)st.st_size;
+    }
+    
+    return -1;
+}
+
+// Response compression functions
+// Note: Full gzip implementation would require zlib library
+// This is a simplified version
+char* omni_http_compress_gzip(const char* data, int32_t len, int32_t* compressed_len) {
+    if (!data || len <= 0 || !compressed_len) return NULL;
+    
+    // Simplified compression - in production, would use zlib
+    // For now, return a copy of the data (no compression)
+    // This allows the framework to work, compression can be added later with zlib
+    
+    char* compressed = (char*)malloc(len + 1);
+    if (!compressed) return NULL;
+    
+    memcpy(compressed, data, len);
+    compressed[len] = '\0';
+    *compressed_len = len;
+    
+    return compressed;
+}
+
+char* omni_http_decompress_gzip(const char* compressed, int32_t len, int32_t* decompressed_len) {
+    if (!compressed || len <= 0 || !decompressed_len) return NULL;
+    
+    // Simplified decompression - in production, would use zlib
+    // For now, return a copy of the data (no decompression)
+    
+    char* decompressed = (char*)malloc(len + 1);
+    if (!decompressed) return NULL;
+    
+    memcpy(decompressed, compressed, len);
+    decompressed[len] = '\0';
+    *decompressed_len = len;
+    
+    return decompressed;
+}
+
+// Validation and sanitization functions
+int32_t omni_validate_string(const char* value, const char* pattern, int32_t min_len, int32_t max_len) {
+    if (!value) return 0;
+    
+    int32_t len = (int32_t)strlen(value);
+    
+    // Check length constraints
+    if (min_len > 0 && len < min_len) return 0;
+    if (max_len > 0 && len > max_len) return 0;
+    
+    // Check pattern (regex) if provided
+    if (pattern && *pattern) {
+        return omni_string_matches(value, pattern);
+    }
+    
+    return 1; // Valid
+}
+
+int32_t omni_validate_int(const char* value, int32_t min, int32_t max) {
+    if (!value) return 0;
+    
+    char* endptr;
+    errno = 0;
+    long num = strtol(value, &endptr, 10);
+    
+    // Check for conversion errors
+    if (errno != 0 || *endptr != '\0' || endptr == value) {
+        return 0;
+    }
+    
+    // Check range
+    if (num < min || num > max) {
+        return 0;
+    }
+    
+    return 1; // Valid
+}
+
+int32_t omni_validate_email(const char* email) {
+    if (!email) return 0;
+    
+    // Basic email validation: contains @ and .
+    const char* at = strchr(email, '@');
+    if (!at) return 0;
+    
+    const char* dot = strchr(at, '.');
+    if (!dot) return 0;
+    
+    // Check that @ comes before .
+    if (dot < at) return 0;
+    
+    // Check that there's at least one character before @
+    if (at == email) return 0;
+    
+    // Check that there's at least one character after @ and before .
+    if (dot - at <= 1) return 0;
+    
+    // Check that there's at least one character after .
+    if (dot[1] == '\0') return 0;
+    
+    return 1; // Valid
+}
+
+int32_t omni_validate_url(const char* url) {
+    if (!url) return 0;
+    
+    // Basic URL validation: starts with http:// or https://
+    if (strncmp(url, "http://", 7) != 0 && strncmp(url, "https://", 8) != 0) {
+        return 0;
+    }
+    
+    // Check that there's at least one character after the scheme
+    const char* host_start = strstr(url, "://");
+    if (!host_start) return 0;
+    host_start += 3;
+    
+    if (*host_start == '\0') return 0;
+    
+    return 1; // Valid
+}
+
+char* omni_sanitize_html(const char* html) {
+    if (!html) return NULL;
+    
+    size_t len = strlen(html);
+    char* sanitized = (char*)malloc(len * 6 + 1); // Worst case: all chars need escaping
+    if (!sanitized) return NULL;
+    
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        switch (html[i]) {
+            case '<':
+                strcpy(sanitized + j, "&lt;");
+                j += 4;
+                break;
+            case '>':
+                strcpy(sanitized + j, "&gt;");
+                j += 4;
+                break;
+            case '&':
+                strcpy(sanitized + j, "&amp;");
+                j += 5;
+                break;
+            case '"':
+                strcpy(sanitized + j, "&quot;");
+                j += 6;
+                break;
+            case '\'':
+                strcpy(sanitized + j, "&#39;");
+                j += 5;
+                break;
+            default:
+                sanitized[j++] = html[i];
+                break;
+        }
+    }
+    sanitized[j] = '\0';
+    
+    return sanitized;
+}
+
+char* omni_sanitize_sql(const char* sql) {
+    if (!sql) return NULL;
+    
+    size_t len = strlen(sql);
+    char* escaped = (char*)malloc(len * 2 + 1); // Worst case: all chars need escaping
+    if (!escaped) return NULL;
+    
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        switch (sql[i]) {
+            case '\'':
+                escaped[j++] = '\'';
+                escaped[j++] = '\'';
+                break;
+            case '\\':
+                escaped[j++] = '\\';
+                escaped[j++] = '\\';
+                break;
+            case '\0':
+                escaped[j++] = '\\';
+                escaped[j++] = '0';
+                break;
+            case '\n':
+                escaped[j++] = '\\';
+                escaped[j++] = 'n';
+                break;
+            case '\r':
+                escaped[j++] = '\\';
+                escaped[j++] = 'r';
+                break;
+            case '\t':
+                escaped[j++] = '\\';
+                escaped[j++] = 't';
+                break;
+            default:
+                escaped[j++] = sql[i];
+                break;
+        }
+    }
+    escaped[j] = '\0';
+    
+    return escaped;
+}
+
+// WebSocket functions
+// WebSocket handshake response structure
+typedef struct {
+    char accept_key[128];
+    char response[512];
+} omni_websocket_handshake_t;
+
+// Simple SHA1 implementation (simplified - full implementation would use OpenSSL or similar)
+static void simple_sha1(const char* input, char* output) {
+    // Simplified SHA1 - in production, would use proper SHA1 implementation
+    // For now, create a basic hash-like string
+    size_t len = strlen(input);
+    snprintf(output, 41, "%08x%08x%08x%08x%08x", 
+             (unsigned int)(len * 0x12345678),
+             (unsigned int)(len * 0x87654321),
+             (unsigned int)(len * 0xABCDEF00),
+             (unsigned int)(len * 0x00FEDCBA),
+             (unsigned int)(len * 0x11223344));
+}
+
+char* omni_websocket_handshake(const char* request_headers) {
+    if (!request_headers) return NULL;
+    
+    // Extract Sec-WebSocket-Key from headers
+    const char* key_start = strstr(request_headers, "Sec-WebSocket-Key:");
+    if (!key_start) return NULL;
+    
+    key_start += 18; // Skip "Sec-WebSocket-Key:"
+    while (*key_start == ' ' || *key_start == '\t') key_start++;
+    
+    const char* key_end = strstr(key_start, "\r\n");
+    if (!key_end) return NULL;
+    
+    size_t key_len = key_end - key_start;
+    char key[256] = {0};
+    if (key_len >= sizeof(key)) key_len = sizeof(key) - 1;
+    strncpy(key, key_start, key_len);
+    key[key_len] = '\0';
+    
+    // WebSocket magic string
+    const char* magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    
+    // Concatenate key + magic
+    char combined[512];
+    snprintf(combined, sizeof(combined), "%s%s", key, magic);
+    
+    // SHA1 hash (simplified)
+    char hash[41];
+    simple_sha1(combined, hash);
+    
+    // Base64 encode (using existing function)
+    char* encoded = omni_encode_base64(hash);
+    if (!encoded) return NULL;
+    
+    // Build response
+    char* response = (char*)malloc(512);
+    if (!response) {
+        free(encoded);
+        return NULL;
+    }
+    
+    snprintf(response, 512,
+             "HTTP/1.1 101 Switching Protocols\r\n"
+             "Upgrade: websocket\r\n"
+             "Connection: Upgrade\r\n"
+             "Sec-WebSocket-Accept: %s\r\n"
+             "\r\n",
+             encoded);
+    
+    free(encoded);
+    return response;
+}
+
+// WebSocket frame structure
+typedef struct {
+    int32_t fin;
+    int32_t opcode;
+    int32_t mask;
+    int32_t payload_len;
+    char* payload;
+} omni_websocket_frame_t;
+
+char* omni_websocket_frame_create(const char* data, int32_t len, int32_t opcode, int32_t mask) {
+    if (!data || len < 0) return NULL;
+    
+    // Calculate frame size
+    size_t frame_size = 2; // Base header
+    if (len > 125) {
+        if (len > 65535) {
+            frame_size += 8; // 64-bit length
+        } else {
+            frame_size += 2; // 16-bit length
+        }
+    }
+    if (mask) {
+        frame_size += 4; // Masking key
+    }
+    frame_size += len; // Payload
+    
+    char* frame = (char*)malloc(frame_size);
+    if (!frame) return NULL;
+    
+    size_t pos = 0;
+    
+    // First byte: FIN (1 bit) + RSV (3 bits) + Opcode (4 bits)
+    frame[pos++] = (char)(0x80 | (opcode & 0x0F)); // FIN=1, opcode
+    
+    // Second byte: MASK (1 bit) + Payload length (7 bits)
+    if (len < 126) {
+        frame[pos++] = (char)((mask ? 0x80 : 0x00) | len);
+    } else if (len < 65536) {
+        frame[pos++] = (char)((mask ? 0x80 : 0x00) | 126);
+        frame[pos++] = (char)((len >> 8) & 0xFF);
+        frame[pos++] = (char)(len & 0xFF);
+    } else {
+        frame[pos++] = (char)((mask ? 0x80 : 0x00) | 127);
+        // 64-bit length (simplified - use 32-bit)
+        frame[pos++] = 0;
+        frame[pos++] = 0;
+        frame[pos++] = 0;
+        frame[pos++] = 0;
+        frame[pos++] = (char)((len >> 24) & 0xFF);
+        frame[pos++] = (char)((len >> 16) & 0xFF);
+        frame[pos++] = (char)((len >> 8) & 0xFF);
+        frame[pos++] = (char)(len & 0xFF);
+    }
+    
+    // Masking key (if needed)
+    if (mask) {
+        uint32_t mask_key = 0x12345678; // Simplified - would be random
+        frame[pos++] = (char)((mask_key >> 24) & 0xFF);
+        frame[pos++] = (char)((mask_key >> 16) & 0xFF);
+        frame[pos++] = (char)((mask_key >> 8) & 0xFF);
+        frame[pos++] = (char)(mask_key & 0xFF);
+        
+        // Mask payload
+        for (int32_t i = 0; i < len; i++) {
+            frame[pos++] = (char)(data[i] ^ ((mask_key >> ((i % 4) * 8)) & 0xFF));
+        }
+    } else {
+        // Copy payload
+        memcpy(frame + pos, data, len);
+        pos += len;
+    }
+    
+    return frame;
+}
+
+void* omni_websocket_frame_parse(const char* frame, int32_t len) {
+    if (!frame || len < 2) return NULL;
+    
+    omni_websocket_frame_t* parsed = (omni_websocket_frame_t*)malloc(sizeof(omni_websocket_frame_t));
+    if (!parsed) return NULL;
+    
+    // Parse first byte
+    parsed->fin = (frame[0] & 0x80) ? 1 : 0;
+    parsed->opcode = frame[0] & 0x0F;
+    
+    // Parse second byte
+    parsed->mask = (frame[1] & 0x80) ? 1 : 0;
+    int32_t payload_len = frame[1] & 0x7F;
+    
+    size_t pos = 2;
+    
+    // Extended length
+    if (payload_len == 126) {
+        if (len < 4) {
+            free(parsed);
+            return NULL;
+        }
+        payload_len = (frame[2] << 8) | frame[3];
+        pos = 4;
+    } else if (payload_len == 127) {
+        if (len < 10) {
+            free(parsed);
+            return NULL;
+        }
+        // Simplified - use 32-bit length
+        payload_len = (frame[6] << 24) | (frame[7] << 16) | (frame[8] << 8) | frame[9];
+        pos = 10;
+    }
+    
+    // Masking key
+    uint32_t mask_key = 0;
+    if (parsed->mask) {
+        if ((int32_t)len < (int32_t)(pos + 4)) {
+            free(parsed);
+            return NULL;
+        }
+        mask_key = (frame[pos] << 24) | (frame[pos+1] << 16) | (frame[pos+2] << 8) | frame[pos+3];
+        pos += 4;
+    }
+    
+    // Payload
+    if ((int32_t)len < (int32_t)(pos + payload_len)) {
+        free(parsed);
+        return NULL;
+    }
+    
+    parsed->payload_len = payload_len;
+    parsed->payload = (char*)malloc(payload_len + 1);
+    if (!parsed->payload) {
+        free(parsed);
+        return NULL;
+    }
+    
+    if (parsed->mask) {
+        // Unmask payload
+        for (int32_t i = 0; i < payload_len; i++) {
+            parsed->payload[i] = (char)(frame[pos + i] ^ ((mask_key >> ((i % 4) * 8)) & 0xFF));
+        }
+    } else {
+        memcpy(parsed->payload, frame + pos, payload_len);
+    }
+    parsed->payload[payload_len] = '\0';
+    
+    return parsed;
+}
+
+// Server concurrency and connection management
+struct omni_connection_pool {
+    int32_t* sockets;
+    int32_t max_connections;
+    int32_t current_connections;
+    int32_t* in_use;
+};
+
+omni_connection_pool_t* omni_server_connection_pool_create(int32_t max_connections) {
+    if (max_connections <= 0) return NULL;
+    
+    omni_connection_pool_t* pool = (omni_connection_pool_t*)malloc(sizeof(omni_connection_pool_t));
+    if (!pool) return NULL;
+    
+    pool->sockets = (int32_t*)malloc(max_connections * sizeof(int32_t));
+    pool->in_use = (int32_t*)malloc(max_connections * sizeof(int32_t));
+    if (!pool->sockets || !pool->in_use) {
+        if (pool->sockets) free(pool->sockets);
+        if (pool->in_use) free(pool->in_use);
+        free(pool);
+        return NULL;
+    }
+    
+    pool->max_connections = max_connections;
+    pool->current_connections = 0;
+    for (int32_t i = 0; i < max_connections; i++) {
+        pool->in_use[i] = 0;
+    }
+    
+    return pool;
+}
+
+int32_t omni_server_connection_pool_acquire(omni_connection_pool_t* pool) {
+    if (!pool) return -1;
+    
+    // Find available socket
+    for (int32_t i = 0; i < pool->max_connections; i++) {
+        if (!pool->in_use[i]) {
+            pool->in_use[i] = 1;
+            return pool->sockets[i];
+        }
+    }
+    
+    return -1; // No available connections
+}
+
+void omni_server_connection_pool_release(omni_connection_pool_t* pool, int32_t socket) {
+    if (!pool) return;
+    
+    // Find and release socket
+    for (int32_t i = 0; i < pool->max_connections; i++) {
+        if (pool->sockets[i] == socket && pool->in_use[i]) {
+            pool->in_use[i] = 0;
+            break;
+        }
+    }
+}
+
+struct omni_thread_pool {
+    int32_t num_threads;
+    // Simplified - full implementation would use pthreads
+};
+
+omni_thread_pool_t* omni_server_thread_pool_create(int32_t num_threads) {
+    if (num_threads <= 0) return NULL;
+    
+    omni_thread_pool_t* pool = (omni_thread_pool_t*)malloc(sizeof(omni_thread_pool_t));
+    if (!pool) return NULL;
+    
+    pool->num_threads = num_threads;
+    
+    return pool;
+}
+
+void omni_server_thread_pool_submit(omni_thread_pool_t* pool, void (*task)(void*), void* arg) {
+    if (!pool || !task) return;
+    
+    // Simplified - execute task directly
+    // Full implementation would queue task and execute in thread pool
+    task(arg);
+}
+
+// Server timeouts and limits
+static int32_t global_max_request_size = 10 * 1024 * 1024; // 10MB default
+static int32_t global_max_headers_size = 8192; // 8KB default
+
+void omni_server_set_timeout(int32_t socket, int32_t timeout_seconds) {
+    if (socket < 0 || timeout_seconds < 0) return;
+    
+    // Set socket timeout (simplified - would use setsockopt)
+    // Full implementation would use setsockopt with SO_RCVTIMEO and SO_SNDTIMEO
+}
+
+void omni_server_set_max_request_size(int32_t max_size) {
+    if (max_size > 0) {
+        global_max_request_size = max_size;
+    }
+}
+
+void omni_server_set_max_headers_size(int32_t max_size) {
+    if (max_size > 0) {
+        global_max_headers_size = max_size;
+    }
+}
+
+// Server lifecycle
+struct omni_server {
+    int32_t port;
+    int32_t socket;
+    int32_t running;
+    omni_connection_pool_t* connection_pool;
+    omni_thread_pool_t* thread_pool;
+};
+
+omni_server_t* omni_server_create(int32_t port, omni_map_t* options) {
+    (void)options;  // Options parameter is ignored for now
+    if (port <= 0 || port > 65535) return NULL;
+    
+    omni_server_t* server = (omni_server_t*)malloc(sizeof(omni_server_t));
+    if (!server) return NULL;
+    
+    server->port = port;
+    server->socket = -1;
+    server->running = 0;
+    server->connection_pool = NULL;
+    server->thread_pool = NULL;
+    
+    return server;
+}
+
+int32_t omni_server_listen(omni_server_t* server) {
+    if (!server) return 0;
+    
+    // Create socket
+    int32_t sock = omni_socket_create();
+    if (sock < 0) return 0;
+    
+    // Bind to port
+    if (!omni_socket_bind(sock, "0.0.0.0", server->port)) {
+        omni_socket_close(sock);
+        return 0;
+    }
+    
+    // Listen
+    if (!omni_socket_listen(sock, 128)) {
+        omni_socket_close(sock);
+        return 0;
+    }
+    
+    server->socket = sock;
+    server->running = 1;
+    
+    return 1; // Success
+}
+
+int32_t omni_server_listen_tls(omni_server_t* server, const char* cert_file, const char* key_file) {
+    if (!server || !cert_file || !key_file) return 0;
+    
+    // TLS implementation would go here
+    // For now, fall back to regular listen
+    return omni_server_listen(server);
+}
+
+void omni_server_close(omni_server_t* server) {
+    if (!server) return;
+    
+    if (server->socket >= 0) {
+        omni_socket_close(server->socket);
+        server->socket = -1;
+    }
+    
+    server->running = 0;
+    
+    if (server->connection_pool) {
+        free(server->connection_pool->sockets);
+        free(server->connection_pool->in_use);
+        free(server->connection_pool);
+        server->connection_pool = NULL;
+    }
+    
+    if (server->thread_pool) {
+        free(server->thread_pool);
+        server->thread_pool = NULL;
+    }
+}
+
+void omni_server_graceful_shutdown(omni_server_t* server, int32_t timeout_seconds) {
+    (void)timeout_seconds; // Unused for now
+    if (!server) return;
+    
+    // Stop accepting new connections
+    server->running = 0;
+    
+    // Wait for existing connections to complete (simplified)
+    // Full implementation would track active connections and wait for them
+    
+    // Close server socket
+    if (server->socket >= 0) {
+        omni_socket_close(server->socket);
+        server->socket = -1;
+    }
+}
+
+// Session management (simplified implementations)
+struct omni_session {
+    char session_id[128];
+    int32_t timeout_seconds;
+    omni_map_t* data;
+    int64_t created_at;
+};
+
+omni_session_t* omni_session_create(const char* session_id, int32_t timeout_seconds) {
+    omni_session_t* session = (omni_session_t*)malloc(sizeof(omni_session_t));
+    if (!session) return NULL;
+    
+    if (session_id) {
+        strncpy(session->session_id, session_id, sizeof(session->session_id) - 1);
+    } else {
+        // Generate session ID (simplified)
+        snprintf(session->session_id, sizeof(session->session_id), "session_%ld", time(NULL));
+    }
+    
+    session->timeout_seconds = timeout_seconds;
+    session->data = omni_map_create();
+    session->created_at = time(NULL);
+    
+    return session;
+}
+
+const char* omni_session_get(omni_session_t* session, const char* key) {
+    if (!session || !session->data || !key) return NULL;
+    return omni_map_get_string_string(session->data, key);
+}
+
+void omni_session_set(omni_session_t* session, const char* key, const char* value) {
+    if (!session || !session->data || !key || !value) return;
+    omni_map_put_string_string(session->data, key, value);
+}
+
+void omni_session_destroy(omni_session_t* session) {
+    if (!session) return;
+    if (session->data) omni_map_destroy(session->data);
+    free(session);
+}
+
+struct omni_session_store {
+    char storage_type[64];
+    omni_map_t* sessions; // Simplified - in-memory storage
+};
+
+omni_session_store_t* omni_session_store_create(const char* storage_type) {
+    omni_session_store_t* store = (omni_session_store_t*)malloc(sizeof(omni_session_store_t));
+    if (!store) return NULL;
+    
+    if (storage_type) {
+        strncpy(store->storage_type, storage_type, sizeof(store->storage_type) - 1);
+    } else {
+        strcpy(store->storage_type, "memory");
+    }
+    
+    store->sessions = omni_map_create();
+    
+    return store;
+}
+
+void omni_session_store_save(omni_session_store_t* store, omni_session_t* session) {
+    if (!store || !session) return;
+    // Simplified - would serialize session and store it
+}
+
+omni_session_t* omni_session_store_load(omni_session_store_t* store, const char* session_id) {
+    if (!store || !session_id) return NULL;
+    // Simplified - would load session from store
+    return NULL;
+}
+
+// Authentication/Authorization (simplified implementations)
+char* omni_auth_hash_password(const char* password, const char* salt) {
+    (void)salt; // Unused for now
+    if (!password) return NULL;
+    // Simplified password hashing - in production, would use bcrypt/argon2
+    // For now, return a simple hash
+    size_t len = strlen(password);
+    char* hash = (char*)malloc(65);
+    if (!hash) return NULL;
+    snprintf(hash, 65, "hash_%s_%zu", password, len);
+    return hash;
+}
+
+int32_t omni_auth_verify_password(const char* password, const char* hash) {
+    if (!password || !hash) return 0;
+    // Simplified verification - in production, would use proper password verification
+    char* computed = omni_auth_hash_password(password, NULL);
+    if (!computed) return 0;
+    int32_t result = (strcmp(computed, hash) == 0) ? 1 : 0;
+    free(computed);
+    return result;
+}
+
+char* omni_auth_generate_token(const char* user_id, const char* secret, int32_t expires_in) {
+    (void)secret; // Unused for now
+    if (!user_id) return NULL;
+    // Simplified token generation - in production, would use JWT
+    char* token = (char*)malloc(256);
+    if (!token) return NULL;
+    snprintf(token, 256, "token_%s_%ld_%d", user_id, time(NULL), expires_in);
+    return token;
+}
+
+const char* omni_auth_verify_token(const char* token, const char* secret) {
+    (void)secret; // Unused for now
+    if (!token) return NULL;
+    // Simplified token verification - in production, would verify JWT signature
+    // For now, extract user_id from token (simplified format)
+    if (strncmp(token, "token_", 6) == 0) {
+        // Extract user_id (simplified)
+        return token + 6; // Skip "token_"
+    }
+    return NULL;
+}
+
+int32_t omni_auth_check_permission(const char* user_id, const char* resource, const char* action) {
+    if (!user_id || !resource || !action) return 0;
+    // Simplified permission check - in production, would query permission database
+    return 1; // Allow by default
+}
+
+// Rate limiting
+struct omni_rate_limiter {
+    int32_t max_requests;
+    int32_t window_seconds;
+    omni_map_t* requests; // Track requests per key
+};
+
+omni_rate_limiter_t* omni_rate_limit_create(int32_t max_requests, int32_t window_seconds) {
+    if (max_requests <= 0 || window_seconds <= 0) return NULL;
+    
+    omni_rate_limiter_t* limiter = (omni_rate_limiter_t*)malloc(sizeof(omni_rate_limiter_t));
+    if (!limiter) return NULL;
+    
+    limiter->max_requests = max_requests;
+    limiter->window_seconds = window_seconds;
+    limiter->requests = omni_map_create();
+    
+    return limiter;
+}
+
+int32_t omni_rate_limit_check(omni_rate_limiter_t* limiter, const char* key) {
+    if (!limiter || !key) return 0;
+    
+    // Simplified rate limiting - in production, would track timestamps and count requests
+    // For now, always allow
+    return 1;
+}
+
+void omni_rate_limit_reset(omni_rate_limiter_t* limiter, const char* key) {
+    if (!limiter || !key) return;
+    // Reset rate limit for key
 }
 
 void omni_http_response_destroy(omni_http_response_t* resp) {

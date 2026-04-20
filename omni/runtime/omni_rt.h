@@ -3,10 +3,18 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <strings.h>  // For strcasecmp on POSIX systems
 
 // Optional libcurl support for HTTP client
 #ifdef HAVE_LIBCURL
 #include <curl/curl.h>
+#endif
+
+// strcasecmp declaration for Windows compatibility
+#ifdef _WIN32
+#ifndef strcasecmp
+#define strcasecmp _stricmp
+#endif
 #endif
 
 // OmniLang Runtime Library
@@ -96,6 +104,29 @@ int32_t omni_array_length(int32_t* arr);
 int32_t omni_array_get_int(int32_t* arr, int32_t index, int32_t length);
 void omni_array_set_int(int32_t* arr, int32_t index, int32_t value, int32_t length);
 
+// Generic dynamic array for JSON parsing and multipart file uploads
+typedef struct omni_array {
+    void** items;
+    int32_t count;
+    int32_t capacity;
+} omni_array_t;
+
+omni_array_t* omni_array_create();
+void omni_array_destroy(omni_array_t* arr);
+void omni_array_append(omni_array_t* arr, void* item);
+void* omni_array_get(omni_array_t* arr, int32_t index);
+int32_t omni_array_size(omni_array_t* arr);
+
+// Type constants for any type support
+#define OMNI_TYPE_INT 1
+#define OMNI_TYPE_STRING 2
+#define OMNI_TYPE_FLOAT 3
+#define OMNI_TYPE_BOOL 4
+#define OMNI_TYPE_MAP 5
+#define OMNI_TYPE_ARRAY 6
+#define OMNI_TYPE_STRUCT 7
+#define OMNI_TYPE_ANY 8
+
 // Map operations
 typedef struct omni_map omni_map_t;
 omni_map_t* omni_map_create();
@@ -110,6 +141,15 @@ void omni_map_put_int_int(omni_map_t* map, int32_t key, int32_t value);
 void omni_map_put_int_string(omni_map_t* map, int32_t key, const char* value);
 void omni_map_put_int_float(omni_map_t* map, int32_t key, double value);
 void omni_map_put_int_bool(omni_map_t* map, int32_t key, int32_t value);
+
+// Map put operations for any type support
+void omni_map_put_string_any(omni_map_t* map, const char* key, void* value, int32_t value_type);
+void omni_map_put_int_any(omni_map_t* map, int32_t key, void* value, int32_t value_type);
+void omni_map_put_any_string(omni_map_t* map, void* key, int32_t key_type, const char* value);
+void omni_map_put_any_int(omni_map_t* map, void* key, int32_t key_type, int32_t value);
+void omni_map_put_any_float(omni_map_t* map, void* key, int32_t key_type, double value);
+void omni_map_put_any_bool(omni_map_t* map, void* key, int32_t key_type, int32_t value);
+void omni_map_put_any_any(omni_map_t* map, void* key, int32_t key_type, void* value, int32_t value_type);
 
 // Map get operations for all type combinations
 int32_t omni_map_get_string_int(omni_map_t* map, const char* key);
@@ -272,6 +312,173 @@ void omni_http_request_set_body(omni_http_request_t* req, const char* body);
 char* omni_http_request_get_header(omni_http_request_t* req, const char* name);
 void omni_http_request_destroy(omni_http_request_t* req);
 
+// Forward declarations for web framework (needed before function declarations)
+// Note: omni_struct_t is defined later, so we use a forward declaration here
+struct omni_struct;
+struct omni_server;
+typedef struct omni_struct omni_struct_t;
+typedef struct omni_server omni_server_t;
+
+// HTTP server functions
+omni_http_request_t* omni_http_parse_request(const char* raw_request);
+char* omni_http_build_response(omni_http_response_t* resp);
+void omni_http_parse_query(const char* query_string, omni_map_t* params);
+int32_t omni_http_match_path(const char* pattern, const char* path, omni_map_t* params);
+
+// Context functions (for std.web framework)
+const char* omni_context_param(omni_struct_t* ctx, const char* name);
+const char* omni_context_query(omni_struct_t* ctx, const char* name);
+omni_map_t* omni_context_query_all(omni_struct_t* ctx);
+const char* omni_context_header(omni_struct_t* ctx, const char* name);
+void omni_context_set_header(omni_struct_t* ctx, const char* name, const char* value);
+void omni_context_status(omni_struct_t* ctx, int32_t code);
+omni_struct_t* omni_context_html(omni_struct_t* ctx, const char* html);
+omni_struct_t* omni_context_redirect(omni_struct_t* ctx, const char* url, int32_t code);
+omni_struct_t* omni_context_cookie(omni_struct_t* ctx, const char* name, const char* value, omni_map_t* options);
+const char* omni_context_get_cookie(omni_struct_t* ctx, const char* name);
+const char* omni_context_body(omni_struct_t* ctx);
+omni_struct_t* omni_context_set_state(omni_struct_t* ctx, const char* key, void* value, int32_t value_type);
+void* omni_context_get_state(omni_struct_t* ctx, const char* key, int32_t* value_type);
+void* omni_context_body_json(omni_struct_t* ctx);
+omni_struct_t* omni_context_text(omni_struct_t* ctx, const char* text);
+omni_struct_t* omni_context_json(omni_struct_t* ctx, void* data);
+omni_struct_t* omni_context_file(omni_struct_t* ctx, const char* path);
+omni_map_t* omni_context_body_form(omni_struct_t* ctx);
+omni_array_t* omni_context_files(omni_struct_t* ctx);
+
+// WebSocket functions (stubs)
+void omni_server_websocket(omni_server_t* server, const char* pattern, void* handler);
+int32_t omni_websocket_send(void* conn, const char* data, int32_t len);
+int32_t omni_websocket_receive(void* conn, char* buf, int32_t max_len);
+void omni_websocket_close(void* conn);
+
+// Server routing functions (for std.web framework)
+void omni_server_get(omni_server_t* server, const char* pattern, void* handler);
+void omni_server_post(omni_server_t* server, const char* pattern, void* handler);
+void omni_server_put(omni_server_t* server, const char* pattern, void* handler);
+void omni_server_delete(omni_server_t* server, const char* pattern, void* handler);
+void omni_server_patch(omni_server_t* server, const char* pattern, void* handler);
+void omni_server_all(omni_server_t* server, const char* pattern, void* handler);
+void omni_server_route(omni_server_t* server, const char* method, const char* pattern, void* handler);
+omni_struct_t* omni_server_group(omni_server_t* server, const char* prefix);
+void omni_server_use(omni_server_t* server, void* middleware);
+void omni_server_use_before(omni_server_t* server, void* middleware);
+void omni_server_use_after(omni_server_t* server, void* middleware);
+void omni_group_get(omni_struct_t* group, const char* pattern, void* handler);
+void omni_group_post(omni_struct_t* group, const char* pattern, void* handler);
+void omni_group_use(omni_struct_t* group, void* middleware);
+
+// Middleware functions
+omni_struct_t* omni_middleware_logger(omni_struct_t* ctx);
+omni_struct_t* omni_middleware_cors(omni_struct_t* ctx, omni_map_t* options);
+omni_struct_t* omni_middleware_json_parser(omni_struct_t* ctx);
+omni_struct_t* omni_middleware_form_parser(omni_struct_t* ctx);
+omni_struct_t* omni_middleware_multipart_parser_impl(omni_struct_t* ctx);
+void* omni_middleware_multipart_parser(omni_struct_t* ctx, int32_t max_size);
+omni_struct_t* omni_middleware_static_impl(omni_struct_t* ctx);
+void* omni_middleware_static(omni_server_t* server, const char* path, const char* dir, omni_map_t* options);
+
+// Template functions
+char* omni_template_render(const char* template, omni_map_t* data);
+char* omni_template_load(const char* path);
+void omni_template_cache_enable(int32_t enable);
+
+// Validation functions
+omni_map_t* omni_validate_request(omni_struct_t* ctx, omni_map_t* rules);
+
+// Test client functions
+void* omni_test_client_create(omni_server_t* server);
+void* omni_test_client_get(void* client, const char* path, omni_map_t* headers);
+void* omni_test_client_post(void* client, const char* path, const char* body, omni_map_t* headers);
+int32_t omni_test_response_status(void* resp);
+const char* omni_test_response_body(void* resp);
+omni_map_t* omni_test_response_headers(void* resp);
+void* omni_test_response_json(void* resp);
+
+// Memory management functions
+void omni_panic(const char* message);
+void* omni_malloc(size_t size);
+void omni_free(void* ptr);
+void* omni_realloc(void* ptr, size_t new_size);
+
+// JSON functions
+void* omni_json_parse(const char* json_str);
+char* omni_json_stringify(void* value, int32_t value_type, int32_t pretty);
+
+// Form data and file upload functions
+void omni_http_parse_form_urlencoded(const char* body, omni_map_t* params);
+void omni_http_parse_multipart(const char* body, const char* boundary, omni_map_t* fields, omni_array_t* files);
+char* omni_file_upload_save(const char* data, int32_t size, const char* filename, const char* upload_dir);
+int32_t omni_file_upload_validate(const char* filename, int32_t size, const char* allowed_types, int32_t max_size);
+
+// Static file serving functions
+char* omni_file_read_binary(const char* path, int32_t* size);
+const char* omni_file_get_mime_type(const char* filename);
+int32_t omni_file_get_size(const char* path);
+
+// Response compression functions
+char* omni_http_compress_gzip(const char* data, int32_t len, int32_t* compressed_len);
+char* omni_http_decompress_gzip(const char* compressed, int32_t len, int32_t* decompressed_len);
+
+// Validation and sanitization functions
+int32_t omni_validate_string(const char* value, const char* pattern, int32_t min_len, int32_t max_len);
+int32_t omni_validate_int(const char* value, int32_t min, int32_t max);
+int32_t omni_validate_email(const char* email);
+int32_t omni_validate_url(const char* url);
+char* omni_sanitize_html(const char* html);
+char* omni_sanitize_sql(const char* sql);
+
+// WebSocket functions
+char* omni_websocket_handshake(const char* request_headers);
+char* omni_websocket_frame_create(const char* data, int32_t len, int32_t opcode, int32_t mask);
+void* omni_websocket_frame_parse(const char* frame, int32_t len);
+
+// Server concurrency and connection management
+typedef struct omni_connection_pool omni_connection_pool_t;
+typedef struct omni_thread_pool omni_thread_pool_t;
+omni_connection_pool_t* omni_server_connection_pool_create(int32_t max_connections);
+int32_t omni_server_connection_pool_acquire(omni_connection_pool_t* pool);
+void omni_server_connection_pool_release(omni_connection_pool_t* pool, int32_t socket);
+omni_thread_pool_t* omni_server_thread_pool_create(int32_t num_threads);
+void omni_server_thread_pool_submit(omni_thread_pool_t* pool, void (*task)(void*), void* arg);
+
+// Server timeouts and limits
+void omni_server_set_timeout(int32_t socket, int32_t timeout_seconds);
+void omni_server_set_max_request_size(int32_t max_size);
+void omni_server_set_max_headers_size(int32_t max_size);
+
+// Server lifecycle
+// Note: omni_server_t is forward declared above
+omni_server_t* omni_server_create(int32_t port, omni_map_t* options);
+int32_t omni_server_listen(omni_server_t* server);
+int32_t omni_server_listen_tls(omni_server_t* server, const char* cert_file, const char* key_file);
+void omni_server_close(omni_server_t* server);
+void omni_server_graceful_shutdown(omni_server_t* server, int32_t timeout_seconds);
+
+// Session management
+typedef struct omni_session omni_session_t;
+typedef struct omni_session_store omni_session_store_t;
+omni_session_t* omni_session_create(const char* session_id, int32_t timeout_seconds);
+const char* omni_session_get(omni_session_t* session, const char* key);
+void omni_session_set(omni_session_t* session, const char* key, const char* value);
+void omni_session_destroy(omni_session_t* session);
+omni_session_store_t* omni_session_store_create(const char* storage_type);
+void omni_session_store_save(omni_session_store_t* store, omni_session_t* session);
+omni_session_t* omni_session_store_load(omni_session_store_t* store, const char* session_id);
+
+// Authentication/Authorization
+char* omni_auth_hash_password(const char* password, const char* salt);
+int32_t omni_auth_verify_password(const char* password, const char* hash);
+char* omni_auth_generate_token(const char* user_id, const char* secret, int32_t expires_in);
+const char* omni_auth_verify_token(const char* token, const char* secret);
+int32_t omni_auth_check_permission(const char* user_id, const char* resource, const char* action);
+
+// Rate limiting
+typedef struct omni_rate_limiter omni_rate_limiter_t;
+omni_rate_limiter_t* omni_rate_limit_create(int32_t max_requests, int32_t window_seconds);
+int32_t omni_rate_limit_check(omni_rate_limiter_t* limiter, const char* key);
+void omni_rate_limit_reset(omni_rate_limiter_t* limiter, const char* key);
+
 // Socket functions
 int32_t omni_socket_create();
 int32_t omni_socket_connect(int32_t socket, const char* address, int32_t port);
@@ -288,17 +495,22 @@ omni_ip_address_t* omni_network_get_local_ip();
 int32_t omni_network_ping(const char* host);
 
 // Struct operations
-typedef struct omni_struct omni_struct_t;
+// Note: omni_struct_t is forward declared above for web framework functions
 omni_struct_t* omni_struct_create();
 void omni_struct_destroy(omni_struct_t* struct_ptr);
 void omni_struct_set_string_field(omni_struct_t* struct_ptr, const char* field_name, const char* value);
 void omni_struct_set_int_field(omni_struct_t* struct_ptr, const char* field_name, int32_t value);
 void omni_struct_set_float_field(omni_struct_t* struct_ptr, const char* field_name, double value);
 void omni_struct_set_bool_field(omni_struct_t* struct_ptr, const char* field_name, int32_t value);
+void omni_struct_set_array_field(omni_struct_t* struct_ptr, const char* field_name, void* array_value, int32_t element_type, int32_t array_length);
+void omni_struct_set_map_field(omni_struct_t* struct_ptr, const char* field_name, omni_map_t* map_value);
+void omni_struct_set_struct_field(omni_struct_t* struct_ptr, const char* field_name, omni_struct_t* struct_value);
+void omni_struct_set_null_field(omni_struct_t* struct_ptr, const char* field_name);
 const char* omni_struct_get_string_field(omni_struct_t* struct_ptr, const char* field_name);
 int32_t omni_struct_get_int_field(omni_struct_t* struct_ptr, const char* field_name);
 double omni_struct_get_float_field(omni_struct_t* struct_ptr, const char* field_name);
 int32_t omni_struct_get_bool_field(omni_struct_t* struct_ptr, const char* field_name);
+omni_struct_t* omni_struct_get_struct_field(omni_struct_t* struct_ptr, const char* field_name);
 
 double omni_pow(double x, double y);
 double omni_sqrt(double x);

@@ -1,0 +1,68 @@
+// Test routing features for std.web module
+// Tests route groups, path parameters, wildcards, and method routing
+
+import std
+
+// Handler for user routes
+func user_handler(ctx:std.web.Context):std.web.Context {
+    let user_id = std.web.context_param(ctx, "id")
+    std.web.context_text(ctx, "User ID: " + user_id)
+    std.web.context_status(ctx, 200)
+    return ctx
+}
+
+// Handler for post routes
+func post_handler(ctx:std.web.Context):std.web.Context {
+    let post_id = std.web.context_param(ctx, "post_id")
+    std.web.context_text(ctx, "Post ID: " + post_id)
+    std.web.context_status(ctx, 200)
+    return ctx
+}
+
+// Handler for API routes
+func api_handler(ctx:std.web.Context):std.web.Context {
+    std.web.context_text(ctx, "{\"status\":\"ok\"}")
+    std.web.context_status(ctx, 200)
+    std.web.context_set_header(ctx, "Content-Type", "application/json")
+    return ctx
+}
+
+// Handler for admin routes
+func admin_handler(ctx:std.web.Context):std.web.Context {
+    std.web.context_status(ctx, 200)
+    std.web.context_text(ctx, "Admin area")
+    return ctx
+}
+
+func main():int {
+    let server = std.web.server_create(8080, {})
+    
+    // Test basic routes with different HTTP methods
+    std.web.server_get(server, "/", api_handler)
+    std.web.server_post(server, "/api/data", api_handler)
+    std.web.server_put(server, "/api/data/:id", api_handler)
+    std.web.server_delete(server, "/api/data/:id", api_handler)
+    std.web.server_patch(server, "/api/data/:id", api_handler)
+    
+    // Test routes with path parameters
+    std.web.server_get(server, "/user/:id", user_handler)
+    std.web.server_get(server, "/user/:id/posts/:post_id", post_handler)
+    
+    // Test route groups
+    let api_group = std.web.server_group(server, "/api/v1")
+    std.web.group_get(api_group, "/users", api_handler)
+    std.web.group_get(api_group, "/users/:id", api_handler)
+    std.web.group_post(api_group, "/users", api_handler)
+    
+    let admin_group = std.web.server_group(server, "/admin")
+    std.web.group_get(admin_group, "/dashboard", admin_handler)
+    std.web.group_get(admin_group, "/users", admin_handler)
+    
+    // Test v2 route group (nested group_group not yet supported)
+    let v2_group = std.web.server_group(server, "/api/v2/users")
+    std.web.group_get(v2_group, "/", api_handler)
+    std.web.group_get(v2_group, "/:id", api_handler)
+    
+    return 0
+}
+

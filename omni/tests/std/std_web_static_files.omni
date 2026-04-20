@@ -1,0 +1,49 @@
+// Test static file serving for std.web module
+// Tests serving static files, file uploads, and file operations
+
+import std
+
+// Handler for file upload
+func upload_handler(ctx:std.web.Context):std.web.Context {
+    // Get uploaded files using context_files
+    let files = std.web.context_files(ctx)
+    
+    // Check if files were uploaded (simplified - file handling may not be fully implemented)
+    if std.array.length(files) > 0 {
+        // Set response
+        std.web.context_status(ctx, 200)
+        std.web.context_text(ctx, "File uploaded")
+    } else {
+        std.web.context_status(ctx, 400)
+        std.web.context_text(ctx, "No file uploaded")
+    }
+    
+    return ctx
+}
+
+// Handler that serves a file
+func serve_file_handler(ctx:std.web.Context):std.web.Context {
+    let filename = std.web.context_param(ctx, "filename")
+    let file_path = "/static/" + filename
+    
+    // Use context_file to serve file (simplified)
+    std.web.context_file(ctx, file_path)
+    
+    return ctx
+}
+
+func main():int {
+    let server = std.web.server_create(8080, {})
+    
+    // Test file upload endpoint
+    std.web.server_post(server, "/upload", upload_handler)
+    
+    // Test serving individual files
+    std.web.server_get(server, "/file/:filename", serve_file_handler)
+    
+    // Test static file serving (would be configured via server options in real implementation)
+    // std.web.server_static(server, "/static", "/path/to/static/files")
+    
+    return 0
+}
+

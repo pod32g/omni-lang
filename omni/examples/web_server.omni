@@ -1,0 +1,64 @@
+// Example: HTTP Server using std.web framework
+
+import std
+
+// Basic GET route handler
+func home_handler(ctx:std.web.Context):std.web.Context {
+    return std.web.context_text(ctx, "Hello, World!")
+}
+
+// Route with path parameter handler
+func user_handler(ctx:std.web.Context):std.web.Context {
+    let id = std.web.context_param(ctx, "id")
+    return std.web.context_text(ctx, "User ID: " + id)
+}
+
+// POST route with JSON handler
+func api_data_handler(ctx:std.web.Context):std.web.Context {
+    let data = std.web.context_body_json(ctx)
+    let response: map<string, any> = {
+        "received": true,
+        "data": data
+    }
+    return std.web.context_json(ctx, response)
+}
+
+// Route with query parameters handler
+func search_handler(ctx:std.web.Context):std.web.Context {
+    let query = std.web.context_query(ctx, "q")
+    return std.web.context_text(ctx, "Search query: " + query)
+}
+
+func main():int {
+    std.io.println("Starting HTTP server on port 8080...")
+    
+    // Create server
+    let server = std.web.server_create(8080, {})
+    
+    // Add middleware
+    std.web.server_use(server, std.web.middleware_logger)
+    // middleware_cors takes options; use server_use_before with a wrapped invocation instead
+    
+    // Register routes
+    std.web.server_get(server, "/", home_handler)
+    std.web.server_get(server, "/user/:id", user_handler)
+    std.web.server_post(server, "/api/data", api_data_handler)
+    std.web.server_get(server, "/search", search_handler)
+    
+    // Start server
+    if std.web.server_listen(server) {
+        std.io.println("Server listening on http://localhost:8080")
+        std.io.println("Press Ctrl+C to stop")
+        
+        // Keep server running (simplified - would handle signals)
+        while true {
+            std.time.sleep_seconds(1.0)
+        }
+    } else {
+        std.io.println("Failed to start server")
+        return 1
+    }
+    
+    return 0
+}
+

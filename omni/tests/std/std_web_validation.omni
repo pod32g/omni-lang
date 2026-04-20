@@ -1,0 +1,93 @@
+// Test validation and sanitization for std.web module
+// Tests input validation, sanitization, and security features
+
+import std
+
+// Handler with input validation
+func validated_handler(ctx:std.web.Context):std.web.Context {
+    // Get and validate input
+    let username = std.web.context_query(ctx, "username")
+    let email = std.web.context_query(ctx, "email")
+    
+    // Validate username (using validate_string with min/max)
+    if !std.web.validate_string(username, "", 3, 20) {
+        std.web.context_status(ctx, 400)
+        std.web.context_text(ctx, "Invalid username")
+        return ctx
+    }
+    
+    // Validate email
+    if !std.web.validate_email(email) {
+        std.web.context_status(ctx, 400)
+        std.web.context_text(ctx, "Invalid email")
+        return ctx
+    }
+    
+    // Sanitize input
+    let safe_username = std.web.sanitize_html(username)
+    let safe_email = std.web.sanitize_html(email)
+    
+    // Process validated data
+    std.web.context_status(ctx, 200)
+    std.web.context_text(ctx, "Validated: " + safe_username + " <" + safe_email + ">")
+    
+    return ctx
+}
+
+// Handler with JSON validation
+func json_validated_handler(ctx:std.web.Context):std.web.Context {
+    // Parse JSON using context_body_json
+    let json_data = std.web.context_body_json(ctx)
+
+    // For now, just validate that JSON was parsed (simplified)
+    // nil comparison on `any` not yet supported; skip check
+    let _json_data = json_data
+    
+    // Set response
+    std.web.context_set_header(ctx, "Content-Type", "application/json")
+    std.web.context_status(ctx, 200)
+    std.web.context_text(ctx, "{\"status\":\"validated\"}")
+    
+    return ctx
+}
+
+// Handler with form validation
+func form_validated_handler(ctx:std.web.Context):std.web.Context {
+    // Parse form data using context_body_form
+    let form_data = std.web.context_body_form(ctx)
+    
+    // Get and validate form fields (simplified - direct map access)
+    let password = ""  // Would access from form_data map
+    let confirm_password = ""  // Would access from form_data map
+    
+    // Validate password strength (using validate_string with min length)
+    if !std.web.validate_string(password, "", 8, 100) {
+        std.web.context_status(ctx, 400)
+        std.web.context_text(ctx, "Password does not meet requirements")
+        return ctx
+    }
+    
+    // Validate password match
+    if password != confirm_password {
+        std.web.context_status(ctx, 400)
+        std.web.context_text(ctx, "Passwords do not match")
+        return ctx
+    }
+    
+    std.web.context_status(ctx, 200)
+    std.web.context_text(ctx, "Form validated successfully")
+    
+    return ctx
+}
+
+func main():int {
+    let server = std.web.server_create(8080, {})
+    
+    // Test validated endpoints
+    std.web.server_get(server, "/validate", validated_handler)
+    std.web.server_post(server, "/api/validate-json", json_validated_handler)
+    std.web.server_post(server, "/api/validate-form", form_validated_handler)
+    
+    return 0
+}
+

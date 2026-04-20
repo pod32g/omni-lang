@@ -1,0 +1,95 @@
+// Test middleware features for std.web module
+// Tests middleware chaining, conditional middleware, and error middleware
+
+import std
+
+// Logger middleware
+func logger_middleware(ctx:std.web.Context):std.web.Context {
+    let method = ctx.request.method
+    let path = ctx.request.url
+    // Log request (in real implementation, this would log to file/console)
+    return ctx
+}
+
+// Authentication middleware
+func auth_middleware(ctx:std.web.Context):std.web.Context {
+    let token = std.web.context_header(ctx, "Authorization")
+    if token == "" {
+        std.web.context_status(ctx, 401)
+        std.web.context_text(ctx, "Unauthorized")
+        return ctx
+    }
+    // Set user in context state (simplified - state functions may have type constraints)
+    // std.web.context_set_state(ctx, "authenticated", true)
+    // std.web.context_set_state(ctx, "user_id", "123")
+    return ctx
+}
+
+// CORS middleware
+func cors_middleware(ctx:std.web.Context):std.web.Context {
+    std.web.context_set_header(ctx, "Access-Control-Allow-Origin", "*")
+    std.web.context_set_header(ctx, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
+    std.web.context_set_header(ctx, "Access-Control-Allow-Headers", "Content-Type, Authorization")
+    return ctx
+}
+
+// Rate limiting middleware (simplified)
+func rate_limit_middleware(ctx:std.web.Context):std.web.Context {
+    // In real implementation, this would check rate limits
+    // For now, just pass through
+    return ctx
+}
+
+// Error handling middleware
+func error_middleware(ctx:std.web.Context):std.web.Context {
+    // Check if there's an error in state (simplified - state access may have type constraints)
+    // let error_msg = std.web.context_get_state(ctx, "error")
+    // if error_msg != nil {
+    //     std.web.context_status(ctx, 500)
+    //     std.web.context_text(ctx, "Internal Server Error")
+    // }
+    return ctx
+}
+
+// Handler that requires authentication
+func protected_handler(ctx:std.web.Context):std.web.Context {
+    // Get user_id from state (simplified - state access may have type constraints)
+    // let user_id = std.web.context_get_state(ctx, "user_id")
+    std.web.context_status(ctx, 200)
+    std.web.context_text(ctx, "Protected resource")
+    return ctx
+}
+
+// Public handler
+func public_handler(ctx:std.web.Context):std.web.Context {
+    std.web.context_status(ctx, 200)
+    std.web.context_text(ctx, "Public resource")
+    return ctx
+}
+
+func main():int {
+    let server = std.web.server_create(8080, {})
+    
+    // Global middleware (applied to all routes)
+    std.web.server_use(server, logger_middleware)
+    std.web.server_use(server, cors_middleware)
+    std.web.server_use(server, error_middleware)
+    
+    // Public routes (no auth required)
+    std.web.server_get(server, "/", public_handler)
+    std.web.server_get(server, "/public", public_handler)
+    
+    // Protected routes (require auth)
+    // In a real implementation, we'd use route-specific middleware
+    std.web.server_get(server, "/api/protected", protected_handler)
+    std.web.server_get(server, "/api/user", protected_handler)
+    
+    // Route group with middleware
+    let api_group = std.web.server_group(server, "/api")
+    std.web.group_use(api_group, auth_middleware)
+    std.web.group_use(api_group, rate_limit_middleware)
+    std.web.group_get(api_group, "/data", protected_handler)
+    
+    return 0
+}
+

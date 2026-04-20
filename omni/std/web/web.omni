@@ -1,0 +1,616 @@
+// std.web - HTTP Server Framework for OmniLang
+// Express.js/Gin-style web framework
+
+import std
+
+// ============================================================================
+// Core Structures
+// ============================================================================
+
+// Server represents an HTTP server instance
+struct Server {
+    port:int
+    routes:array<Route>
+    middleware:array<Middleware>
+    connection_pool:any  // Will be connection pool handle
+    thread_pool:any      // Will be thread pool handle
+    config:map<string, any>
+}
+
+// Route represents a single route definition
+struct Route {
+    method:string
+    pattern:string
+    handler:Handler
+    middleware:array<Middleware>
+    route_group:any  // Optional route group
+}
+
+// RouteGroup represents a group of routes with a common prefix
+struct RouteGroup {
+    prefix:string
+    middleware:array<Middleware>
+    routes:array<Route>
+    server:Server
+}
+
+// Context represents the request/response context
+struct Context {
+    request:std.network.HTTPRequest
+    response:std.network.HTTPResponse
+    params:map<string, string>
+    query:map<string, string>
+    body:string
+    session:any  // Session data
+    user:any    // Authenticated user
+    state:map<string, any>  // Custom state
+}
+
+// Handler type: function that processes a request and returns a response
+type Handler = (Context) -> Context | Promise<Context>
+
+// Middleware type: function that processes context and returns modified context
+type Middleware = (Context) -> Context | Promise<Context>
+
+// WebSocket represents a WebSocket connection
+struct WebSocket {
+    socket:int
+    connection:any
+}
+
+// UploadedFile represents an uploaded file
+struct UploadedFile {
+    name:string
+    filename:string
+    content_type:string
+    size:int
+    data:string
+    path:string
+}
+
+// ============================================================================
+// Server Creation & Lifecycle
+// ============================================================================
+
+// server_create creates a new server instance
+// [IMPLEMENTED] Implemented in runtime
+func server_create(port:int, options:map<string, any>):Server {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return Server{
+        port: port,
+        routes: [],
+        middleware: [],
+        connection_pool: nil,
+        thread_pool: nil,
+        config: options
+    }
+}
+
+// server_listen starts the server listening on the configured port
+// [IMPLEMENTED] Implemented in runtime
+func server_listen(server:Server):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// server_listen_tls starts an HTTPS server with TLS
+// [IMPLEMENTED] Implemented in runtime
+func server_listen_tls(server:Server, cert_file:string, key_file:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// server_close stops the server and cleans up resources
+// [IMPLEMENTED] Implemented in runtime
+func server_close(server:Server) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// server_graceful_shutdown gracefully shuts down the server
+// [IMPLEMENTED] Implemented in runtime
+func server_graceful_shutdown(server:Server, timeout:int) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// ============================================================================
+// Routing
+// ============================================================================
+
+// server_get registers a GET route
+func server_get(server:Server, pattern:string, handler:Handler) {
+    let route = Route{
+        method: "GET",
+        pattern: pattern,
+        handler: handler,
+        middleware: [],
+        route_group: nil
+    }
+    // Add route to server (simplified - would need proper array append)
+}
+
+// server_post registers a POST route
+func server_post(server:Server, pattern:string, handler:Handler) {
+    let route = Route{
+        method: "POST",
+        pattern: pattern,
+        handler: handler,
+        middleware: [],
+        route_group: nil
+    }
+}
+
+// server_put registers a PUT route
+func server_put(server:Server, pattern:string, handler:Handler) {
+    let route = Route{
+        method: "PUT",
+        pattern: pattern,
+        handler: handler,
+        middleware: [],
+        route_group: nil
+    }
+}
+
+// server_delete registers a DELETE route
+func server_delete(server:Server, pattern:string, handler:Handler) {
+    let route = Route{
+        method: "DELETE",
+        pattern: pattern,
+        handler: handler,
+        middleware: [],
+        route_group: nil
+    }
+}
+
+// server_patch registers a PATCH route
+func server_patch(server:Server, pattern:string, handler:Handler) {
+    let route = Route{
+        method: "PATCH",
+        pattern: pattern,
+        handler: handler,
+        middleware: [],
+        route_group: nil
+    }
+}
+
+// server_all registers a route that matches all HTTP methods
+func server_all(server:Server, pattern:string, handler:Handler) {
+    // Register for all methods
+    server_get(server, pattern, handler)
+    server_post(server, pattern, handler)
+    server_put(server, pattern, handler)
+    server_delete(server, pattern, handler)
+    server_patch(server, pattern, handler)
+}
+
+// server_route registers a route with a custom HTTP method
+func server_route(server:Server, method:string, pattern:string, handler:Handler) {
+    let route = Route{
+        method: method,
+        pattern: pattern,
+        handler: handler,
+        middleware: [],
+        route_group: nil
+    }
+}
+
+// ============================================================================
+// Route Groups
+// ============================================================================
+
+// server_group creates a new route group with a prefix
+func server_group(server:Server, prefix:string):RouteGroup {
+    return RouteGroup{
+        prefix: prefix,
+        middleware: [],
+        routes: [],
+        server: server
+    }
+}
+
+// group_get registers a GET route in a group
+func group_get(group:RouteGroup, pattern:string, handler:Handler) {
+    let full_pattern = group.prefix + pattern
+    server_get(group.server, full_pattern, handler)
+}
+
+// group_post registers a POST route in a group
+func group_post(group:RouteGroup, pattern:string, handler:Handler) {
+    let full_pattern = group.prefix + pattern
+    server_post(group.server, full_pattern, handler)
+}
+
+// group_use adds middleware to a route group
+func group_use(group:RouteGroup, middleware:Middleware) {
+    // Add middleware to group (simplified)
+}
+
+// ============================================================================
+// Context API
+// ============================================================================
+
+// context_param gets a path parameter value
+// [IMPLEMENTED] Implemented in runtime
+func context_param(ctx:Context, name:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return std.collections.get(ctx.params, name)
+}
+
+// context_query gets a query parameter value
+// [IMPLEMENTED] Implemented in runtime
+func context_query(ctx:Context, name:string):string {
+    return std.collections.get(ctx.query, name)
+}
+
+// context_query_all gets all query parameters
+func context_query_all(ctx:Context):map<string, string> {
+    return ctx.query
+}
+
+// context_header gets a request header value
+func context_header(ctx:Context, name:string):string {
+    return std.collections.get(ctx.request.headers, name)
+}
+
+// context_set_header sets a response header
+func context_set_header(ctx:Context, name:string, value:string) {
+    std.collections.set(ctx.response.headers, name, value)
+}
+
+// context_status sets the response status code
+func context_status(ctx:Context, code:int) {
+    ctx.response.status_code = code
+    // Set default status text based on code
+    if code == 200 {
+        ctx.response.status_text = "OK"
+    } else if code == 404 {
+        ctx.response.status_text = "Not Found"
+    } else if code == 500 {
+        ctx.response.status_text = "Internal Server Error"
+    }
+}
+
+// context_json sends a JSON response
+func context_json(ctx:Context, data:any):Context {
+    context_set_header(ctx, "Content-Type", "application/json")
+    context_status(ctx, 200)
+    // Convert data to JSON string (would use omni_json_stringify)
+    ctx.response.body = ""  // Placeholder
+    return ctx
+}
+
+// context_text sends a text response
+func context_text(ctx:Context, text:string):Context {
+    context_set_header(ctx, "Content-Type", "text/plain")
+    context_status(ctx, 200)
+    ctx.response.body = text
+    return ctx
+}
+
+// context_html sends an HTML response
+func context_html(ctx:Context, html:string):Context {
+    context_set_header(ctx, "Content-Type", "text/html")
+    context_status(ctx, 200)
+    ctx.response.body = html
+    return ctx
+}
+
+// context_file sends a file response
+// [IMPLEMENTED] Implemented in runtime
+func context_file(ctx:Context, path:string):Context {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ctx
+}
+
+// context_redirect sends a redirect response
+func context_redirect(ctx:Context, url:string, code:int):Context {
+    context_status(ctx, code)
+    context_set_header(ctx, "Location", url)
+    ctx.response.body = ""
+    return ctx
+}
+
+// context_cookie sets a cookie
+func context_cookie(ctx:Context, name:string, value:string, options:map<string, any>):Context {
+    let cookie_value = name + "=" + value
+    // Add options (path, domain, expires, etc.)
+    context_set_header(ctx, "Set-Cookie", cookie_value)
+    return ctx
+}
+
+// context_get_cookie gets a cookie value from the request
+func context_get_cookie(ctx:Context, name:string):string {
+    let cookie_header = context_header(ctx, "Cookie")
+    if cookie_header == "" {
+        return ""
+    }
+    // Parse cookie header (simplified)
+    return ""
+}
+
+// context_body gets the request body
+func context_body(ctx:Context):string {
+    return ctx.body
+}
+
+// context_body_json parses the request body as JSON
+// [IMPLEMENTED] Implemented in runtime
+func context_body_json(ctx:Context):any {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return nil
+}
+
+// context_body_form parses the request body as form data
+// [IMPLEMENTED] Implemented in runtime
+func context_body_form(ctx:Context):map<string, string> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return {}
+}
+
+// context_files gets uploaded files
+// [IMPLEMENTED] Implemented in runtime
+func context_files(ctx:Context):array<UploadedFile> {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return []
+}
+
+// context_set_state sets a value in the context state
+func context_set_state(ctx:Context, key:string, value:any):Context {
+    // Would need proper map handling for any type
+    return ctx
+}
+
+// context_get_state gets a value from the context state
+func context_get_state(ctx:Context, key:string):any {
+    // Would need proper map handling for any type
+    return nil
+}
+
+// ============================================================================
+// Middleware System
+// ============================================================================
+
+// server_use adds global middleware
+func server_use(server:Server, middleware:Middleware) {
+    // Add middleware to server (simplified)
+}
+
+// server_use_before adds pre-route middleware
+func server_use_before(server:Server, middleware:Middleware) {
+    // Add middleware before routes
+}
+
+// server_use_after adds post-route middleware
+func server_use_after(server:Server, middleware:Middleware) {
+    // Add middleware after routes
+}
+
+// middleware_logger logs requests
+func middleware_logger(ctx:Context):Context {
+    std.io.println("[" + std.time.now_string() + "] " + ctx.request.method + " " + ctx.request.url)
+    return ctx
+}
+
+// middleware_cors adds CORS headers
+func middleware_cors(ctx:Context, options:map<string, any>):Context {
+    context_set_header(ctx, "Access-Control-Allow-Origin", "*")
+    context_set_header(ctx, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+    context_set_header(ctx, "Access-Control-Allow-Headers", "Content-Type")
+    return ctx
+}
+
+// middleware_json_parser parses JSON request body
+func middleware_json_parser(ctx:Context):Context {
+    let content_type = context_header(ctx, "Content-Type")
+    if std.string.contains(content_type, "application/json") {
+        ctx.body = context_body(ctx)
+        // Parse JSON (would use omni_json_parse)
+    }
+    return ctx
+}
+
+// middleware_form_parser parses form request body
+func middleware_form_parser(ctx:Context):Context {
+    let content_type = context_header(ctx, "Content-Type")
+    if std.string.contains(content_type, "application/x-www-form-urlencoded") {
+        // Parse form data (would use omni_http_parse_form_urlencoded)
+    }
+    return ctx
+}
+
+// middleware_multipart_parser creates a middleware that parses multipart form data
+// Note: This is a placeholder - in a full implementation, this would be a factory function
+// that returns a middleware function. For now, we'll create a simple middleware function.
+func middleware_multipart_parser_impl(ctx:Context):Context {
+    let content_type = context_header(ctx, "Content-Type")
+    if std.string.contains(content_type, "multipart/form-data") {
+        // Parse multipart (would use omni_http_parse_multipart)
+    }
+    return ctx
+}
+
+// middleware_multipart_parser returns the multipart parser middleware
+func middleware_multipart_parser(ctx:Context, max_size:int):Middleware {
+    // Return the middleware function
+    // Note: In a full implementation, this would create a closure with max_size
+    return middleware_multipart_parser_impl
+}
+
+// middleware_static_impl serves static files
+func middleware_static_impl(ctx:Context):Context {
+    // Serve static files (would use omni_file_read_binary)
+    return ctx
+}
+
+// middleware_static creates a middleware that serves static files
+func middleware_static(server:Server, path:string, dir:string, options:map<string, any>):Middleware {
+    // Return the middleware function
+    // Note: In a full implementation, this would create a closure with path, dir, options
+    return middleware_static_impl
+}
+
+// ============================================================================
+// Template Rendering
+// ============================================================================
+
+// template_render renders a template with data
+func template_render(template:string, data:map<string, any>):string {
+    var result = template
+    // Simple template engine: {{variable}} replacement
+    // Would implement full template engine with conditionals, loops, etc.
+    return result
+}
+
+// template_load loads a template from a file
+func template_load(path:string):string {
+    return std.os.read_file(path)
+}
+
+// template_cache_enable enables template caching
+func template_cache_enable(enable:bool) {
+    // Enable/disable template caching
+}
+
+// ============================================================================
+// WebSocket Support
+// ============================================================================
+
+// server_websocket registers a WebSocket route
+// [IMPLEMENTED] Implemented in runtime
+func server_websocket(server:Server, pattern:string, handler:(Context, WebSocket) -> void) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// websocket_send sends a text message
+// [IMPLEMENTED] Implemented in runtime
+func websocket_send(ws:WebSocket, data:string) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// websocket_receive receives a text message
+// [IMPLEMENTED] Implemented in runtime
+func websocket_receive(ws:WebSocket):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// websocket_close closes the WebSocket connection
+// [IMPLEMENTED] Implemented in runtime
+func websocket_close(ws:WebSocket, code:int, reason:string) {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+}
+
+// ============================================================================
+// Validation & Sanitization
+// ============================================================================
+
+// validate_string validates a string value
+// [IMPLEMENTED] Implemented in runtime
+func validate_string(value:string, pattern:string, min_len:int, max_len:int):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// validate_int validates an integer value
+// [IMPLEMENTED] Implemented in runtime
+func validate_int(value:string, min:int, max:int):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// validate_email validates an email address
+// [IMPLEMENTED] Implemented in runtime
+func validate_email(email:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// validate_url validates a URL
+// [IMPLEMENTED] Implemented in runtime
+func validate_url(url:string):bool {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return false
+}
+
+// sanitize_html sanitizes HTML to prevent XSS
+// [IMPLEMENTED] Implemented in runtime
+func sanitize_html(html:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return html
+}
+
+// sanitize_sql escapes SQL to prevent injection
+// [IMPLEMENTED] Implemented in runtime
+func sanitize_sql(sql:string):string {
+    // This is an intrinsic function that will be wired to the runtime
+    // during compilation. The actual implementation is in the backend.
+    return sql
+}
+
+// validate_request validates a request against rules
+func validate_request(ctx:Context, rules:map<string, map<string, any>>):map<string, string> {
+    let errors = {}
+    // Validate request fields according to rules
+    return errors
+}
+
+// ============================================================================
+// Testing Utilities
+// ============================================================================
+
+// test_client_create creates a test client for the server
+func test_client_create(server:Server):any {
+    // Create test client
+    return nil
+}
+
+// test_client_get makes a GET request
+func test_client_get(client:any, path:string, headers:map<string, string>):any {
+    // Make GET request
+    return nil
+}
+
+// test_client_post makes a POST request
+func test_client_post(client:any, path:string, body:string, headers:map<string, string>):any {
+    // Make POST request
+    return nil
+}
+
+// test_response_status gets the response status code
+func test_response_status(resp:any):int {
+    return 0
+}
+
+// test_response_body gets the response body
+func test_response_body(resp:any):string {
+    return ""
+}
+
+// test_response_headers gets the response headers
+func test_response_headers(resp:any):map<string, string> {
+    return {}
+}
+
+// test_response_json parses the JSON response
+func test_response_json(resp:any):any {
+    return nil
+}
+

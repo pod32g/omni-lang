@@ -1,0 +1,57 @@
+// Simple HTTP Server Example using std.web framework
+// A minimal example to get started quickly
+
+import std
+
+// Handler function for home route
+func home_handler(ctx:std.web.Context):std.web.Context {
+    return std.web.context_text(ctx, "Hello, OmniLang!")
+}
+
+// Handler function for greeting route
+func hello_handler(ctx:std.web.Context):std.web.Context {
+    let name = std.web.context_param(ctx, "name")
+    return std.web.context_text(ctx, "Hello, " + name + "!")
+}
+
+// Handler function for echo route
+func echo_handler(ctx:std.web.Context):std.web.Context {
+    let data = std.web.context_body_json(ctx)
+    return std.web.context_json(ctx, data)
+}
+
+func main():int {
+    std.io.println("Starting simple web server on port 8080...")
+    
+    // Create server with empty options
+    let server = std.web.server_create(8080, {})
+    
+    // Simple GET route
+    std.web.server_get(server, "/", home_handler)
+    
+    // GET route with path parameter
+    std.web.server_get(server, "/hello/:name", hello_handler)
+    
+    // POST route with JSON
+    std.web.server_post(server, "/api/echo", echo_handler)
+    
+    // Start server
+    if std.web.server_listen(server) {
+        std.io.println("Server running at http://localhost:8080")
+        std.io.println("Try:")
+        std.io.println("  curl http://localhost:8080/")
+        std.io.println("  curl http://localhost:8080/hello/World")
+        std.io.println("  curl -X POST http://localhost:8080/api/echo -H 'Content-Type: application/json' -d '{\"message\":\"test\"}'")
+        
+        // Keep running
+        while true {
+            std.time.sleep_seconds(1.0)
+        }
+    } else {
+        std.io.println("Failed to start server")
+        return 1
+    }
+    
+    return 0
+}
+

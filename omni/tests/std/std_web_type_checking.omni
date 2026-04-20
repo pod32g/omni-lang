@@ -1,0 +1,36 @@
+// Test type checking for std.web module
+// Specifically tests Handler and Middleware type aliases
+
+import std
+
+// Test that (Context) -> Context is assignable to Handler
+func handler1(ctx:std.web.Context):std.web.Context {
+    return ctx
+}
+
+// Test Middleware type alias
+func middleware1(ctx:std.web.Context):std.web.Context {
+    return ctx
+}
+
+func main():int {
+    // Test empty map literal inference
+    let server = std.web.server_create(8080, {})
+    
+    // Test Handler type alias assignment - this should work
+    let h1:std.web.Handler = handler1
+    
+    // Test that handler can be passed to server_get - tests Handler type matching
+    std.web.server_get(server, "/", handler1)
+    std.web.server_get(server, "/test", h1)
+    
+    // Test that (Context) -> Context is assignable to Middleware
+    let m1:std.web.Middleware = middleware1
+    
+    // Test middleware registration - tests Middleware type matching
+    std.web.server_use(server, middleware1)
+    std.web.server_use(server, m1)
+    
+    return 0
+}
+
