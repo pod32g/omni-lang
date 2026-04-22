@@ -153,24 +153,6 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
-	// Phase 5 (concurrency): spawn / chan land front-end + VM first; the C
-	// backend's pthreads + mutex/condvar runtime is a follow-up. Fail fast
-	// with a clear message rather than silently miscompiling.
-	for _, fn := range g.module.Functions {
-		for _, block := range fn.Blocks {
-			for _, inst := range block.Instructions {
-				switch inst.Op {
-				case "spawn":
-					return "", fmt.Errorf("C backend: spawn is not yet supported (function %s). Use the VM backend (omnir) for concurrent programs, or land the deferred pthreads runtime", fn.Name)
-				case "chan.make":
-					return "", fmt.Errorf("C backend: channels are not yet supported (function %s). Use the VM backend (omnir), or land the deferred pthreads runtime", fn.Name)
-				case "chan.send", "chan.recv":
-					return "", fmt.Errorf("C backend: channel ops are not yet supported (function %s). Use the VM backend (omnir), or land the deferred pthreads runtime", fn.Name)
-				}
-			}
-		}
-	}
-
 	g.writeHeader()
 	g.writeStdLibFunctions()
 
@@ -361,9 +343,92 @@ func (g *CGenerator) writeDeferThunksForFunction(fn *mir.Function) {
 				g.writeDeferThunkFunc(fn, inst)
 			case "defer.push.iface":
 				g.writeDeferThunkIface(fn, inst)
+			case "spawn":
+				g.writeSpawnThunk(fn, inst)
 			}
 		}
 	}
+}
+
+// writeSpawnThunk emits a per-call-site pthread thunk for `spawn fn(args)`.
+// The thunk signature matches `void* (*)(void*)` so it can be handed to
+// pthread_create. It unpacks the heap-allocated context (which holds
+// snapshotted argument values), invokes the target by its mangled C name,
+// frees the context, and returns NULL — exactly the same shape as the
+// per-site defer thunks. Lambda-typed (function-value) spawn callees use
+// a `void* fn` slot that's cast to the right signature at call time.
+func (g *CGenerator) writeSpawnThunk(fn *mir.Function, inst mir.Instruction) {
+	if len(inst.Operands) == 0 {
+		return
+	}
+	calleeOp := inst.Operands[0]
+	argOps := inst.Operands[1:]
+	ctxStructName := g.spawnCtxStructName(fn, inst.ID)
+	thunkName := g.spawnThunkName(fn, inst.ID)
+
+	// Context struct: holds either a function pointer (for func-valued
+	// callees) or nothing extra (for named callees), plus one field per
+	// snapshotted argument.
+	g.output.WriteString("typedef struct {\n")
+	if calleeOp.Kind == mir.OperandValue {
+		g.output.WriteString("    void* fn;\n")
+	}
+	if calleeOp.Kind != mir.OperandValue && len(argOps) == 0 {
+		g.output.WriteString("    char __omni_spawn_empty;\n")
+	}
+	for i, op := range argOps {
+		g.output.WriteString(fmt.Sprintf("    %s a%d;\n", g.mapType(op.Type), i))
+	}
+	g.output.WriteString(fmt.Sprintf("} %s;\n", ctxStructName))
+
+	g.output.WriteString(fmt.Sprintf("static void* %s(void* __raw) {\n", thunkName))
+	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)__raw;\n", ctxStructName, ctxStructName))
+
+	switch calleeOp.Kind {
+	case mir.OperandLiteral:
+		calleeCName := g.mapFunctionName(calleeOp.Literal)
+		g.output.WriteString(fmt.Sprintf("    %s(", calleeCName))
+		for i := range argOps {
+			if i > 0 {
+				g.output.WriteString(", ")
+			}
+			g.output.WriteString(fmt.Sprintf("__ctx->a%d", i))
+		}
+		g.output.WriteString(");\n")
+	case mir.OperandValue:
+		// Function-value callee: cast __ctx->fn to the right signature
+		// using the operand's MIR func type. Return type defaults to void
+		// because spawn discards results.
+		retType := "void"
+		if r, ok := parseFuncReturnType(calleeOp.Type); ok {
+			retType = r
+		}
+		retC := g.mapType(retType)
+		var argCs []string
+		for _, op := range argOps {
+			argCs = append(argCs, g.mapType(op.Type))
+		}
+		g.output.WriteString(fmt.Sprintf("    ((%s(*)(%s))__ctx->fn)(",
+			retC, strings.Join(argCs, ", ")))
+		for i := range argOps {
+			if i > 0 {
+				g.output.WriteString(", ")
+			}
+			g.output.WriteString(fmt.Sprintf("__ctx->a%d", i))
+		}
+		g.output.WriteString(");\n")
+	}
+	g.output.WriteString("    free(__ctx);\n")
+	g.output.WriteString("    return NULL;\n")
+	g.output.WriteString("}\n\n")
+}
+
+func (g *CGenerator) spawnCtxStructName(fn *mir.Function, id mir.ValueID) string {
+	return fmt.Sprintf("__omni_spawn_ctx_%s_%d_t", g.mapFunctionName(fn.Name), int(id))
+}
+
+func (g *CGenerator) spawnThunkName(fn *mir.Function, id mir.ValueID) string {
+	return fmt.Sprintf("__omni_spawn_thunk_%s_%d", g.mapFunctionName(fn.Name), int(id))
 }
 
 // writeDeferThunkNamed handles `defer f(args)` / `defer Type.method(recv, args)`
@@ -704,6 +769,109 @@ func (g *CGenerator) emitSliceSlice(inst *mir.Instruction) error {
 	} else {
 		g.output.WriteString(fmt.Sprintf("  %s* %s = (%s*)omni_slice_subslice(%s, (int64_t)(%s), (int64_t)(%s));\n",
 			elemC, varName, elemC, tgtExpr, lowExpr, highExpr))
+		g.declaredVariables[inst.ID] = true
+	}
+	g.valueTypes[inst.ID] = inst.Type
+	return nil
+}
+
+// chanElementTypeOf extracts T from a channel type `chan<T>`. Falls back to
+// "int" so the generated C is well-formed; the checker has already gated
+// channel ops to actual channel-typed operands.
+func (g *CGenerator) chanElementTypeOf(chanType string) string {
+	if strings.HasPrefix(chanType, "chan<") && strings.HasSuffix(chanType, ">") {
+		return chanType[5 : len(chanType)-1]
+	}
+	return "int"
+}
+
+// emitSpawn emits the call site for a `spawn fn(args)` instruction. The
+// thunk has already been emitted at file scope by writeSpawnThunk; here we
+// allocate the heap context, copy in snapshotted args, and hand it off to
+// omni_spawn (a thin wrapper over pthread_create that detaches the thread).
+func (g *CGenerator) emitSpawn(inst *mir.Instruction) error {
+	if len(inst.Operands) == 0 {
+		return fmt.Errorf("spawn: missing callee operand")
+	}
+	calleeOp := inst.Operands[0]
+	argOps := inst.Operands[1:]
+	ctxStructName := g.spawnCtxStructName(g.currentDeferFn, inst.ID)
+	thunkName := g.spawnThunkName(g.currentDeferFn, inst.ID)
+
+	g.output.WriteString("  {\n")
+	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)malloc(sizeof(*__ctx));\n", ctxStructName, ctxStructName))
+	if calleeOp.Kind == mir.OperandValue {
+		g.output.WriteString(fmt.Sprintf("    __ctx->fn = (void*)%s;\n", g.getOperandValue(calleeOp)))
+	}
+	for i, op := range argOps {
+		g.output.WriteString(fmt.Sprintf("    __ctx->a%d = %s;\n", i, g.getOperandValue(op)))
+	}
+	g.output.WriteString(fmt.Sprintf("    omni_spawn(%s, __ctx);\n", thunkName))
+	g.output.WriteString("  }\n")
+	return nil
+}
+
+// emitChanMake lowers `make(chan T[, cap])` into omni_chan_make. Operand
+// layout: [elemTypeLit, capValue?]. Cap defaults to 0 (which the runtime
+// treats as a single-slot buffered channel — see omni_chan_make's comment).
+func (g *CGenerator) emitChanMake(inst *mir.Instruction) error {
+	if len(inst.Operands) == 0 {
+		return fmt.Errorf("chan.make: missing element-type operand")
+	}
+	elemOp := inst.Operands[0]
+	if elemOp.Kind != mir.OperandLiteral {
+		return fmt.Errorf("chan.make: element type must be a literal operand")
+	}
+	elemC := g.mapType(elemOp.Literal)
+	capExpr := "0"
+	if len(inst.Operands) >= 2 {
+		capExpr = g.getOperandValue(inst.Operands[1])
+	}
+	varName := g.getVariableName(inst.ID)
+	if g.declaredVariables[inst.ID] {
+		g.output.WriteString(fmt.Sprintf("  %s = omni_chan_make((int64_t)(%s), sizeof(%s));\n", varName, capExpr, elemC))
+	} else {
+		g.output.WriteString(fmt.Sprintf("  omni_chan_t* %s = omni_chan_make((int64_t)(%s), sizeof(%s));\n", varName, capExpr, elemC))
+		g.declaredVariables[inst.ID] = true
+	}
+	g.valueTypes[inst.ID] = inst.Type
+	return nil
+}
+
+// emitChanSend lowers `c <- v` into omni_chan_send. Snapshots the value
+// into a typed temporary so we can pass &temp through the runtime's
+// generic memcpy interface without caring about the element type.
+func (g *CGenerator) emitChanSend(inst *mir.Instruction) error {
+	if len(inst.Operands) != 2 {
+		return fmt.Errorf("chan.send: expected (chan, value) operands, got %d", len(inst.Operands))
+	}
+	chOp := inst.Operands[0]
+	valOp := inst.Operands[1]
+	elemC := g.mapType(g.chanElementTypeOf(chOp.Type))
+	chExpr := g.getOperandValue(chOp)
+	valExpr := g.getOperandValue(valOp)
+	g.output.WriteString("  {\n")
+	g.output.WriteString(fmt.Sprintf("    %s __elem = %s;\n", elemC, valExpr))
+	g.output.WriteString(fmt.Sprintf("    omni_chan_send(%s, &__elem);\n", chExpr))
+	g.output.WriteString("  }\n")
+	return nil
+}
+
+// emitChanRecv lowers `<-c` into omni_chan_recv. Declares a typed result
+// variable and passes its address as the destination buffer.
+func (g *CGenerator) emitChanRecv(inst *mir.Instruction) error {
+	if len(inst.Operands) != 1 {
+		return fmt.Errorf("chan.recv: expected (chan) operand, got %d", len(inst.Operands))
+	}
+	chOp := inst.Operands[0]
+	elemC := g.mapType(g.chanElementTypeOf(chOp.Type))
+	varName := g.getVariableName(inst.ID)
+	chExpr := g.getOperandValue(chOp)
+	if g.declaredVariables[inst.ID] {
+		g.output.WriteString(fmt.Sprintf("  omni_chan_recv(%s, &%s);\n", chExpr, varName))
+	} else {
+		g.output.WriteString(fmt.Sprintf("  %s %s;\n", elemC, varName))
+		g.output.WriteString(fmt.Sprintf("  omni_chan_recv(%s, &%s);\n", chExpr, varName))
 		g.declaredVariables[inst.ID] = true
 	}
 	g.valueTypes[inst.ID] = inst.Type
@@ -1551,6 +1719,26 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		return nil
 	case "slice.slice":
 		if err := g.emitSliceSlice(inst); err != nil {
+			return err
+		}
+		return nil
+	case "spawn":
+		if err := g.emitSpawn(inst); err != nil {
+			return err
+		}
+		return nil
+	case "chan.make":
+		if err := g.emitChanMake(inst); err != nil {
+			return err
+		}
+		return nil
+	case "chan.send":
+		if err := g.emitChanSend(inst); err != nil {
+			return err
+		}
+		return nil
+	case "chan.recv":
+		if err := g.emitChanRecv(inst); err != nil {
 			return err
 		}
 		return nil
@@ -4887,6 +5075,13 @@ func (g *CGenerator) mapType(omniType string) string {
 	// Handle map types: map<KeyType,ValueType>
 	if strings.HasPrefix(omniType, "map<") && strings.HasSuffix(omniType, ">") {
 		return "omni_map_t*"
+	}
+
+	// Handle channel types: chan<T> — represented at runtime by an
+	// omni_chan_t* (a pthread-backed bounded ring buffer). Element types
+	// don't widen the C type because the channel stores raw bytes.
+	if strings.HasPrefix(omniType, "chan<") && strings.HasSuffix(omniType, ">") {
+		return "omni_chan_t*"
 	}
 
 	// Handle struct types: struct<Field1Type,Field2Type,...>

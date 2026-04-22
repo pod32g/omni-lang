@@ -7716,3 +7716,125 @@ void* omni_slice_subslice(void* slice, int64_t lo, int64_t hi) {
     }
     return out;
 }
+
+// ---------------------------------------------------------------------------
+// Channel and spawn support (Phase 5)
+//
+// Channels are bounded ring buffers protected by a mutex with two condvars
+// (not_empty / not_full). Element bytes are stored inline in the buffer so we
+// don't pay a heap allocation per send. Capacity-0 channels (Go semantics:
+// "unbuffered" — synchronous handoff) use cap=1 internally and rely on
+// senders/receivers serializing through the mutex; not exact Go semantics
+// (a real unbuffered channel rendezvous), but close enough for early
+// programs and matches what the VM does today.
+//
+// Spawn uses pthread_create directly. The C backend emits one detached
+// thunk per spawn site that knows how to unpack the snapshotted args from a
+// heap context — same pattern as the defer codegen.
+// ---------------------------------------------------------------------------
+
+// Definition of the struct forward-declared as `omni_chan_t` in omni_rt.h.
+struct omni_chan {
+    pthread_mutex_t mu;
+    pthread_cond_t  not_empty;
+    pthread_cond_t  not_full;
+    char*           buf;       // cap * elem_size bytes
+    int64_t         cap;
+    int64_t         len;
+    int64_t         head;      // dequeue position
+    int64_t         tail;      // enqueue position
+    int64_t         elem_size;
+    int             closed;
+};
+
+omni_chan_t* omni_chan_make(int64_t cap, int64_t elem_size) {
+    if (cap <= 0) cap = 1; // see header comment
+    if (elem_size <= 0) elem_size = sizeof(void*);
+    omni_chan_t* ch = (omni_chan_t*)malloc(sizeof(omni_chan_t));
+    if (!ch) return NULL;
+    ch->buf = (char*)malloc((size_t)cap * (size_t)elem_size);
+    if (!ch->buf) { free(ch); return NULL; }
+    pthread_mutex_init(&ch->mu, NULL);
+    pthread_cond_init(&ch->not_empty, NULL);
+    pthread_cond_init(&ch->not_full, NULL);
+    ch->cap = cap;
+    ch->len = 0;
+    ch->head = 0;
+    ch->tail = 0;
+    ch->elem_size = elem_size;
+    ch->closed = 0;
+    return ch;
+}
+
+void omni_chan_send(omni_chan_t* ch, const void* elem) {
+    if (!ch) return;
+    pthread_mutex_lock(&ch->mu);
+    while (ch->len == ch->cap && !ch->closed) {
+        pthread_cond_wait(&ch->not_full, &ch->mu);
+    }
+    if (ch->closed) {
+        pthread_mutex_unlock(&ch->mu);
+        fprintf(stderr, "omni_chan_send: send on closed channel\n");
+        return;
+    }
+    memcpy(ch->buf + ch->tail * ch->elem_size, elem, (size_t)ch->elem_size);
+    ch->tail = (ch->tail + 1) % ch->cap;
+    ch->len++;
+    pthread_cond_signal(&ch->not_empty);
+    pthread_mutex_unlock(&ch->mu);
+}
+
+void omni_chan_recv(omni_chan_t* ch, void* out) {
+    if (!ch) return;
+    pthread_mutex_lock(&ch->mu);
+    while (ch->len == 0 && !ch->closed) {
+        pthread_cond_wait(&ch->not_empty, &ch->mu);
+    }
+    if (ch->len == 0 && ch->closed) {
+        // Match Go's "zero value on closed empty channel" behavior.
+        memset(out, 0, (size_t)ch->elem_size);
+        pthread_mutex_unlock(&ch->mu);
+        return;
+    }
+    memcpy(out, ch->buf + ch->head * ch->elem_size, (size_t)ch->elem_size);
+    ch->head = (ch->head + 1) % ch->cap;
+    ch->len--;
+    pthread_cond_signal(&ch->not_full);
+    pthread_mutex_unlock(&ch->mu);
+}
+
+void omni_chan_close(omni_chan_t* ch) {
+    if (!ch) return;
+    pthread_mutex_lock(&ch->mu);
+    ch->closed = 1;
+    pthread_cond_broadcast(&ch->not_empty);
+    pthread_cond_broadcast(&ch->not_full);
+    pthread_mutex_unlock(&ch->mu);
+}
+
+void omni_chan_destroy(omni_chan_t* ch) {
+    if (!ch) return;
+    pthread_mutex_destroy(&ch->mu);
+    pthread_cond_destroy(&ch->not_empty);
+    pthread_cond_destroy(&ch->not_full);
+    free(ch->buf);
+    free(ch);
+}
+
+// omni_spawn launches `thunk(ctx)` on a detached pthread. The thunk owns
+// ctx (it must free it before returning). Returns 0 on success, errno on
+// failure — the C codegen ignores the return today because there's no
+// language surface for it; failures crash via a stderr message.
+int omni_spawn(void* (*thunk)(void*), void* ctx) {
+    pthread_t tid;
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    int rc = pthread_create(&tid, &attr, thunk, ctx);
+    pthread_attr_destroy(&attr);
+    if (rc != 0) {
+        fprintf(stderr, "omni_spawn: pthread_create failed (errno %d)\n", rc);
+        if (ctx) free(ctx);
+    }
+    return rc;
+}

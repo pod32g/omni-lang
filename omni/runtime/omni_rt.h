@@ -126,6 +126,17 @@ int64_t omni_slice_cap(void* slice);
 void* omni_slice_append(void* slice, const void* elem);
 void* omni_slice_subslice(void* slice, int64_t lo, int64_t hi);
 
+// Channel + spawn support — pthread-backed bounded ring buffers and
+// detached-thread spawning. The C backend lowers `make(chan T, n)` to
+// omni_chan_make, `c <- v` to omni_chan_send, and `<-c` to omni_chan_recv.
+typedef struct omni_chan omni_chan_t;
+omni_chan_t* omni_chan_make(int64_t cap, int64_t elem_size);
+void omni_chan_send(omni_chan_t* ch, const void* elem);
+void omni_chan_recv(omni_chan_t* ch, void* out);
+void omni_chan_close(omni_chan_t* ch);
+void omni_chan_destroy(omni_chan_t* ch);
+int omni_spawn(void* (*thunk)(void*), void* ctx);
+
 // Type constants for any type support
 #define OMNI_TYPE_INT 1
 #define OMNI_TYPE_STRING 2

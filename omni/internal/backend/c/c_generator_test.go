@@ -3878,6 +3878,76 @@ func TestDeferCodegen(t *testing.T) {
 	}
 }
 
+// TestConcurrencyCodegen asserts the C backend's lowering for spawn +
+// channels: each spawn site emits a per-site pthread thunk and a heap-
+// allocated context, chan.make/send/recv go through the runtime helpers.
+func TestConcurrencyCodegen(t *testing.T) {
+	module := &mir.Module{
+		Functions: []*mir.Function{
+			{
+				Name:       "worker",
+				ReturnType: "void",
+				Params:     []mir.Param{{Name: "c", Type: "chan<int>", ID: mir.ValueID(0)}},
+				Blocks: []*mir.BasicBlock{{
+					Name:       "entry",
+					Terminator: mir.Terminator{Op: "ret"},
+				}},
+			},
+			{
+				Name:       "main",
+				ReturnType: "int",
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(0), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "2"}}},
+						{ID: mir.ValueID(1), Op: "chan.make", Type: "chan<int>",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandLiteral, Literal: "int"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "int"},
+							}},
+						{ID: mir.ValueID(2), Op: "spawn", Type: "void",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandLiteral, Literal: "worker"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "chan<int>"},
+							}},
+						{ID: mir.ValueID(3), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "7"}}},
+						{ID: mir.ValueID(4), Op: "chan.send", Type: "void",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "chan<int>"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(3), Type: "int"},
+							}},
+						{ID: mir.ValueID(5), Op: "chan.recv", Type: "int",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "chan<int>"},
+							}},
+					},
+					Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{
+						{Kind: mir.OperandValue, Value: mir.ValueID(5), Type: "int"},
+					}},
+				}},
+			},
+		},
+	}
+	result, err := GenerateC(module)
+	if err != nil {
+		t.Fatalf("GenerateC failed: %v", err)
+	}
+	for _, c := range []struct{ name, needle string }{
+		{"chan.make calls runtime", "omni_chan_make("},
+		{"chan.send copies value through runtime", "omni_chan_send("},
+		{"chan.recv writes into local", "omni_chan_recv("},
+		{"per-site spawn thunk emitted", "__omni_spawn_thunk_main_2("},
+		{"spawn site hands ctx to omni_spawn", "omni_spawn(__omni_spawn_thunk_main_2"},
+		{"thunk casts ctx and frees it", "free(__ctx);"},
+	} {
+		if !strings.Contains(result, c.needle) {
+			t.Errorf("%s: generated C is missing %q", c.name, c.needle)
+		}
+	}
+}
+
 // TestSliceCodegen asserts the C backend's slice lowering: array literals
 // allocate via omni_slice_make, append goes through omni_slice_append, and
 // slicing goes through omni_slice_subslice.
