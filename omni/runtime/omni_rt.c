@@ -7544,3 +7544,45 @@ char* omni_coverage_export(void) {
     
     return json;
 }
+
+// ---------------------------------------------------------------------------
+// Deferred-call support (Go-style `defer`)
+//
+// Each function that uses `defer` declares a local omni_defer_frame_t and
+// pushes a small per-site thunk + context pointer for every defer site. When
+// the frame reaches its terminating defer.run, we walk the list in LIFO
+// order and invoke each thunk, then free its context. The thunk is generated
+// by the C backend alongside each defer site and knows the exact argument
+// types to cast back out of the context struct.
+// ---------------------------------------------------------------------------
+
+void omni_defer_push(omni_defer_frame_t* frame, omni_defer_thunk_t thunk, void* ctx) {
+    if (!frame || !thunk) {
+        if (ctx) free(ctx);
+        return;
+    }
+    omni_defer_node_t* node = (omni_defer_node_t*)malloc(sizeof(omni_defer_node_t));
+    if (!node) {
+        if (ctx) free(ctx);
+        return;
+    }
+    node->thunk = thunk;
+    node->ctx = ctx;
+    // Prepend so walking forward yields LIFO order.
+    node->next = frame->head;
+    frame->head = node;
+}
+
+void omni_defer_run_all(omni_defer_frame_t* frame) {
+    if (!frame) return;
+    omni_defer_node_t* node = frame->head;
+    frame->head = NULL;
+    while (node) {
+        omni_defer_node_t* next = node->next;
+        // Thunks own their ctx and free it themselves — that keeps cleanup
+        // responsibility next to the per-site code that allocated it.
+        node->thunk(node->ctx);
+        free(node);
+        node = next;
+    }
+}

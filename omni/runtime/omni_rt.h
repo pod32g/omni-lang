@@ -645,6 +645,21 @@ int32_t omni_getppid(void);
 // Entry point
 int32_t omni_main();
 
+// Deferred-call support (Go-style `defer`). Each function that uses defer
+// declares a local omni_defer_frame_t, pushes per-site thunks for each
+// deferred call, and calls omni_defer_run_all before returning.
+typedef void (*omni_defer_thunk_t)(void*);
+typedef struct omni_defer_node {
+    omni_defer_thunk_t thunk;
+    void* ctx;
+    struct omni_defer_node* next;
+} omni_defer_node_t;
+typedef struct {
+    omni_defer_node_t* head;
+} omni_defer_frame_t;
+void omni_defer_push(omni_defer_frame_t* frame, omni_defer_thunk_t thunk, void* ctx);
+void omni_defer_run_all(omni_defer_frame_t* frame);
+
 // Coverage tracking functions
 void omni_coverage_init(void);
 void omni_coverage_record(const char* function_name, const char* file_path, int32_t line_number);

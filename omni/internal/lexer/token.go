@@ -49,6 +49,7 @@ const (
 	TokenOptional
 	TokenAsync
 	TokenAwait
+	TokenDefer
 
 	// Delimiters
 	TokenLParen
@@ -131,6 +132,7 @@ var kindNames = map[Kind]string{
 	TokenOptional:            "OPTIONAL",
 	TokenAsync:               "ASYNC",
 	TokenAwait:               "AWAIT",
+	TokenDefer:               "DEFER",
 	TokenLParen:              "LPAREN",
 	TokenRParen:              "RPAREN",
 	TokenLBrace:              "LBRACE",

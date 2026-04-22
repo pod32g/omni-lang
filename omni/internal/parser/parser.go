@@ -587,6 +587,8 @@ func (p *Parser) parseStmt() (ast.Stmt, error) {
 	switch p.peekKind() {
 	case lexer.TokenReturn:
 		return p.parseReturnStmt()
+	case lexer.TokenDefer:
+		return p.parseDeferStmt()
 	case lexer.TokenIf:
 		return p.parseIfStmt()
 	case lexer.TokenFor:
@@ -631,6 +633,19 @@ func (p *Parser) parseReturnStmt() (ast.Stmt, error) {
 	}
 	span := lexer.Span{Start: tok.Span.Start, End: expr.Span().End}
 	return &ast.ReturnStmt{SpanInfo: span, Value: expr}, nil
+}
+
+func (p *Parser) parseDeferStmt() (ast.Stmt, error) {
+	tok := p.advance() // consume 'defer'
+	expr, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	// The checker is the authoritative gatekeeper for "defer operand must be
+	// a call expression". We only store the expression here so the checker
+	// can produce a precise diagnostic with the right span.
+	span := lexer.Span{Start: tok.Span.Start, End: expr.Span().End}
+	return &ast.DeferStmt{SpanInfo: span, Call: expr}, nil
 }
 
 func (p *Parser) parseIfStmt() (ast.Stmt, error) {

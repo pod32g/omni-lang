@@ -471,6 +471,8 @@ func init() {
 		"call.string":     execCall,
 		"call.bool":       execCall,
 		"iface.call":      execIfaceCall,
+		"defer.push":      execDeferPush,
+		"defer.run":       execDeferRun,
 		"struct.init":     execStructInit,
 		"array.init":      execArrayInit,
 		"index":           execIndex,
@@ -548,7 +550,16 @@ func Execute(mod *mir.Module, entry string) (res Result, err error) {
 }
 
 type frame struct {
-	values map[mir.ValueID]Result
+	values     map[mir.ValueID]Result
+	deferStack []deferredCall // LIFO stack of pending defers
+}
+
+// deferredCall is a snapshot of a deferred call: its callee (by MIR-mangled
+// name) plus the already-evaluated argument values. Args are captured at
+// defer time, not at run time, matching Go semantics.
+type deferredCall struct {
+	callee string
+	args   []Result
 }
 
 func execFunction(funcs map[string]*mir.Function, fn *mir.Function, args []Result) (Result, error) {
@@ -1295,6 +1306,78 @@ func execIfaceCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instructi
 	rewritten.Op = "call"
 	rewritten.Operands = append([]mir.Operand{{Kind: mir.OperandLiteral, Literal: callee}}, inst.Operands[2:]...)
 	return execCall(funcs, fr, rewritten)
+}
+
+// execDeferPush snapshots a deferred call onto the current frame. The MIR
+// builder has already lowered the args as ordinary operands, so by the time
+// we get here the argument values exist in the frame — we just need to read
+// them and stash them verbatim. They will be consumed in LIFO order when the
+// frame's defer.run instruction fires before `ret`.
+func execDeferPush(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) == 0 {
+		return Result{}, fmt.Errorf("defer.push: missing callee operand")
+	}
+	calleeOp := inst.Operands[0]
+	if calleeOp.Kind != mir.OperandLiteral {
+		return Result{}, fmt.Errorf("defer.push: callee must be literal")
+	}
+	args := make([]Result, 0, len(inst.Operands)-1)
+	for _, op := range inst.Operands[1:] {
+		args = append(args, operandValue(fr, op))
+	}
+	fr.deferStack = append(fr.deferStack, deferredCall{callee: calleeOp.Literal, args: args})
+	return Result{Type: "void"}, nil
+}
+
+// execDeferRun flushes the current frame's deferred calls in LIFO order,
+// invoking each via the normal execFunction machinery. Any value they return
+// is discarded: deferred calls cannot contribute to the enclosing function's
+// result (matching Go semantics).
+func execDeferRun(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	// Walk the stack in reverse and clear it before dispatching so that a
+	// deferred call which itself defers on the same frame (unusual but legal)
+	// doesn't double-run the existing entries.
+	pending := fr.deferStack
+	fr.deferStack = nil
+	for i := len(pending) - 1; i >= 0; i-- {
+		d := pending[i]
+		if result, handled := execIntrinsicWithArgs(d.callee, d.args, fr); handled {
+			_ = result
+			continue
+		}
+		fn, ok := funcs[d.callee]
+		if !ok {
+			return Result{}, fmt.Errorf("defer.run: callee %q not found", d.callee)
+		}
+		if _, err := execFunction(funcs, fn, d.args); err != nil {
+			return Result{}, err
+		}
+	}
+	return Result{Type: "void"}, nil
+}
+
+// execIntrinsicWithArgs is a thin adapter that lets deferred calls to
+// builtin / stdlib intrinsics reuse the existing intrinsic dispatcher. It
+// converts pre-evaluated args into temporary literal operands — the cheapest
+// way to keep the intrinsic table as the single source of truth for builtin
+// behavior without duplicating its call surface.
+func execIntrinsicWithArgs(callee string, args []Result, fr *frame) (Result, bool) {
+	ops := make([]mir.Operand, 0, len(args))
+	// Stash each arg in the frame under a transient negative ID so the
+	// intrinsic can read it through operandValue. Negative IDs are outside
+	// the range NextValue() issues, so they can't collide with real SSA
+	// values.
+	base := mir.ValueID(-1000)
+	for i, a := range args {
+		id := base - mir.ValueID(i)
+		fr.values[id] = a
+		ops = append(ops, mir.Operand{Kind: mir.OperandValue, Value: id, Type: a.Type})
+	}
+	res, handled := execIntrinsic(callee, ops, fr)
+	for i := range args {
+		delete(fr.values, base-mir.ValueID(i))
+	}
+	return res, handled
 }
 
 func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {

@@ -728,6 +728,15 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 	switch s := stmt.(type) {
 	case *ast.ReturnStmt:
 		c.handleReturn(s)
+	case *ast.DeferStmt:
+		if _, ok := s.Call.(*ast.CallExpr); !ok {
+			c.report(s.Call.Span(), "defer operand must be a call expression", "call a function or method directly, e.g. `defer close(f)`")
+			return
+		}
+		// Type-check the call now so argument errors surface at the defer
+		// site. The call's return type is intentionally discarded — deferred
+		// calls never contribute to the enclosing function's value.
+		c.checkExpr(s.Call)
 	case *ast.ExprStmt:
 		c.checkExpr(s.Expr)
 	case *ast.IfStmt:

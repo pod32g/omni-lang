@@ -988,6 +988,59 @@ func parseSource(t *testing.T, src string) (*ast.Module, error) {
 	return parser.Parse("test.omni", src)
 }
 
+func TestDeferSemantics(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "defer on plain call is valid",
+			src: `
+func noop(n: int) {}
+func main() : int {
+    defer noop(1)
+    return 0
+}`,
+		},
+		{
+			name: "defer wrong arg type is an error",
+			src: `
+func noop(n: int) {}
+func main() : int {
+    defer noop("nope")
+    return 0
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "defer with non-call operand is rejected",
+			src: `
+func main() : int {
+    var x: int = 1
+    defer x
+    return 0
+}`,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Errorf("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+			}
+		})
+	}
+}
+
 func TestInterfaceSatisfaction(t *testing.T) {
 	tests := []struct {
 		name      string

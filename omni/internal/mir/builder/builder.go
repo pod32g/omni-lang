@@ -59,6 +59,7 @@ type functionBuilder struct {
 	mb           *moduleBuilder // Reference to module builder for lambda collection
 	loopStack    []loopContext  // Stack of loop contexts for break/continue
 	modulePrefix string         // Module prefix for this function (e.g., "std.web")
+	hasDefer     bool           // set once any defer.push is emitted in this function
 }
 
 type loopContext struct {
@@ -225,6 +226,9 @@ func (mb *moduleBuilder) buildFunction(fn *ast.FuncDecl) (*mir.Function, error) 
 			return nil, err
 		}
 		if fb.block == nil {
+			if fb.hasDefer {
+				injectDeferRun(mirFunc)
+			}
 			return mirFunc, nil
 		}
 		if !fb.block.HasTerminator() {
@@ -236,7 +240,26 @@ func (mb *moduleBuilder) buildFunction(fn *ast.FuncDecl) (*mir.Function, error) 
 		}
 	}
 
+	if fb.hasDefer {
+		injectDeferRun(mirFunc)
+	}
 	return mirFunc, nil
+}
+
+// injectDeferRun appends a `defer.run` instruction immediately before every
+// `ret` terminator in the function. Backends handle defer.run by flushing the
+// function's pending deferred calls in LIFO order — matching Go semantics.
+func injectDeferRun(fn *mir.Function) {
+	for _, block := range fn.Blocks {
+		if block.Terminator.Op != "ret" {
+			continue
+		}
+		block.Instructions = append(block.Instructions, mir.Instruction{
+			ID:   mir.InvalidValue,
+			Op:   "defer.run",
+			Type: "void",
+		})
+	}
 }
 
 func (fb *functionBuilder) lowerBlock(block *ast.BlockStmt) error {
@@ -276,6 +299,8 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 		}
 		fb.block.Terminator = mir.Terminator{Op: "ret", Operands: operands}
 		return nil
+	case *ast.DeferStmt:
+		return fb.lowerDefer(s)
 	case *ast.BindingStmt:
 		val, err := fb.lowerOptionalExpr(s.Value)
 		if err != nil {
@@ -1340,6 +1365,69 @@ func (fb *functionBuilder) emitUnary(expr *ast.UnaryExpr) (mirValue, error) {
 	}
 	fb.block.Instructions = append(fb.block.Instructions, inst)
 	return mirValue{ID: id, Type: resultType}, nil
+}
+
+// lowerDefer lowers `defer <call>` to a defer.push instruction that snapshots
+// the call's arguments (by fully lowering them) and records the target. The
+// actual invocation is deferred to the defer.run instruction(s) the builder
+// injects before every terminating `ret` in this function.
+//
+// Operand layout mirrors `call`: [calleeLit, recv?, args...]. For a method
+// call `x.m(a, b)` we mangle as `TypeName.m` and prepend x — same trick as
+// emitCall's method-dispatch path. Interface-typed or lambda-typed deferred
+// calls are not supported yet (the language surface doesn't need them to
+// demonstrate LIFO + arg snapshotting); they'd require threading through
+// iface.call / func.call equivalents, which we can do in a follow-up when a
+// motivating use case appears.
+func (fb *functionBuilder) lowerDefer(s *ast.DeferStmt) error {
+	callExpr, ok := s.Call.(*ast.CallExpr)
+	if !ok {
+		return fmt.Errorf("mir builder: defer operand must be a call expression")
+	}
+
+	operands := []mir.Operand{}
+	switch callee := callExpr.Callee.(type) {
+	case *ast.IdentifierExpr:
+		operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: callee.Name})
+	case *ast.MemberExpr:
+		// Either a module-qualified call (`pkg.fn(...)`) or a method call
+		// (`x.m(...)`). Reuse the struct-type heuristic from emitCall.
+		if ident, ok := callee.Target.(*ast.IdentifierExpr); ok {
+			if sym, inEnv := fb.env[ident.Name]; inEnv {
+				if _, isStruct := fb.mb.structFields[sym.Type]; isStruct {
+					methodName := sym.Type + "." + callee.Member
+					if _, exists := fb.sigs[methodName]; exists {
+						operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: methodName})
+						operands = append(operands, valueOperand(sym.Value, sym.Type))
+						break
+					}
+				}
+			}
+			operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: ident.Name + "." + callee.Member})
+		} else {
+			return fmt.Errorf("mir builder: defer on unsupported callee shape %T", callee.Target)
+		}
+	default:
+		return fmt.Errorf("mir builder: defer on unsupported callee expression %T", callExpr.Callee)
+	}
+
+	for _, arg := range callExpr.Args {
+		v, err := fb.lowerExpr(arg)
+		if err != nil {
+			return err
+		}
+		operands = append(operands, valueOperand(v.ID, v.Type))
+	}
+
+	id := fb.fn.NextValue()
+	fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+		ID:       id,
+		Op:       "defer.push",
+		Type:     "void",
+		Operands: operands,
+	})
+	fb.hasDefer = true
+	return nil
 }
 
 func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {

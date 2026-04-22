@@ -46,6 +46,11 @@ type CGenerator struct {
 	returnedValueID mir.ValueID
 	// Track which variables were declared at the top of the function
 	declaredVariables map[mir.ValueID]bool
+	// currentDeferFn is the MIR function currently being generated. The defer
+	// emitters read it to name per-site context structs and thunks
+	// consistently between the pre-function thunk emission and the body
+	// emission of defer.push.
+	currentDeferFn *mir.Function
 }
 
 // NewCGenerator creates a new C code generator
@@ -162,6 +167,9 @@ func (g *CGenerator) generate() (string, error) {
 
 	// Then generate function definitions
 	for _, fn := range g.module.Functions {
+		// Emit defer thunks for this function ahead of the function body so
+		// the body can reference them as static file-scope symbols.
+		g.writeDeferThunksForFunction(fn)
 		if err := g.generateFunction(fn); err != nil {
 			return "", err
 		}
@@ -321,6 +329,116 @@ func (g *CGenerator) writeFunctionDeclarations() {
 	g.output.WriteString("\n")
 }
 
+// writeDeferThunksForFunction scans a function for defer.push instructions
+// and, for each one, emits a file-scope context struct + thunk function that
+// unpacks the snapshotted args and invokes the target. Emitted just before
+// the enclosing function's definition.
+func (g *CGenerator) writeDeferThunksForFunction(fn *mir.Function) {
+	for _, block := range fn.Blocks {
+		for _, inst := range block.Instructions {
+			if inst.Op != "defer.push" {
+				continue
+			}
+			if len(inst.Operands) == 0 {
+				continue
+			}
+			calleeOp := inst.Operands[0]
+			if calleeOp.Kind != mir.OperandLiteral {
+				continue
+			}
+			argOps := inst.Operands[1:]
+
+			ctxStructName := g.deferCtxStructName(fn, inst.ID)
+			thunkName := g.deferThunkName(fn, inst.ID)
+			calleeCName := g.mapFunctionName(calleeOp.Literal)
+
+			// Context struct: one field per argument, typed via mapType on
+			// the operand's MIR type. Zero-arg defers still get an empty
+			// struct so malloc(sizeof(*ctx)) is valid and the thunk body can
+			// reference &ctx->something uniformly if extended later.
+			g.output.WriteString(fmt.Sprintf("typedef struct {\n"))
+			if len(argOps) == 0 {
+				// C forbids zero-length structs in strict modes; include a
+				// single padding byte so the declaration is always legal.
+				g.output.WriteString("    char __omni_defer_empty;\n")
+			} else {
+				for i, op := range argOps {
+					g.output.WriteString(fmt.Sprintf("    %s a%d;\n", g.mapType(op.Type), i))
+				}
+			}
+			g.output.WriteString(fmt.Sprintf("} %s;\n", ctxStructName))
+
+			// Thunk: cast ctx back, invoke the target, free the ctx. The
+			// target is called by its mangled C name, so user functions,
+			// methods (TypeName.method → TypeName_method), and stdlib
+			// intrinsics (std.io.println → omni_println_string) all go
+			// through the same path.
+			g.output.WriteString(fmt.Sprintf("static void %s(void* __raw) {\n", thunkName))
+			g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)__raw;\n", ctxStructName, ctxStructName))
+			g.output.WriteString(fmt.Sprintf("    %s(", calleeCName))
+			for i := range argOps {
+				if i > 0 {
+					g.output.WriteString(", ")
+				}
+				g.output.WriteString(fmt.Sprintf("__ctx->a%d", i))
+			}
+			g.output.WriteString(");\n")
+			g.output.WriteString("    free(__ctx);\n")
+			g.output.WriteString("}\n\n")
+		}
+	}
+}
+
+// functionHasDefer returns true if the given function contains at least one
+// defer.push instruction. The C backend uses this to decide whether to emit
+// the per-function omni_defer_frame_t variable.
+func functionHasDefer(fn *mir.Function) bool {
+	for _, block := range fn.Blocks {
+		for _, inst := range block.Instructions {
+			if inst.Op == "defer.push" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (g *CGenerator) deferCtxStructName(fn *mir.Function, id mir.ValueID) string {
+	return fmt.Sprintf("__omni_defer_ctx_%s_%d_t", g.mapFunctionName(fn.Name), int(id))
+}
+
+func (g *CGenerator) deferThunkName(fn *mir.Function, id mir.ValueID) string {
+	return fmt.Sprintf("__omni_defer_thunk_%s_%d", g.mapFunctionName(fn.Name), int(id))
+}
+
+// emitDeferPush emits the C code for a defer.push instruction: allocate a
+// context struct, fill it from the operands' current values, and register it
+// with the enclosing function's omni_defer_frame.
+func (g *CGenerator) emitDeferPush(inst *mir.Instruction) error {
+	if len(inst.Operands) == 0 {
+		return fmt.Errorf("defer.push: missing callee operand")
+	}
+	argOps := inst.Operands[1:]
+	ctxStructName := g.deferCtxStructName(g.currentDeferFn, inst.ID)
+	thunkName := g.deferThunkName(g.currentDeferFn, inst.ID)
+
+	g.output.WriteString("  {\n")
+	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)malloc(sizeof(*__ctx));\n", ctxStructName, ctxStructName))
+	for i, op := range argOps {
+		g.output.WriteString(fmt.Sprintf("    __ctx->a%d = %s;\n", i, g.getOperandValue(op)))
+	}
+	g.output.WriteString(fmt.Sprintf("    omni_defer_push(&__omni_defer_frame, %s, __ctx);\n", thunkName))
+	g.output.WriteString("  }\n")
+	return nil
+}
+
+// emitDeferRun emits the flush call: `omni_defer_run_all(&__omni_defer_frame);`.
+// The MIR builder places this immediately before every `ret` terminator, so
+// it naturally runs in LIFO order ahead of the actual return.
+func (g *CGenerator) emitDeferRun() {
+	g.output.WriteString("  omni_defer_run_all(&__omni_defer_frame);\n")
+}
+
 // emitIfaceCall emits the C code for an iface.call MIR instruction. The op's
 // operand layout is [ifaceNameLit, methodNameLit, receiver, args...]. We look
 // up the concrete method pointer at runtime via omni_method_lookup using the
@@ -406,23 +524,23 @@ func (g *CGenerator) writeInterfaceDispatchSupport() {
 	type entry struct{ typeName, methodName, cName string }
 	var entries []entry
 	for _, fn := range g.module.Functions {
-		dot := strings.Index(fn.Name, ".")
-		if dot <= 0 || dot == len(fn.Name)-1 {
+		// Only include `TypeName.method` mangled names — exactly one dot.
+		// Module-qualified stdlib names like `std.io.println` (two dots)
+		// are not user methods and must not appear in this table.
+		if strings.Count(fn.Name, ".") != 1 {
 			continue
 		}
+		dot := strings.Index(fn.Name, ".")
 		typeName := fn.Name[:dot]
 		methodName := fn.Name[dot+1:]
-		// Skip module-qualified names like `std.io.println` — they are not
-		// user methods. Heuristic: a user type is a single identifier, not a
-		// dotted path.
-		if strings.Contains(typeName, ".") {
+		if typeName == "" || methodName == "" || !isLikelyTypeName(typeName) {
 			continue
 		}
-		// Skip if the receiver's type isn't an uppercase-started identifier
-		// (OmniLang user type naming convention); avoids picking up things
-		// like `io.println` that slip through when modules are collapsed
-		// into the MIR with a single segment.
-		if typeName == "" || !isLikelyTypeName(typeName) {
+		// Also skip known stdlib aliases (e.g., `io.println`) that the MIR
+		// sometimes collapses to a single-dot form — they're intrinsics, not
+		// methods. We detect these by checking whether the resulting C name
+		// would clash with a runtime-provided function.
+		if g.isRuntimeProvidedFunction(fn.Name) {
 			continue
 		}
 		entries = append(entries, entry{typeName, methodName, g.mapFunctionName(fn.Name)})
@@ -562,6 +680,14 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 			}
 		}
 		g.output.WriteString(") {\n")
+	}
+
+	// Track the current function so the defer emitters can name context
+	// structs and thunks consistently. Emit the frame variable up front if
+	// any defer.push appears in this function.
+	g.currentDeferFn = fn
+	if functionHasDefer(fn) {
+		g.output.WriteString("  omni_defer_frame_t __omni_defer_frame = {0};\n")
 	}
 
 	// Reset maps for this function to avoid conflicts
@@ -1114,6 +1240,14 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		if err := g.emitIfaceCall(inst); err != nil {
 			return err
 		}
+		return nil
+	case "defer.push":
+		if err := g.emitDeferPush(inst); err != nil {
+			return err
+		}
+		return nil
+	case "defer.run":
+		g.emitDeferRun()
 		return nil
 	case "const":
 		// Handle constants based on type

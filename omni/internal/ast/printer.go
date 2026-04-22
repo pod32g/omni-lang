@@ -202,6 +202,13 @@ func (p *printer) writeStmt(stmt Stmt) {
 			}
 		})
 		p.writeLine("}")
+	case *DeferStmt:
+		p.writeLine("DeferStmt {")
+		p.indent(func() {
+			p.writeLine("Call")
+			p.indent(func() { p.writeExpr(s.Call) })
+		})
+		p.writeLine("}")
 	case *ExprStmt:
 		p.writeLine("ExprStmt")
 		p.indent(func() { p.writeExpr(s.Expr) })

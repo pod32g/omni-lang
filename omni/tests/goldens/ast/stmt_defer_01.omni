@@ -1,0 +1,6 @@
+func cleanup(n:int) {}
+
+func run() {
+  defer cleanup(1)
+  defer cleanup(2)
+}

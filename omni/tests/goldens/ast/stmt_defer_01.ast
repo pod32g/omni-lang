@@ -1,0 +1,37 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name cleanup
+      Params [
+        n: int
+      ]
+      Body
+        Block {
+        }
+    }
+    FuncDecl {
+      Name run
+      Body
+        Block {
+          DeferStmt {
+            Call
+              Call
+                Callee
+                  Identifier cleanup
+                Args [
+                  Literal int 1
+                ]
+          }
+          DeferStmt {
+            Call
+              Call
+                Callee
+                  Identifier cleanup
+                Args [
+                  Literal int 2
+                ]
+          }
+        }
+    }
+  ]
+}

@@ -195,6 +195,18 @@ func (s *ReturnStmt) Span() lexer.Span { return s.SpanInfo }
 func (s *ReturnStmt) node()            {}
 func (s *ReturnStmt) stmt()            {}
 
+// DeferStmt schedules a function call to run when the enclosing function
+// returns. Arguments are evaluated at the defer site; calls run in LIFO
+// order. The Call expression must be a *CallExpr (enforced by the checker).
+type DeferStmt struct {
+	SpanInfo lexer.Span
+	Call     Expr
+}
+
+func (s *DeferStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *DeferStmt) node()            {}
+func (s *DeferStmt) stmt()            {}
+
 // ExprStmt wraps an expression as a statement.
 type ExprStmt struct {
 	SpanInfo lexer.Span

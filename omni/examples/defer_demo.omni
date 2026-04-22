@@ -1,0 +1,21 @@
+import std
+
+func show(label: string, n: int) {
+    std.io.println(label)
+    std.io.println(std.int_to_string(n))
+}
+
+func main() : int {
+    var i: int = 0
+    while i < 3 {
+        // Each iteration's value of i must be captured at defer time,
+        // so the output is "in_loop 2 / in_loop 1 / in_loop 0" (LIFO).
+        defer show("in_loop", i)
+        i = i + 1
+    }
+    // These run in LIFO order after the loop's defers, so the tail is:
+    //   second / first / in_loop 2 / in_loop 1 / in_loop 0
+    defer show("first", 1)
+    defer show("second", 2)
+    return 0
+}

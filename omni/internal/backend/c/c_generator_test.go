@@ -3819,6 +3819,65 @@ func TestCGenerator(t *testing.T) {
 	})
 }
 
+// TestDeferCodegen asserts the C backend's defer lowering: each defer.push
+// gets a per-site context struct + thunk, the enclosing function declares
+// an omni_defer_frame_t, and defer.run flushes via omni_defer_run_all.
+func TestDeferCodegen(t *testing.T) {
+	module := &mir.Module{
+		Functions: []*mir.Function{
+			{
+				Name:       "cleanup",
+				ReturnType: "void",
+				Params:     []mir.Param{{Name: "n", Type: "int", ID: mir.ValueID(0)}},
+				Blocks: []*mir.BasicBlock{{
+					Name:       "entry",
+					Terminator: mir.Terminator{Op: "ret"},
+				}},
+			},
+			{
+				Name:       "run",
+				ReturnType: "void",
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(1), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "42"}}},
+						{ID: mir.ValueID(2), Op: "defer.push", Type: "void",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandLiteral, Literal: "cleanup"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "int"},
+							}},
+						{ID: mir.InvalidValue, Op: "defer.run", Type: "void"},
+					},
+					Terminator: mir.Terminator{Op: "ret"},
+				}},
+			},
+		},
+	}
+
+	result, err := GenerateC(module)
+	if err != nil {
+		t.Fatalf("GenerateC failed: %v", err)
+	}
+
+	checks := []struct {
+		name   string
+		needle string
+	}{
+		{"per-site context struct emitted", "__omni_defer_ctx_run_2_t"},
+		{"per-site thunk emitted", "__omni_defer_thunk_run_2("},
+		{"thunk frees its ctx", "free(__ctx);"},
+		{"function declares defer frame", "omni_defer_frame_t __omni_defer_frame"},
+		{"defer.push registers the thunk", "omni_defer_push(&__omni_defer_frame, __omni_defer_thunk_run_2"},
+		{"defer.run flushes the frame", "omni_defer_run_all(&__omni_defer_frame)"},
+	}
+	for _, c := range checks {
+		if !strings.Contains(result, c.needle) {
+			t.Errorf("%s: generated C is missing %q", c.name, c.needle)
+		}
+	}
+}
+
 // TestInterfaceDispatchCodegen asserts that the C backend lowers interface
 // values correctly: it tags concrete values with their OmniLang type, emits
 // the method-lookup table including each user method, and produces a dispatch
