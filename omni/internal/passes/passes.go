@@ -84,7 +84,7 @@ func verifyFunction(fn *mir.Function) error {
 
 func verifyInstruction(inst mir.Instruction) error {
 	switch inst.Op {
-	case "const", "add", "sub", "mul", "div", "mod", "strcat", "neg", "not", "bitnot", "bitand", "bitor", "bitxor", "lshift", "rshift", "cast", "index", "index.assign", "array.init", "map.init", "struct.init", "member", "member.assign", "call", "call.int", "call.void", "call.string", "call.bool", "iface.call", "defer.push", "defer.push.func", "defer.push.iface", "defer.run", "slice.append", "slice.slice", "assign", "func.ref", "func.assign", "func.call", "closure.create", "closure.capture", "closure.bind", "throw", "await":
+	case "const", "add", "sub", "mul", "div", "mod", "strcat", "neg", "not", "bitnot", "bitand", "bitor", "bitxor", "lshift", "rshift", "cast", "index", "index.assign", "array.init", "map.init", "struct.init", "member", "member.assign", "call", "call.int", "call.void", "call.string", "call.bool", "iface.call", "defer.push", "defer.push.func", "defer.push.iface", "defer.run", "slice.append", "slice.slice", "spawn", "chan.make", "chan.send", "chan.recv", "assign", "func.ref", "func.assign", "func.call", "closure.create", "closure.capture", "closure.bind", "throw", "await":
 		// These instructions are already validated by the builder
 		return nil
 	case "cmp.eq", "cmp.neq", "cmp.lt", "cmp.lte", "cmp.gt", "cmp.gte", "and", "or":

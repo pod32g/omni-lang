@@ -988,6 +988,90 @@ func parseSource(t *testing.T, src string) (*ast.Module, error) {
 	return parser.Parse("test.omni", src)
 }
 
+func TestConcurrencySemantics(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "spawn + send + recv typecheck",
+			src: `
+func worker(c: chan int) { c <- 1 }
+func main() : int {
+    let c: chan int = make(chan int, 2)
+    spawn worker(c)
+    let v: int = <-c
+    return v
+}`,
+		},
+		{
+			name: "spawn on non-call is rejected",
+			src: `
+func main() : int {
+    let x: int = 1
+    spawn x
+    return 0
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "send on non-channel is an error",
+			src: `
+func main() : int {
+    let x: int = 1
+    x <- 2
+    return 0
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "send element type mismatch is an error",
+			src: `
+func main() : int {
+    let c: chan int = make(chan int)
+    c <- "nope"
+    return 0
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "recv from non-channel is an error",
+			src: `
+func main() : int {
+    let x: int = 1
+    let v: int = <-x
+    return v
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "make capacity must be int",
+			src: `
+func main() : int {
+    let c: chan int = make(chan int, "huge")
+    return 0
+}`,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Errorf("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+			}
+		})
+	}
+}
+
 func TestSliceSemantics(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -301,6 +301,10 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 		return nil
 	case *ast.DeferStmt:
 		return fb.lowerDefer(s)
+	case *ast.SpawnStmt:
+		return fb.lowerSpawn(s)
+	case *ast.SendStmt:
+		return fb.lowerSend(s)
 	case *ast.BindingStmt:
 		val, err := fb.lowerOptionalExpr(s.Value)
 		if err != nil {
@@ -1128,6 +1132,10 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		return fb.emitIndexAccess(e)
 	case *ast.SliceExpr:
 		return fb.emitSlice(e)
+	case *ast.RecvExpr:
+		return fb.emitChanRecv(e)
+	case *ast.MakeChanExpr:
+		return fb.emitMakeChan(e)
 	case *ast.AssignmentExpr:
 		if err := fb.lowerStmt(&ast.AssignmentStmt{SpanInfo: e.SpanInfo, Left: e.Left, Right: e.Right}); err != nil {
 			return mirValue{}, err
@@ -1452,6 +1460,123 @@ func (fb *functionBuilder) lowerDefer(s *ast.DeferStmt) error {
 	})
 	fb.hasDefer = true
 	return nil
+}
+
+// lowerSpawn lowers `spawn <call>` to a `spawn` MIR op. The op's first
+// operand identifies the callee (literal name for free functions and module
+// calls, value for func-typed locals) and the remaining operands are the
+// already-evaluated arguments. Backends start a new concurrent task and
+// invoke the callee with those args; spawned calls have no return value
+// path back to the spawner.
+func (fb *functionBuilder) lowerSpawn(s *ast.SpawnStmt) error {
+	callExpr, ok := s.Call.(*ast.CallExpr)
+	if !ok {
+		return fmt.Errorf("mir builder: spawn operand must be a call expression")
+	}
+	operands := []mir.Operand{}
+	switch callee := callExpr.Callee.(type) {
+	case *ast.IdentifierExpr:
+		// Function-typed local routes through the callable's value, the same
+		// trick lowerDefer uses for defer.push.func.
+		if sym, inEnv := fb.env[callee.Name]; inEnv && strings.Contains(sym.Type, ") -> ") {
+			operands = append(operands, valueOperand(sym.Value, sym.Type))
+		} else {
+			operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: callee.Name})
+		}
+	case *ast.MemberExpr:
+		if ident, ok := callee.Target.(*ast.IdentifierExpr); ok {
+			operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: ident.Name + "." + callee.Member})
+		} else {
+			return fmt.Errorf("mir builder: spawn on unsupported callee shape %T", callee.Target)
+		}
+	default:
+		return fmt.Errorf("mir builder: spawn on unsupported callee expression %T", callExpr.Callee)
+	}
+	for _, arg := range callExpr.Args {
+		v, err := fb.lowerExpr(arg)
+		if err != nil {
+			return err
+		}
+		operands = append(operands, valueOperand(v.ID, v.Type))
+	}
+	id := fb.fn.NextValue()
+	fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+		ID:       id,
+		Op:       "spawn",
+		Type:     "void",
+		Operands: operands,
+	})
+	return nil
+}
+
+// lowerSend lowers `c <- v` to a chan.send op. Operands: [chan, value].
+func (fb *functionBuilder) lowerSend(s *ast.SendStmt) error {
+	ch, err := fb.lowerExpr(s.Chan)
+	if err != nil {
+		return err
+	}
+	val, err := fb.lowerExpr(s.Value)
+	if err != nil {
+		return err
+	}
+	id := fb.fn.NextValue()
+	fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+		ID:   id,
+		Op:   "chan.send",
+		Type: "void",
+		Operands: []mir.Operand{
+			valueOperand(ch.ID, ch.Type),
+			valueOperand(val.ID, val.Type),
+		},
+	})
+	return nil
+}
+
+// emitChanRecv lowers `<-c` to a chan.recv op. Result type is the channel's
+// element type, recovered from the channel value's MIR type.
+func (fb *functionBuilder) emitChanRecv(e *ast.RecvExpr) (mirValue, error) {
+	ch, err := fb.lowerExpr(e.Chan)
+	if err != nil {
+		return mirValue{}, err
+	}
+	elem := inferTypePlaceholder
+	if strings.HasPrefix(ch.Type, "chan<") && strings.HasSuffix(ch.Type, ">") {
+		elem = ch.Type[len("chan<") : len(ch.Type)-1]
+	}
+	id := fb.fn.NextValue()
+	fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+		ID:   id,
+		Op:   "chan.recv",
+		Type: elem,
+		Operands: []mir.Operand{
+			valueOperand(ch.ID, ch.Type),
+		},
+	})
+	return mirValue{ID: id, Type: elem}, nil
+}
+
+// emitMakeChan lowers `make(chan T)` / `make(chan T, cap)` to a chan.make op.
+// Operand layout: [elemTypeLit, capValue?]. The literal carries the element
+// type so backends can size the underlying buffer / typed Go channel.
+func (fb *functionBuilder) emitMakeChan(e *ast.MakeChanExpr) (mirValue, error) {
+	elem := typeExprToString(e.ElemType)
+	operands := []mir.Operand{{Kind: mir.OperandLiteral, Literal: elem}}
+	if e.Cap != nil {
+		c, err := fb.lowerExpr(e.Cap)
+		if err != nil {
+			return mirValue{}, err
+		}
+		operands = append(operands, valueOperand(c.ID, c.Type))
+	}
+	resultType := buildGeneric("chan", []string{elem})
+	id := fb.fn.NextValue()
+	fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+		ID:       id,
+		Op:       "chan.make",
+		Type:     resultType,
+		Operands: operands,
+	})
+	return mirValue{ID: id, Type: resultType}, nil
 }
 
 func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {

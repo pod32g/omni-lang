@@ -46,6 +46,8 @@ var keywords = map[string]Kind{
 	"async":    TokenAsync,
 	"await":    TokenAwait,
 	"defer":    TokenDefer,
+	"spawn":    TokenSpawn,
+	"chan":     TokenChan,
 }
 
 // Lexer transforms a source buffer into a stream of tokens while tracking
@@ -206,6 +208,12 @@ func (l *Lexer) NextToken() (Token, error) {
 		}
 		if l.match('=') {
 			return l.emitToken(TokenLessEqual, startPos, startOffset)
+		}
+		// `<-` is the channel send/recv arrow. We tokenize it greedily here
+		// (no whitespace allowed between `<` and `-`); `x < -y` keeps working
+		// because the space breaks the sequence at the rune-stream level.
+		if l.match('-') {
+			return l.emitToken(TokenLArrow, startPos, startOffset)
 		}
 		return l.emitToken(TokenLess, startPos, startOffset)
 	case '>':

@@ -589,6 +589,8 @@ func (p *Parser) parseStmt() (ast.Stmt, error) {
 		return p.parseReturnStmt()
 	case lexer.TokenDefer:
 		return p.parseDeferStmt()
+	case lexer.TokenSpawn:
+		return p.parseSpawnStmt()
 	case lexer.TokenIf:
 		return p.parseIfStmt()
 	case lexer.TokenFor:
@@ -613,6 +615,19 @@ func (p *Parser) parseStmt() (ast.Stmt, error) {
 		expr, err := p.parseExpr()
 		if err != nil {
 			return nil, err
+		}
+		// Channel send statement: `c <- v`. The first expression names the
+		// channel; if the next token is `<-`, parse the value to send and
+		// emit a SendStmt. (Recv `<-c` is an expression and is handled by
+		// the unary-operator path during parseExpr.)
+		if p.peekKind() == lexer.TokenLArrow {
+			p.advance()
+			value, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			span := lexer.Span{Start: expr.Span().Start, End: value.Span().End}
+			return &ast.SendStmt{SpanInfo: span, Chan: expr, Value: value}, nil
 		}
 		// Postfix increment/decrement as statements
 		if inc, ok := expr.(*ast.IncrementExpr); ok {
@@ -646,6 +661,18 @@ func (p *Parser) parseDeferStmt() (ast.Stmt, error) {
 	// can produce a precise diagnostic with the right span.
 	span := lexer.Span{Start: tok.Span.Start, End: expr.Span().End}
 	return &ast.DeferStmt{SpanInfo: span, Call: expr}, nil
+}
+
+// parseSpawnStmt parses `spawn fn(args)`. The checker enforces that the
+// expression after `spawn` is a call.
+func (p *Parser) parseSpawnStmt() (ast.Stmt, error) {
+	tok := p.advance() // consume 'spawn'
+	expr, err := p.parseExpr()
+	if err != nil {
+		return nil, err
+	}
+	span := lexer.Span{Start: tok.Span.Start, End: expr.Span().End}
+	return &ast.SpawnStmt{SpanInfo: span, Call: expr}, nil
 }
 
 func (p *Parser) parseIfStmt() (ast.Stmt, error) {
@@ -1037,6 +1064,16 @@ func (p *Parser) parseFactor() (ast.Expr, error) {
 
 func (p *Parser) parseUnary() (ast.Expr, error) {
 	switch p.peekKind() {
+	case lexer.TokenLArrow:
+		// Channel receive: `<-c`. Returns the value the channel produces.
+		// Unlike SendStmt this is an expression — a value flows into the
+		// surrounding context.
+		arrow := p.advance()
+		ch, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.RecvExpr{SpanInfo: lexer.Span{Start: arrow.Span.Start, End: ch.Span().End}, Chan: ch}, nil
 	case lexer.TokenAwait:
 		awaitTok := p.advance()
 		expr, err := p.parseUnary()
@@ -1184,6 +1221,30 @@ func (p *Parser) parsePostfix() (ast.Expr, error) {
 
 func (p *Parser) finishCall(callee ast.Expr) (ast.Expr, error) {
 	p.expect(lexer.TokenLParen)
+
+	// Special-case `make(chan T)` and `make(chan T, cap)` — `chan T` is a
+	// type expression, not a value expression, so the regular arg-parsing
+	// loop can't carry it. We only re-route when the callee is the bare
+	// identifier `make` AND the first non-paren token is `chan`, which
+	// keeps a user binding named `make` from being hijacked.
+	if ident, ok := callee.(*ast.IdentifierExpr); ok && ident.Name == "make" && p.peekKind() == lexer.TokenChan {
+		p.advance() // consume 'chan'
+		elemType, err := p.parseSingleType()
+		if err != nil {
+			return nil, err
+		}
+		var capExpr ast.Expr
+		if p.match(lexer.TokenComma) {
+			capExpr, err = p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+		}
+		rparen := p.expect(lexer.TokenRParen)
+		span := lexer.Span{Start: callee.Span().Start, End: rparen.Span.End}
+		return &ast.MakeChanExpr{SpanInfo: span, ElemType: elemType, Cap: capExpr}, nil
+	}
+
 	args := []ast.Expr{}
 	if p.peekKind() != lexer.TokenRParen {
 		for {
@@ -1795,6 +1856,18 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 		}
 		span := lexer.Span{Start: start, End: elementType.SpanInfo.End}
 		return &ast.TypeExpr{SpanInfo: span, Name: "[]", Args: []*ast.TypeExpr{elementType}}, nil
+	}
+
+	// Handle channel types: `chan T`. Stored under TypeExpr.Name == "chan"
+	// with Args = [T], parallel to how array types use Name == "[]".
+	if p.match(lexer.TokenChan) {
+		start := p.previous().Span.Start
+		elemType, err := p.parseSingleType()
+		if err != nil {
+			return nil, err
+		}
+		span := lexer.Span{Start: start, End: elemType.SpanInfo.End}
+		return &ast.TypeExpr{SpanInfo: span, Name: "chan", Args: []*ast.TypeExpr{elemType}}, nil
 	}
 
 	// Handle pointer types: *Type or *(Type)

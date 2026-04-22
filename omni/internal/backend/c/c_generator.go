@@ -153,6 +153,24 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
+	// Phase 5 (concurrency): spawn / chan land front-end + VM first; the C
+	// backend's pthreads + mutex/condvar runtime is a follow-up. Fail fast
+	// with a clear message rather than silently miscompiling.
+	for _, fn := range g.module.Functions {
+		for _, block := range fn.Blocks {
+			for _, inst := range block.Instructions {
+				switch inst.Op {
+				case "spawn":
+					return "", fmt.Errorf("C backend: spawn is not yet supported (function %s). Use the VM backend (omnir) for concurrent programs, or land the deferred pthreads runtime", fn.Name)
+				case "chan.make":
+					return "", fmt.Errorf("C backend: channels are not yet supported (function %s). Use the VM backend (omnir), or land the deferred pthreads runtime", fn.Name)
+				case "chan.send", "chan.recv":
+					return "", fmt.Errorf("C backend: channel ops are not yet supported (function %s). Use the VM backend (omnir), or land the deferred pthreads runtime", fn.Name)
+				}
+			}
+		}
+	}
+
 	g.writeHeader()
 	g.writeStdLibFunctions()
 

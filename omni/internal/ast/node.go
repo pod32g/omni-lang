@@ -207,6 +207,55 @@ func (s *DeferStmt) Span() lexer.Span { return s.SpanInfo }
 func (s *DeferStmt) node()            {}
 func (s *DeferStmt) stmt()            {}
 
+// SpawnStmt launches a function call as a new goroutine-equivalent
+// concurrent task: `spawn fn(args)`. The Call expression must be a
+// *CallExpr (enforced by the checker). Arguments are evaluated by the
+// spawning goroutine before the new task starts running, matching Go's
+// `go` semantics around argument capture.
+type SpawnStmt struct {
+	SpanInfo lexer.Span
+	Call     Expr
+}
+
+func (s *SpawnStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *SpawnStmt) node()            {}
+func (s *SpawnStmt) stmt()            {}
+
+// SendStmt models `chan_expr <- value_expr`. Blocks if the channel is full
+// (or always, for unbuffered channels) until a receiver is ready.
+type SendStmt struct {
+	SpanInfo lexer.Span
+	Chan     Expr
+	Value    Expr
+}
+
+func (s *SendStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *SendStmt) node()            {}
+func (s *SendStmt) stmt()            {}
+
+// RecvExpr models `<-chan_expr`. Blocks until a value is available.
+type RecvExpr struct {
+	SpanInfo lexer.Span
+	Chan     Expr
+}
+
+func (e *RecvExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *RecvExpr) node()            {}
+func (e *RecvExpr) expr()            {}
+
+// MakeChanExpr models `make(chan T)` or `make(chan T, cap)`. Treated as a
+// special syntactic form because `chan T` is a type expression, not an
+// ordinary value expression — a regular CallExpr can't carry it.
+type MakeChanExpr struct {
+	SpanInfo lexer.Span
+	ElemType *TypeExpr
+	Cap      Expr // optional buffer capacity; nil → unbuffered
+}
+
+func (e *MakeChanExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *MakeChanExpr) node()            {}
+func (e *MakeChanExpr) expr()            {}
+
 // ExprStmt wraps an expression as a statement.
 type ExprStmt struct {
 	SpanInfo lexer.Span

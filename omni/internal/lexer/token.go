@@ -50,6 +50,8 @@ const (
 	TokenAsync
 	TokenAwait
 	TokenDefer
+	TokenSpawn
+	TokenChan
 
 	// Delimiters
 	TokenLParen
@@ -90,6 +92,7 @@ const (
 	TokenMinusMinus
 	TokenArrow    // ->
 	TokenFatArrow // =>
+	TokenLArrow   // <- (channel send/recv)
 )
 
 var kindNames = map[Kind]string{
@@ -133,6 +136,8 @@ var kindNames = map[Kind]string{
 	TokenAsync:               "ASYNC",
 	TokenAwait:               "AWAIT",
 	TokenDefer:               "DEFER",
+	TokenSpawn:               "SPAWN",
+	TokenChan:                "CHAN",
 	TokenLParen:              "LPAREN",
 	TokenRParen:              "RPAREN",
 	TokenLBrace:              "LBRACE",
@@ -169,6 +174,7 @@ var kindNames = map[Kind]string{
 	TokenMinusMinus:          "MINUS_MINUS",
 	TokenArrow:               "ARROW",
 	TokenFatArrow:            "FAT_ARROW",
+	TokenLArrow:              "LARROW",
 }
 
 // String returns the stable textual representation for the token kind.

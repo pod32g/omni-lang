@@ -312,6 +312,7 @@ func (c *Checker) initBuiltins() {
 	}
 	c.knownTypes["array"] = struct{}{}
 	c.knownTypes["map"] = struct{}{}
+	c.knownTypes["chan"] = struct{}{}
 	c.knownTypes["Promise"] = struct{}{}
 	c.knownTypes["any"] = struct{}{} // Top type for dynamic values
 
@@ -745,6 +746,30 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 		// site. The call's return type is intentionally discarded — deferred
 		// calls never contribute to the enclosing function's value.
 		c.checkExpr(s.Call)
+	case *ast.SpawnStmt:
+		if _, ok := s.Call.(*ast.CallExpr); !ok {
+			c.report(s.Call.Span(), "spawn operand must be a call expression", "call a function directly, e.g. `spawn worker(in)`")
+			return
+		}
+		// Type-check the call so argument errors surface at the spawn site.
+		// The return value is discarded — spawned tasks have no value channel
+		// back to the spawner; use a chan for that.
+		c.checkExpr(s.Call)
+	case *ast.SendStmt:
+		chanType := c.checkExpr(s.Chan)
+		valueType := c.checkExpr(s.Value)
+		elem, ok := chanElementType(chanType)
+		if !ok {
+			if chanType != typeError {
+				c.report(s.Chan.Span(), fmt.Sprintf("send target must be a channel, got %s", chanType),
+					"the left side of `<-` must be a `chan T` value")
+			}
+			return
+		}
+		if valueType != typeError && !c.isAssignable(valueType, elem) {
+			c.report(s.Value.Span(), fmt.Sprintf("channel send type mismatch: expected %s, got %s", elem, valueType),
+				fmt.Sprintf("send a %s value", elem))
+		}
 	case *ast.ExprStmt:
 		c.checkExpr(s.Expr)
 	case *ast.IfStmt:
@@ -1161,6 +1186,27 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			return "int"
 		}
 		return typeInfer
+	case *ast.RecvExpr:
+		chanType := c.checkExpr(e.Chan)
+		elem, ok := chanElementType(chanType)
+		if !ok {
+			if chanType != typeError {
+				c.report(e.Chan.Span(), fmt.Sprintf("receive operand must be a channel, got %s", chanType),
+					"the operand of `<-` must be a `chan T` value")
+			}
+			return typeError
+		}
+		return elem
+	case *ast.MakeChanExpr:
+		elem := c.resolveTypeExpr(e.ElemType)
+		if e.Cap != nil {
+			capType := c.checkExpr(e.Cap)
+			if capType != typeError && !c.typesEqual(capType, "int") {
+				c.report(e.Cap.Span(), fmt.Sprintf("channel capacity must be int, got %s", capType),
+					"pass a non-negative integer or omit the capacity for an unbuffered channel")
+			}
+		}
+		return buildGeneric("chan", []string{elem})
 	case *ast.AwaitExpr:
 		// Check if we're in an async function
 		ctx := c.currentFunctionContext()
@@ -2604,6 +2650,16 @@ func arrayElementType(typ string) (string, bool) {
 	// Check for old array syntax: array<int> (for backward compatibility)
 	if strings.HasPrefix(typ, "array<") && strings.HasSuffix(typ, ">") {
 		inner := typ[len("array<") : len(typ)-1]
+		return strings.TrimSpace(inner), true
+	}
+	return "", false
+}
+
+// chanElementType extracts T from a channel type `chan<T>`. Returns ("", false)
+// if typ isn't a channel type — callers use this to gate send/recv typing.
+func chanElementType(typ string) (string, bool) {
+	if strings.HasPrefix(typ, "chan<") && strings.HasSuffix(typ, ">") {
+		inner := typ[len("chan<") : len(typ)-1]
 		return strings.TrimSpace(inner), true
 	}
 	return "", false

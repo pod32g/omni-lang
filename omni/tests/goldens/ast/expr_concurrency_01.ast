@@ -1,0 +1,54 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name worker
+      Params [
+        c: chan<int>
+      ]
+      Body
+        Block {
+          SendStmt {
+            Chan
+              Identifier c
+            Value
+              Literal int 1
+          }
+        }
+    }
+    FuncDecl {
+      Name main
+      Return int
+      Body
+        Block {
+          BindingStmt let {
+            Name c
+            Type chan<int>
+            Value
+              MakeChan int
+                Cap
+                  Literal int 2
+          }
+          SpawnStmt {
+            Call
+              Call
+                Callee
+                  Identifier worker
+                Args [
+                  Identifier c
+                ]
+          }
+          BindingStmt let {
+            Name v
+            Type int
+            Value
+              Recv
+                Identifier c
+          }
+          ReturnStmt {
+            Value
+              Identifier v
+          }
+        }
+    }
+  ]
+}

@@ -479,6 +479,10 @@ func init() {
 		"array.init":      execArrayInit,
 		"slice.append":    execSliceAppend,
 		"slice.slice":     execSliceSlice,
+		"spawn":           execSpawn,
+		"chan.make":       execChanMake,
+		"chan.send":       execChanSend,
+		"chan.recv":       execChanRecv,
 		"index":           execIndex,
 		"assign":          execAssign,
 		"map.init":        execMapInit,
@@ -855,6 +859,105 @@ func execSliceAppend(funcs map[string]*mir.Function, fr *frame, inst mir.Instruc
 	default:
 		return Result{}, fmt.Errorf("slice.append: unsupported slice backing of Go type %T", slice.Value)
 	}
+}
+
+// execSpawn launches a function call as a new goroutine. Operand layout
+// matches a regular call: [calleeLit | calleeValue, args...]. Argument values
+// are captured by the spawning goroutine before the new one starts, mirroring
+// Go's `go fn(args)` semantics.
+func execSpawn(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) == 0 {
+		return Result{}, fmt.Errorf("spawn: missing callee operand")
+	}
+	calleeOp := inst.Operands[0]
+	args := make([]Result, 0, len(inst.Operands)-1)
+	for _, op := range inst.Operands[1:] {
+		args = append(args, operandValue(fr, op))
+	}
+
+	switch calleeOp.Kind {
+	case mir.OperandLiteral:
+		callee := calleeOp.Literal
+		fn, ok := funcs[callee]
+		if !ok {
+			return Result{}, fmt.Errorf("spawn: callee %q not found", callee)
+		}
+		go func() {
+			// We deliberately discard errors and the result: spawned tasks
+			// have no direct return path. Programs route results through
+			// channels.
+			_, _ = execFunction(funcs, fn, args)
+		}()
+	case mir.OperandValue:
+		callable := operandValue(fr, calleeOp)
+		go func() {
+			_ = invokeDeferredFunc(funcs, fr, callable, args)
+		}()
+	default:
+		return Result{}, fmt.Errorf("spawn: unsupported callee operand kind")
+	}
+	return Result{Type: "void"}, nil
+}
+
+// execChanMake creates a buffered Go channel of `interface{}` typed slots.
+// We don't keep per-element typing in the VM channel — the value travels
+// through the frame's Result wrapper, which already carries its dynamic
+// type tag.
+func execChanMake(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) == 0 {
+		return Result{}, fmt.Errorf("chan.make: missing element-type operand")
+	}
+	elemOp := inst.Operands[0]
+	if elemOp.Kind != mir.OperandLiteral {
+		return Result{}, fmt.Errorf("chan.make: element type must be a literal operand")
+	}
+	bufSize := 0
+	if len(inst.Operands) >= 2 {
+		capR := operandValue(fr, inst.Operands[1])
+		if n, ok := coerceToInt(capR.Value); ok {
+			if n < 0 {
+				return Result{}, fmt.Errorf("chan.make: negative capacity %d", n)
+			}
+			bufSize = n
+		}
+	}
+	ch := make(chan Result, bufSize)
+	return Result{Type: inst.Type, Value: ch}, nil
+}
+
+// execChanSend pushes a value onto the channel. Blocks if the channel is
+// full or unbuffered with no waiting receiver.
+func execChanSend(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 2 {
+		return Result{}, fmt.Errorf("chan.send: expected (chan, value) operands, got %d", len(inst.Operands))
+	}
+	chR := operandValue(fr, inst.Operands[0])
+	val := operandValue(fr, inst.Operands[1])
+	ch, ok := chR.Value.(chan Result)
+	if !ok {
+		return Result{}, fmt.Errorf("chan.send: target is not a channel (Go type %T)", chR.Value)
+	}
+	ch <- val
+	return Result{Type: "void"}, nil
+}
+
+// execChanRecv pops a value off the channel. Blocks until one is available.
+// Result Type is set to the channel's element type so downstream
+// instructions see the right type tag.
+func execChanRecv(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 1 {
+		return Result{}, fmt.Errorf("chan.recv: expected (chan) operand, got %d", len(inst.Operands))
+	}
+	chR := operandValue(fr, inst.Operands[0])
+	ch, ok := chR.Value.(chan Result)
+	if !ok {
+		return Result{}, fmt.Errorf("chan.recv: source is not a channel (Go type %T)", chR.Value)
+	}
+	val := <-ch
+	if val.Type == "" {
+		val.Type = inst.Type
+	}
+	return val, nil
 }
 
 // execSliceSlice handles `target[low:high]`. low and high are either Value

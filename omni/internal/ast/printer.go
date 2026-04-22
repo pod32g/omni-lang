@@ -209,6 +209,22 @@ func (p *printer) writeStmt(stmt Stmt) {
 			p.indent(func() { p.writeExpr(s.Call) })
 		})
 		p.writeLine("}")
+	case *SpawnStmt:
+		p.writeLine("SpawnStmt {")
+		p.indent(func() {
+			p.writeLine("Call")
+			p.indent(func() { p.writeExpr(s.Call) })
+		})
+		p.writeLine("}")
+	case *SendStmt:
+		p.writeLine("SendStmt {")
+		p.indent(func() {
+			p.writeLine("Chan")
+			p.indent(func() { p.writeExpr(s.Chan) })
+			p.writeLine("Value")
+			p.indent(func() { p.writeExpr(s.Value) })
+		})
+		p.writeLine("}")
 	case *ExprStmt:
 		p.writeLine("ExprStmt")
 		p.indent(func() { p.writeExpr(s.Expr) })
@@ -345,6 +361,17 @@ func (p *printer) writeExpr(expr Expr) {
 	case *UnaryExpr:
 		p.writeLine("Unary " + e.Op)
 		p.indent(func() { p.writeExpr(e.Expr) })
+	case *RecvExpr:
+		p.writeLine("Recv")
+		p.indent(func() { p.writeExpr(e.Chan) })
+	case *MakeChanExpr:
+		p.writeLine("MakeChan " + p.formatType(e.ElemType))
+		if e.Cap != nil {
+			p.indent(func() {
+				p.writeLine("Cap")
+				p.indent(func() { p.writeExpr(e.Cap) })
+			})
+		}
 	case *BinaryExpr:
 		p.writeLine("Binary " + e.Op)
 		p.indent(func() {

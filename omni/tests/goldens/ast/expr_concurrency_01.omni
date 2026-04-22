@@ -1,0 +1,10 @@
+func worker(c:chan int) {
+  c <- 1
+}
+
+func main():int {
+  let c:chan int = make(chan int, 2)
+  spawn worker(c)
+  let v:int = <-c
+  return v
+}

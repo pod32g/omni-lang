@@ -1,0 +1,27 @@
+import std
+
+func produce(out: chan int, n: int) {
+    var i: int = 0
+    while i < n {
+        out <- i
+        i = i + 1
+    }
+}
+
+func main() : int {
+    let ch: chan int = make(chan int, 3)
+
+    // Producer runs concurrently and pushes 0,1,2,3 into the channel.
+    spawn produce(ch, 4)
+
+    // Consumer drains the channel and accumulates.
+    // Sum is 0+1+2+3 = 6.
+    var sum: int = 0
+    var i: int = 0
+    while i < 4 {
+        let v: int = <-ch
+        sum = sum + v
+        i = i + 1
+    }
+    return sum
+}
