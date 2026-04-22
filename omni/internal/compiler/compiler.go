@@ -914,6 +914,14 @@ func compileCWrapperWithOpt(cPath, outputPath string, optLevel string) error {
 		"-Wextra",
 		"-lm",
 		"-pthread",
+		// Silence codegen-emitted noise (unused SSA result slots, stub
+		// bodies that don't read every parameter, the interface-dispatch
+		// helper when no interface is used) while keeping the warnings
+		// that catch real bugs — -Wuninitialized, -Wreturn-stack-address,
+		// -Wreturn-type, etc. all stay on.
+		"-Wno-unused-variable",
+		"-Wno-unused-parameter",
+		"-Wno-unused-function",
 	}
 
 	// Add optimization flags
@@ -980,6 +988,14 @@ func compileCWrapperWithDebug(cPath, outputPath string, optLevel string) error {
 		"-g", // Generate debug symbols
 		"-lm",
 		"-pthread",
+		// Silence codegen-emitted noise (unused SSA result slots, stub
+		// bodies that don't read every parameter, the interface-dispatch
+		// helper when no interface is used) while keeping the warnings
+		// that catch real bugs — -Wuninitialized, -Wreturn-stack-address,
+		// -Wreturn-type, etc. all stay on.
+		"-Wno-unused-variable",
+		"-Wno-unused-parameter",
+		"-Wno-unused-function",
 	}
 
 	// Add optimization flags
@@ -1087,6 +1103,14 @@ func compileCWrapper(cPath, outputPath string) error {
 		"-Wextra",
 		"-lm",
 		"-pthread",
+		// Silence codegen-emitted noise (unused SSA result slots, stub
+		// bodies that don't read every parameter, the interface-dispatch
+		// helper when no interface is used) while keeping the warnings
+		// that catch real bugs — -Wuninitialized, -Wreturn-stack-address,
+		// -Wreturn-type, etc. all stay on.
+		"-Wno-unused-variable",
+		"-Wno-unused-parameter",
+		"-Wno-unused-function",
 	}
 
 	// Add platform-specific flags
