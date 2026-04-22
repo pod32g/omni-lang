@@ -510,7 +510,7 @@ func main():int {
 import std
 
 func main():int {
-    let count:int = 0
+    var count:int = 0
     
     // While loop with break and continue
     while count < 10 {
@@ -1034,7 +1034,7 @@ func is_prime(n:int):bool {
 }
 
 func main():int {
-    let count:int = 0
+    var count:int = 0
     for i:int = 2; i < 100; i++ {
         if is_prime(i) {
             std.io.print(i)
