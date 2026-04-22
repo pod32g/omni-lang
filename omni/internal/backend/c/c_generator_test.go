@@ -3878,6 +3878,106 @@ func TestDeferCodegen(t *testing.T) {
 	}
 }
 
+// TestDeferFuncCodegen asserts defer.push.func lowering.
+func TestDeferFuncCodegen(t *testing.T) {
+	module := &mir.Module{
+		Functions: []*mir.Function{
+			{
+				Name:       "run",
+				ReturnType: "void",
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(0), Op: "const", Type: "(int) -> void",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "noop"}}},
+						{ID: mir.ValueID(1), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "7"}}},
+						{ID: mir.ValueID(2), Op: "defer.push.func", Type: "void",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "(int) -> void"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "int"},
+							}},
+						{ID: mir.InvalidValue, Op: "defer.run", Type: "void"},
+					},
+					Terminator: mir.Terminator{Op: "ret"},
+				}},
+			},
+		},
+	}
+	result, err := GenerateC(module)
+	if err != nil {
+		t.Fatalf("GenerateC failed: %v", err)
+	}
+	for _, c := range []struct{ name, needle string }{
+		{"ctx stores fn as void*", "void* fn;"},
+		{"ctx stores arg a0", "int32_t a0;"},
+		{"thunk casts fn pointer", "((void(*)(int32_t))__ctx->fn)(__ctx->a0);"},
+		{"defer site records fn value", "__ctx->fn = (void*)"},
+	} {
+		if !strings.Contains(result, c.needle) {
+			t.Errorf("%s: generated C is missing %q", c.name, c.needle)
+		}
+	}
+}
+
+// TestDeferIfaceCodegen asserts defer.push.iface lowering.
+func TestDeferIfaceCodegen(t *testing.T) {
+	module := &mir.Module{
+		Interfaces: []mir.Interface{{
+			Name: "Closer",
+			Methods: []mir.InterfaceMethod{
+				{Name: "close", ParamTypes: nil, ReturnType: "int"},
+			},
+		}},
+		Functions: []*mir.Function{
+			{
+				Name:       "Dog.close",
+				ReturnType: "int",
+				Params:     []mir.Param{{Name: "d", Type: "Dog", ID: mir.ValueID(0)}},
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{
+						{Kind: mir.OperandLiteral, Literal: "0", Type: "int"},
+					}},
+				}},
+			},
+			{
+				Name:       "run",
+				ReturnType: "void",
+				Params:     []mir.Param{{Name: "c", Type: "Closer", ID: mir.ValueID(0)}},
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(1), Op: "defer.push.iface", Type: "void",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandLiteral, Literal: "Closer"},
+								{Kind: mir.OperandLiteral, Literal: "close"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "Closer"},
+							}},
+						{ID: mir.InvalidValue, Op: "defer.run", Type: "void"},
+					},
+					Terminator: mir.Terminator{Op: "ret"},
+				}},
+			},
+		},
+	}
+	result, err := GenerateC(module)
+	if err != nil {
+		t.Fatalf("GenerateC failed: %v", err)
+	}
+	for _, c := range []struct{ name, needle string }{
+		{"ctx stores receiver", "omni_struct_t* recv;"},
+		{"thunk looks up method at runtime",
+			`omni_method_lookup(omni_struct_get_type_name(__ctx->recv), "close")`},
+		{"thunk casts to iface method signature", "((int32_t(*)(omni_struct_t*))"},
+		{"defer site records recv pointer", "__ctx->recv = "},
+	} {
+		if !strings.Contains(result, c.needle) {
+			t.Errorf("%s: generated C is missing %q", c.name, c.needle)
+		}
+	}
+}
+
 // TestInterfaceDispatchCodegen asserts that the C backend lowers interface
 // values correctly: it tags concrete values with their OmniLang type, emits
 // the method-lookup table including each user method, and produces a dispatch

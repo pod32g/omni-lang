@@ -1,0 +1,31 @@
+import std
+
+interface Closer {
+    close() : int
+}
+
+struct File { id: int }
+
+func (f : File) close() : int {
+    std.io.println("closing file")
+    return f.id
+}
+
+func shout(msg: string) {
+    std.io.println(msg)
+}
+
+func main() : int {
+    // Interface-typed receiver: deferred call dispatches via the runtime
+    // type tag on f at the time close() is finally invoked.
+    let f: File = File{id: 42}
+    let c: Closer = f
+    defer c.close()
+
+    // Function-valued callee: deferred call snapshots the function value.
+    let fn: (string) -> void = shout
+    defer fn("bye")
+
+    std.io.println("main body")
+    return 0
+}

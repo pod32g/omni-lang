@@ -336,57 +336,190 @@ func (g *CGenerator) writeFunctionDeclarations() {
 func (g *CGenerator) writeDeferThunksForFunction(fn *mir.Function) {
 	for _, block := range fn.Blocks {
 		for _, inst := range block.Instructions {
-			if inst.Op != "defer.push" {
-				continue
+			switch inst.Op {
+			case "defer.push":
+				g.writeDeferThunkNamed(fn, inst)
+			case "defer.push.func":
+				g.writeDeferThunkFunc(fn, inst)
+			case "defer.push.iface":
+				g.writeDeferThunkIface(fn, inst)
 			}
-			if len(inst.Operands) == 0 {
-				continue
-			}
-			calleeOp := inst.Operands[0]
-			if calleeOp.Kind != mir.OperandLiteral {
-				continue
-			}
-			argOps := inst.Operands[1:]
-
-			ctxStructName := g.deferCtxStructName(fn, inst.ID)
-			thunkName := g.deferThunkName(fn, inst.ID)
-			calleeCName := g.mapFunctionName(calleeOp.Literal)
-
-			// Context struct: one field per argument, typed via mapType on
-			// the operand's MIR type. Zero-arg defers still get an empty
-			// struct so malloc(sizeof(*ctx)) is valid and the thunk body can
-			// reference &ctx->something uniformly if extended later.
-			g.output.WriteString(fmt.Sprintf("typedef struct {\n"))
-			if len(argOps) == 0 {
-				// C forbids zero-length structs in strict modes; include a
-				// single padding byte so the declaration is always legal.
-				g.output.WriteString("    char __omni_defer_empty;\n")
-			} else {
-				for i, op := range argOps {
-					g.output.WriteString(fmt.Sprintf("    %s a%d;\n", g.mapType(op.Type), i))
-				}
-			}
-			g.output.WriteString(fmt.Sprintf("} %s;\n", ctxStructName))
-
-			// Thunk: cast ctx back, invoke the target, free the ctx. The
-			// target is called by its mangled C name, so user functions,
-			// methods (TypeName.method → TypeName_method), and stdlib
-			// intrinsics (std.io.println → omni_println_string) all go
-			// through the same path.
-			g.output.WriteString(fmt.Sprintf("static void %s(void* __raw) {\n", thunkName))
-			g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)__raw;\n", ctxStructName, ctxStructName))
-			g.output.WriteString(fmt.Sprintf("    %s(", calleeCName))
-			for i := range argOps {
-				if i > 0 {
-					g.output.WriteString(", ")
-				}
-				g.output.WriteString(fmt.Sprintf("__ctx->a%d", i))
-			}
-			g.output.WriteString(");\n")
-			g.output.WriteString("    free(__ctx);\n")
-			g.output.WriteString("}\n\n")
 		}
 	}
+}
+
+// writeDeferThunkNamed handles `defer f(args)` / `defer Type.method(recv, args)`
+// where the callee is a static symbol. Operand layout: [calleeLit, args...].
+func (g *CGenerator) writeDeferThunkNamed(fn *mir.Function, inst mir.Instruction) {
+	if len(inst.Operands) == 0 {
+		return
+	}
+	calleeOp := inst.Operands[0]
+	if calleeOp.Kind != mir.OperandLiteral {
+		return
+	}
+	argOps := inst.Operands[1:]
+	ctxStructName := g.deferCtxStructName(fn, inst.ID)
+	thunkName := g.deferThunkName(fn, inst.ID)
+	calleeCName := g.mapFunctionName(calleeOp.Literal)
+
+	g.emitDeferCtxStruct(ctxStructName, nil, argOps)
+	g.output.WriteString(fmt.Sprintf("static void %s(void* __raw) {\n", thunkName))
+	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)__raw;\n", ctxStructName, ctxStructName))
+	g.output.WriteString(fmt.Sprintf("    %s(", calleeCName))
+	for i := range argOps {
+		if i > 0 {
+			g.output.WriteString(", ")
+		}
+		g.output.WriteString(fmt.Sprintf("__ctx->a%d", i))
+	}
+	g.output.WriteString(");\n")
+	g.output.WriteString("    free(__ctx);\n")
+	g.output.WriteString("}\n\n")
+}
+
+// writeDeferThunkFunc handles `defer fn(args)` where fn is a function-valued
+// local. Operand layout: [fnValue, args...]. The ctx stores the callable as
+// a void* (the actual C type is a function pointer, but function-pointer
+// syntax with embedded field names is awkward in a struct field position)
+// and the thunk casts it to the right signature before invoking.
+func (g *CGenerator) writeDeferThunkFunc(fn *mir.Function, inst mir.Instruction) {
+	if len(inst.Operands) == 0 {
+		return
+	}
+	fnOp := inst.Operands[0]
+	argOps := inst.Operands[1:]
+	ctxStructName := g.deferCtxStructName(fn, inst.ID)
+	thunkName := g.deferThunkName(fn, inst.ID)
+
+	g.output.WriteString(fmt.Sprintf("typedef struct {\n"))
+	g.output.WriteString("    void* fn;\n")
+	for i, op := range argOps {
+		g.output.WriteString(fmt.Sprintf("    %s a%d;\n", g.mapType(op.Type), i))
+	}
+	g.output.WriteString(fmt.Sprintf("} %s;\n", ctxStructName))
+
+	retType := "void"
+	if r, ok := parseFuncReturnType(fnOp.Type); ok {
+		retType = r
+	}
+	retC := g.mapType(retType)
+
+	g.output.WriteString(fmt.Sprintf("static void %s(void* __raw) {\n", thunkName))
+	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)__raw;\n", ctxStructName, ctxStructName))
+	g.output.WriteString(fmt.Sprintf("    ((%s(*)(", retC))
+	for i, op := range argOps {
+		if i > 0 {
+			g.output.WriteString(", ")
+		}
+		g.output.WriteString(g.mapType(op.Type))
+	}
+	g.output.WriteString("))__ctx->fn)(")
+	for i := range argOps {
+		if i > 0 {
+			g.output.WriteString(", ")
+		}
+		g.output.WriteString(fmt.Sprintf("__ctx->a%d", i))
+	}
+	g.output.WriteString(");\n")
+	g.output.WriteString("    free(__ctx);\n")
+	g.output.WriteString("}\n\n")
+}
+
+// writeDeferThunkIface handles `defer x.m(args)` where x is interface-typed.
+// Operand layout: [ifaceLit, methodLit, recv, args...]. Dispatch is via the
+// existing omni_method_lookup helper — the same mechanism iface.call uses.
+func (g *CGenerator) writeDeferThunkIface(fn *mir.Function, inst mir.Instruction) {
+	if len(inst.Operands) < 3 {
+		return
+	}
+	ifaceOp := inst.Operands[0]
+	methodOp := inst.Operands[1]
+	if ifaceOp.Kind != mir.OperandLiteral || methodOp.Kind != mir.OperandLiteral {
+		return
+	}
+	argOps := inst.Operands[3:]
+	ctxStructName := g.deferCtxStructName(fn, inst.ID)
+	thunkName := g.deferThunkName(fn, inst.ID)
+
+	g.output.WriteString(fmt.Sprintf("typedef struct {\n"))
+	g.output.WriteString("    omni_struct_t* recv;\n")
+	for i, op := range argOps {
+		g.output.WriteString(fmt.Sprintf("    %s a%d;\n", g.mapType(op.Type), i))
+	}
+	g.output.WriteString(fmt.Sprintf("} %s;\n", ctxStructName))
+
+	// Look up the method's signature from the module's interface metadata so
+	// we can cast the void* returned by omni_method_lookup to the precise
+	// function-pointer type.
+	var method *mir.InterfaceMethod
+	for _, iface := range g.module.Interfaces {
+		if iface.Name != ifaceOp.Literal {
+			continue
+		}
+		for i, m := range iface.Methods {
+			if m.Name == methodOp.Literal {
+				method = &iface.Methods[i]
+				break
+			}
+		}
+	}
+	retC := "void"
+	var argCs []string
+	if method != nil {
+		retC = g.mapType(method.ReturnType)
+		for _, pt := range method.ParamTypes {
+			argCs = append(argCs, g.mapType(pt))
+		}
+	} else {
+		// Fallback: types from the actual operands. Safe but less precise.
+		for _, op := range argOps {
+			argCs = append(argCs, g.mapType(op.Type))
+		}
+	}
+	castParams := append([]string{"omni_struct_t*"}, argCs...)
+
+	g.output.WriteString(fmt.Sprintf("static void %s(void* __raw) {\n", thunkName))
+	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)__raw;\n", ctxStructName, ctxStructName))
+	g.output.WriteString(fmt.Sprintf("    ((%s(*)(%s))omni_method_lookup(omni_struct_get_type_name(__ctx->recv), \"%s\"))(__ctx->recv",
+		retC, strings.Join(castParams, ", "), methodOp.Literal))
+	for i := range argOps {
+		g.output.WriteString(fmt.Sprintf(", __ctx->a%d", i))
+	}
+	g.output.WriteString(");\n")
+	g.output.WriteString("    free(__ctx);\n")
+	g.output.WriteString("}\n\n")
+}
+
+// emitDeferCtxStruct writes a `typedef struct { ... } <name>;` for the named
+// defer kind. leadingFields is an optional list of pre-arg fields (none for
+// the plain named kind); argOps is the list of value operands whose types
+// become `a0`, `a1`, etc.
+func (g *CGenerator) emitDeferCtxStruct(name string, leadingFields []string, argOps []mir.Operand) {
+	g.output.WriteString(fmt.Sprintf("typedef struct {\n"))
+	if len(leadingFields) == 0 && len(argOps) == 0 {
+		// C forbids zero-length structs in strict modes; include a padding
+		// byte so the declaration is always legal.
+		g.output.WriteString("    char __omni_defer_empty;\n")
+	}
+	for _, f := range leadingFields {
+		g.output.WriteString(fmt.Sprintf("    %s\n", f))
+	}
+	for i, op := range argOps {
+		g.output.WriteString(fmt.Sprintf("    %s a%d;\n", g.mapType(op.Type), i))
+	}
+	g.output.WriteString(fmt.Sprintf("} %s;\n", name))
+}
+
+// parseFuncReturnType extracts the return-type substring from a MIR function
+// type `(p1, p2) -> ret`. Returns ("", false) if the input does not look
+// like one — callers treat that as "unknown return type" and default to void.
+func parseFuncReturnType(funcType string) (string, bool) {
+	idx := strings.Index(funcType, ") -> ")
+	if idx == -1 {
+		return "", false
+	}
+	return strings.TrimSpace(funcType[idx+len(") -> "):]), true
 }
 
 // functionHasDefer returns true if the given function contains at least one
@@ -395,7 +528,8 @@ func (g *CGenerator) writeDeferThunksForFunction(fn *mir.Function) {
 func functionHasDefer(fn *mir.Function) bool {
 	for _, block := range fn.Blocks {
 		for _, inst := range block.Instructions {
-			if inst.Op == "defer.push" {
+			switch inst.Op {
+			case "defer.push", "defer.push.func", "defer.push.iface":
 				return true
 			}
 		}
@@ -424,6 +558,50 @@ func (g *CGenerator) emitDeferPush(inst *mir.Instruction) error {
 
 	g.output.WriteString("  {\n")
 	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)malloc(sizeof(*__ctx));\n", ctxStructName, ctxStructName))
+	for i, op := range argOps {
+		g.output.WriteString(fmt.Sprintf("    __ctx->a%d = %s;\n", i, g.getOperandValue(op)))
+	}
+	g.output.WriteString(fmt.Sprintf("    omni_defer_push(&__omni_defer_frame, %s, __ctx);\n", thunkName))
+	g.output.WriteString("  }\n")
+	return nil
+}
+
+// emitDeferPushFunc emits the defer.push.func site: snapshot the function
+// value (as a void*) and the args into a ctx, push the site's thunk.
+func (g *CGenerator) emitDeferPushFunc(inst *mir.Instruction) error {
+	if len(inst.Operands) == 0 {
+		return fmt.Errorf("defer.push.func: missing callee operand")
+	}
+	fnOp := inst.Operands[0]
+	argOps := inst.Operands[1:]
+	ctxStructName := g.deferCtxStructName(g.currentDeferFn, inst.ID)
+	thunkName := g.deferThunkName(g.currentDeferFn, inst.ID)
+
+	g.output.WriteString("  {\n")
+	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)malloc(sizeof(*__ctx));\n", ctxStructName, ctxStructName))
+	g.output.WriteString(fmt.Sprintf("    __ctx->fn = (void*)%s;\n", g.getOperandValue(fnOp)))
+	for i, op := range argOps {
+		g.output.WriteString(fmt.Sprintf("    __ctx->a%d = %s;\n", i, g.getOperandValue(op)))
+	}
+	g.output.WriteString(fmt.Sprintf("    omni_defer_push(&__omni_defer_frame, %s, __ctx);\n", thunkName))
+	g.output.WriteString("  }\n")
+	return nil
+}
+
+// emitDeferPushIface emits the defer.push.iface site: snapshot the receiver
+// + args and push the site's thunk (which does the runtime method lookup).
+func (g *CGenerator) emitDeferPushIface(inst *mir.Instruction) error {
+	if len(inst.Operands) < 3 {
+		return fmt.Errorf("defer.push.iface: expected at least ifaceName, methodName, receiver")
+	}
+	recvOp := inst.Operands[2]
+	argOps := inst.Operands[3:]
+	ctxStructName := g.deferCtxStructName(g.currentDeferFn, inst.ID)
+	thunkName := g.deferThunkName(g.currentDeferFn, inst.ID)
+
+	g.output.WriteString("  {\n")
+	g.output.WriteString(fmt.Sprintf("    %s* __ctx = (%s*)malloc(sizeof(*__ctx));\n", ctxStructName, ctxStructName))
+	g.output.WriteString(fmt.Sprintf("    __ctx->recv = %s;\n", g.getOperandValue(recvOp)))
 	for i, op := range argOps {
 		g.output.WriteString(fmt.Sprintf("    __ctx->a%d = %s;\n", i, g.getOperandValue(op)))
 	}
@@ -1243,6 +1421,16 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		return nil
 	case "defer.push":
 		if err := g.emitDeferPush(inst); err != nil {
+			return err
+		}
+		return nil
+	case "defer.push.func":
+		if err := g.emitDeferPushFunc(inst); err != nil {
+			return err
+		}
+		return nil
+	case "defer.push.iface":
+		if err := g.emitDeferPushIface(inst); err != nil {
 			return err
 		}
 		return nil

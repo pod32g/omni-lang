@@ -1367,33 +1367,55 @@ func (fb *functionBuilder) emitUnary(expr *ast.UnaryExpr) (mirValue, error) {
 	return mirValue{ID: id, Type: resultType}, nil
 }
 
-// lowerDefer lowers `defer <call>` to a defer.push instruction that snapshots
-// the call's arguments (by fully lowering them) and records the target. The
-// actual invocation is deferred to the defer.run instruction(s) the builder
-// injects before every terminating `ret` in this function.
+// lowerDefer lowers `defer <call>` to one of three MIR ops depending on the
+// callee shape. All three snapshot arguments by fully lowering them at the
+// defer site; the actual invocation happens at defer.run time.
 //
-// Operand layout mirrors `call`: [calleeLit, recv?, args...]. For a method
-// call `x.m(a, b)` we mangle as `TypeName.m` and prepend x — same trick as
-// emitCall's method-dispatch path. Interface-typed or lambda-typed deferred
-// calls are not supported yet (the language surface doesn't need them to
-// demonstrate LIFO + arg snapshotting); they'd require threading through
-// iface.call / func.call equivalents, which we can do in a follow-up when a
-// motivating use case appears.
+//   1. `defer f(...)` or `defer ModOrPkg.f(...)` or `defer x.m(...)` where x
+//      is a concrete struct with a known method: op = defer.push,
+//      operands = [calleeLit, recv?, args...]. Same layout as `call`.
+//
+//   2. `defer x.m(...)` where x has interface type: op = defer.push.iface,
+//      operands = [ifaceLit, methodLit, recv, args...]. Same layout as
+//      iface.call — the backend does a dynamic dispatch via the receiver's
+//      runtime type tag at defer.run time.
+//
+//   3. `defer fn(...)` where fn is a local binding with function type: op =
+//      defer.push.func, operands = [fnValue, args...]. Same layout as
+//      func.call — the backend captures the callable value and any needed
+//      closure state, then invokes it at defer.run time.
 func (fb *functionBuilder) lowerDefer(s *ast.DeferStmt) error {
 	callExpr, ok := s.Call.(*ast.CallExpr)
 	if !ok {
 		return fmt.Errorf("mir builder: defer operand must be a call expression")
 	}
 
+	op := "defer.push"
 	operands := []mir.Operand{}
+
 	switch callee := callExpr.Callee.(type) {
 	case *ast.IdentifierExpr:
-		operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: callee.Name})
+		// A bare identifier may name a free function OR a local variable
+		// holding a function value. The env tells us which: if the binding
+		// exists and has a function type, route through defer.push.func.
+		if sym, inEnv := fb.env[callee.Name]; inEnv && strings.Contains(sym.Type, ") -> ") {
+			op = "defer.push.func"
+			operands = append(operands, valueOperand(sym.Value, sym.Type))
+		} else {
+			operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: callee.Name})
+		}
 	case *ast.MemberExpr:
-		// Either a module-qualified call (`pkg.fn(...)`) or a method call
-		// (`x.m(...)`). Reuse the struct-type heuristic from emitCall.
 		if ident, ok := callee.Target.(*ast.IdentifierExpr); ok {
 			if sym, inEnv := fb.env[ident.Name]; inEnv {
+				if _, isIface := fb.mb.interfaces[sym.Type]; isIface {
+					// Interface-typed receiver: defer through the same
+					// runtime dispatch path as iface.call.
+					op = "defer.push.iface"
+					operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: sym.Type})
+					operands = append(operands, mir.Operand{Kind: mir.OperandLiteral, Literal: callee.Member})
+					operands = append(operands, valueOperand(sym.Value, sym.Type))
+					break
+				}
 				if _, isStruct := fb.mb.structFields[sym.Type]; isStruct {
 					methodName := sym.Type + "." + callee.Member
 					if _, exists := fb.sigs[methodName]; exists {
@@ -1422,7 +1444,7 @@ func (fb *functionBuilder) lowerDefer(s *ast.DeferStmt) error {
 	id := fb.fn.NextValue()
 	fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
 		ID:       id,
-		Op:       "defer.push",
+		Op:       op,
 		Type:     "void",
 		Operands: operands,
 	})

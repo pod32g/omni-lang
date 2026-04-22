@@ -471,8 +471,10 @@ func init() {
 		"call.string":     execCall,
 		"call.bool":       execCall,
 		"iface.call":      execIfaceCall,
-		"defer.push":      execDeferPush,
-		"defer.run":       execDeferRun,
+		"defer.push":       execDeferPush,
+		"defer.push.func":  execDeferPushFunc,
+		"defer.push.iface": execDeferPushIface,
+		"defer.run":        execDeferRun,
 		"struct.init":     execStructInit,
 		"array.init":      execArrayInit,
 		"index":           execIndex,
@@ -554,13 +556,30 @@ type frame struct {
 	deferStack []deferredCall // LIFO stack of pending defers
 }
 
-// deferredCall is a snapshot of a deferred call: its callee (by MIR-mangled
-// name) plus the already-evaluated argument values. Args are captured at
-// defer time, not at run time, matching Go semantics.
+// deferredCall snapshots one enqueued defer. Three variants mirror the three
+// MIR ops that enqueue them:
+//
+//   deferKindNamed: named function or intrinsic. `callee` is the MIR-mangled
+//     name; `recv` is unused.
+//   deferKindFunc:  function-valued callee. `recv` holds the captured callable
+//     value (same encoding execFuncCall expects); `callee` is unused.
+//   deferKindIface: method on an interface-typed receiver. `callee` holds the
+//     method name; `recv` holds the receiver whose Type tag drives runtime
+//     dispatch.
 type deferredCall struct {
+	kind   deferKind
 	callee string
+	recv   Result
 	args   []Result
 }
+
+type deferKind int
+
+const (
+	deferKindNamed deferKind = iota
+	deferKindFunc
+	deferKindIface
+)
 
 func execFunction(funcs map[string]*mir.Function, fn *mir.Function, args []Result) (Result, error) {
 	fr := &frame{values: make(map[mir.ValueID]Result)}
@@ -1308,9 +1327,9 @@ func execIfaceCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instructi
 	return execCall(funcs, fr, rewritten)
 }
 
-// execDeferPush snapshots a deferred call onto the current frame. The MIR
-// builder has already lowered the args as ordinary operands, so by the time
-// we get here the argument values exist in the frame — we just need to read
+// execDeferPush snapshots a named-function defer onto the current frame. The
+// MIR builder has already lowered the args as ordinary operands, so by the
+// time we get here the argument values exist in the frame — we just read
 // them and stash them verbatim. They will be consumed in LIFO order when the
 // frame's defer.run instruction fires before `ret`.
 func execDeferPush(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
@@ -1325,7 +1344,58 @@ func execDeferPush(funcs map[string]*mir.Function, fr *frame, inst mir.Instructi
 	for _, op := range inst.Operands[1:] {
 		args = append(args, operandValue(fr, op))
 	}
-	fr.deferStack = append(fr.deferStack, deferredCall{callee: calleeOp.Literal, args: args})
+	fr.deferStack = append(fr.deferStack, deferredCall{
+		kind:   deferKindNamed,
+		callee: calleeOp.Literal,
+		args:   args,
+	})
+	return Result{Type: "void"}, nil
+}
+
+// execDeferPushFunc snapshots a function-valued defer. Operand layout:
+// [funcValue, args...]. The callable value is captured by value just like
+// any other arg — subsequent rebindings of the source variable do not
+// affect what the defer will call.
+func execDeferPushFunc(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) == 0 {
+		return Result{}, fmt.Errorf("defer.push.func: missing callee value operand")
+	}
+	recv := operandValue(fr, inst.Operands[0])
+	args := make([]Result, 0, len(inst.Operands)-1)
+	for _, op := range inst.Operands[1:] {
+		args = append(args, operandValue(fr, op))
+	}
+	fr.deferStack = append(fr.deferStack, deferredCall{
+		kind: deferKindFunc,
+		recv: recv,
+		args: args,
+	})
+	return Result{Type: "void"}, nil
+}
+
+// execDeferPushIface snapshots an interface-dispatched defer. Operand layout:
+// [ifaceLit, methodLit, receiver, args...]. The ifaceLit is informational
+// (debug only); dispatch is driven entirely by the receiver's runtime type
+// tag at defer.run time.
+func execDeferPushIface(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 3 {
+		return Result{}, fmt.Errorf("defer.push.iface: expected at least ifaceName, methodName, receiver")
+	}
+	methodOp := inst.Operands[1]
+	if methodOp.Kind != mir.OperandLiteral {
+		return Result{}, fmt.Errorf("defer.push.iface: methodName must be literal")
+	}
+	recv := operandValue(fr, inst.Operands[2])
+	args := make([]Result, 0, len(inst.Operands)-3)
+	for _, op := range inst.Operands[3:] {
+		args = append(args, operandValue(fr, op))
+	}
+	fr.deferStack = append(fr.deferStack, deferredCall{
+		kind:   deferKindIface,
+		callee: methodOp.Literal,
+		recv:   recv,
+		args:   args,
+	})
 	return Result{Type: "void"}, nil
 }
 
@@ -1341,19 +1411,74 @@ func execDeferRun(funcs map[string]*mir.Function, fr *frame, inst mir.Instructio
 	fr.deferStack = nil
 	for i := len(pending) - 1; i >= 0; i-- {
 		d := pending[i]
-		if result, handled := execIntrinsicWithArgs(d.callee, d.args, fr); handled {
-			_ = result
-			continue
-		}
-		fn, ok := funcs[d.callee]
-		if !ok {
-			return Result{}, fmt.Errorf("defer.run: callee %q not found", d.callee)
-		}
-		if _, err := execFunction(funcs, fn, d.args); err != nil {
-			return Result{}, err
+		switch d.kind {
+		case deferKindNamed:
+			if _, handled := execIntrinsicWithArgs(d.callee, d.args, fr); handled {
+				continue
+			}
+			fn, ok := funcs[d.callee]
+			if !ok {
+				return Result{}, fmt.Errorf("defer.run: callee %q not found", d.callee)
+			}
+			if _, err := execFunction(funcs, fn, d.args); err != nil {
+				return Result{}, err
+			}
+		case deferKindFunc:
+			if err := invokeDeferredFunc(funcs, fr, d.recv, d.args); err != nil {
+				return Result{}, err
+			}
+		case deferKindIface:
+			concreteType := d.recv.Type
+			if concreteType == "" {
+				return Result{}, fmt.Errorf("defer.run (iface): receiver missing dynamic type tag for method %q", d.callee)
+			}
+			fullName := concreteType + "." + d.callee
+			fn, ok := funcs[fullName]
+			if !ok {
+				return Result{}, fmt.Errorf("defer.run (iface): method %q not found on type %q", d.callee, concreteType)
+			}
+			callArgs := append([]Result{d.recv}, d.args...)
+			if _, err := execFunction(funcs, fn, callArgs); err != nil {
+				return Result{}, err
+			}
+		default:
+			return Result{}, fmt.Errorf("defer.run: unknown defer kind %d", d.kind)
 		}
 	}
 	return Result{Type: "void"}, nil
+}
+
+// invokeDeferredFunc runs a deferred function-valued call. It mirrors
+// execFuncCall's closure vs plain-func dispatch, but with pre-evaluated args
+// so there's no operand-lookup step.
+func invokeDeferredFunc(funcs map[string]*mir.Function, fr *frame, callable Result, args []Result) error {
+	if closure, ok := callable.Value.(map[string]interface{}); ok {
+		fnName, ok := closure["function"].(string)
+		if !ok {
+			return fmt.Errorf("defer.run (func): closure missing function name")
+		}
+		fn, ok := funcs[fnName]
+		if !ok {
+			return fmt.Errorf("defer.run (func): closure target %q not found", fnName)
+		}
+		merged := append([]Result{}, args...)
+		if captured, ok := closure["captured"].(map[string]interface{}); ok {
+			for _, v := range captured {
+				merged = append(merged, Result{Type: "int", Value: v})
+			}
+		}
+		_, err := execFunction(funcs, fn, merged)
+		return err
+	}
+	if name, ok := callable.Value.(string); ok {
+		fn, ok := funcs[name]
+		if !ok {
+			return fmt.Errorf("defer.run (func): named target %q not found", name)
+		}
+		_, err := execFunction(funcs, fn, args)
+		return err
+	}
+	return fmt.Errorf("defer.run (func): unsupported callable value of Go type %T", callable.Value)
 }
 
 // execIntrinsicWithArgs is a thin adapter that lets deferred calls to
