@@ -1,8 +1,0 @@
-struct Pair8 {
-  left:int
-  right:int
-}
-
-func makePair8():Pair8 {
-  return Pair8{ left:8, right:9 }
-}

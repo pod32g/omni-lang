@@ -1,2 +1,0 @@
-let c:char = 'x'
-let newline:char = '\n'

@@ -1,3 +1,0 @@
-func maps2():map<string,int> {
-  return { "a":2, "b":3 }
-}

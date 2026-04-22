@@ -1,2 +1,0 @@
-let answer:int = 42
-var count:int = answer + 1

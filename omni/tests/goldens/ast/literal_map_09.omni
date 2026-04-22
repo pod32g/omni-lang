@@ -1,3 +1,0 @@
-func maps9():map<string,int> {
-  return { "a":9, "b":10 }
-}

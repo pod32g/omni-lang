@@ -1,7 +1,0 @@
-struct Node6 {
-  value:int
-}
-
-func makeNode6():array<Node6> {
-  return [Node6{ value:6 }, Node6{ value:7 }]
-}

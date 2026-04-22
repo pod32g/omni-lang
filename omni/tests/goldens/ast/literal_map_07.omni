@@ -1,3 +1,0 @@
-func maps7():map<string,int> {
-  return { "a":7, "b":8 }
-}

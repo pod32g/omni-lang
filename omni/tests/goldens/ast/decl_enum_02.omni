@@ -1,5 +1,0 @@
-enum Enum2 { SPRING SUMMER FALL WINTER }
-
-func chooseEnum2():Enum2 {
-  return Enum2.SPRING
-}

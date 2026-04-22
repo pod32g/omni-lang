@@ -1,2 +1,0 @@
-let value3:int = 3
-var counter3:int = value3 + 1

@@ -1,1 +1,0 @@
-func print(s:string) { /* intrinsic wired to runtime */ }

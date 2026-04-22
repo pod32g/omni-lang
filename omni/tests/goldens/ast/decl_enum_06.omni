@@ -1,5 +1,0 @@
-enum Enum6 { LOW MEDIUM HIGH }
-
-func chooseEnum6():Enum6 {
-  return Enum6.LOW
-}

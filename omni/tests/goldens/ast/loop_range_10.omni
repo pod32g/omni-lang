@@ -1,6 +1,0 @@
-func iterate10(items:array<int>):int {
-  for item in items {
-    return item
-  }
-  return 10
-}
