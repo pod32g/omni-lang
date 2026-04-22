@@ -13,10 +13,11 @@ const inferTypePlaceholder = "<infer>"
 // BuildModule lowers the parsed AST into MIR suitable for optimisation passes and codegen.
 func BuildModule(mod *ast.Module) (*mir.Module, error) {
 	mb := &moduleBuilder{
-		module:       &mir.Module{},
-		signatures:   make(map[string]FunctionSignature),
-		structFields: make(map[string]map[string]string),
-		interfaces:   make(map[string]struct{}),
+		module:        &mir.Module{},
+		signatures:    make(map[string]FunctionSignature),
+		structFields:  make(map[string]map[string]string),
+		interfaces:    make(map[string]struct{}),
+		interfaceSigs: make(map[string][]mir.InterfaceMethod),
 	}
 	mb.collectFunctionSignatures(mod)
 	mb.collectStructDefinitions(mod)
@@ -41,11 +42,12 @@ func BuildModule(mod *ast.Module) (*mir.Module, error) {
 }
 
 type moduleBuilder struct {
-	module       *mir.Module
-	signatures   map[string]FunctionSignature
-	lambdas      []*mir.Function              // Collect lambda functions
-	structFields map[string]map[string]string // struct type name -> field name -> field type
-	interfaces   map[string]struct{}          // known interface type names (for dynamic-dispatch lowering)
+	module         *mir.Module
+	signatures     map[string]FunctionSignature
+	lambdas        []*mir.Function              // Collect lambda functions
+	structFields   map[string]map[string]string // struct type name -> field name -> field type
+	interfaces     map[string]struct{}          // known interface type names (for dynamic-dispatch lowering)
+	interfaceSigs  map[string][]mir.InterfaceMethod
 }
 
 type functionBuilder struct {
@@ -121,6 +123,27 @@ func (mb *moduleBuilder) collectInterfaceDefinitions(mod *ast.Module) {
 			continue
 		}
 		mb.interfaces[iface.Name] = struct{}{}
+		methods := make([]mir.InterfaceMethod, 0, len(iface.Methods))
+		for _, m := range iface.Methods {
+			paramTypes := make([]string, 0, len(m.Params))
+			for _, p := range m.Params {
+				paramTypes = append(paramTypes, typeExprToString(p.Type))
+			}
+			ret := "void"
+			if m.Return != nil {
+				ret = typeExprToString(m.Return)
+			}
+			methods = append(methods, mir.InterfaceMethod{
+				Name:       m.Name,
+				ParamTypes: paramTypes,
+				ReturnType: ret,
+			})
+		}
+		mb.interfaceSigs[iface.Name] = methods
+		mb.module.Interfaces = append(mb.module.Interfaces, mir.Interface{
+			Name:    iface.Name,
+			Methods: methods,
+		})
 	}
 }
 
@@ -1349,16 +1372,22 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			}
 			// Interface dispatch: the static receiver type is an interface.
 			// Emit a dedicated `iface.call` so backends can route the call
-			// through the receiver's runtime vtable (VM) or a vtable pointer
-			// stored in a fat-pointer value (C — deferred; for now the C
-			// backend will error out if it encounters this op).
+			// through the receiver's runtime type tag (VM and C: runtime
+			// method lookup keyed by concrete type + method name).
 			if _, isIface := fb.mb.interfaces[target.Type]; isIface {
 				id := fb.fn.NextValue()
-				// Determine the return type from the interface method set by
-				// inspecting the AST-derived signatures: we don't have direct
-				// access here, so fall back to the placeholder — the runtime
-				// will read the return from the concrete method's MIR func.
+				// Resolve the method's return type from the interface
+				// signature so downstream passes (verifier, C backend) can
+				// declare result variables with the right C type.
 				resultType := inferTypePlaceholder
+				if methods, ok := fb.mb.interfaceSigs[target.Type]; ok {
+					for _, m := range methods {
+						if m.Name == member.Member {
+							resultType = m.ReturnType
+							break
+						}
+					}
+				}
 				operands := []mir.Operand{
 					{Kind: mir.OperandLiteral, Literal: target.Type},
 					{Kind: mir.OperandLiteral, Literal: member.Member},

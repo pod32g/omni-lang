@@ -2959,19 +2959,44 @@ typedef struct omni_struct_field {
 
 struct omni_struct {
     omni_struct_field_t* fields;
+    char* type_name; // OmniLang type tag; used for interface method dispatch.
 };
 
 omni_struct_t* omni_struct_create() {
     omni_struct_t* struct_ptr = (omni_struct_t*)malloc(sizeof(omni_struct_t));
     if (!struct_ptr) return NULL;
-    
+
     struct_ptr->fields = NULL;
+    struct_ptr->type_name = NULL;
     return struct_ptr;
+}
+
+void omni_struct_set_type_name(omni_struct_t* struct_ptr, const char* type_name) {
+    if (!struct_ptr) return;
+    if (struct_ptr->type_name) {
+        free(struct_ptr->type_name);
+        struct_ptr->type_name = NULL;
+    }
+    if (type_name) {
+        struct_ptr->type_name = (char*)malloc(strlen(type_name) + 1);
+        if (struct_ptr->type_name) {
+            strcpy(struct_ptr->type_name, type_name);
+        }
+    }
+}
+
+const char* omni_struct_get_type_name(omni_struct_t* struct_ptr) {
+    if (!struct_ptr || !struct_ptr->type_name) return "";
+    return struct_ptr->type_name;
 }
 
 void omni_struct_destroy(omni_struct_t* struct_ptr) {
     if (!struct_ptr) return;
-    
+
+    if (struct_ptr->type_name) {
+        free(struct_ptr->type_name);
+        struct_ptr->type_name = NULL;
+    }
     omni_struct_field_t* field = struct_ptr->fields;
     while (field) {
         omni_struct_field_t* next = field->next;

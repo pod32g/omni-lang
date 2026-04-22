@@ -148,25 +148,17 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
-	// Interfaces are currently front-end + VM only. The C backend's vtable
-	// emission is deferred to a follow-up slice (see memory: "OmniLang Phase
-	// 2 C backend interface codegen pending"). Fail fast with a clear message
-	// rather than silently miscompiling.
-	for _, fn := range g.module.Functions {
-		for _, block := range fn.Blocks {
-			for _, inst := range block.Instructions {
-				if inst.Op == "iface.call" {
-					return "", fmt.Errorf("C backend: interface method dispatch is not yet supported (function %s). Use the VM backend (omnir) for interface-based programs, or land the deferred vtable codegen", fn.Name)
-				}
-			}
-		}
-	}
-
 	g.writeHeader()
 	g.writeStdLibFunctions()
 
 	// Generate function declarations first
 	g.writeFunctionDeclarations()
+
+	// Emit the interface method lookup table (keyed by concrete-type + method
+	// name) so iface.call dispatch can resolve the right function pointer at
+	// runtime. Must come AFTER function declarations so the table can take
+	// addresses of the generated methods.
+	g.writeInterfaceDispatchSupport()
 
 	// Then generate function definitions
 	for _, fn := range g.module.Functions {
@@ -327,6 +319,171 @@ func (g *CGenerator) writeFunctionDeclarations() {
 		}
 	}
 	g.output.WriteString("\n")
+}
+
+// emitIfaceCall emits the C code for an iface.call MIR instruction. The op's
+// operand layout is [ifaceNameLit, methodNameLit, receiver, args...]. We look
+// up the concrete method pointer at runtime via omni_method_lookup using the
+// receiver's type_name tag (set during struct.init), then cast to a typed
+// function pointer using the interface method's declared signature.
+func (g *CGenerator) emitIfaceCall(inst *mir.Instruction) error {
+	if len(inst.Operands) < 3 {
+		return fmt.Errorf("iface.call: expected at least 3 operands (iface, method, recv), got %d", len(inst.Operands))
+	}
+	ifaceOp := inst.Operands[0]
+	methodOp := inst.Operands[1]
+	if ifaceOp.Kind != mir.OperandLiteral || methodOp.Kind != mir.OperandLiteral {
+		return fmt.Errorf("iface.call: iface and method must be literal operands")
+	}
+	ifaceName := ifaceOp.Literal
+	methodName := methodOp.Literal
+
+	// Find the matching interface method to reconstruct the C function pointer
+	// signature (needed to cast the void* returned by omni_method_lookup).
+	var methodSig *mir.InterfaceMethod
+	for _, iface := range g.module.Interfaces {
+		if iface.Name != ifaceName {
+			continue
+		}
+		for i, m := range iface.Methods {
+			if m.Name == methodName {
+				methodSig = &iface.Methods[i]
+				break
+			}
+		}
+		if methodSig != nil {
+			break
+		}
+	}
+	if methodSig == nil {
+		return fmt.Errorf("iface.call: interface %q has no method %q in MIR metadata", ifaceName, methodName)
+	}
+
+	// Build the C function-pointer cast: (<retC>(*)(omni_struct_t*, <argCs...>))
+	retC := g.mapType(methodSig.ReturnType)
+	var castParams []string
+	castParams = append(castParams, "omni_struct_t*")
+	for _, pt := range methodSig.ParamTypes {
+		castParams = append(castParams, g.mapType(pt))
+	}
+	cast := fmt.Sprintf("%s(*)(%s)", retC, strings.Join(castParams, ", "))
+
+	recvExpr := g.getOperandValue(inst.Operands[2])
+	var argExprs []string
+	for _, op := range inst.Operands[3:] {
+		argExprs = append(argExprs, g.getOperandValue(op))
+	}
+
+	callArgs := []string{recvExpr}
+	callArgs = append(callArgs, argExprs...)
+	call := fmt.Sprintf("((%s)omni_method_lookup(omni_struct_get_type_name(%s), \"%s\"))(%s)",
+		cast, recvExpr, methodName, strings.Join(callArgs, ", "))
+
+	if inst.ID == mir.InvalidValue || retC == "void" {
+		g.output.WriteString(fmt.Sprintf("  %s;\n", call))
+		return nil
+	}
+
+	varName := g.getVariableName(inst.ID)
+	g.output.WriteString(fmt.Sprintf("  %s = %s;\n", varName, call))
+	return nil
+}
+
+// writeInterfaceDispatchSupport emits a program-wide method lookup table and
+// the omni_method_lookup helper used to route iface.call instructions at
+// runtime. The table lists every function whose MIR name matches the
+// `<TypeName>.<methodName>` mangling (i.e. every method declared on a
+// user-defined type, satisfying or not), keyed by concrete type name +
+// method name. The helper does a linear scan; interface method calls are
+// expected to be rare enough that a table large enough to matter doesn't
+// arise in practice.
+func (g *CGenerator) writeInterfaceDispatchSupport() {
+	// Discover every (type, method, fn) triple by scanning MIR function names
+	// for the `<TypeName>.<method>` mangling introduced by the Phase 1 method
+	// support. This deliberately includes methods whether or not they
+	// satisfy a declared interface — the table is a uniform runtime view of
+	// the method set.
+	type entry struct{ typeName, methodName, cName string }
+	var entries []entry
+	for _, fn := range g.module.Functions {
+		dot := strings.Index(fn.Name, ".")
+		if dot <= 0 || dot == len(fn.Name)-1 {
+			continue
+		}
+		typeName := fn.Name[:dot]
+		methodName := fn.Name[dot+1:]
+		// Skip module-qualified names like `std.io.println` — they are not
+		// user methods. Heuristic: a user type is a single identifier, not a
+		// dotted path.
+		if strings.Contains(typeName, ".") {
+			continue
+		}
+		// Skip if the receiver's type isn't an uppercase-started identifier
+		// (OmniLang user type naming convention); avoids picking up things
+		// like `io.println` that slip through when modules are collapsed
+		// into the MIR with a single segment.
+		if typeName == "" || !isLikelyTypeName(typeName) {
+			continue
+		}
+		entries = append(entries, entry{typeName, methodName, g.mapFunctionName(fn.Name)})
+	}
+
+	g.output.WriteString("// Interface method dispatch table (populated from user-defined methods)\n")
+	g.output.WriteString("typedef struct {\n")
+	g.output.WriteString("    const char* type_name;\n")
+	g.output.WriteString("    const char* method_name;\n")
+	g.output.WriteString("    void* fn;\n")
+	g.output.WriteString("} omni_method_entry_t;\n\n")
+
+	if len(entries) == 0 {
+		// Emit a one-element dummy table so the C standard doesn't complain
+		// about zero-length arrays and omni_method_lookup has something to
+		// iterate over.
+		g.output.WriteString("static const omni_method_entry_t omni_method_table[] = {\n")
+		g.output.WriteString("    {NULL, NULL, NULL}\n")
+		g.output.WriteString("};\n")
+		g.output.WriteString("static const int omni_method_table_len = 0;\n\n")
+	} else {
+		g.output.WriteString("static const omni_method_entry_t omni_method_table[] = {\n")
+		for _, e := range entries {
+			g.output.WriteString(fmt.Sprintf("    {\"%s\", \"%s\", (void*)&%s},\n", e.typeName, e.methodName, e.cName))
+		}
+		g.output.WriteString("};\n")
+		g.output.WriteString(fmt.Sprintf("static const int omni_method_table_len = %d;\n\n", len(entries)))
+	}
+
+	g.output.WriteString("static void* omni_method_lookup(const char* type_name, const char* method_name) {\n")
+	g.output.WriteString("    if (!type_name || !method_name) return NULL;\n")
+	g.output.WriteString("    for (int i = 0; i < omni_method_table_len; i++) {\n")
+	g.output.WriteString("        if (strcmp(omni_method_table[i].type_name, type_name) == 0 &&\n")
+	g.output.WriteString("            strcmp(omni_method_table[i].method_name, method_name) == 0) {\n")
+	g.output.WriteString("            return omni_method_table[i].fn;\n")
+	g.output.WriteString("        }\n")
+	g.output.WriteString("    }\n")
+	g.output.WriteString("    return NULL;\n")
+	g.output.WriteString("}\n\n")
+}
+
+// isLikelyTypeName returns true if s looks like a user-defined type — i.e.
+// it starts with a letter and contains only identifier characters. We use
+// this as a cheap filter to avoid sweeping module-qualified function names
+// into the method dispatch table.
+func isLikelyTypeName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i, r := range s {
+		if i == 0 {
+			if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || r == '_') {
+				return false
+			}
+			continue
+		}
+		if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 // generateFunction generates C code for a single function
@@ -953,6 +1110,11 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 	}
 
 	switch inst.Op {
+	case "iface.call":
+		if err := g.emitIfaceCall(inst); err != nil {
+			return err
+		}
+		return nil
 	case "const":
 		// Handle constants based on type
 		if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandLiteral {
@@ -2810,6 +2972,11 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		varName := g.getVariableName(inst.ID)
 		// Assign to already declared variable
 		g.output.WriteString(fmt.Sprintf("  %s = omni_struct_create();\n", varName))
+		// Tag the value with its OmniLang type so interface method dispatch
+		// can resolve the concrete implementation at runtime.
+		if inst.Type != "" && inst.Type != inferTypePlaceholder && !strings.Contains(inst.Type, "<") {
+			g.output.WriteString(fmt.Sprintf("  omni_struct_set_type_name(%s, \"%s\");\n", varName, inst.Type))
+		}
 
 		// Process field-value pairs from operands
 		// Handle different operand formats: [field1Value, field2Value, ...] or [field1Name, field1Value, field2Name, field2Value, ...]

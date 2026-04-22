@@ -18,7 +18,22 @@ func (v ValueID) String() string {
 
 // Module contains the MIR for an OmniLang compilation unit.
 type Module struct {
-	Functions []*Function
+	Functions  []*Function
+	Interfaces []Interface
+}
+
+// Interface captures the method set of a declared interface so backends can
+// resolve iface.call dispatch (return type, argument types, method index).
+type Interface struct {
+	Name    string
+	Methods []InterfaceMethod
+}
+
+// InterfaceMethod is a single method signature inside an Interface.
+type InterfaceMethod struct {
+	Name       string
+	ParamTypes []string
+	ReturnType string
 }
 
 // Function represents a lowered function in SSA form.

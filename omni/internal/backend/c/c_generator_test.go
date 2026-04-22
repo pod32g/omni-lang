@@ -3818,3 +3818,83 @@ func TestCGenerator(t *testing.T) {
 		}
 	})
 }
+
+// TestInterfaceDispatchCodegen asserts that the C backend lowers interface
+// values correctly: it tags concrete values with their OmniLang type, emits
+// the method-lookup table including each user method, and produces a dispatch
+// call for iface.call instructions.
+func TestInterfaceDispatchCodegen(t *testing.T) {
+	// Module shape: a Dog struct with a legs() method, and a function
+	// total_legs(a: Animal) that calls a.legs() — lowered to iface.call.
+	module := &mir.Module{
+		Interfaces: []mir.Interface{
+			{
+				Name: "Animal",
+				Methods: []mir.InterfaceMethod{
+					{Name: "legs", ParamTypes: nil, ReturnType: "int"},
+				},
+			},
+		},
+		Functions: []*mir.Function{
+			{
+				Name: "Dog.legs", ReturnType: "int",
+				Params: []mir.Param{{Name: "d", Type: "Dog", ID: mir.ValueID(0)}},
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(1), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "4"}}},
+					},
+					Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "int"}}},
+				}},
+			},
+			{
+				Name: "total_legs", ReturnType: "int",
+				Params: []mir.Param{{Name: "a", Type: "Animal", ID: mir.ValueID(0)}},
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(1), Op: "iface.call", Type: "int", Operands: []mir.Operand{
+							{Kind: mir.OperandLiteral, Literal: "Animal"},
+							{Kind: mir.OperandLiteral, Literal: "legs"},
+							{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "Animal"},
+						}},
+					},
+					Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "int"}}},
+				}},
+			},
+			{
+				Name: "main", ReturnType: "int",
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(1), Op: "struct.init", Type: "Dog",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "Dog"}}},
+					},
+					Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "Dog"}}},
+				}},
+			},
+		},
+	}
+
+	result, err := GenerateC(module)
+	if err != nil {
+		t.Fatalf("GenerateC failed: %v", err)
+	}
+
+	checks := []struct {
+		name   string
+		needle string
+	}{
+		{"method table entry for Dog.legs", `{"Dog", "legs", (void*)&Dog_legs}`},
+		{"omni_method_lookup definition", `omni_method_lookup(const char* type_name, const char* method_name)`},
+		{"struct.init tags Dog type", `omni_struct_set_type_name`},
+		{"iface.call dispatches via omni_method_lookup", `omni_method_lookup(omni_struct_get_type_name`},
+		{"iface.call cast uses interface return type", `(int32_t(*)(omni_struct_t*))`},
+	}
+	for _, c := range checks {
+		if !strings.Contains(result, c.needle) {
+			t.Errorf("%s: generated C is missing %q", c.name, c.needle)
+		}
+	}
+}

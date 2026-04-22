@@ -498,6 +498,8 @@ int32_t omni_network_ping(const char* host);
 // Note: omni_struct_t is forward declared above for web framework functions
 omni_struct_t* omni_struct_create();
 void omni_struct_destroy(omni_struct_t* struct_ptr);
+void omni_struct_set_type_name(omni_struct_t* struct_ptr, const char* type_name);
+const char* omni_struct_get_type_name(omni_struct_t* struct_ptr);
 void omni_struct_set_string_field(omni_struct_t* struct_ptr, const char* field_name, const char* value);
 void omni_struct_set_int_field(omni_struct_t* struct_ptr, const char* field_name, int32_t value);
 void omni_struct_set_float_field(omni_struct_t* struct_ptr, const char* field_name, double value);
