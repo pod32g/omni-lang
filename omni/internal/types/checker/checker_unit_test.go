@@ -988,6 +988,72 @@ func parseSource(t *testing.T, src string) (*ast.Module, error) {
 	return parser.Parse("test.omni", src)
 }
 
+func TestMethodReceiverCheck(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "method typechecks and is callable",
+			src: `
+struct Counter { value: int }
+func (c : Counter) bumped(delta: int) : int { return c.value + delta }
+func main() : int {
+    let c: Counter = Counter{value: 1}
+    return c.bumped(2)
+}`,
+		},
+		{
+			name: "method sees receiver fields",
+			src: `
+struct Point { x: int
+y: int }
+func (p : Point) sum() : int { return p.x + p.y }
+func main() : int {
+    let p: Point = Point{x: 1, y: 2}
+    return p.sum()
+}`,
+		},
+		{
+			name: "wrong arg type to method is an error",
+			src: `
+struct Counter { value: int }
+func (c : Counter) bumped(delta: int) : int { return c.value + delta }
+func main() : int {
+    let c: Counter = Counter{value: 1}
+    return c.bumped("nope")
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "unknown method is an error",
+			src: `
+struct Counter { value: int }
+func main() : int {
+    let c: Counter = Counter{value: 1}
+    return c.nope()
+}`,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Errorf("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+			}
+		})
+	}
+}
+
 func TestCallExprFunctionType(t *testing.T) {
 	tests := []struct {
 		name      string

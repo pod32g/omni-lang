@@ -1,0 +1,7 @@
+struct Counter {
+  value:int
+}
+
+func (c : Counter) bumped(delta:int):int {
+  return c.value + delta
+}

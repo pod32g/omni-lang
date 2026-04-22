@@ -1,0 +1,28 @@
+Module {
+  Decls [
+    StructDecl {
+      Name Counter
+      Fields [
+        value: int
+      ]
+    }
+    FuncDecl {
+      Name bumped
+      Receiver c: Counter
+      Params [
+        delta: int
+      ]
+      Return int
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Binary +
+                Member value
+                  Identifier c
+                Identifier delta
+          }
+        }
+    }
+  ]
+}

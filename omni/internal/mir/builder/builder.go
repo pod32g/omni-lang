@@ -91,11 +91,23 @@ func (mb *moduleBuilder) collectFunctionSignatures(mod *ast.Module) {
 				sig.Return = "Promise<" + sig.Return + ">"
 			}
 		}
-		sig.Params = make([]string, len(fn.Params))
-		for i, param := range fn.Params {
-			sig.Params[i] = typeExprToString(param.Type)
+		name := fn.Name
+		if fn.Receiver != nil {
+			// Method: mangle as `TypeName.method` and prepend the receiver type.
+			recvType := typeExprToString(fn.Receiver.Type)
+			name = recvType + "." + fn.Name
+			sig.Params = make([]string, 0, len(fn.Params)+1)
+			sig.Params = append(sig.Params, recvType)
+			for _, param := range fn.Params {
+				sig.Params = append(sig.Params, typeExprToString(param.Type))
+			}
+		} else {
+			sig.Params = make([]string, len(fn.Params))
+			for i, param := range fn.Params {
+				sig.Params[i] = typeExprToString(param.Type)
+			}
 		}
-		mb.signatures[fn.Name] = sig
+		mb.signatures[name] = sig
 	}
 }
 
@@ -114,9 +126,18 @@ func (mb *moduleBuilder) collectStructDefinitions(mod *ast.Module) {
 }
 
 func (mb *moduleBuilder) buildFunction(fn *ast.FuncDecl) (*mir.Function, error) {
-	params := make([]mir.Param, len(fn.Params))
-	for i, p := range fn.Params {
-		params[i] = mir.Param{Name: p.Name, Type: typeExprToString(p.Type)}
+	var params []mir.Param
+	funcName := fn.Name
+	if fn.Receiver != nil {
+		recvType := typeExprToString(fn.Receiver.Type)
+		funcName = recvType + "." + fn.Name
+		params = make([]mir.Param, 0, len(fn.Params)+1)
+		params = append(params, mir.Param{Name: fn.Receiver.Name, Type: recvType})
+	} else {
+		params = make([]mir.Param, 0, len(fn.Params))
+	}
+	for _, p := range fn.Params {
+		params = append(params, mir.Param{Name: p.Name, Type: typeExprToString(p.Type)})
 	}
 	returnType := "void"
 	if fn.Return != nil {
@@ -131,10 +152,11 @@ func (mb *moduleBuilder) buildFunction(fn *ast.FuncDecl) (*mir.Function, error) 
 		}
 	}
 
-	mirFunc := mir.NewFunction(fn.Name, returnType, params)
-	// Determine the module prefix for this function (e.g., "std.web" from "std.web.middleware_multipart_parser")
+	mirFunc := mir.NewFunction(funcName, returnType, params)
+	// Determine the module prefix for this function (e.g., "std.web" from "std.web.middleware_multipart_parser").
+	// Methods mangle as "TypeName.method" but belong to the current module, not a submodule.
 	modulePrefix := ""
-	if strings.Contains(fn.Name, ".") {
+	if fn.Receiver == nil && strings.Contains(fn.Name, ".") {
 		parts := strings.Split(fn.Name, ".")
 		if len(parts) > 1 {
 			modulePrefix = strings.Join(parts[:len(parts)-1], ".")
@@ -1285,7 +1307,8 @@ func (fb *functionBuilder) emitUnary(expr *ast.UnaryExpr) (mirValue, error) {
 }
 
 func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
-	// Handle array method calls like x.len() where x is an array
+	// Handle array method calls like x.len() where x is an array, and method
+	// calls on user-defined struct types.
 	if member, ok := expr.Callee.(*ast.MemberExpr); ok {
 		// Try to lower the target expression to get its type
 		target, err := fb.lowerExpr(member.Target)
@@ -1310,6 +1333,33 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 					return mirValue{ID: id, Type: "int"}, nil
 				}
 				return mirValue{}, fmt.Errorf("mir builder: unsupported array method %q", member.Member)
+			}
+			// Method dispatch on user types: if `TypeName.method` is a known
+			// signature, rewrite `x.method(args)` as `TypeName.method(x, args...)`.
+			if _, isStruct := fb.mb.structFields[target.Type]; isStruct {
+				methodName := target.Type + "." + member.Member
+				if sig, exists := fb.sigs[methodName]; exists {
+					id := fb.fn.NextValue()
+					operands := []mir.Operand{
+						{Kind: mir.OperandLiteral, Literal: methodName},
+						valueOperand(target.ID, target.Type),
+					}
+					for _, arg := range expr.Args {
+						argValue, err := fb.lowerExpr(arg)
+						if err != nil {
+							return mirValue{}, err
+						}
+						operands = append(operands, valueOperand(argValue.ID, argValue.Type))
+					}
+					inst := mir.Instruction{
+						ID:       id,
+						Op:       "call",
+						Type:     sig.Return,
+						Operands: operands,
+					}
+					fb.block.Instructions = append(fb.block.Instructions, inst)
+					return mirValue{ID: id, Type: sig.Return}, nil
+				}
 			}
 		}
 	}

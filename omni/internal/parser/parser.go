@@ -408,6 +408,23 @@ func (p *Parser) parseFuncDecl() (ast.Decl, error) {
 		isAsync = true
 	}
 	kw := p.expect(lexer.TokenFunc)
+
+	// Optional method receiver: `func (name : TypeName) methodName(...)`.
+	// A `(` immediately after `func` (before the method name) distinguishes a
+	// method declaration from a regular function.
+	var receiver *ast.Param
+	if p.peekKind() == lexer.TokenLParen {
+		p.advance() // consume '('
+		recvName := p.expect(lexer.TokenIdentifier)
+		p.expect(lexer.TokenColon)
+		recvType, err := p.parseTypeExpr()
+		if err != nil {
+			return nil, err
+		}
+		p.expect(lexer.TokenRParen)
+		receiver = &ast.Param{Name: recvName.Lexeme, Type: recvType, Span: recvName.Span}
+	}
+
 	nameTok := p.expect(lexer.TokenIdentifier)
 
 	// Parse generic type parameters
@@ -457,14 +474,14 @@ func (p *Parser) parseFuncDecl() (ast.Decl, error) {
 			return nil, err
 		}
 		span := lexer.Span{Start: kw.Span.Start, End: expr.Span().End}
-		return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Params: params, Return: retType, ExprBody: expr, IsAsync: isAsync}, nil
+		return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, Receiver: receiver, TypeParams: typeParams, Params: params, Return: retType, ExprBody: expr, IsAsync: isAsync}, nil
 	}
 	body, err := p.parseBlock()
 	if err != nil {
 		return nil, err
 	}
 	span := lexer.Span{Start: kw.Span.Start, End: body.Span().End}
-	return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Params: params, Return: retType, Body: body, IsAsync: isAsync}, nil
+	return &ast.FuncDecl{SpanInfo: span, Name: nameTok.Lexeme, Receiver: receiver, TypeParams: typeParams, Params: params, Return: retType, Body: body, IsAsync: isAsync}, nil
 }
 
 func (p *Parser) parseBlock() (*ast.BlockStmt, error) {

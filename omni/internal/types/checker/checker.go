@@ -366,6 +366,20 @@ func (c *Checker) registerTopLevelSymbols(mod *ast.Module) {
 			if strings.Contains(d.Name, ".") {
 				continue
 			}
+			if d.Receiver != nil {
+				// Method declaration: register under mangled name `TypeName.method`
+				// with the receiver prepended to the parameter list. Methods do not
+				// shadow free identifiers, so we do not call c.declare for them.
+				recvType := c.resolveTypeExpr(d.Receiver.Type)
+				sig := c.buildFunctionSignature(d)
+				sig.Params = append([]string{recvType}, sig.Params...)
+				methodName := recvType + "." + d.Name
+				if _, exists := c.functions[methodName]; exists {
+					c.report(d.Span(), fmt.Sprintf("method %q on type %q redeclared", d.Name, recvType), "rename the method or remove the duplicate declaration")
+				}
+				c.functions[methodName] = sig
+				continue
+			}
 			sig := c.buildFunctionSignature(d)
 			if _, exists := c.functions[d.Name]; exists {
 				c.report(d.Span(), fmt.Sprintf("function %q redeclared", d.Name), "rename the function or remove the duplicate declaration")
@@ -455,7 +469,12 @@ func (c *Checker) checkStruct(decl *ast.StructDecl) {
 }
 
 func (c *Checker) checkFunc(decl *ast.FuncDecl) {
-	sig := c.functions[decl.Name]
+	lookupName := decl.Name
+	if decl.Receiver != nil {
+		recvType := c.resolveTypeExpr(decl.Receiver.Type)
+		lookupName = recvType + "." + decl.Name
+	}
+	sig := c.functions[lookupName]
 
 	// Enter type parameter scope for generic functions FIRST
 	c.enterTypeParams(sig.TypeParams)
@@ -497,10 +516,19 @@ func (c *Checker) checkFunc(decl *ast.FuncDecl) {
 
 	c.pushFunctionContext(decl.Name, expectedReturn, decl.IsAsync)
 	c.enterScope()
+	// For methods, the receiver occupies sig.Params[0]; declare it in scope first
+	// and offset subsequent parameter indices by 1.
+	sigParamOffset := 0
+	if decl.Receiver != nil {
+		recvType := c.checkTypeExpr(decl.Receiver.Type)
+		c.declare(decl.Receiver.Name, recvType, true, decl.Receiver.Span)
+		sigParamOffset = 1
+	}
 	for i, param := range decl.Params {
 		paramType := c.checkTypeExpr(param.Type)
-		if sig.Params != nil && i < len(sig.Params) {
-			if !c.typesEqual(sig.Params[i], paramType) {
+		sigIdx := i + sigParamOffset
+		if sig.Params != nil && sigIdx < len(sig.Params) {
+			if !c.typesEqual(sig.Params[sigIdx], paramType) {
 				c.report(param.Span, fmt.Sprintf("parameter %q type mismatch", param.Name), "align the signature with the annotation")
 			}
 		}
@@ -1137,6 +1165,17 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			resolvedFields := c.applyStructTypeArguments(structName, fields, typeArgs, e.Target.Span())
 			if fieldType, exists := resolvedFields[e.Member]; exists {
 				return fieldType
+			}
+			// Not a field — check for a method defined on this struct type.
+			methodName := structName + "." + e.Member
+			if sig, exists := c.functions[methodName]; exists {
+				// Expose as a function type whose receiver has been bound,
+				// i.e. drop the first (receiver) parameter from the signature.
+				methodParams := sig.Params
+				if len(methodParams) > 0 {
+					methodParams = methodParams[1:]
+				}
+				return buildFunctionType(methodParams, sig.Return)
 			}
 			c.report(e.Span(), fmt.Sprintf("struct %s has no field %q", targetType, e.Member), "use a declared field name")
 			return typeError

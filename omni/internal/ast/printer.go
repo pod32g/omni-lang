@@ -110,6 +110,9 @@ func (p *printer) writeDecl(decl Decl) {
 		p.writeLine("FuncDecl {")
 		p.indent(func() {
 			p.writeLine("Name " + d.Name)
+			if d.Receiver != nil {
+				p.writeLine("Receiver " + d.Receiver.Name + ": " + p.formatType(d.Receiver.Type))
+			}
 			if len(d.Params) > 0 {
 				p.writeLine("Params [")
 				p.indent(func() {

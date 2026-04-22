@@ -122,6 +122,7 @@ type EnumVariant struct {
 type FuncDecl struct {
 	SpanInfo   lexer.Span
 	Name       string
+	Receiver   *Param      // Optional method receiver (e.g. `func (d : Dog) greet()`)
 	TypeParams []TypeParam // Generic type parameters
 	Params     []Param
 	Return     *TypeExpr
