@@ -91,7 +91,8 @@ package: build-all
 	@mkdir -p $(DIST_PACKAGE_DIR)
 	
 	# Copy binaries
-	@cp $(BIN_DIR)/* $(DIST_PACKAGE_DIR)/
+	@mkdir -p $(DIST_PACKAGE_DIR)/bin
+	@cp $(BIN_DIR)/* $(DIST_PACKAGE_DIR)/bin/
 	
 	# Copy standard library
 	@cp -r $(GO_PROJECT_DIR)/std $(DIST_PACKAGE_DIR)/
