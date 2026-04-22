@@ -122,8 +122,8 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/${{ matrix.target }}
           rsync -a --delete omni/bin/ artifacts/${{ matrix.target }}/bin/
-          if [ -d "omni/target/release" ]; then
-            rsync -a omni/target/release/ artifacts/${{ matrix.target }}/target/
+          if [ -d "omni/native/clift/target/release" ]; then
+            rsync -a omni/native/clift/target/release/ artifacts/${{ matrix.target }}/target/
           fi
           (cd artifacts && tar -czf omni-${{ matrix.target }}.tar.gz ${{ matrix.target }})
 

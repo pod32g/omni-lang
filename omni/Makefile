@@ -136,7 +136,8 @@ package: build-all
 	@mkdir -p dist/omni-$(VERSION)
 	
 	# Copy binaries
-	@cp bin/* dist/omni-$(VERSION)/
+	@mkdir -p dist/omni-$(VERSION)/bin
+	@cp bin/* dist/omni-$(VERSION)/bin/
 	
 	# Copy standard library
 	@cp -r std dist/omni-$(VERSION)/

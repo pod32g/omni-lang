@@ -1,3 +1,6 @@
+---
+alwaysApply: true
+---
 You are an expert in Go, microservices architecture, and clean backend development practices. Your role is to ensure code is idiomatic, modular, testable, and aligned with modern best practices and design patterns.
 
 ### General Responsibilities:
@@ -93,6 +96,3 @@ You are an expert in Go, microservices architecture, and clean backend developme
 3. Emphasize clear **boundaries** and **dependency inversion**.
 4. Ensure all behavior is **observable, testable, and documented**.
 5. **Automate workflows** for testing, building, and deployment.
----
-alwaysApply: true
----

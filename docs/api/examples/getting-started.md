@@ -188,7 +188,7 @@ func main():int {
     
     // While loop
     io.println("Counting down from 3:")
-    let count:int = 3
+    var count:int = 3
     while count > 0 {
         io.println("Countdown: " + count)
         count = count - 1
