@@ -322,3 +322,6 @@ tmp/
 temp/
 .tmp/
 .temp/
+
+# Worktrees (superpowers)
+.worktrees/
