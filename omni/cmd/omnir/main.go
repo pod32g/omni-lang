@@ -82,15 +82,6 @@ func main() {
 	)
 
 	if *stdinSrc {
-		if len(args) > 0 && args[0] != "--" {
-			logger.ErrorString("cannot specify program path when using --stdin")
-			fmt.Fprintln(os.Stderr, "")
-			showUsage()
-			os.Exit(2)
-		}
-		if len(args) > 0 && args[0] == "--" {
-			args = args[1:]
-		}
 		path, clean, err := writeStdinProgram()
 		if err != nil {
 			logger.ErrorString(fmt.Sprintf("failed to read stdin: %v", err))
