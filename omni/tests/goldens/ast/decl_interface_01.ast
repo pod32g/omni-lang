@@ -1,0 +1,41 @@
+Module {
+  Decls [
+    InterfaceDecl {
+      Name Animal
+      Methods [
+        speak() : string
+        legs() : int
+      ]
+    }
+    StructDecl {
+      Name Dog
+      Fields [
+        name: string
+      ]
+    }
+    FuncDecl {
+      Name speak
+      Receiver d: Dog
+      Return string
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Literal string "woof"
+          }
+        }
+    }
+    FuncDecl {
+      Name legs
+      Receiver d: Dog
+      Return int
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Literal int 4
+          }
+        }
+    }
+  ]
+}

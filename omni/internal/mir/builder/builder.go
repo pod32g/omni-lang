@@ -16,9 +16,11 @@ func BuildModule(mod *ast.Module) (*mir.Module, error) {
 		module:       &mir.Module{},
 		signatures:   make(map[string]FunctionSignature),
 		structFields: make(map[string]map[string]string),
+		interfaces:   make(map[string]struct{}),
 	}
 	mb.collectFunctionSignatures(mod)
 	mb.collectStructDefinitions(mod)
+	mb.collectInterfaceDefinitions(mod)
 
 	for _, decl := range mod.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -43,6 +45,7 @@ type moduleBuilder struct {
 	signatures   map[string]FunctionSignature
 	lambdas      []*mir.Function              // Collect lambda functions
 	structFields map[string]map[string]string // struct type name -> field name -> field type
+	interfaces   map[string]struct{}          // known interface type names (for dynamic-dispatch lowering)
 }
 
 type functionBuilder struct {
@@ -108,6 +111,16 @@ func (mb *moduleBuilder) collectFunctionSignatures(mod *ast.Module) {
 			}
 		}
 		mb.signatures[name] = sig
+	}
+}
+
+func (mb *moduleBuilder) collectInterfaceDefinitions(mod *ast.Module) {
+	for _, decl := range mod.Decls {
+		iface, ok := decl.(*ast.InterfaceDecl)
+		if !ok {
+			continue
+		}
+		mb.interfaces[iface.Name] = struct{}{}
 	}
 }
 
@@ -1333,6 +1346,39 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 					return mirValue{ID: id, Type: "int"}, nil
 				}
 				return mirValue{}, fmt.Errorf("mir builder: unsupported array method %q", member.Member)
+			}
+			// Interface dispatch: the static receiver type is an interface.
+			// Emit a dedicated `iface.call` so backends can route the call
+			// through the receiver's runtime vtable (VM) or a vtable pointer
+			// stored in a fat-pointer value (C — deferred; for now the C
+			// backend will error out if it encounters this op).
+			if _, isIface := fb.mb.interfaces[target.Type]; isIface {
+				id := fb.fn.NextValue()
+				// Determine the return type from the interface method set by
+				// inspecting the AST-derived signatures: we don't have direct
+				// access here, so fall back to the placeholder — the runtime
+				// will read the return from the concrete method's MIR func.
+				resultType := inferTypePlaceholder
+				operands := []mir.Operand{
+					{Kind: mir.OperandLiteral, Literal: target.Type},
+					{Kind: mir.OperandLiteral, Literal: member.Member},
+					valueOperand(target.ID, target.Type),
+				}
+				for _, arg := range expr.Args {
+					argValue, err := fb.lowerExpr(arg)
+					if err != nil {
+						return mirValue{}, err
+					}
+					operands = append(operands, valueOperand(argValue.ID, argValue.Type))
+				}
+				inst := mir.Instruction{
+					ID:       id,
+					Op:       "iface.call",
+					Type:     resultType,
+					Operands: operands,
+				}
+				fb.block.Instructions = append(fb.block.Instructions, inst)
+				return mirValue{ID: id, Type: resultType}, nil
 			}
 			// Method dispatch on user types: if `TypeName.method` is a known
 			// signature, rewrite `x.method(args)` as `TypeName.method(x, args...)`.

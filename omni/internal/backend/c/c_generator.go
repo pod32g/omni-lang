@@ -148,6 +148,20 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
+	// Interfaces are currently front-end + VM only. The C backend's vtable
+	// emission is deferred to a follow-up slice (see memory: "OmniLang Phase
+	// 2 C backend interface codegen pending"). Fail fast with a clear message
+	// rather than silently miscompiling.
+	for _, fn := range g.module.Functions {
+		for _, block := range fn.Blocks {
+			for _, inst := range block.Instructions {
+				if inst.Op == "iface.call" {
+					return "", fmt.Errorf("C backend: interface method dispatch is not yet supported (function %s). Use the VM backend (omnir) for interface-based programs, or land the deferred vtable codegen", fn.Name)
+				}
+			}
+		}
+	}
+
 	g.writeHeader()
 	g.writeStdLibFunctions()
 

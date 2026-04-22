@@ -318,6 +318,8 @@ func (p *Parser) parseDecl() (ast.Decl, error) {
 		return p.parseStructDecl()
 	case lexer.TokenEnum:
 		return p.parseEnumDecl()
+	case lexer.TokenInterface:
+		return p.parseInterfaceDecl()
 	case lexer.TokenType:
 		return p.parseTypeAliasDecl()
 	case lexer.TokenAsync, lexer.TokenFunc:
@@ -384,6 +386,60 @@ func (p *Parser) parseStructDecl() (ast.Decl, error) {
 	}
 	span := lexer.Span{Start: kw.Span.Start, End: p.previous().Span.End}
 	return &ast.StructDecl{SpanInfo: span, Name: nameTok.Lexeme, TypeParams: typeParams, Fields: fields}, nil
+}
+
+func (p *Parser) parseInterfaceDecl() (ast.Decl, error) {
+	kw := p.advance() // 'interface'
+	nameTok := p.expect(lexer.TokenIdentifier)
+	p.expect(lexer.TokenLBrace)
+	methods := []ast.MethodSig{}
+	for !p.match(lexer.TokenRBrace) {
+		// Tolerate stray semicolons or blank lines between method signatures.
+		for p.peekKind() == lexer.TokenSemicolon {
+			p.advance()
+		}
+		if p.match(lexer.TokenRBrace) {
+			break
+		}
+		methodName := p.expect(lexer.TokenIdentifier)
+		p.expect(lexer.TokenLParen)
+		params := []ast.Param{}
+		if !p.match(lexer.TokenRParen) {
+			for {
+				paramName := p.expect(lexer.TokenIdentifier)
+				p.expect(lexer.TokenColon)
+				typ, err := p.parseTypeExpr()
+				if err != nil {
+					return nil, err
+				}
+				params = append(params, ast.Param{Name: paramName.Lexeme, Type: typ, Span: paramName.Span})
+				if p.match(lexer.TokenComma) {
+					continue
+				}
+				p.expect(lexer.TokenRParen)
+				break
+			}
+		}
+		var retType *ast.TypeExpr
+		if p.match(lexer.TokenColon) || p.match(lexer.TokenArrow) {
+			t, err := p.parseTypeExpr()
+			if err != nil {
+				return nil, err
+			}
+			retType = t
+		}
+		for p.peekKind() == lexer.TokenSemicolon {
+			p.advance()
+		}
+		methods = append(methods, ast.MethodSig{
+			Name:   methodName.Lexeme,
+			Params: params,
+			Return: retType,
+			Span:   methodName.Span,
+		})
+	}
+	span := lexer.Span{Start: kw.Span.Start, End: p.previous().Span.End}
+	return &ast.InterfaceDecl{SpanInfo: span, Name: nameTok.Lexeme, Methods: methods}, nil
 }
 
 func (p *Parser) parseEnumDecl() (ast.Decl, error) {

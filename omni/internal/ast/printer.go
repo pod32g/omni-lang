@@ -106,6 +106,34 @@ func (p *printer) writeDecl(decl Decl) {
 			}
 		})
 		p.writeLine("}")
+	case *InterfaceDecl:
+		p.writeLine("InterfaceDecl {")
+		p.indent(func() {
+			p.writeLine("Name " + d.Name)
+			if len(d.Methods) > 0 {
+				p.writeLine("Methods [")
+				p.indent(func() {
+					for _, m := range d.Methods {
+						var buf strings.Builder
+						buf.WriteString(m.Name)
+						buf.WriteByte('(')
+						for i, param := range m.Params {
+							if i > 0 {
+								buf.WriteString(", ")
+							}
+							buf.WriteString(param.Name + ": " + p.formatType(param.Type))
+						}
+						buf.WriteByte(')')
+						if m.Return != nil {
+							buf.WriteString(" : " + p.formatType(m.Return))
+						}
+						p.writeLine(buf.String())
+					}
+				})
+				p.writeLine("]")
+			}
+		})
+		p.writeLine("}")
 	case *FuncDecl:
 		p.writeLine("FuncDecl {")
 		p.indent(func() {

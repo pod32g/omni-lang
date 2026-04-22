@@ -988,6 +988,92 @@ func parseSource(t *testing.T, src string) (*ast.Module, error) {
 	return parser.Parse("test.omni", src)
 }
 
+func TestInterfaceSatisfaction(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "concrete type satisfying interface is assignable",
+			src: `
+interface Animal { legs() : int }
+struct Dog { name: string }
+func (d : Dog) legs() : int { return 4 }
+func main() : int {
+    let d: Dog = Dog{name: "rex"}
+    let a: Animal = d
+    return a.legs()
+}`,
+		},
+		{
+			name: "interface-typed argument accepts satisfying concrete type",
+			src: `
+interface Counter { bump() : int }
+struct Box { n: int }
+func (b : Box) bump() : int { return b.n + 1 }
+func use(c : Counter) : int { return c.bump() }
+func main() : int {
+    let b: Box = Box{n: 1}
+    return use(b)
+}`,
+		},
+		{
+			name: "missing method fails satisfaction",
+			src: `
+interface Animal { legs() : int }
+struct Rock { mass: int }
+func main() : int {
+    let r: Rock = Rock{mass: 10}
+    let a: Animal = r
+    return 0
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "wrong return type fails satisfaction",
+			src: `
+interface Animal { legs() : int }
+struct Dog { name: string }
+func (d : Dog) legs() : string { return "four" }
+func main() : int {
+    let d: Dog = Dog{name: "rex"}
+    let a: Animal = d
+    return 0
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "unknown method on interface value is an error",
+			src: `
+interface Animal { legs() : int }
+struct Dog { name: string }
+func (d : Dog) legs() : int { return 4 }
+func main() : int {
+    let d: Dog = Dog{name: "rex"}
+    let a: Animal = d
+    return a.speak()
+}`,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Errorf("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+			}
+		})
+	}
+}
+
 func TestMethodReceiverCheck(t *testing.T) {
 	tests := []struct {
 		name      string

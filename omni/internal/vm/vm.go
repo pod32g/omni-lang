@@ -470,6 +470,7 @@ func init() {
 		"call.void":       execCall,
 		"call.string":     execCall,
 		"call.bool":       execCall,
+		"iface.call":      execIfaceCall,
 		"struct.init":     execStructInit,
 		"array.init":      execArrayInit,
 		"index":           execIndex,
@@ -1268,6 +1269,32 @@ func execUnary(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) 
 	default:
 		return Result{}, fmt.Errorf("unsupported unary operation %q", inst.Op)
 	}
+}
+
+// execIfaceCall dispatches a method call on an interface-typed receiver by
+// inspecting the receiver's dynamic (concrete) type at runtime, then forwarding
+// to the concrete type's method via the normal call machinery.
+//
+// Operand layout: [ifaceNameLit, methodNameLit, receiverValue, args...].
+func execIfaceCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) < 3 {
+		return Result{}, fmt.Errorf("iface.call: expected at least ifaceName, methodName, receiver")
+	}
+	ifaceOp := inst.Operands[0]
+	methodOp := inst.Operands[1]
+	if ifaceOp.Kind != mir.OperandLiteral || methodOp.Kind != mir.OperandLiteral {
+		return Result{}, fmt.Errorf("iface.call: ifaceName and methodName must be literal operands")
+	}
+	receiver := operandValue(fr, inst.Operands[2])
+	concreteType := receiver.Type
+	if concreteType == "" {
+		return Result{}, fmt.Errorf("iface.call: receiver is missing a dynamic type tag (interface %s, method %s)", ifaceOp.Literal, methodOp.Literal)
+	}
+	callee := concreteType + "." + methodOp.Literal
+	rewritten := inst
+	rewritten.Op = "call"
+	rewritten.Operands = append([]mir.Operand{{Kind: mir.OperandLiteral, Literal: callee}}, inst.Operands[2:]...)
+	return execCall(funcs, fr, rewritten)
 }
 
 func execCall(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {

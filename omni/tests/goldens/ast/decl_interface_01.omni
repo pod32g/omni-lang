@@ -1,0 +1,12 @@
+interface Animal {
+  speak() : string
+  legs() : int
+}
+
+struct Dog {
+  name:string
+}
+
+func (d : Dog) speak() : string { return "woof" }
+
+func (d : Dog) legs() : int { return 4 }

@@ -27,6 +27,7 @@ const (
 	TokenReturn
 	TokenStruct
 	TokenEnum
+	TokenInterface
 	TokenImport
 	TokenAs
 	TokenIf
@@ -108,6 +109,7 @@ var kindNames = map[Kind]string{
 	TokenReturn:              "RETURN",
 	TokenStruct:              "STRUCT",
 	TokenEnum:                "ENUM",
+	TokenInterface:           "INTERFACE",
 	TokenImport:              "IMPORT",
 	TokenAs:                  "AS",
 	TokenIf:                  "IF",

@@ -1,0 +1,25 @@
+interface Animal {
+    speak() : string
+    legs() : int
+}
+
+struct Dog { name: string }
+struct Cat { name: string }
+
+func (d : Dog) speak() : string { return "woof" }
+func (d : Dog) legs() : int { return 4 }
+
+func (c : Cat) speak() : string { return "meow" }
+func (c : Cat) legs() : int { return 4 }
+
+func total_legs(a : Animal) : int {
+    return a.legs()
+}
+
+func main() : int {
+    let d: Dog = Dog{name: "rex"}
+    let c: Cat = Cat{name: "miso"}
+    let a: Animal = d
+    let b: Animal = c
+    return total_legs(a) + total_legs(b)
+}

@@ -30,6 +30,7 @@ func Check(filename, src string, mod *ast.Module) error {
 		typeAliases:      make(map[string]string),
 		structFields:     make(map[string]map[string]string),
 		structTypeParams: make(map[string][]ast.TypeParam),
+		interfaceMethods: make(map[string][]ast.MethodSig),
 		functions:        make(map[string]FunctionSignature),
 		imports: map[string]bool{
 			// Compiler-provided intrinsic namespaces under std that exist even
@@ -105,6 +106,7 @@ type Checker struct {
 
 	structFields     map[string]map[string]string
 	structTypeParams map[string][]ast.TypeParam // Store type parameters for generic structs
+	interfaceMethods map[string][]ast.MethodSig // Interface name -> method signature list
 	functions        map[string]FunctionSignature
 
 	scopes      []map[string]Symbol
@@ -336,6 +338,9 @@ func (c *Checker) collectTypeDecls(mod *ast.Module) {
 			}
 		case *ast.EnumDecl:
 			c.knownTypes[d.Name] = struct{}{}
+		case *ast.InterfaceDecl:
+			c.knownTypes[d.Name] = struct{}{}
+			c.interfaceMethods[d.Name] = d.Methods
 		}
 	}
 }
@@ -443,6 +448,8 @@ func (c *Checker) checkModule(mod *ast.Module) {
 			c.checkStruct(d)
 		case *ast.EnumDecl:
 			// Enumerations currently require no additional checks beyond registration.
+		case *ast.InterfaceDecl:
+			c.checkInterface(d)
 		case *ast.FuncDecl:
 			// Skip checking namespaced functions (imported/merged from std modules)
 			// They were already validated when the std module was parsed
@@ -454,6 +461,62 @@ func (c *Checker) checkModule(mod *ast.Module) {
 			c.checkTypeAliasDecl(d)
 		}
 	}
+}
+
+func (c *Checker) checkInterface(decl *ast.InterfaceDecl) {
+	// Validate each method's parameter and return types refer to known types.
+	seen := make(map[string]bool, len(decl.Methods))
+	for _, m := range decl.Methods {
+		if seen[m.Name] {
+			c.report(m.Span, fmt.Sprintf("interface %s declares method %q more than once", decl.Name, m.Name), "remove the duplicate method signature")
+		}
+		seen[m.Name] = true
+		for _, p := range m.Params {
+			c.checkTypeExpr(p.Type)
+		}
+		if m.Return != nil {
+			c.checkTypeExpr(m.Return)
+		}
+	}
+}
+
+// typeSatisfiesInterface returns true iff concreteType has a method matching
+// every signature declared on ifaceName. Method set lookup reuses c.functions
+// keyed by "TypeName.methodName" (populated by method registration).
+func (c *Checker) typeSatisfiesInterface(concreteType, ifaceName string) bool {
+	methods, ok := c.interfaceMethods[ifaceName]
+	if !ok {
+		return false
+	}
+	// An interface trivially satisfies itself.
+	if concreteType == ifaceName {
+		return true
+	}
+	for _, m := range methods {
+		sig, exists := c.functions[concreteType+"."+m.Name]
+		if !exists {
+			return false
+		}
+		// sig.Params includes the receiver at index 0.
+		if len(sig.Params) != len(m.Params)+1 {
+			return false
+		}
+		for i, p := range m.Params {
+			want := c.resolveTypeExpr(p.Type)
+			got := sig.Params[i+1]
+			if !c.typesEqual(want, got) {
+				return false
+			}
+		}
+		wantRet := typeVoid
+		if m.Return != nil {
+			wantRet = c.resolveTypeExpr(m.Return)
+		}
+		if !c.typesEqual(wantRet, sig.Return) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Checker) checkStruct(decl *ast.StructDecl) {
@@ -1154,6 +1217,26 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			}
 			c.report(e.Span(), fmt.Sprintf("array type %s has no method %q", targetType, e.Member),
 				"available methods: len")
+			return typeError
+		}
+
+		// Interface-typed target: dispatch to its method set.
+		if ifaceMethods, ok := c.interfaceMethods[targetType]; ok {
+			for _, m := range ifaceMethods {
+				if m.Name != e.Member {
+					continue
+				}
+				paramTypes := make([]string, 0, len(m.Params))
+				for _, p := range m.Params {
+					paramTypes = append(paramTypes, c.resolveTypeExpr(p.Type))
+				}
+				ret := typeVoid
+				if m.Return != nil {
+					ret = c.resolveTypeExpr(m.Return)
+				}
+				return buildFunctionType(paramTypes, ret)
+			}
+			c.report(e.Span(), fmt.Sprintf("interface %s has no method %q", targetType, e.Member), "call a method declared on the interface")
 			return typeError
 		}
 
@@ -2716,6 +2799,15 @@ func (c *Checker) isAssignable(fromType, toType string) bool {
 	// First check exact equality
 	if c.typesEqual(fromType, toType) {
 		return true
+	}
+
+	// Structural interface satisfaction: a concrete type is assignable to an
+	// interface iff it provides every method in the interface's method set
+	// with matching signatures.
+	if _, isIface := c.interfaceMethods[toType]; isIface {
+		if c.typeSatisfiesInterface(fromType, toType) {
+			return true
+		}
 	}
 
 	// Widen integer literals/values to float where a float is expected

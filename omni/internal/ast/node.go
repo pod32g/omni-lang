@@ -118,6 +118,27 @@ type EnumVariant struct {
 	Span lexer.Span
 }
 
+// InterfaceDecl defines a structural interface: a set of method signatures
+// that any concrete type can satisfy by declaring matching methods. Interfaces
+// in OmniLang are Go-style — there is no explicit `impl` keyword.
+type InterfaceDecl struct {
+	SpanInfo lexer.Span
+	Name     string
+	Methods  []MethodSig
+}
+
+func (d *InterfaceDecl) Span() lexer.Span { return d.SpanInfo }
+func (d *InterfaceDecl) node()            {}
+func (d *InterfaceDecl) decl()            {}
+
+// MethodSig is a single method signature inside an interface declaration.
+type MethodSig struct {
+	Name   string
+	Params []Param
+	Return *TypeExpr
+	Span   lexer.Span
+}
+
 // FuncDecl describes a function definition.
 type FuncDecl struct {
 	SpanInfo   lexer.Span
