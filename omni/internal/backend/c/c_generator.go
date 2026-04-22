@@ -153,23 +153,6 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
-	// Phase 4 (slices): append and s[lo:hi] land front-end + VM first; the C
-	// backend's heap-allocation rework for arrays is a follow-up (see memory
-	// `project_omni_phase4_c_slices_pending`). Fail fast with a clear error
-	// rather than silently miscompiling a stack-allocated array-growth.
-	for _, fn := range g.module.Functions {
-		for _, block := range fn.Blocks {
-			for _, inst := range block.Instructions {
-				switch inst.Op {
-				case "slice.append":
-					return "", fmt.Errorf("C backend: append() is not yet supported (function %s). Use the VM backend (omnir) for slice-heavy programs, or land the deferred heap-allocation rework", fn.Name)
-				case "slice.slice":
-					return "", fmt.Errorf("C backend: slicing `s[lo:hi]` is not yet supported (function %s). Use the VM backend (omnir), or land the deferred heap-allocation rework", fn.Name)
-				}
-			}
-		}
-	}
-
 	g.writeHeader()
 	g.writeStdLibFunctions()
 
@@ -632,6 +615,95 @@ func (g *CGenerator) emitDeferPushIface(inst *mir.Instruction) error {
 // it naturally runs in LIFO order ahead of the actual return.
 func (g *CGenerator) emitDeferRun() {
 	g.output.WriteString("  omni_defer_run_all(&__omni_defer_frame);\n")
+}
+
+// emitSliceAppend lowers `append(slice, elem)` into a call to
+// omni_slice_append. The runtime grows-or-reuses the heap allocation and
+// returns the (possibly new) data pointer, which we cast back to the slice's
+// element type and store into the result variable. We pass `&tmp` as the
+// element address so we can append by-value through a generic memcpy without
+// the runtime caring about the element type.
+func (g *CGenerator) emitSliceAppend(inst *mir.Instruction) error {
+	if len(inst.Operands) != 2 {
+		return fmt.Errorf("slice.append: expected (slice, elem) operands, got %d", len(inst.Operands))
+	}
+	sliceOp := inst.Operands[0]
+	elemOp := inst.Operands[1]
+
+	elemTypeStr := g.elementTypeOf(sliceOp.Type)
+	elemC := g.mapType(elemTypeStr)
+	if !g.isPrimitiveType(elemTypeStr) && !strings.Contains(elemTypeStr, "<") && !strings.Contains(elemTypeStr, "(") {
+		elemC = "omni_struct_t*"
+	}
+
+	varName := g.getVariableName(inst.ID)
+	sliceExpr := g.getOperandValue(sliceOp)
+	elemExpr := g.getOperandValue(elemOp)
+
+	// Compound block scopes the temporary so back-to-back appends don't
+	// fight over a `__elem` name. Casting append's return back to elemC* is
+	// safe because the runtime preserves elem_size from the original
+	// allocation — same backing layout, possibly new pointer.
+	g.output.WriteString("  {\n")
+	g.output.WriteString(fmt.Sprintf("    %s __elem = %s;\n", elemC, elemExpr))
+	if g.declaredVariables[inst.ID] {
+		g.output.WriteString(fmt.Sprintf("    %s = (%s*)omni_slice_append(%s, &__elem);\n", varName, elemC, sliceExpr))
+	} else {
+		g.output.WriteString(fmt.Sprintf("    %s* %s = (%s*)omni_slice_append(%s, &__elem);\n", elemC, varName, elemC, sliceExpr))
+		g.declaredVariables[inst.ID] = true
+	}
+	g.output.WriteString("  }\n")
+	g.valueTypes[inst.ID] = inst.Type
+	return nil
+}
+
+// emitSliceSlice lowers `target[low:high]` into a call to
+// omni_slice_subslice. The MIR builder represents missing bounds with a
+// literal "0" (low) or "-1" (high), so we just pass operands through to the
+// runtime which interprets -1 as "len(target)".
+func (g *CGenerator) emitSliceSlice(inst *mir.Instruction) error {
+	if len(inst.Operands) != 3 {
+		return fmt.Errorf("slice.slice: expected (target, low, high) operands, got %d", len(inst.Operands))
+	}
+	targetOp := inst.Operands[0]
+	lowOp := inst.Operands[1]
+	highOp := inst.Operands[2]
+
+	elemTypeStr := g.elementTypeOf(targetOp.Type)
+	elemC := g.mapType(elemTypeStr)
+	if !g.isPrimitiveType(elemTypeStr) && !strings.Contains(elemTypeStr, "<") && !strings.Contains(elemTypeStr, "(") {
+		elemC = "omni_struct_t*"
+	}
+
+	varName := g.getVariableName(inst.ID)
+	tgtExpr := g.getOperandValue(targetOp)
+	lowExpr := g.getOperandValue(lowOp)
+	highExpr := g.getOperandValue(highOp)
+
+	if g.declaredVariables[inst.ID] {
+		g.output.WriteString(fmt.Sprintf("  %s = (%s*)omni_slice_subslice(%s, (int64_t)(%s), (int64_t)(%s));\n",
+			varName, elemC, tgtExpr, lowExpr, highExpr))
+	} else {
+		g.output.WriteString(fmt.Sprintf("  %s* %s = (%s*)omni_slice_subslice(%s, (int64_t)(%s), (int64_t)(%s));\n",
+			elemC, varName, elemC, tgtExpr, lowExpr, highExpr))
+		g.declaredVariables[inst.ID] = true
+	}
+	g.valueTypes[inst.ID] = inst.Type
+	return nil
+}
+
+// elementTypeOf extracts the element type string from an OmniLang array type
+// like `[]<int>` or `array<int>`. Returns "int" if the input doesn't look
+// like an array — that's a reasonable fallback that produces well-formed
+// (if possibly wrong) C, leaving the actual diagnosis to the type checker.
+func (g *CGenerator) elementTypeOf(arrayType string) string {
+	if strings.HasPrefix(arrayType, "array<") && strings.HasSuffix(arrayType, ">") {
+		return arrayType[6 : len(arrayType)-1]
+	}
+	if strings.HasPrefix(arrayType, "[]<") && strings.HasSuffix(arrayType, ">") {
+		return arrayType[3 : len(arrayType)-1]
+	}
+	return "int"
 }
 
 // emitIfaceCall emits the C code for an iface.call MIR instruction. The op's
@@ -1453,6 +1525,16 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		return nil
 	case "defer.run":
 		g.emitDeferRun()
+		return nil
+	case "slice.append":
+		if err := g.emitSliceAppend(inst); err != nil {
+			return err
+		}
+		return nil
+	case "slice.slice":
+		if err := g.emitSliceSlice(inst); err != nil {
+			return err
+		}
 		return nil
 	case "const":
 		// Handle constants based on type
@@ -2999,86 +3081,61 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			}
 		}
 	case "array.init":
-		// Handle array literal initialization
-		// WARNING: Arrays are currently allocated on the stack, which means:
-		// - They cannot be returned from functions (dangling pointers)
-		// - They cannot be stored in longer-lived variables
-		// - They decay to pointers when passed around
-		// TODO: Implement heap allocation for arrays to support proper value semantics
-		if len(inst.Operands) == 0 {
-			// Empty array literal — emit as a pointer so the variable is
-			// reassignable (for loops that rebind through std.array.append),
-			// and length() sees 0 via arrayLengths.
-			varName := g.getVariableName(inst.ID)
-			g.arrayLengths[inst.ID] = 0
-			var elementTypeStr string
-			if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
-				elementTypeStr = inst.Type[6 : len(inst.Type)-1]
-			} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
-				elementTypeStr = inst.Type[3 : len(inst.Type)-1]
-			}
-			if elementTypeStr == "" || elementTypeStr == inferTypePlaceholder || elementTypeStr == "<infer>" {
-				elementTypeStr = "int"
-			}
-			elementType := g.mapType(elementTypeStr)
-			if !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(") {
-				elementType = "omni_struct_t*"
-			}
-			g.output.WriteString(fmt.Sprintf("  // Empty array literal — reassignable pointer (len tracked as 0)\n"))
+		// Heap-allocate the backing storage via omni_slice_make so the
+		// pointer carries a runtime length/capacity header. This unlocks
+		// append() and slicing, and incidentally fixes the long-standing
+		// "can't return arrays" bug since the storage outlives the frame.
+		varName := g.getVariableName(inst.ID)
+		arrayLength := len(inst.Operands)
+		g.arrayLengths[inst.ID] = arrayLength
+
+		// Extract element type from array type ("array<int>" / "[]<int>" /
+		// fallback "int").
+		var elementTypeStr string
+		if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
+			elementTypeStr = inst.Type[6 : len(inst.Type)-1]
+		} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
+			elementTypeStr = inst.Type[3 : len(inst.Type)-1]
+		} else {
+			elementTypeStr = inst.Type
+		}
+		if elementTypeStr == "" || elementTypeStr == inferTypePlaceholder || elementTypeStr == "<infer>" {
+			elementTypeStr = "int"
+		}
+
+		// Struct elements are tracked as omni_struct_t* so the runtime can
+		// store pointers to per-element heap structs.
+		isStruct := !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(")
+		var elementType string
+		if isStruct {
+			elementType = "omni_struct_t*"
+		} else {
+			elementType = g.mapType(elementTypeStr)
+		}
+
+		// Empty literal: still allocate so subsequent appends find a header.
+		if arrayLength == 0 {
 			if g.declaredVariables[inst.ID] {
-				g.output.WriteString(fmt.Sprintf("  %s = NULL;\n", varName))
+				g.output.WriteString(fmt.Sprintf("  %s = (%s*)omni_slice_make(0, 0, sizeof(%s));\n", varName, elementType, elementType))
 			} else {
-				g.output.WriteString(fmt.Sprintf("  %s* %s = NULL;\n", elementType, varName))
+				g.output.WriteString(fmt.Sprintf("  %s* %s = (%s*)omni_slice_make(0, 0, sizeof(%s));\n", elementType, varName, elementType, elementType))
 				g.declaredVariables[inst.ID] = true
 			}
 			g.valueTypes[inst.ID] = inst.Type
 			return nil
 		}
-		if len(inst.Operands) > 0 {
-			varName := g.getVariableName(inst.ID)
-			arrayLength := len(inst.Operands)
-			// Store array length for later use in len() and bounds checking
-			g.arrayLengths[inst.ID] = arrayLength
 
-			// Extract element type from array type
-			var elementTypeStr string
-			if strings.HasPrefix(inst.Type, "array<") && strings.HasSuffix(inst.Type, ">") {
-				elementTypeStr = inst.Type[6 : len(inst.Type)-1] // Extract "int" from "array<int>"
-			} else if strings.HasPrefix(inst.Type, "[]<") && strings.HasSuffix(inst.Type, ">") {
-				elementTypeStr = inst.Type[3 : len(inst.Type)-1] // Extract "int" from "[]<int>"
-			} else {
-				elementTypeStr = inst.Type // fallback
-			}
-
-			// Check if element type is a struct (not a primitive)
-			isStruct := !g.isPrimitiveType(elementTypeStr) && !strings.Contains(elementTypeStr, "<") && !strings.Contains(elementTypeStr, "(")
-
-			if isStruct {
-				// For struct arrays, create array of pointers
-				elementType := "omni_struct_t*"
-				g.output.WriteString(fmt.Sprintf("  // WARNING: Stack-allocated array, cannot be returned or stored long-term\n"))
-				g.output.WriteString(fmt.Sprintf("  %s %s[%d];\n", elementType, varName, arrayLength))
-				// Initialize each struct element
-				for i, op := range inst.Operands {
-					// Each operand should be a struct.init instruction result
-					// Get the variable name for this struct
-					structVar := g.getOperandValue(op)
-					g.output.WriteString(fmt.Sprintf("  %s[%d] = %s;\n", varName, i, structVar))
-				}
-			} else {
-				// For primitive types, create simple array
-				elementType := g.mapType(elementTypeStr) // Map "int" to "int32_t"
-				g.output.WriteString(fmt.Sprintf("  // WARNING: Stack-allocated array, cannot be returned or stored long-term\n"))
-				g.output.WriteString(fmt.Sprintf("  %s %s[] = {", elementType, varName))
-				for i, op := range inst.Operands {
-					if i > 0 {
-						g.output.WriteString(", ")
-					}
-					g.output.WriteString(g.getOperandValue(op))
-				}
-				g.output.WriteString("};\n")
-			}
+		// Non-empty literal: allocate then assign each element by index.
+		if g.declaredVariables[inst.ID] {
+			g.output.WriteString(fmt.Sprintf("  %s = (%s*)omni_slice_make(%d, %d, sizeof(%s));\n", varName, elementType, arrayLength, arrayLength, elementType))
+		} else {
+			g.output.WriteString(fmt.Sprintf("  %s* %s = (%s*)omni_slice_make(%d, %d, sizeof(%s));\n", elementType, varName, elementType, arrayLength, arrayLength, elementType))
+			g.declaredVariables[inst.ID] = true
 		}
+		for i, op := range inst.Operands {
+			g.output.WriteString(fmt.Sprintf("  %s[%d] = %s;\n", varName, i, g.getOperandValue(op)))
+		}
+		g.valueTypes[inst.ID] = inst.Type
 	case "map.init":
 		// Handle map initialization
 		varName := g.getVariableName(inst.ID)

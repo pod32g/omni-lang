@@ -730,11 +730,25 @@ double omni_trunc(double x) {
 }
 
 // Array operations
-// omni_len returns the length of an array. The length is passed explicitly by the backend.
+// omni_len returns the length of an array. If the pointer was produced by
+// omni_slice_make (i.e. has the slice header magic immediately before it),
+// we return the runtime-tracked length. Otherwise we fall back to the
+// compile-time hint that the backend passed in. This lets old fixed-length
+// codegen and new heap-allocated slice codegen coexist.
 int32_t omni_len(void* array, size_t element_size, int32_t array_length) {
-    (void)array;        // Suppress unused parameter warning
-    (void)element_size; // Suppress unused parameter warning
-    // Return the length passed by the backend
+    (void)element_size;
+    if (array != NULL) {
+        // omni_slice_header_t layout (defined later in this file):
+        //     { int64_t len; int64_t cap; int64_t elem_size; int64_t magic; }
+        // so the magic word sits at offset -1 from the data pointer in
+        // int64 units. Check it inline rather than calling the helper to
+        // avoid a forward-declaration ordering dance with the slice section.
+        int64_t* magic_slot = (int64_t*)array - 1;
+        if (*magic_slot == (int64_t)0x4F4D4E494C535443LL) {
+            int64_t* len_slot = (int64_t*)array - 4;
+            return (int32_t)(*len_slot);
+        }
+    }
     return array_length;
 }
 
@@ -7585,4 +7599,120 @@ void omni_defer_run_all(omni_defer_frame_t* frame) {
         free(node);
         node = next;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Slice support (heap-allocated arrays with embedded length/cap header).
+//
+// Every slice allocation is laid out as:
+//
+//     [omni_slice_header_t][element 0][element 1]...[element cap-1]
+//                          ^-- pointer returned to OmniLang code
+//
+// The pointer handed back points at the first ELEMENT, not the header. This
+// preserves backwards compatibility with the existing T*-typed array surface
+// (indexing, struct fields, function args/returns) — old code keeps reading
+// `arr[i]` exactly as before. Helpers walk back by sizeof(header) when they
+// need length/cap info.
+// ---------------------------------------------------------------------------
+
+#define OMNI_SLICE_MAGIC ((int64_t)0x4F4D4E494C535443LL) /* 'OMNILSTC' */
+
+typedef struct {
+    int64_t len;
+    int64_t cap;
+    int64_t elem_size;
+    int64_t magic;
+} omni_slice_header_t;
+
+static inline omni_slice_header_t* omni_slice_header(void* slice) {
+    if (!slice) return NULL;
+    omni_slice_header_t* h = ((omni_slice_header_t*)slice) - 1;
+    if (h->magic != OMNI_SLICE_MAGIC) return NULL;
+    return h;
+}
+
+void* omni_slice_make(int64_t len, int64_t cap, int64_t elem_size) {
+    if (cap < len) cap = len;
+    if (cap == 0) cap = 1; // avoid zero-byte mallocs; len stays 0
+    if (elem_size <= 0) elem_size = sizeof(void*);
+    omni_slice_header_t* h = (omni_slice_header_t*)malloc(sizeof(omni_slice_header_t) + (size_t)cap * (size_t)elem_size);
+    if (!h) return NULL;
+    h->len = len;
+    h->cap = cap;
+    h->elem_size = elem_size;
+    h->magic = OMNI_SLICE_MAGIC;
+    void* data = (void*)(h + 1);
+    // Zero the payload so reads of unfilled slots produce predictable values
+    // rather than uninitialized memory. Costs a memset per allocation; small
+    // price for the safety win and still O(n) which append amortizes anyway.
+    memset(data, 0, (size_t)cap * (size_t)elem_size);
+    return data;
+}
+
+int64_t omni_slice_len_real(void* slice) {
+    omni_slice_header_t* h = omni_slice_header(slice);
+    if (!h) return 0;
+    return h->len;
+}
+
+int64_t omni_slice_cap(void* slice) {
+    omni_slice_header_t* h = omni_slice_header(slice);
+    if (!h) return 0;
+    return h->cap;
+}
+
+// omni_slice_append copies one element pointed to by elem onto the end of
+// slice, growing if necessary. Returns the (possibly new) data pointer.
+// Doubles capacity on grow — same as Go's amortized strategy.
+void* omni_slice_append(void* slice, const void* elem) {
+    omni_slice_header_t* h = omni_slice_header(slice);
+    if (!h) {
+        // Defensive: a non-slice input can't be safely grown. Return NULL so
+        // the caller crashes loudly rather than corrupting an arbitrary
+        // buffer. In practice this only fires if codegen mixes raw arrays
+        // with the heap-allocated slice machinery — a bug to find, not silently work around.
+        return NULL;
+    }
+    int64_t elem_size = h->elem_size;
+    if (h->len < h->cap) {
+        // Fast path: no reallocation needed.
+        memcpy((char*)slice + h->len * elem_size, elem, (size_t)elem_size);
+        h->len++;
+        return slice;
+    }
+    int64_t new_cap = h->cap * 2;
+    if (new_cap < h->len + 1) new_cap = h->len + 1;
+    omni_slice_header_t* nh = (omni_slice_header_t*)malloc(sizeof(omni_slice_header_t) + (size_t)new_cap * (size_t)elem_size);
+    if (!nh) return NULL;
+    nh->len = h->len + 1;
+    nh->cap = new_cap;
+    nh->elem_size = elem_size;
+    nh->magic = OMNI_SLICE_MAGIC;
+    void* new_data = (void*)(nh + 1);
+    memcpy(new_data, slice, (size_t)h->len * (size_t)elem_size);
+    memcpy((char*)new_data + h->len * elem_size, elem, (size_t)elem_size);
+    free(h);
+    return new_data;
+}
+
+// omni_slice_subslice produces a fresh allocation for slice[lo:hi]. We copy
+// rather than aliasing so a later append on either slice can't disturb the
+// other — the simplest semantics; matches what the VM does. Use -1 for hi to
+// mean "len(slice)".
+void* omni_slice_subslice(void* slice, int64_t lo, int64_t hi) {
+    omni_slice_header_t* h = omni_slice_header(slice);
+    if (!h) return NULL;
+    if (hi < 0) hi = h->len;
+    if (lo < 0 || hi < lo || hi > h->len) {
+        fprintf(stderr, "omni_slice_subslice: out of bounds [%lld:%lld] for length %lld\n",
+                (long long)lo, (long long)hi, (long long)h->len);
+        return NULL;
+    }
+    int64_t n = hi - lo;
+    void* out = omni_slice_make(n, n, h->elem_size);
+    if (out && n > 0) {
+        memcpy(out, (char*)slice + lo * h->elem_size, (size_t)n * (size_t)h->elem_size);
+    }
+    return out;
 }

@@ -117,6 +117,15 @@ void omni_array_append(omni_array_t* arr, void* item);
 void* omni_array_get(omni_array_t* arr, int32_t index);
 int32_t omni_array_size(omni_array_t* arr);
 
+// Slice support — heap-allocated arrays with a hidden length/capacity header
+// just before the data pointer. Used for OmniLang `[]T` arrays so they can
+// be appended to and sliced at runtime.
+void* omni_slice_make(int64_t len, int64_t cap, int64_t elem_size);
+int64_t omni_slice_len_real(void* slice);
+int64_t omni_slice_cap(void* slice);
+void* omni_slice_append(void* slice, const void* elem);
+void* omni_slice_subslice(void* slice, int64_t lo, int64_t hi);
+
 // Type constants for any type support
 #define OMNI_TYPE_INT 1
 #define OMNI_TYPE_STRING 2

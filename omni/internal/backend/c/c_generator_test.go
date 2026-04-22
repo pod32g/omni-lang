@@ -3878,6 +3878,63 @@ func TestDeferCodegen(t *testing.T) {
 	}
 }
 
+// TestSliceCodegen asserts the C backend's slice lowering: array literals
+// allocate via omni_slice_make, append goes through omni_slice_append, and
+// slicing goes through omni_slice_subslice.
+func TestSliceCodegen(t *testing.T) {
+	module := &mir.Module{
+		Functions: []*mir.Function{
+			{
+				Name:       "main",
+				ReturnType: "int",
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(0), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "1"}}},
+						{ID: mir.ValueID(1), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "2"}}},
+						{ID: mir.ValueID(2), Op: "array.init", Type: "[]<int>",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "int"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "int"},
+							}},
+						{ID: mir.ValueID(3), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "3"}}},
+						{ID: mir.ValueID(4), Op: "slice.append", Type: "[]<int>",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandValue, Value: mir.ValueID(2), Type: "[]<int>"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(3), Type: "int"},
+							}},
+						{ID: mir.ValueID(5), Op: "slice.slice", Type: "[]<int>",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandValue, Value: mir.ValueID(4), Type: "[]<int>"},
+								{Kind: mir.OperandLiteral, Literal: "0", Type: "int"},
+								{Kind: mir.OperandLiteral, Literal: "-1", Type: "int"},
+							}},
+					},
+					Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{
+						{Kind: mir.OperandLiteral, Literal: "0", Type: "int"},
+					}},
+				}},
+			},
+		},
+	}
+	result, err := GenerateC(module)
+	if err != nil {
+		t.Fatalf("GenerateC failed: %v", err)
+	}
+	for _, c := range []struct{ name, needle string }{
+		{"array.init heap-allocates via omni_slice_make", "omni_slice_make(2, 2, sizeof(int32_t))"},
+		{"slice.append goes through omni_slice_append", "omni_slice_append("},
+		{"slice.slice goes through omni_slice_subslice", "omni_slice_subslice("},
+	} {
+		if !strings.Contains(result, c.needle) {
+			t.Errorf("%s: generated C is missing %q", c.name, c.needle)
+		}
+	}
+}
+
 // TestDeferFuncCodegen asserts defer.push.func lowering.
 func TestDeferFuncCodegen(t *testing.T) {
 	module := &mir.Module{
