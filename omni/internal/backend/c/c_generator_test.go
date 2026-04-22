@@ -3948,6 +3948,73 @@ func TestConcurrencyCodegen(t *testing.T) {
 	}
 }
 
+// TestTCOCodegen asserts the C backend rewrites a tail-position `call` to
+// the same function as a `goto entry;` after staging arguments through
+// temporaries. Cross-function tail calls use `return f(args);` (left to
+// clang's sibling-call optimization, gated on -foptimize-sibling-calls).
+func TestTCOCodegen(t *testing.T) {
+	// Self-recursive shape: count_down(n, acc) tail-calls itself.
+	module := &mir.Module{
+		Functions: []*mir.Function{
+			{
+				Name:       "count_down",
+				ReturnType: "int",
+				Params: []mir.Param{
+					{Name: "n", Type: "int", ID: mir.ValueID(0)},
+					{Name: "acc", Type: "int", ID: mir.ValueID(1)},
+				},
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(2), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "1"}}},
+						{ID: mir.ValueID(3), Op: "sub", Type: "int",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "int"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(2), Type: "int"},
+							}},
+						{ID: mir.ValueID(4), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "1"}}},
+						{ID: mir.ValueID(5), Op: "add", Type: "int",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "int"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(4), Type: "int"},
+							}},
+						{ID: mir.ValueID(6), Op: "call", Type: "int",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandLiteral, Literal: "count_down"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(3), Type: "int"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(5), Type: "int"},
+							}},
+					},
+					Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{
+						{Kind: mir.OperandValue, Value: mir.ValueID(6), Type: "int"},
+					}},
+				}},
+			},
+		},
+	}
+	result, err := GenerateC(module)
+	if err != nil {
+		t.Fatalf("GenerateC failed: %v", err)
+	}
+	for _, c := range []struct{ name, needle string }{
+		{"entry: label emitted", "entry:"},
+		{"args staged through temps", "__omni_tco_a0"},
+		{"second arg staged", "__omni_tco_a1"},
+		{"params reassigned then jump", "goto entry;"},
+		{"no recursive C call to count_down", ""},
+	} {
+		if c.needle != "" && !strings.Contains(result, c.needle) {
+			t.Errorf("%s: generated C is missing %q", c.name, c.needle)
+		}
+	}
+	// Negative: recursive call must NOT remain as a normal `count_down(...)` invocation.
+	if strings.Contains(result, "count_down(__omni_tco_a0") || strings.Contains(result, "count_down(v3, v5)") {
+		t.Errorf("expected goto-based TCO, but found a normal recursive call: %s", result)
+	}
+}
+
 // TestSliceCodegen asserts the C backend's slice lowering: array literals
 // allocate via omni_slice_make, append goes through omni_slice_append, and
 // slicing goes through omni_slice_subslice.

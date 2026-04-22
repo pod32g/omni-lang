@@ -588,83 +588,191 @@ const (
 )
 
 func execFunction(funcs map[string]*mir.Function, fn *mir.Function, args []Result) (Result, error) {
-	fr := &frame{values: make(map[mir.ValueID]Result)}
-	if len(args) != 0 && len(args) != len(fn.Params) {
-		return Result{}, fmt.Errorf("vm: function %s expects %d arguments, got %d", fn.Name, len(fn.Params), len(args))
-	}
-	for i, param := range fn.Params {
-		var val Result
-		if args != nil {
-			val = args[i]
-		} else {
-			val = Result{Type: param.Type, Value: nil}
-		}
-		if val.Type == "" {
-			val.Type = param.Type
-		}
-		fr.values[param.ID] = val
-	}
-
-	if len(fn.Blocks) == 0 {
-		return Result{Type: "void"}, nil
-	}
-	blockMap := make(map[string]*mir.BasicBlock, len(fn.Blocks))
-	for _, b := range fn.Blocks {
-		blockMap[b.Name] = b
-	}
-	current := fn.Blocks[0]
+	// Outer loop drives tail-call rebinding: when the inner block walker
+	// detects a call in tail position (i.e. the result feeds directly into
+	// `ret %callId`), it fills nextFn / nextArgs and breaks out of the
+	// inner loop. We then reset the frame to the new fn+args and re-enter
+	// without growing the Go stack. Both self-recursion and mutual
+	// recursion benefit — the loop doesn't care whether the callee is the
+	// same function or a different one.
 	for {
-		for _, inst := range current.Instructions {
-			res, err := execInstruction(funcs, fr, inst)
-			if err != nil {
-				return Result{}, fmt.Errorf("vm: %s: %w", fn.Name, err)
+		if len(args) != 0 && len(args) != len(fn.Params) {
+			return Result{}, fmt.Errorf("vm: function %s expects %d arguments, got %d", fn.Name, len(fn.Params), len(args))
+		}
+		fr := &frame{values: make(map[mir.ValueID]Result)}
+		for i, param := range fn.Params {
+			var val Result
+			if args != nil {
+				val = args[i]
+			} else {
+				val = Result{Type: param.Type, Value: nil}
 			}
-			if inst.ID != mir.InvalidValue {
-				fr.values[inst.ID] = res
+			if val.Type == "" {
+				val.Type = param.Type
+			}
+			fr.values[param.ID] = val
+		}
+		if len(fn.Blocks) == 0 {
+			return Result{Type: "void"}, nil
+		}
+		blockMap := make(map[string]*mir.BasicBlock, len(fn.Blocks))
+		for _, b := range fn.Blocks {
+			blockMap[b.Name] = b
+		}
+
+		current := fn.Blocks[0]
+		var nextFn *mir.Function
+		var nextArgs []Result
+		var ret Result
+		var done bool
+		var execErr error
+
+	blockLoop:
+		for {
+			n := len(current.Instructions)
+			for i, inst := range current.Instructions {
+				// Tail-call detection: if this is the LAST instruction in
+				// the block, it's a static-callee `call`, and the block's
+				// terminator is `ret %thisInstID`, rebind (fn, args) and
+				// re-enter the outer loop instead of recursing.
+				if i == n-1 {
+					if tFn, tArgs, ok := tailCallTarget(funcs, fr, current.Terminator, inst); ok {
+						nextFn = tFn
+						nextArgs = tArgs
+						break blockLoop
+					}
+				}
+				res, err := execInstruction(funcs, fr, inst)
+				if err != nil {
+					execErr = fmt.Errorf("vm: %s: %w", fn.Name, err)
+					done = true
+					break blockLoop
+				}
+				if inst.ID != mir.InvalidValue {
+					fr.values[inst.ID] = res
+				}
+			}
+
+			term := current.Terminator
+			switch term.Op {
+			case "ret":
+				if len(term.Operands) == 0 {
+					ret = Result{Type: "void"}
+				} else {
+					op := term.Operands[0]
+					if op.Kind != mir.OperandValue {
+						r, err := literalResult(op)
+						if err != nil {
+							execErr = err
+						} else {
+							ret = r
+						}
+					} else {
+						ret = fr.values[op.Value]
+					}
+				}
+				done = true
+				break blockLoop
+			case "br", "jmp":
+				target, err := blockByOperand(blockMap, term.Operands[0])
+				if err != nil {
+					execErr = fmt.Errorf("vm: %s: %w", fn.Name, err)
+					done = true
+					break blockLoop
+				}
+				current = target
+			case "cbr":
+				if len(term.Operands) < 3 {
+					execErr = fmt.Errorf("vm: %s: conditional branch requires condition and two targets", fn.Name)
+					done = true
+					break blockLoop
+				}
+				cond := operandValue(fr, term.Operands[0])
+				b, err := toBool(cond)
+				if err != nil {
+					execErr = fmt.Errorf("vm: %s: %w", fn.Name, err)
+					done = true
+					break blockLoop
+				}
+				var targetOp mir.Operand
+				if b {
+					targetOp = term.Operands[1]
+				} else {
+					targetOp = term.Operands[2]
+				}
+				target, err := blockByOperand(blockMap, targetOp)
+				if err != nil {
+					execErr = fmt.Errorf("vm: %s: %w", fn.Name, err)
+					done = true
+					break blockLoop
+				}
+				current = target
+			default:
+				execErr = fmt.Errorf("unsupported terminator %q", term.Op)
+				done = true
+				break blockLoop
 			}
 		}
 
-		term := current.Terminator
-		switch term.Op {
-		case "ret":
-			if len(term.Operands) == 0 {
-				return Result{Type: "void"}, nil
+		if done {
+			if execErr != nil {
+				return Result{}, execErr
 			}
-			op := term.Operands[0]
-			if op.Kind != mir.OperandValue {
-				return literalResult(op)
-			}
-			return fr.values[op.Value], nil
-		case "br", "jmp":
-			target, err := blockByOperand(blockMap, term.Operands[0])
-			if err != nil {
-				return Result{}, fmt.Errorf("vm: %s: %w", fn.Name, err)
-			}
-			current = target
-		case "cbr":
-			if len(term.Operands) < 3 {
-				return Result{}, fmt.Errorf("vm: %s: conditional branch requires condition and two targets", fn.Name)
-			}
-			cond := operandValue(fr, term.Operands[0])
-			b, err := toBool(cond)
-			if err != nil {
-				return Result{}, fmt.Errorf("vm: %s: %w", fn.Name, err)
-			}
-			var targetOp mir.Operand
-			if b {
-				targetOp = term.Operands[1]
-			} else {
-				targetOp = term.Operands[2]
-			}
-			target, err := blockByOperand(blockMap, targetOp)
-			if err != nil {
-				return Result{}, fmt.Errorf("vm: %s: %w", fn.Name, err)
-			}
-			current = target
-		default:
-			return Result{}, fmt.Errorf("unsupported terminator %q", term.Op)
+			return ret, nil
 		}
+		// Tail-call rebind. Loop back to the top of execFunction with the
+		// new function and arguments — no stack growth.
+		fn = nextFn
+		args = nextArgs
 	}
+}
+
+// tailCallTarget returns (callee, args, true) if `inst` is a static-callee
+// `call` whose result feeds directly into the block's `ret` terminator. The
+// caller treats this as a tail call and rebinds the dispatch loop instead of
+// recursing.
+//
+// Deliberately conservative: only plain "call" / "call.<type>" with a
+// literal callee qualify. iface.call (dynamic dispatch via type tag),
+// func.call (function-value receiver), intrinsics, and async/Promise calls
+// fall through and execute normally — TCO for those is its own design
+// problem.
+func tailCallTarget(funcs map[string]*mir.Function, fr *frame, term mir.Terminator, inst mir.Instruction) (*mir.Function, []Result, bool) {
+	if term.Op != "ret" || len(term.Operands) != 1 {
+		return nil, nil, false
+	}
+	retOp := term.Operands[0]
+	if retOp.Kind != mir.OperandValue || retOp.Value != inst.ID {
+		return nil, nil, false
+	}
+	switch inst.Op {
+	case "call", "call.int", "call.string", "call.bool":
+		// fine — value-producing call ops
+	default:
+		return nil, nil, false
+	}
+	if len(inst.Operands) == 0 || inst.Operands[0].Kind != mir.OperandLiteral {
+		return nil, nil, false
+	}
+	callee := inst.Operands[0].Literal
+	fn, ok := funcs[callee]
+	if !ok {
+		return nil, nil, false
+	}
+	// Only tail-call functions whose param count matches: a Promise<T>
+	// callee would require unwrapping at the call site, which the normal
+	// call path handles but the tail-rebind doesn't.
+	if strings.HasPrefix(fn.ReturnType, "Promise<") {
+		return nil, nil, false
+	}
+	if len(inst.Operands)-1 != len(fn.Params) {
+		return nil, nil, false
+	}
+	args := make([]Result, 0, len(fn.Params))
+	for _, op := range inst.Operands[1:] {
+		args = append(args, operandValue(fr, op))
+	}
+	return fn, args, true
 }
 
 func blockByOperand(blocks map[string]*mir.BasicBlock, op mir.Operand) (*mir.BasicBlock, error) {

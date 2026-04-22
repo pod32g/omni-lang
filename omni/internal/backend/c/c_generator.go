@@ -1617,13 +1617,12 @@ func (g *CGenerator) generateBlock(block *mir.BasicBlock, fn *mir.Function) erro
 	if funcName == "main" {
 		funcName = "omni_main"
 	}
-	// Generate block label if it's not the entry block
-	if block.Name != "entry" {
-		g.output.WriteString(fmt.Sprintf("  %s:\n", block.Name))
-		// Add empty statement after label to avoid C23 warning about label followed by declaration
-		// This ensures compatibility with older C standards
-		g.output.WriteString("  ;\n")
-	}
+	// Generate block label. The entry block gets `entry:` too so self
+	// tail-calls can `goto entry;` after reassigning parameters; that's
+	// half of the TCO story (the other half is cross-function tail calls
+	// staying as `return f(args);` for clang's sibling-call optimization).
+	g.output.WriteString(fmt.Sprintf("  %s:\n", block.Name))
+	g.output.WriteString("  ;\n")
 
 	// Pre-populate valueTypes for this block's instructions
 	// This ensures type information is available when processing struct.init
@@ -1652,11 +1651,31 @@ func (g *CGenerator) generateBlock(block *mir.BasicBlock, fn *mir.Function) erro
 		}
 	}
 
-	// Generate instructions
-	for _, inst := range block.Instructions {
+	// Detect a tail call: the block ends with `ret %callId` and the last
+	// instruction is `call` producing %callId with a literal callee. We
+	// then emit either `goto entry;` (after reassigning params) for
+	// self-recursion, or `return f(args);` for cross-function tail calls
+	// — the latter shape is what clang's -foptimize-sibling-calls
+	// recognizes.
+	tailIdx := -1
+	if isTail, idx := tailCallIndex(block); isTail {
+		tailIdx = idx
+	}
+
+	// Generate instructions, skipping the tail-call instruction itself
+	// (we'll emit its specialized form below).
+	for i, inst := range block.Instructions {
+		if i == tailIdx {
+			continue
+		}
 		if err := g.generateInstruction(&inst); err != nil {
 			return err
 		}
+	}
+
+	if tailIdx >= 0 {
+		g.emitTailCall(block.Instructions[tailIdx], fn)
+		return nil
 	}
 
 	// Generate terminator
@@ -1665,6 +1684,103 @@ func (g *CGenerator) generateBlock(block *mir.BasicBlock, fn *mir.Function) erro
 	}
 
 	return nil
+}
+
+// tailCallIndex returns (true, idx) if block ends with `ret %callId` where
+// the previous instruction at idx produces %callId via a static-callee
+// `call`. Conservative: skips iface.call, func.call, intrinsics with
+// special lowering, and Promise-returning calls.
+func tailCallIndex(block *mir.BasicBlock) (bool, int) {
+	if block.Terminator.Op != "ret" || len(block.Terminator.Operands) != 1 {
+		return false, -1
+	}
+	retOp := block.Terminator.Operands[0]
+	if retOp.Kind != mir.OperandValue {
+		return false, -1
+	}
+	for i := len(block.Instructions) - 1; i >= 0; i-- {
+		inst := block.Instructions[i]
+		if inst.ID != retOp.Value {
+			continue
+		}
+		switch inst.Op {
+		case "call", "call.int", "call.string", "call.bool":
+			// proceed
+		default:
+			return false, -1
+		}
+		if len(inst.Operands) == 0 || inst.Operands[0].Kind != mir.OperandLiteral {
+			return false, -1
+		}
+		callee := inst.Operands[0].Literal
+		// Skip stdlib / module-qualified callees: their lowering is
+		// special-cased throughout the C backend, and the natural shape
+		// `omni_println_string(...)` doesn't need TCO anyway.
+		if strings.Contains(callee, ".") {
+			return false, -1
+		}
+		// Builtins like `len` get bespoke call-site emission (length
+		// hint, element-size argument, etc). Never tail-call them — the
+		// generic `return f(args);` shape would lose those arguments.
+		if callee == "len" || callee == "append" {
+			return false, -1
+		}
+		// Skip Promise returns — the regular call path wraps these.
+		if strings.HasPrefix(inst.Type, "Promise<") {
+			return false, -1
+		}
+		// Must be the LAST non-terminator instruction. If anything
+		// non-trivial sits between the call and the ret, we'd lose those
+		// side effects.
+		if i != len(block.Instructions)-1 {
+			return false, -1
+		}
+		return true, i
+	}
+	return false, -1
+}
+
+// emitTailCall writes the C tail-call form for a tail-position `call`
+// instruction. Self-recursion becomes parameter reassignment + goto entry;
+// cross-function calls become `return callee(args);` so clang's sibling-call
+// optimization can take a swing.
+func (g *CGenerator) emitTailCall(inst mir.Instruction, fn *mir.Function) {
+	callee := inst.Operands[0].Literal
+	argOps := inst.Operands[1:]
+
+	if callee == fn.Name && len(argOps) == len(fn.Params) {
+		// Self-recursive: stage new args into temporaries first so we
+		// don't clobber a parameter that another arg expression reads.
+		g.output.WriteString("  {\n")
+		for i, op := range argOps {
+			pType := g.mapType(fn.Params[i].Type)
+			g.output.WriteString(fmt.Sprintf("    %s __omni_tco_a%d = %s;\n", pType, i, g.getOperandValue(op)))
+		}
+		for i, p := range fn.Params {
+			paramName := g.formatParamRef(p)
+			g.output.WriteString(fmt.Sprintf("    %s = __omni_tco_a%d;\n", paramName, i))
+		}
+		g.output.WriteString("    goto entry;\n")
+		g.output.WriteString("  }\n")
+		return
+	}
+
+	// Cross-function: emit `return callee(args);` directly. Clang at -O2+
+	// with -foptimize-sibling-calls turns this into a jump.
+	calleeC := g.mapFunctionName(callee)
+	var argExprs []string
+	for _, op := range argOps {
+		argExprs = append(argExprs, g.getOperandValue(op))
+	}
+	g.output.WriteString(fmt.Sprintf("  return %s(%s);\n", calleeC, strings.Join(argExprs, ", ")))
+}
+
+// formatParamRef returns the C identifier the function body uses to read
+// param p. Param values flow through SSA value IDs the same way as any
+// other binding, so we just look up the variable name we'd have given
+// inst.ID == p.ID.
+func (g *CGenerator) formatParamRef(p mir.Param) string {
+	return g.getVariableName(p.ID)
 }
 
 // generateInstruction generates C code for a single instruction

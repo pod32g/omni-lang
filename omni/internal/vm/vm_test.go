@@ -3,6 +3,8 @@ package vm
 import (
 	"strings"
 	"testing"
+
+	"github.com/omni-lang/omni/internal/mir"
 )
 
 func TestNewObjectPool(t *testing.T) {
@@ -149,5 +151,93 @@ func TestObjectPoolConcurrency(t *testing.T) {
 	// Wait for all goroutines to complete
 	for i := 0; i < 10; i++ {
 		<-done
+	}
+}
+
+// TestTCOSelfRecursionDeep verifies the VM's tail-call dispatch loop
+// handles a million-deep self-recursive call without growing the Go
+// stack. Without TCO, this would either crash on a stack-overflow
+// signal or grow the goroutine's stack to many MB.
+//
+// Module shape (count_down(n, acc) returns acc when n==0, else
+// recurses):
+//
+//	if n == 0 { return acc }
+//	return count_down(n - 1, acc + 1)
+func TestTCOSelfRecursionDeep(t *testing.T) {
+	param0 := mir.Param{Name: "n", Type: "int", ID: mir.ValueID(0)}
+	param1 := mir.Param{Name: "acc", Type: "int", ID: mir.ValueID(1)}
+
+	fn := &mir.Function{
+		Name:       "count_down",
+		ReturnType: "int",
+		Params:     []mir.Param{param0, param1},
+		Blocks: []*mir.BasicBlock{
+			{
+				Name: "entry",
+				Instructions: []mir.Instruction{
+					{ID: mir.ValueID(2), Op: "const", Type: "int",
+						Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "0"}}},
+					{ID: mir.ValueID(3), Op: "cmp.eq", Type: "bool",
+						Operands: []mir.Operand{
+							{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "int"},
+							{Kind: mir.OperandValue, Value: mir.ValueID(2), Type: "int"},
+						}},
+				},
+				Terminator: mir.Terminator{Op: "cbr", Operands: []mir.Operand{
+					{Kind: mir.OperandValue, Value: mir.ValueID(3), Type: "bool"},
+					{Kind: mir.OperandLiteral, Literal: "ret_block"},
+					{Kind: mir.OperandLiteral, Literal: "rec_block"},
+				}},
+			},
+			{
+				Name:       "ret_block",
+				Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "int"}}},
+			},
+			{
+				Name: "rec_block",
+				Instructions: []mir.Instruction{
+					{ID: mir.ValueID(4), Op: "const", Type: "int",
+						Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "1"}}},
+					{ID: mir.ValueID(5), Op: "sub", Type: "int",
+						Operands: []mir.Operand{
+							{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "int"},
+							{Kind: mir.OperandValue, Value: mir.ValueID(4), Type: "int"},
+						}},
+					{ID: mir.ValueID(6), Op: "const", Type: "int",
+						Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "1"}}},
+					{ID: mir.ValueID(7), Op: "add", Type: "int",
+						Operands: []mir.Operand{
+							{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "int"},
+							{Kind: mir.OperandValue, Value: mir.ValueID(6), Type: "int"},
+						}},
+					{ID: mir.ValueID(8), Op: "call", Type: "int",
+						Operands: []mir.Operand{
+							{Kind: mir.OperandLiteral, Literal: "count_down"},
+							{Kind: mir.OperandValue, Value: mir.ValueID(5), Type: "int"},
+							{Kind: mir.OperandValue, Value: mir.ValueID(7), Type: "int"},
+						}},
+				},
+				Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{{Kind: mir.OperandValue, Value: mir.ValueID(8), Type: "int"}}},
+			},
+		},
+	}
+	funcs := map[string]*mir.Function{"count_down": fn}
+
+	const depth = 1_000_000
+	args := []Result{
+		{Type: "int", Value: depth},
+		{Type: "int", Value: 0},
+	}
+	res, err := execFunction(funcs, fn, args)
+	if err != nil {
+		t.Fatalf("execFunction: %v", err)
+	}
+	got, ok := res.Value.(int)
+	if !ok {
+		t.Fatalf("expected int result, got %T", res.Value)
+	}
+	if got != depth {
+		t.Fatalf("expected %d, got %d", depth, got)
 	}
 }

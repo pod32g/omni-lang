@@ -922,6 +922,18 @@ func compileCWrapperWithOpt(cPath, outputPath string, optLevel string) error {
 		"-Wno-unused-variable",
 		"-Wno-unused-parameter",
 		"-Wno-unused-function",
+		// Every function gets an `entry:` label so self tail-calls can
+		// `goto entry;` after reassigning params. Functions that don't
+		// tail-recurse leave the label unused — that's expected, not a
+		// bug.
+		"-Wno-unused-label",
+		// Encourage clang/gcc to apply sibling-call optimization to
+		// cross-function tail calls. The C backend emits those as
+		// `return f(args);`, which is the shape this optimization
+		// recognizes. Self-recursion is already lowered to `goto entry;`
+		// in codegen so it doesn't need the flag. No-op at -O0; most
+		// useful at -O1 and above.
+		"-foptimize-sibling-calls",
 	}
 
 	// Add optimization flags
@@ -996,6 +1008,18 @@ func compileCWrapperWithDebug(cPath, outputPath string, optLevel string) error {
 		"-Wno-unused-variable",
 		"-Wno-unused-parameter",
 		"-Wno-unused-function",
+		// Every function gets an `entry:` label so self tail-calls can
+		// `goto entry;` after reassigning params. Functions that don't
+		// tail-recurse leave the label unused — that's expected, not a
+		// bug.
+		"-Wno-unused-label",
+		// Encourage clang/gcc to apply sibling-call optimization to
+		// cross-function tail calls. The C backend emits those as
+		// `return f(args);`, which is the shape this optimization
+		// recognizes. Self-recursion is already lowered to `goto entry;`
+		// in codegen so it doesn't need the flag. No-op at -O0; most
+		// useful at -O1 and above.
+		"-foptimize-sibling-calls",
 	}
 
 	// Add optimization flags
@@ -1111,6 +1135,18 @@ func compileCWrapper(cPath, outputPath string) error {
 		"-Wno-unused-variable",
 		"-Wno-unused-parameter",
 		"-Wno-unused-function",
+		// Every function gets an `entry:` label so self tail-calls can
+		// `goto entry;` after reassigning params. Functions that don't
+		// tail-recurse leave the label unused — that's expected, not a
+		// bug.
+		"-Wno-unused-label",
+		// Encourage clang/gcc to apply sibling-call optimization to
+		// cross-function tail calls. The C backend emits those as
+		// `return f(args);`, which is the shape this optimization
+		// recognizes. Self-recursion is already lowered to `goto entry;`
+		// in codegen so it doesn't need the flag. No-op at -O0; most
+		// useful at -O1 and above.
+		"-foptimize-sibling-calls",
 	}
 
 	// Add platform-specific flags

@@ -1,0 +1,16 @@
+import std
+
+// Self-recursive accumulator. Without TCO this would blow the stack
+// long before reaching 1M deep — the C backend lowers the tail call to
+// `goto entry;` after reassigning params, and the VM rebinds (fn, args)
+// in its dispatch loop without growing the Go stack.
+func count_down(n: int, acc: int) : int {
+    if n == 0 {
+        return acc
+    }
+    return count_down(n - 1, acc + 1)
+}
+
+func main() : int {
+    return count_down(1000000, 0)
+}
