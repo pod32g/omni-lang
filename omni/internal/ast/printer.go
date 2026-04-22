@@ -372,6 +372,23 @@ func (p *printer) writeExpr(expr Expr) {
 			p.writeExpr(e.Target)
 			p.writeExpr(e.Index)
 		})
+	case *SliceExpr:
+		p.writeLine("Slice")
+		p.indent(func() {
+			p.writeExpr(e.Target)
+			if e.Low != nil {
+				p.writeLine("Low")
+				p.indent(func() { p.writeExpr(e.Low) })
+			} else {
+				p.writeLine("Low <nil>")
+			}
+			if e.High != nil {
+				p.writeLine("High")
+				p.indent(func() { p.writeExpr(e.High) })
+			} else {
+				p.writeLine("High <nil>")
+			}
+		})
 	case *MemberExpr:
 		p.writeLine("Member " + e.Member)
 		p.indent(func() { p.writeExpr(e.Target) })

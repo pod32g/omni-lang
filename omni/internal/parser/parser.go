@@ -1128,12 +1128,40 @@ func (p *Parser) parsePostfix() (ast.Expr, error) {
 			}
 		case lexer.TokenLBracket:
 			p.advance()
-			index, err := p.parseExpr()
-			if err != nil {
-				return nil, err
+			// Distinguish index (`x[i]`) from slice (`x[lo:hi]`, `x[:hi]`,
+			// `x[lo:]`, `x[:]`). A leading colon starts a low-omitted slice;
+			// otherwise parse the first expression and peek for a colon.
+			var low, high ast.Expr
+			isSlice := false
+			if p.peekKind() == lexer.TokenColon {
+				isSlice = true
+			} else {
+				first, err := p.parseExpr()
+				if err != nil {
+					return nil, err
+				}
+				if p.peekKind() == lexer.TokenColon {
+					isSlice = true
+					low = first
+				} else {
+					// Pure index expression.
+					rbrack := p.expect(lexer.TokenRBracket)
+					expr = &ast.IndexExpr{SpanInfo: lexer.Span{Start: expr.Span().Start, End: rbrack.Span.End}, Target: expr, Index: first}
+					continue
+				}
 			}
-			rbrack := p.expect(lexer.TokenRBracket)
-			expr = &ast.IndexExpr{SpanInfo: lexer.Span{Start: expr.Span().Start, End: rbrack.Span.End}, Target: expr, Index: index}
+			if isSlice {
+				p.expect(lexer.TokenColon)
+				if p.peekKind() != lexer.TokenRBracket {
+					h, err := p.parseExpr()
+					if err != nil {
+						return nil, err
+					}
+					high = h
+				}
+				rbrack := p.expect(lexer.TokenRBracket)
+				expr = &ast.SliceExpr{SpanInfo: lexer.Span{Start: expr.Span().Start, End: rbrack.Span.End}, Target: expr, Low: low, High: high}
+			}
 		case lexer.TokenDot:
 			p.advance()
 			member := p.expect(lexer.TokenIdentifier)

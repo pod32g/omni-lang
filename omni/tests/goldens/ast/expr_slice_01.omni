@@ -1,0 +1,8 @@
+func main():int {
+  let xs:[]int = [1, 2, 3]
+  let a:[]int = xs[0:2]
+  let b:[]int = xs[:2]
+  let c:[]int = xs[1:]
+  let d:[]int = xs[:]
+  return xs[0]
+}

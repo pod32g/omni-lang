@@ -153,6 +153,23 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
+	// Phase 4 (slices): append and s[lo:hi] land front-end + VM first; the C
+	// backend's heap-allocation rework for arrays is a follow-up (see memory
+	// `project_omni_phase4_c_slices_pending`). Fail fast with a clear error
+	// rather than silently miscompiling a stack-allocated array-growth.
+	for _, fn := range g.module.Functions {
+		for _, block := range fn.Blocks {
+			for _, inst := range block.Instructions {
+				switch inst.Op {
+				case "slice.append":
+					return "", fmt.Errorf("C backend: append() is not yet supported (function %s). Use the VM backend (omnir) for slice-heavy programs, or land the deferred heap-allocation rework", fn.Name)
+				case "slice.slice":
+					return "", fmt.Errorf("C backend: slicing `s[lo:hi]` is not yet supported (function %s). Use the VM backend (omnir), or land the deferred heap-allocation rework", fn.Name)
+				}
+			}
+		}
+	}
+
 	g.writeHeader()
 	g.writeStdLibFunctions()
 

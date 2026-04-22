@@ -988,6 +988,88 @@ func parseSource(t *testing.T, src string) (*ast.Module, error) {
 	return parser.Parse("test.omni", src)
 }
 
+func TestSliceSemantics(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "append with matching element type",
+			src: `
+func main() : int {
+    var xs: []int = [1, 2, 3]
+    xs = append(xs, 4)
+    return xs[0]
+}`,
+		},
+		{
+			name: "append element type mismatch is an error",
+			src: `
+func main() : int {
+    var xs: []int = [1, 2, 3]
+    xs = append(xs, "nope")
+    return xs[0]
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "append on non-array is an error",
+			src: `
+func main() : int {
+    let x: int = 1
+    let y: int = append(x, 2)
+    return y
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "slice expression on array is valid",
+			src: `
+func main() : int {
+    let xs: []int = [1, 2, 3]
+    let ys: []int = xs[0:2]
+    return ys[0]
+}`,
+		},
+		{
+			name: "slice low bound non-int is an error",
+			src: `
+func main() : int {
+    let xs: []int = [1, 2, 3]
+    let ys: []int = xs["bad":2]
+    return ys[0]
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "slicing non-array is an error",
+			src: `
+func main() : int {
+    let x: int = 1
+    let y: int = x[0:1]
+    return y
+}`,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Errorf("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+			}
+		})
+	}
+}
+
 func TestDeferSemantics(t *testing.T) {
 	tests := []struct {
 		name      string

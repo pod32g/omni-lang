@@ -477,6 +477,8 @@ func init() {
 		"defer.run":        execDeferRun,
 		"struct.init":     execStructInit,
 		"array.init":      execArrayInit,
+		"slice.append":    execSliceAppend,
+		"slice.slice":     execSliceSlice,
 		"index":           execIndex,
 		"assign":          execAssign,
 		"map.init":        execMapInit,
@@ -804,6 +806,146 @@ func execPhi(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (R
 	// and select the appropriate value based on which block we came from
 	firstValue := operandValue(fr, inst.Operands[0])
 	return firstValue, nil
+}
+
+// execSliceAppend handles `append(slice, elem)` by producing a new slice with
+// elem appended. The VM carries arrays as typed Go slices (`[]int`,
+// `[]string`, `[]float64`, `[]bool`, `[]interface{}` for nested/heterogeneous
+// element types), so we dispatch on the underlying value type. The input
+// slice is not mutated — Go's builtin append may return a new backing array
+// when capacity runs out, and we return that directly.
+func execSliceAppend(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 2 {
+		return Result{}, fmt.Errorf("slice.append: expected (slice, elem) operands, got %d", len(inst.Operands))
+	}
+	slice := operandValue(fr, inst.Operands[0])
+	elem := operandValue(fr, inst.Operands[1])
+
+	switch s := slice.Value.(type) {
+	case []int:
+		n, ok := coerceToInt(elem.Value)
+		if !ok {
+			return Result{}, fmt.Errorf("slice.append: expected int element, got %T", elem.Value)
+		}
+		return Result{Type: slice.Type, Value: append(s, n)}, nil
+	case []string:
+		str, ok := elem.Value.(string)
+		if !ok {
+			return Result{}, fmt.Errorf("slice.append: expected string element, got %T", elem.Value)
+		}
+		return Result{Type: slice.Type, Value: append(s, str)}, nil
+	case []float64:
+		f, ok := coerceToFloat(elem.Value)
+		if !ok {
+			return Result{}, fmt.Errorf("slice.append: expected float element, got %T", elem.Value)
+		}
+		return Result{Type: slice.Type, Value: append(s, f)}, nil
+	case []bool:
+		b, ok := elem.Value.(bool)
+		if !ok {
+			return Result{}, fmt.Errorf("slice.append: expected bool element, got %T", elem.Value)
+		}
+		return Result{Type: slice.Type, Value: append(s, b)}, nil
+	case []interface{}:
+		return Result{Type: slice.Type, Value: append(s, elem.Value)}, nil
+	case nil:
+		// Appending to a nil slice — start a new []interface{} so subsequent
+		// appends through the same binding keep working.
+		return Result{Type: slice.Type, Value: []interface{}{elem.Value}}, nil
+	default:
+		return Result{}, fmt.Errorf("slice.append: unsupported slice backing of Go type %T", slice.Value)
+	}
+}
+
+// execSliceSlice handles `target[low:high]`. low and high are either Value
+// operands (real integers in the frame) or Literal operands carrying "0" or
+// "-1" to denote defaults. -1 means "len(target)".
+func execSliceSlice(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 3 {
+		return Result{}, fmt.Errorf("slice.slice: expected (target, low, high) operands, got %d", len(inst.Operands))
+	}
+	target := operandValue(fr, inst.Operands[0])
+	lowR := operandValue(fr, inst.Operands[1])
+	highR := operandValue(fr, inst.Operands[2])
+	low, ok := coerceToInt(lowR.Value)
+	if !ok {
+		return Result{}, fmt.Errorf("slice.slice: low bound not an int (%T)", lowR.Value)
+	}
+	high, ok := coerceToInt(highR.Value)
+	if !ok {
+		return Result{}, fmt.Errorf("slice.slice: high bound not an int (%T)", highR.Value)
+	}
+
+	n := reflectLen(target.Value)
+	if n < 0 {
+		return Result{}, fmt.Errorf("slice.slice: target is not a slice (Go type %T)", target.Value)
+	}
+	if high == -1 {
+		high = n
+	}
+	if low < 0 || high < low || high > n {
+		return Result{}, fmt.Errorf("slice.slice: out-of-bounds [%d:%d] for length %d", low, high, n)
+	}
+
+	switch s := target.Value.(type) {
+	case []int:
+		return Result{Type: target.Type, Value: append([]int(nil), s[low:high]...)}, nil
+	case []string:
+		return Result{Type: target.Type, Value: append([]string(nil), s[low:high]...)}, nil
+	case []float64:
+		return Result{Type: target.Type, Value: append([]float64(nil), s[low:high]...)}, nil
+	case []bool:
+		return Result{Type: target.Type, Value: append([]bool(nil), s[low:high]...)}, nil
+	case []interface{}:
+		return Result{Type: target.Type, Value: append([]interface{}(nil), s[low:high]...)}, nil
+	default:
+		return Result{}, fmt.Errorf("slice.slice: unsupported slice backing of Go type %T", target.Value)
+	}
+}
+
+// coerceToInt accepts int and common wider integer forms and unifies them
+// to an int so the slice builtins can accept values from any typed context.
+func coerceToInt(v interface{}) (int, bool) {
+	switch x := v.(type) {
+	case int:
+		return x, true
+	case int32:
+		return int(x), true
+	case int64:
+		return int(x), true
+	}
+	return 0, false
+}
+
+// coerceToFloat mirrors coerceToInt for float-flavored slices.
+func coerceToFloat(v interface{}) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	}
+	return 0, false
+}
+
+// reflectLen returns the length of any supported slice backing, or -1 if v
+// is not a recognized slice.
+func reflectLen(v interface{}) int {
+	switch s := v.(type) {
+	case []int:
+		return len(s)
+	case []string:
+		return len(s)
+	case []float64:
+		return len(s)
+	case []bool:
+		return len(s)
+	case []interface{}:
+		return len(s)
+	}
+	return -1
 }
 
 // execArrayInit handles array initialization

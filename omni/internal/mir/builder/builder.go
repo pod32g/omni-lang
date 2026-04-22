@@ -1126,6 +1126,8 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 		return fb.emitMemberAccess(e)
 	case *ast.IndexExpr:
 		return fb.emitIndexAccess(e)
+	case *ast.SliceExpr:
+		return fb.emitSlice(e)
 	case *ast.AssignmentExpr:
 		if err := fb.lowerStmt(&ast.AssignmentStmt{SpanInfo: e.SpanInfo, Left: e.Left, Right: e.Right}); err != nil {
 			return mirValue{}, err
@@ -1453,6 +1455,31 @@ func (fb *functionBuilder) lowerDefer(s *ast.DeferStmt) error {
 }
 
 func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
+	// `append(slice, x)` lowers to a dedicated slice.append op so each
+	// backend can own its own grow strategy (VM: append to Go slice;
+	// C: reallocate via runtime helpers once heap-allocated arrays land).
+	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok && ident.Name == "append" && len(expr.Args) == 2 {
+		sliceVal, err := fb.lowerExpr(expr.Args[0])
+		if err != nil {
+			return mirValue{}, err
+		}
+		elemVal, err := fb.lowerExpr(expr.Args[1])
+		if err != nil {
+			return mirValue{}, err
+		}
+		id := fb.fn.NextValue()
+		fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+			ID:   id,
+			Op:   "slice.append",
+			Type: sliceVal.Type,
+			Operands: []mir.Operand{
+				valueOperand(sliceVal.ID, sliceVal.Type),
+				valueOperand(elemVal.ID, elemVal.Type),
+			},
+		})
+		return mirValue{ID: id, Type: sliceVal.Type}, nil
+	}
+
 	// Handle array method calls like x.len() where x is an array, and method
 	// calls on user-defined struct types.
 	if member, ok := expr.Callee.(*ast.MemberExpr); ok {
@@ -1931,6 +1958,50 @@ func (fb *functionBuilder) emitMapLiteral(expr *ast.MapLiteralExpr) (mirValue, e
 	}
 	fb.block.Instructions = append(fb.block.Instructions, inst)
 	return mirValue{ID: id, Type: inst.Type}, nil
+}
+
+// emitSlice lowers `target[low:high]` into a slice.slice MIR op. Either bound
+// may be absent at the AST level — we pass a const int operand so backends
+// don't have to special-case nil operands. Missing low defaults to 0;
+// missing high defaults to -1, which every backend interprets as "len".
+func (fb *functionBuilder) emitSlice(expr *ast.SliceExpr) (mirValue, error) {
+	target, err := fb.lowerExpr(expr.Target)
+	if err != nil {
+		return mirValue{}, err
+	}
+
+	boundOp := func(e ast.Expr, defaultLit string) (mir.Operand, error) {
+		if e == nil {
+			return mir.Operand{Kind: mir.OperandLiteral, Literal: defaultLit, Type: "int"}, nil
+		}
+		v, err := fb.lowerExpr(e)
+		if err != nil {
+			return mir.Operand{}, err
+		}
+		return valueOperand(v.ID, v.Type), nil
+	}
+
+	lowOp, err := boundOp(expr.Low, "0")
+	if err != nil {
+		return mirValue{}, err
+	}
+	highOp, err := boundOp(expr.High, "-1")
+	if err != nil {
+		return mirValue{}, err
+	}
+
+	id := fb.fn.NextValue()
+	fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+		ID:   id,
+		Op:   "slice.slice",
+		Type: target.Type,
+		Operands: []mir.Operand{
+			valueOperand(target.ID, target.Type),
+			lowOp,
+			highOp,
+		},
+	})
+	return mirValue{ID: id, Type: target.Type}, nil
 }
 
 func (fb *functionBuilder) emitIndexAccess(expr *ast.IndexExpr) (mirValue, error) {

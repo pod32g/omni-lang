@@ -463,6 +463,20 @@ func (e *IndexExpr) Span() lexer.Span { return e.SpanInfo }
 func (e *IndexExpr) node()            {}
 func (e *IndexExpr) expr()            {}
 
+// SliceExpr models a Go-style slicing expression `target[low:high]`. Either
+// bound may be nil, in which case the checker defaults to 0 or len(target).
+// The result is a new slice referencing the same element type as target.
+type SliceExpr struct {
+	SpanInfo lexer.Span
+	Target   Expr
+	Low      Expr // may be nil for `target[:high]`
+	High     Expr // may be nil for `target[low:]`
+}
+
+func (e *SliceExpr) Span() lexer.Span { return e.SpanInfo }
+func (e *SliceExpr) node()            {}
+func (e *SliceExpr) expr()            {}
+
 // MemberExpr models field access.
 type MemberExpr struct {
 	SpanInfo lexer.Span

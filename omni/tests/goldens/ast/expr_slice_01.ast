@@ -1,0 +1,67 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name main
+      Return int
+      Body
+        Block {
+          BindingStmt let {
+            Name xs
+            Type []<int>
+            Value
+              ArrayLiteral [
+                Literal int 1
+                Literal int 2
+                Literal int 3
+              ]
+          }
+          BindingStmt let {
+            Name a
+            Type []<int>
+            Value
+              Slice
+                Identifier xs
+                Low
+                  Literal int 0
+                High
+                  Literal int 2
+          }
+          BindingStmt let {
+            Name b
+            Type []<int>
+            Value
+              Slice
+                Identifier xs
+                Low <nil>
+                High
+                  Literal int 2
+          }
+          BindingStmt let {
+            Name c
+            Type []<int>
+            Value
+              Slice
+                Identifier xs
+                Low
+                  Literal int 1
+                High <nil>
+          }
+          BindingStmt let {
+            Name d
+            Type []<int>
+            Value
+              Slice
+                Identifier xs
+                Low <nil>
+                High <nil>
+          }
+          ReturnStmt {
+            Value
+              Index
+                Identifier xs
+                Literal int 0
+          }
+        }
+    }
+  ]
+}

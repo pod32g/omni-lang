@@ -320,6 +320,14 @@ func (c *Checker) initBuiltins() {
 		Params: []string{typeInfer}, // Accept any array type
 		Return: "int",
 	}
+	// append(slice, elem) -> slice. Both parameters are left as typeInfer so
+	// any concrete element type goes through; checkCallExpr has a special
+	// case to compute the real return type from the first argument and to
+	// verify the second argument's type is compatible with the element.
+	c.functions["append"] = FunctionSignature{
+		Params: []string{typeInfer, typeInfer},
+		Return: typeInfer,
+	}
 }
 
 func (c *Checker) collectTypeDecls(mod *ast.Module) {
@@ -1215,6 +1223,28 @@ func (c *Checker) checkExpr(expr ast.Expr) string {
 			c.report(e.Target.Span(), fmt.Sprintf("type %s does not support indexing", targetType), "use an array or map expression")
 		}
 		return typeError
+	case *ast.SliceExpr:
+		targetType := c.checkExpr(e.Target)
+		if _, isArray := arrayElementType(targetType); !isArray {
+			if targetType != typeError {
+				c.report(e.Target.Span(), fmt.Sprintf("cannot slice non-array type %s", targetType),
+					"slice expressions apply to arrays/slices like `xs[1:3]`")
+			}
+			return typeError
+		}
+		if e.Low != nil {
+			lowType := c.checkExpr(e.Low)
+			if lowType != typeError && !c.typesEqual(lowType, "int") {
+				c.report(e.Low.Span(), fmt.Sprintf("slice low bound must be int, got %s", lowType), "use an integer index")
+			}
+		}
+		if e.High != nil {
+			highType := c.checkExpr(e.High)
+			if highType != typeError && !c.typesEqual(highType, "int") {
+				c.report(e.High.Span(), fmt.Sprintf("slice high bound must be int, got %s", highType), "use an integer index")
+			}
+		}
+		return targetType
 	case *ast.MemberExpr:
 		targetType := c.checkExpr(e.Target)
 
@@ -1674,6 +1704,31 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 	var calleeType string
 	if expr.Callee != nil {
 		calleeType = c.checkExpr(expr.Callee)
+	}
+
+	// Special-case the append builtin: the return type is the first
+	// argument's type, and the second argument must be assignable to the
+	// element type of that array.
+	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok && ident.Name == "append" {
+		if len(expr.Args) != 2 {
+			c.report(expr.Span(), fmt.Sprintf("append expects 2 arguments (slice, element), got %d", len(expr.Args)),
+				"call append like `append(xs, x)`")
+			return typeError
+		}
+		sliceType := c.checkExpr(expr.Args[0])
+		elem, ok := arrayElementType(sliceType)
+		if !ok {
+			c.report(expr.Args[0].Span(), fmt.Sprintf("append expects a slice/array, got %s", sliceType),
+				"the first argument to append must be an array or slice")
+			c.checkExpr(expr.Args[1])
+			return typeError
+		}
+		argType := c.checkExpr(expr.Args[1])
+		if argType != typeError && !c.isAssignable(argType, elem) {
+			c.report(expr.Args[1].Span(), fmt.Sprintf("append element type mismatch: expected %s, got %s", elem, argType),
+				fmt.Sprintf("pass a %s value", elem))
+		}
+		return sliceType
 	}
 
 	// Check if this is a regular function call (not a function type call)
