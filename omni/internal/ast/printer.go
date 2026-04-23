@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -200,6 +201,27 @@ func (p *printer) writeStmt(stmt Stmt) {
 				p.writeLine("Value")
 				p.indent(func() { p.writeExpr(s.Value) })
 			}
+			for i, e := range s.Extra {
+				p.writeLine(fmt.Sprintf("Value%d", i+2))
+				p.indent(func() { p.writeExpr(e) })
+			}
+		})
+		p.writeLine("}")
+	case *TupleBindStmt:
+		kw := "let"
+		if s.Mutable {
+			kw = "var"
+		}
+		p.writeLine("TupleBindStmt " + kw + " {")
+		p.indent(func() {
+			p.writeLine("Names " + strings.Join(s.Names, ", "))
+			for i, t := range s.Types {
+				if t != nil {
+					p.writeLine(fmt.Sprintf("Type%d %s", i, p.formatType(t)))
+				}
+			}
+			p.writeLine("Value")
+			p.indent(func() { p.writeExpr(s.Value) })
 		})
 		p.writeLine("}")
 	case *DeferStmt:

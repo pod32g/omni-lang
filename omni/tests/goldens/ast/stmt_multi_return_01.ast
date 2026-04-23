@@ -1,0 +1,51 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name divmod
+      Params [
+        a: int
+        b: int
+      ]
+      Return tuple<int,int>
+      Body
+        Block {
+          ReturnStmt {
+            Value
+              Binary /
+                Identifier a
+                Identifier b
+            Value2
+              Binary %
+                Identifier a
+                Identifier b
+          }
+        }
+    }
+    FuncDecl {
+      Name main
+      Return int
+      Body
+        Block {
+          TupleBindStmt let {
+            Names q, r
+            Type0 int
+            Type1 int
+            Value
+              Call
+                Callee
+                  Identifier divmod
+                Args [
+                  Literal int 10
+                  Literal int 3
+                ]
+          }
+          ReturnStmt {
+            Value
+              Binary +
+                Identifier q
+                Identifier r
+          }
+        }
+    }
+  ]
+}

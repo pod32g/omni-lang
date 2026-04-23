@@ -1,0 +1,38 @@
+import std
+
+// Go-style multi-return: one function produces two values via a tuple
+// return type. The caller destructures with `let a, b = ...`.
+func divmod(a: int, b: int) : (int, int) {
+    return a / b, a % b
+}
+
+// Channel producer. The receiver drains using the ok-form so it knows
+// when the channel is closed.
+func producer(out: chan int) {
+    out <- 10
+    out <- 20
+    close(out)
+}
+
+func main() : int {
+    let q: int, r: int = divmod(17, 5)   // q = 3, r = 2
+
+    let ch: chan int = make(chan int, 2)
+    spawn producer(ch)
+
+    // Drain using ok-form: `v, ok = <-ch` returns a sentinel false
+    // when the channel has been closed and fully drained.
+    var sum: int = 0
+    var keep: bool = true
+    while keep {
+        let v: int, ok: bool = <-ch
+        if ok {
+            sum = sum + v
+        } else {
+            keep = false
+        }
+    }
+    // sum = 30
+
+    return q + r + sum  // 3 + 2 + 30 = 35
+}

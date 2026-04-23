@@ -483,6 +483,10 @@ func init() {
 		"chan.make":       execChanMake,
 		"chan.send":       execChanSend,
 		"chan.recv":       execChanRecv,
+		"chan.recv.ok":    execChanRecvOk,
+		"chan.close":      execChanClose,
+		"tuple.new":       execTupleNew,
+		"tuple.extract":   execTupleExtract,
 		"index":           execIndex,
 		"assign":          execAssign,
 		"map.init":        execMapInit,
@@ -1066,6 +1070,95 @@ func execChanRecv(funcs map[string]*mir.Function, fr *frame, inst mir.Instructio
 		val.Type = inst.Type
 	}
 	return val, nil
+}
+
+// execChanRecvOk is the ok-form: `let v, ok = <-c` in source. Returns a
+// Result whose Value is a []Result of length 2: [value, ok:bool]. ok is
+// false exactly when the channel has been closed AND drained — matching Go
+// semantics.
+func execChanRecvOk(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 1 {
+		return Result{}, fmt.Errorf("chan.recv.ok: expected (chan) operand, got %d", len(inst.Operands))
+	}
+	chR := operandValue(fr, inst.Operands[0])
+	ch, ok := chR.Value.(chan Result)
+	if !ok {
+		return Result{}, fmt.Errorf("chan.recv.ok: source is not a channel (Go type %T)", chR.Value)
+	}
+	val, isOpen := <-ch
+	elemType := inst.Type
+	// inst.Type might be a tuple like "(int, bool)" — extract the element
+	// type from the channel's own type for the inner value. We look it up
+	// from the operand's channel type.
+	if strings.HasPrefix(chR.Type, "chan<") && strings.HasSuffix(chR.Type, ">") {
+		elemType = chR.Type[len("chan<") : len(chR.Type)-1]
+	}
+	if val.Type == "" {
+		val.Type = elemType
+	}
+	okVal := Result{Type: "bool", Value: isOpen}
+	return Result{Type: inst.Type, Value: []Result{val, okVal}}, nil
+}
+
+// execTupleNew packs operands into a Go []Result. The MIR builder emits
+// this at `return a, b` and anywhere else multi-value results flow
+// through a single SSA slot.
+func execTupleNew(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	out := make([]Result, 0, len(inst.Operands))
+	for _, op := range inst.Operands {
+		out = append(out, operandValue(fr, op))
+	}
+	return Result{Type: inst.Type, Value: out}, nil
+}
+
+// execTupleExtract reads the Nth component out of a tuple Result produced
+// by tuple.new or chan.recv.ok. Operand layout: [tupleValue, indexLit].
+func execTupleExtract(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 2 {
+		return Result{}, fmt.Errorf("tuple.extract: expected (tuple, index) operands, got %d", len(inst.Operands))
+	}
+	tuple := operandValue(fr, inst.Operands[0])
+	idxOp := inst.Operands[1]
+	if idxOp.Kind != mir.OperandLiteral {
+		return Result{}, fmt.Errorf("tuple.extract: index must be a literal operand")
+	}
+	idx := 0
+	if _, err := fmt.Sscanf(idxOp.Literal, "%d", &idx); err != nil {
+		return Result{}, fmt.Errorf("tuple.extract: invalid index literal %q", idxOp.Literal)
+	}
+	members, ok := tuple.Value.([]Result)
+	if !ok {
+		return Result{}, fmt.Errorf("tuple.extract: source is not a tuple (Go type %T)", tuple.Value)
+	}
+	if idx < 0 || idx >= len(members) {
+		return Result{}, fmt.Errorf("tuple.extract: index %d out of bounds for tuple of size %d", idx, len(members))
+	}
+	r := members[idx]
+	if r.Type == "" {
+		r.Type = inst.Type
+	}
+	return r, nil
+}
+
+// execChanClose closes the underlying Go channel so waiting receivers
+// unblock and subsequent recv.ok returns (zero, false).
+func execChanClose(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) != 1 {
+		return Result{}, fmt.Errorf("chan.close: expected (chan) operand, got %d", len(inst.Operands))
+	}
+	chR := operandValue(fr, inst.Operands[0])
+	ch, ok := chR.Value.(chan Result)
+	if !ok {
+		return Result{}, fmt.Errorf("chan.close: target is not a channel (Go type %T)", chR.Value)
+	}
+	// Guard against double-close: Go panics on re-close, so recover and
+	// surface it as a VM-level error. Matches what a defensive program
+	// expects.
+	defer func() {
+		_ = recover()
+	}()
+	close(ch)
+	return Result{Type: "void"}, nil
 }
 
 // execSliceSlice handles `target[low:high]`. low and high are either Value

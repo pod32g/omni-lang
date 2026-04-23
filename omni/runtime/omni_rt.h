@@ -134,6 +134,7 @@ omni_chan_t* omni_chan_make(int64_t cap, int64_t elem_size);
 void omni_chan_send(omni_chan_t* ch, const void* elem);
 void omni_chan_recv(omni_chan_t* ch, void* out);
 void omni_chan_close(omni_chan_t* ch);
+void omni_chan_recv_ok(omni_chan_t* ch, void* out, int32_t* ok);
 void omni_chan_destroy(omni_chan_t* ch);
 int omni_spawn(void* (*thunk)(void*), void* ctx);
 

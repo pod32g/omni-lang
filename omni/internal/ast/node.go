@@ -185,15 +185,33 @@ func (s *BlockStmt) Span() lexer.Span { return s.SpanInfo }
 func (s *BlockStmt) node()            {}
 func (s *BlockStmt) stmt()            {}
 
-// ReturnStmt returns from a function.
+// ReturnStmt returns from a function. `Value` is the first return value
+// (or nil for void); `Extra` holds the 2nd, 3rd, … values for
+// multi-return functions. Single-return paths leave Extra empty.
 type ReturnStmt struct {
 	SpanInfo lexer.Span
 	Value    Expr
+	Extra    []Expr
 }
 
 func (s *ReturnStmt) Span() lexer.Span { return s.SpanInfo }
 func (s *ReturnStmt) node()            {}
 func (s *ReturnStmt) stmt()            {}
+
+// TupleBindStmt models `let a, b = rhs` / `var a, b = rhs` — destructuring
+// a multi-return call or a channel ok-form recv into multiple bindings.
+// Types slots are parallel to Names; a nil slot means "infer from RHS".
+type TupleBindStmt struct {
+	SpanInfo lexer.Span
+	Names    []string
+	Types    []*TypeExpr
+	Value    Expr
+	Mutable  bool
+}
+
+func (s *TupleBindStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *TupleBindStmt) node()            {}
+func (s *TupleBindStmt) stmt()            {}
 
 // DeferStmt schedules a function call to run when the enclosing function
 // returns. Arguments are evaluated at the defer site; calls run in LIFO

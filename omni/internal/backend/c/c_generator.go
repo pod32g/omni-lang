@@ -2,6 +2,7 @@ package cbackend
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -51,6 +52,18 @@ type CGenerator struct {
 	// consistently between the pre-function thunk emission and the body
 	// emission of defer.push.
 	currentDeferFn *mir.Function
+	// tupleStructs records every tuple type the program references; each
+	// distinct type gets a typedef emitted once at file scope via
+	// ensureTupleStruct + writeTupleStructDecls. Value is the C typedef
+	// name. Keyed by the full OmniLang type string (e.g.
+	// "tuple<int,bool>").
+	tupleStructs map[string]string
+	// tupleSplits records tuples that aren't actually stored as a
+	// struct — specifically, the synthetic (value, ok) tuple that
+	// chan.recv.ok produces. Keyed by the tuple-producing instruction's
+	// ValueID, value is the per-component C variable names in order.
+	// tuple.extract reads from these names instead of from a field.
+	tupleSplits map[mir.ValueID][]string
 }
 
 // NewCGenerator creates a new C code generator
@@ -75,6 +88,8 @@ func NewCGenerator(module *mir.Module) *CGenerator {
 		tempStringsToFree: []string{},
 		returnedValueID:   mir.InvalidValue,
 		declaredVariables: make(map[mir.ValueID]bool),
+		tupleStructs:      make(map[string]string),
+		tupleSplits:       make(map[mir.ValueID][]string),
 	}
 }
 
@@ -100,6 +115,8 @@ func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator 
 		tempStringsToFree: []string{},
 		returnedValueID:   mir.InvalidValue,
 		declaredVariables: make(map[mir.ValueID]bool),
+		tupleStructs:      make(map[string]string),
+		tupleSplits:       make(map[mir.ValueID][]string),
 	}
 }
 
@@ -125,6 +142,8 @@ func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool,
 		tempStringsToFree: []string{},
 		returnedValueID:   mir.InvalidValue,
 		declaredVariables: make(map[mir.ValueID]bool),
+		tupleStructs:      make(map[string]string),
+		tupleSplits:       make(map[mir.ValueID][]string),
 	}
 }
 
@@ -155,6 +174,14 @@ func (g *CGenerator) Generate() (string, error) {
 func (g *CGenerator) generate() (string, error) {
 	g.writeHeader()
 	g.writeStdLibFunctions()
+
+	// Eager-scan every function's return type and every instruction's
+	// result type for tuple shapes so writeTupleStructDecls can emit the
+	// typedefs up-front. Without this pre-scan, mapType would populate
+	// tupleStructs lazily during function-declaration emission — by which
+	// point the struct would be referenced before it was defined.
+	g.collectTupleStructsFromModule()
+	g.writeTupleStructDecls()
 
 	// Generate function declarations first
 	g.writeFunctionDeclarations()
@@ -878,6 +905,235 @@ func (g *CGenerator) emitChanRecv(inst *mir.Instruction) error {
 	return nil
 }
 
+// emitChanRecvOk lowers `v, ok = <-c` via the runtime's ok-form helper.
+// The op's ID maps to a pair of logical outputs: the received element and
+// a bool flag. We synthesize two concrete C variables (<id>_val and
+// <id>_ok) so the tuple-destructure pass can bind user-level `v` and `ok`
+// to them.
+func (g *CGenerator) emitChanRecvOk(inst *mir.Instruction) error {
+	if len(inst.Operands) != 1 {
+		return fmt.Errorf("chan.recv.ok: expected (chan) operand, got %d", len(inst.Operands))
+	}
+	chOp := inst.Operands[0]
+	elemC := g.mapType(g.chanElementTypeOf(chOp.Type))
+	baseName := g.getVariableName(inst.ID)
+	valName := baseName + "_val"
+	okName := baseName + "_ok"
+	chExpr := g.getOperandValue(chOp)
+	g.output.WriteString(fmt.Sprintf("  %s %s;\n", elemC, valName))
+	g.output.WriteString(fmt.Sprintf("  int32_t %s;\n", okName))
+	g.output.WriteString(fmt.Sprintf("  omni_chan_recv_ok(%s, &%s, &%s);\n", chExpr, valName, okName))
+	// Register a synthetic split: subsequent tuple.extract ops on this
+	// ValueID read from the pair of vars above instead of going through
+	// a real tuple struct. Saves an unnecessary struct copy for the
+	// ok-form hot path.
+	g.tupleSplits[inst.ID] = []string{valName, okName}
+	g.valueTypes[inst.ID] = inst.Type
+	return nil
+}
+
+// emitChanClose lowers `close(c)` into the runtime helper.
+func (g *CGenerator) emitChanClose(inst *mir.Instruction) error {
+	if len(inst.Operands) != 1 {
+		return fmt.Errorf("chan.close: expected (chan) operand, got %d", len(inst.Operands))
+	}
+	chExpr := g.getOperandValue(inst.Operands[0])
+	g.output.WriteString(fmt.Sprintf("  omni_chan_close(%s);\n", chExpr))
+	return nil
+}
+
+// tupleStructName returns the C typedef name for a tuple type. Name is
+// built from the component C types so the same shape always maps to the
+// same struct (no aliasing by source-level name).
+func (g *CGenerator) tupleStructName(tupleType string) string {
+	if !strings.HasPrefix(tupleType, "tuple<") || !strings.HasSuffix(tupleType, ">") {
+		return "omni_tuple_unknown_t"
+	}
+	inner := tupleType[len("tuple<") : len(tupleType)-1]
+	parts := splitGenericTypeArgs(inner)
+	var buf strings.Builder
+	buf.WriteString("omni_tuple")
+	for _, p := range parts {
+		buf.WriteByte('_')
+		buf.WriteString(sanitizeForIdent(g.mapType(strings.TrimSpace(p))))
+	}
+	buf.WriteString("_t")
+	return buf.String()
+}
+
+// ensureTupleStruct registers a tuple type so its typedef gets emitted by
+// writeTupleStructDecls. Idempotent — safe to call repeatedly. Keyed by
+// the resulting C struct name (not the OmniLang tuple string), so that
+// `tuple<int,bool>` and `tuple<int,int>` — which both map to the same C
+// layout because `bool` and `int` are both int32_t — share one typedef
+// instead of producing a clashing redefinition.
+func (g *CGenerator) ensureTupleStruct(tupleType string) {
+	name := g.tupleStructName(tupleType)
+	if _, ok := g.tupleStructs[name]; ok {
+		return
+	}
+	g.tupleStructs[name] = tupleType
+}
+
+// collectTupleStructsFromModule walks the whole module looking for tuple
+// types in function return slots, parameters, and instruction result
+// types. Pre-populates tupleStructs so writeTupleStructDecls can emit all
+// typedefs at file scope before any user function references them.
+func (g *CGenerator) collectTupleStructsFromModule() {
+	consider := func(t string) {
+		if strings.HasPrefix(t, "tuple<") && strings.HasSuffix(t, ">") {
+			g.ensureTupleStruct(t)
+		}
+	}
+	for _, fn := range g.module.Functions {
+		consider(fn.ReturnType)
+		for _, p := range fn.Params {
+			consider(p.Type)
+		}
+		for _, block := range fn.Blocks {
+			for _, inst := range block.Instructions {
+				consider(inst.Type)
+				for _, op := range inst.Operands {
+					consider(op.Type)
+				}
+			}
+		}
+	}
+}
+
+// writeTupleStructDecls emits `typedef struct { T1 v0; T2 v1; ... } name_t;`
+// for every tuple shape the module uses. Called once, after
+// collectTupleStructsFromModule, before writeFunctionDeclarations.
+func (g *CGenerator) writeTupleStructDecls() {
+	if len(g.tupleStructs) == 0 {
+		return
+	}
+	// Deterministic order keeps generated output diff-stable across runs.
+	var names []string
+	for n := range g.tupleStructs {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		tupleType := g.tupleStructs[name]
+		inner := tupleType[len("tuple<") : len(tupleType)-1]
+		parts := splitGenericTypeArgs(inner)
+		g.output.WriteString("typedef struct {\n")
+		for i, p := range parts {
+			g.output.WriteString(fmt.Sprintf("    %s v%d;\n", g.mapType(strings.TrimSpace(p)), i))
+		}
+		g.output.WriteString(fmt.Sprintf("} %s;\n", name))
+	}
+	g.output.WriteString("\n")
+}
+
+// sanitizeForIdent replaces characters not legal in C identifiers with '_'.
+// Used when building tuple-struct names from component C types.
+func sanitizeForIdent(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
+}
+
+// splitGenericTypeArgs splits a comma-separated generic inner list,
+// respecting angle-bracket nesting so `tuple<int, map<string,int>>`
+// returns ["int", "map<string,int>"].
+func splitGenericTypeArgs(inner string) []string {
+	var parts []string
+	depth := 0
+	start := 0
+	for i, r := range inner {
+		switch r {
+		case '<':
+			depth++
+		case '>':
+			depth--
+		case ',':
+			if depth == 0 {
+				parts = append(parts, inner[start:i])
+				start = i + 1
+			}
+		}
+	}
+	parts = append(parts, inner[start:])
+	return parts
+}
+
+// emitTupleNew lowers `tuple.new v0, v1, ...` into a compound literal
+// assignment: the result is the tuple struct built from the operand
+// values. Used at `return a, b;` sites.
+func (g *CGenerator) emitTupleNew(inst *mir.Instruction) error {
+	structName := g.tupleStructName(inst.Type)
+	g.ensureTupleStruct(inst.Type)
+	varName := g.getVariableName(inst.ID)
+	var fields []string
+	for i, op := range inst.Operands {
+		fields = append(fields, fmt.Sprintf(".v%d = %s", i, g.getOperandValue(op)))
+	}
+	if g.declaredVariables[inst.ID] {
+		g.output.WriteString(fmt.Sprintf("  %s = (%s){%s};\n", varName, structName, strings.Join(fields, ", ")))
+	} else {
+		g.output.WriteString(fmt.Sprintf("  %s %s = (%s){%s};\n", structName, varName, structName, strings.Join(fields, ", ")))
+		g.declaredVariables[inst.ID] = true
+	}
+	g.valueTypes[inst.ID] = inst.Type
+	return nil
+}
+
+// emitTupleExtract lowers `tuple.extract %tuple, N`. For regular tuples
+// this is a struct field access. For synthetic split tuples (produced by
+// chan.recv.ok — see tupleSplits), we read from the per-component
+// variable registered there.
+func (g *CGenerator) emitTupleExtract(inst *mir.Instruction) error {
+	if len(inst.Operands) != 2 {
+		return fmt.Errorf("tuple.extract: expected (tuple, index) operands, got %d", len(inst.Operands))
+	}
+	tupleOp := inst.Operands[0]
+	idxOp := inst.Operands[1]
+	if idxOp.Kind != mir.OperandLiteral {
+		return fmt.Errorf("tuple.extract: index must be a literal")
+	}
+	idx := 0
+	if _, err := fmt.Sscanf(idxOp.Literal, "%d", &idx); err != nil {
+		return fmt.Errorf("tuple.extract: invalid index %q", idxOp.Literal)
+	}
+
+	elemC := g.mapType(inst.Type)
+	varName := g.getVariableName(inst.ID)
+
+	// Synthetic split: chan.recv.ok stored its (val, ok) pair as two
+	// standalone C variables rather than a real struct. Route the
+	// extract to the pre-registered names.
+	if tupleOp.Kind == mir.OperandValue {
+		if names, ok := g.tupleSplits[tupleOp.Value]; ok && idx < len(names) {
+			g.emitExtractAssignment(varName, elemC, names[idx], inst.ID)
+			return nil
+		}
+	}
+
+	// Regular struct-backed tuple: produce `tupleVar.vN`.
+	tupleExpr := g.getOperandValue(tupleOp)
+	access := fmt.Sprintf("%s.v%d", tupleExpr, idx)
+	g.emitExtractAssignment(varName, elemC, access, inst.ID)
+	return nil
+}
+
+func (g *CGenerator) emitExtractAssignment(varName, varType, rhs string, id mir.ValueID) {
+	if g.declaredVariables[id] {
+		g.output.WriteString(fmt.Sprintf("  %s = %s;\n", varName, rhs))
+	} else {
+		g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n", varType, varName, rhs))
+		g.declaredVariables[id] = true
+	}
+}
+
 // elementTypeOf extracts the element type string from an OmniLang array type
 // like `[]<int>` or `array<int>`. Returns "int" if the input doesn't look
 // like an array — that's a reasonable fallback that produces well-formed
@@ -1171,6 +1427,42 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 		g.variables[param.ID] = param.Name
 		if param.Type != "" {
 			g.valueTypes[param.ID] = param.Type
+		}
+	}
+
+	// Pre-register every `assign` op's result SSA ID as pointing to the
+	// target variable, before any block emits code. Without this,
+	// terminators in blocks emitted before the block that contains the
+	// assign (e.g. a while_exit lying between the header and the
+	// mutating then-branch) look up the result ID, find no mapping, and
+	// synthesize a fresh `v<N>` name that never gets initialized. We
+	// chase the chain transitively so `assign` of an `assign` keeps
+	// pointing to the original binding.
+	assignedFrom := make(map[mir.ValueID]mir.ValueID)
+	for _, block := range fn.Blocks {
+		for _, inst := range block.Instructions {
+			if inst.Op == "assign" && len(inst.Operands) >= 1 && inst.ID != mir.InvalidValue {
+				if inst.Operands[0].Kind == mir.OperandValue {
+					assignedFrom[inst.ID] = inst.Operands[0].Value
+				}
+			}
+		}
+	}
+	resolveAssignRoot := func(id mir.ValueID) mir.ValueID {
+		for {
+			target, ok := assignedFrom[id]
+			if !ok {
+				return id
+			}
+			id = target
+		}
+	}
+	for assignID := range assignedFrom {
+		rootID := resolveAssignRoot(assignID)
+		if name, ok := g.variables[rootID]; ok {
+			g.variables[assignID] = name
+		} else {
+			g.variables[assignID] = fmt.Sprintf("v%d", int(rootID))
 		}
 	}
 
@@ -1855,6 +2147,26 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		return nil
 	case "chan.recv":
 		if err := g.emitChanRecv(inst); err != nil {
+			return err
+		}
+		return nil
+	case "chan.recv.ok":
+		if err := g.emitChanRecvOk(inst); err != nil {
+			return err
+		}
+		return nil
+	case "chan.close":
+		if err := g.emitChanClose(inst); err != nil {
+			return err
+		}
+		return nil
+	case "tuple.new":
+		if err := g.emitTupleNew(inst); err != nil {
+			return err
+		}
+		return nil
+	case "tuple.extract":
+		if err := g.emitTupleExtract(inst); err != nil {
 			return err
 		}
 		return nil
@@ -5198,6 +5510,15 @@ func (g *CGenerator) mapType(omniType string) string {
 	// don't widen the C type because the channel stores raw bytes.
 	if strings.HasPrefix(omniType, "chan<") && strings.HasSuffix(omniType, ">") {
 		return "omni_chan_t*"
+	}
+
+	// Handle tuple types: tuple<T1,T2,...> — represented as a
+	// program-unique struct emitted up-front. Multi-return functions use
+	// this as their C return type so call sites can read the components
+	// via field access.
+	if strings.HasPrefix(omniType, "tuple<") && strings.HasSuffix(omniType, ">") {
+		g.ensureTupleStruct(omniType)
+		return g.tupleStructName(omniType)
 	}
 
 	// Handle struct types: struct<Field1Type,Field2Type,...>

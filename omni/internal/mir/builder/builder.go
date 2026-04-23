@@ -283,6 +283,40 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 	}
 	switch s := stmt.(type) {
 	case *ast.ReturnStmt:
+		// Multi-return: pack the values into a tuple via tuple.new, then
+		// ret the tuple. Single-value / void paths stay as they were so
+		// the existing VM/C-backend lowering keeps working.
+		if len(s.Extra) > 0 {
+			values := []mirValue{}
+			first, err := fb.lowerExpr(s.Value)
+			if err != nil {
+				return err
+			}
+			values = append(values, first)
+			for _, e := range s.Extra {
+				v, err := fb.lowerExpr(e)
+				if err != nil {
+					return err
+				}
+				values = append(values, v)
+			}
+			ops := make([]mir.Operand, 0, len(values))
+			memberTypes := make([]string, 0, len(values))
+			for _, v := range values {
+				ops = append(ops, valueOperand(v.ID, v.Type))
+				memberTypes = append(memberTypes, v.Type)
+			}
+			tupleType := buildGeneric("tuple", memberTypes)
+			tupleID := fb.fn.NextValue()
+			fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+				ID:       tupleID,
+				Op:       "tuple.new",
+				Type:     tupleType,
+				Operands: ops,
+			})
+			fb.block.Terminator = mir.Terminator{Op: "ret", Operands: []mir.Operand{valueOperand(tupleID, tupleType)}}
+			return nil
+		}
 		var value mirValue
 		var err error
 		if s.Value != nil {
@@ -305,6 +339,8 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 		return fb.lowerSpawn(s)
 	case *ast.SendStmt:
 		return fb.lowerSend(s)
+	case *ast.TupleBindStmt:
+		return fb.lowerTupleBind(s)
 	case *ast.BindingStmt:
 		val, err := fb.lowerOptionalExpr(s.Value)
 		if err != nil {
@@ -1462,6 +1498,73 @@ func (fb *functionBuilder) lowerDefer(s *ast.DeferStmt) error {
 	return nil
 }
 
+// lowerTupleBind lowers `let a, b = rhs` / `var a, b = rhs`. Two supported
+// RHS shapes:
+//
+//   1. Any expression whose value is a tuple (a call returning a tuple).
+//      We lower it normally then emit one tuple.extract per name.
+//   2. A channel recv expression `<-c`. In the ok-form context we
+//      switch the lowering to chan.recv.ok, which produces a tuple
+//      whose members are (chan_elem, bool).
+func (fb *functionBuilder) lowerTupleBind(s *ast.TupleBindStmt) error {
+	var tupleValue mirValue
+	var memberTypes []string
+
+	if recv, ok := s.Value.(*ast.RecvExpr); ok {
+		ch, err := fb.lowerExpr(recv.Chan)
+		if err != nil {
+			return err
+		}
+		elem := inferTypePlaceholder
+		if strings.HasPrefix(ch.Type, "chan<") && strings.HasSuffix(ch.Type, ">") {
+			elem = ch.Type[len("chan<") : len(ch.Type)-1]
+		}
+		memberTypes = []string{elem, "bool"}
+		tupleType := buildGeneric("tuple", memberTypes)
+		id := fb.fn.NextValue()
+		fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+			ID:   id,
+			Op:   "chan.recv.ok",
+			Type: tupleType,
+			Operands: []mir.Operand{
+				valueOperand(ch.ID, ch.Type),
+			},
+		})
+		tupleValue = mirValue{ID: id, Type: tupleType}
+	} else {
+		v, err := fb.lowerExpr(s.Value)
+		if err != nil {
+			return err
+		}
+		tupleValue = v
+		if strings.HasPrefix(v.Type, "tuple<") && strings.HasSuffix(v.Type, ">") {
+			inner := v.Type[len("tuple<") : len(v.Type)-1]
+			memberTypes = splitGenericArgs(inner)
+			for i := range memberTypes {
+				memberTypes[i] = strings.TrimSpace(memberTypes[i])
+			}
+		}
+	}
+
+	if len(memberTypes) != len(s.Names) {
+		return fmt.Errorf("mir builder: tuple bind arity mismatch (%d names, %d members)", len(s.Names), len(memberTypes))
+	}
+	for i, name := range s.Names {
+		extractID := fb.fn.NextValue()
+		fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+			ID:   extractID,
+			Op:   "tuple.extract",
+			Type: memberTypes[i],
+			Operands: []mir.Operand{
+				valueOperand(tupleValue.ID, tupleValue.Type),
+				{Kind: mir.OperandLiteral, Literal: fmt.Sprintf("%d", i)},
+			},
+		})
+		fb.env[name] = symbol{Value: extractID, Type: memberTypes[i], Mutable: s.Mutable}
+	}
+	return nil
+}
+
 // lowerSpawn lowers `spawn <call>` to a `spawn` MIR op. The op's first
 // operand identifies the callee (literal name for free functions and module
 // calls, value for func-typed locals) and the remaining operands are the
@@ -1603,6 +1706,26 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			},
 		})
 		return mirValue{ID: id, Type: sliceVal.Type}, nil
+	}
+
+	// `close(c)` lowers to a dedicated chan.close op so backends can
+	// signal waiting send/recv operations (broadcast the condvars in C,
+	// close the Go channel in the VM).
+	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok && ident.Name == "close" && len(expr.Args) == 1 {
+		chVal, err := fb.lowerExpr(expr.Args[0])
+		if err != nil {
+			return mirValue{}, err
+		}
+		id := fb.fn.NextValue()
+		fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+			ID:   id,
+			Op:   "chan.close",
+			Type: "void",
+			Operands: []mir.Operand{
+				valueOperand(chVal.ID, chVal.Type),
+			},
+		})
+		return mirValue{ID: id, Type: "void"}, nil
 	}
 
 	// Handle array method calls like x.len() where x is an array, and method

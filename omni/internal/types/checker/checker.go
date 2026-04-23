@@ -313,6 +313,7 @@ func (c *Checker) initBuiltins() {
 	c.knownTypes["array"] = struct{}{}
 	c.knownTypes["map"] = struct{}{}
 	c.knownTypes["chan"] = struct{}{}
+	c.knownTypes["tuple"] = struct{}{}
 	c.knownTypes["Promise"] = struct{}{}
 	c.knownTypes["any"] = struct{}{} // Top type for dynamic values
 
@@ -328,6 +329,13 @@ func (c *Checker) initBuiltins() {
 	c.functions["append"] = FunctionSignature{
 		Params: []string{typeInfer, typeInfer},
 		Return: typeInfer,
+	}
+	// close(chan T) -> void. The arg type flows through typeInfer; the
+	// call-site special case in checkCallExpr verifies it is actually a
+	// channel.
+	c.functions["close"] = FunctionSignature{
+		Params: []string{typeInfer},
+		Return: typeVoid,
 	}
 }
 
@@ -746,6 +754,8 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 		// site. The call's return type is intentionally discarded — deferred
 		// calls never contribute to the enclosing function's value.
 		c.checkExpr(s.Call)
+	case *ast.TupleBindStmt:
+		c.checkTupleBind(s)
 	case *ast.SpawnStmt:
 		if _, ok := s.Call.(*ast.CallExpr); !ok {
 			c.report(s.Call.Span(), "spawn operand must be a call expression", "call a function directly, e.g. `spawn worker(in)`")
@@ -1068,6 +1078,61 @@ func (c *Checker) checkWhileStmt(stmt *ast.WhileStmt) {
 	c.checkBlock(stmt.Body)
 }
 
+// checkTupleBind handles `let a, b = rhs` / `var a, b = rhs`. Supported
+// right-hand sides: a call returning a tuple, or a channel recv in its
+// ok-form (which synthesizes a tuple `(T, bool)`). Any other RHS is an
+// error — tuples aren't first-class in OmniLang today, they only exist as
+// multi-return carriers.
+func (c *Checker) checkTupleBind(s *ast.TupleBindStmt) {
+	var tupleType string
+	var members []string
+
+	// Channel recv ok-form: `let v, ok = <-c`. We synthesize the tuple
+	// (chan_elem, bool) here; the MIR builder later emits chan.recv.ok.
+	if recv, ok := s.Value.(*ast.RecvExpr); ok {
+		chanType := c.checkExpr(recv.Chan)
+		elem, isChan := chanElementType(chanType)
+		if !isChan {
+			if chanType != typeError {
+				c.report(recv.Chan.Span(), fmt.Sprintf("ok-form receive requires a channel, got %s", chanType),
+					"the operand of `<-` must be a `chan T` value")
+			}
+			return
+		}
+		members = []string{elem, "bool"}
+		tupleType = buildGeneric("tuple", members)
+	} else {
+		tupleType = c.checkExpr(s.Value)
+		parts, ok := tupleMembers(tupleType)
+		if !ok {
+			if tupleType != typeError {
+				c.report(s.Value.Span(), fmt.Sprintf("cannot destructure %s: right-hand side must be a multi-return call or channel recv ok-form", tupleType),
+					"use `let x = rhs` for a single-value binding")
+			}
+			return
+		}
+		members = parts
+	}
+
+	if len(members) != len(s.Names) {
+		c.report(s.Span(), fmt.Sprintf("tuple destructure arity mismatch: %d names, %d values", len(s.Names), len(members)),
+			"match the number of names to the tuple size")
+		return
+	}
+	for i, name := range s.Names {
+		memType := members[i]
+		if i < len(s.Types) && s.Types[i] != nil {
+			annotated := c.checkTypeExpr(s.Types[i])
+			if annotated != typeError && !c.isAssignable(memType, annotated) {
+				c.report(s.Types[i].Span(), fmt.Sprintf("type mismatch for %q: expected %s, got %s", name, annotated, memType),
+					"remove the annotation or match the tuple component type")
+			}
+			memType = annotated
+		}
+		c.declare(name, memType, s.Mutable, s.Span())
+	}
+}
+
 func (c *Checker) handleReturn(ret *ast.ReturnStmt) {
 	ctx := c.currentFunctionContext()
 	if ctx == nil {
@@ -1084,6 +1149,43 @@ func (c *Checker) handleReturn(ret *ast.ReturnStmt) {
 			c.report(ret.Span(), "missing return value", "return an expression matching the function return type")
 		} else if expected == typeInfer {
 			c.updateCurrentFunctionReturn(typeVoid)
+		}
+		return
+	}
+
+	// Multi-return: `return a, b[, c...]`. Expected return type must be a
+	// tuple with matching arity; each value is checked against the
+	// corresponding component type.
+	if len(ret.Extra) > 0 {
+		valueTypes := []string{c.checkExpr(ret.Value)}
+		for _, e := range ret.Extra {
+			valueTypes = append(valueTypes, c.checkExpr(e))
+		}
+		members, ok := tupleMembers(expected)
+		if !ok {
+			// Infer a tuple type from what the programmer wrote.
+			if expected == typeInfer {
+				c.updateCurrentFunctionReturn(buildGeneric("tuple", valueTypes))
+				return
+			}
+			c.report(ret.Span(), fmt.Sprintf("function returning %s cannot return %d values", expected, len(valueTypes)),
+				"change the return type to a tuple like `(int, bool)` or remove the extra values")
+			return
+		}
+		if len(members) != len(valueTypes) {
+			c.report(ret.Span(), fmt.Sprintf("return arity mismatch: function declares %d values, got %d", len(members), len(valueTypes)),
+				"match the number of return values to the declared tuple type")
+			return
+		}
+		for i, vt := range valueTypes {
+			if vt != typeError && !c.isAssignable(vt, members[i]) {
+				spn := ret.Value.Span()
+				if i > 0 {
+					spn = ret.Extra[i-1].Span()
+				}
+				c.report(spn, fmt.Sprintf("return value %d: cannot use %s as %s", i+1, vt, members[i]),
+					"adjust the expression or the declared tuple component type")
+			}
 		}
 		return
 	}
@@ -1775,6 +1877,21 @@ func (c *Checker) checkCallExpr(expr *ast.CallExpr) string {
 				fmt.Sprintf("pass a %s value", elem))
 		}
 		return sliceType
+	}
+
+	// Special-case close(ch): arg must be a channel; always returns void.
+	if ident, ok := expr.Callee.(*ast.IdentifierExpr); ok && ident.Name == "close" {
+		if len(expr.Args) != 1 {
+			c.report(expr.Span(), fmt.Sprintf("close expects 1 argument (channel), got %d", len(expr.Args)),
+				"call close like `close(c)`")
+			return typeError
+		}
+		chanType := c.checkExpr(expr.Args[0])
+		if _, ok := chanElementType(chanType); !ok && chanType != typeError {
+			c.report(expr.Args[0].Span(), fmt.Sprintf("close expects a channel, got %s", chanType),
+				"the argument to close must be a `chan T` value")
+		}
+		return typeVoid
 	}
 
 	// Check if this is a regular function call (not a function type call)
@@ -2663,6 +2780,20 @@ func chanElementType(typ string) (string, bool) {
 		return strings.TrimSpace(inner), true
 	}
 	return "", false
+}
+
+// tupleMembers extracts the component types from a tuple type like
+// `tuple<int, bool>`. Returns (nil, false) if typ isn't a tuple.
+func tupleMembers(typ string) ([]string, bool) {
+	if !strings.HasPrefix(typ, "tuple<") || !strings.HasSuffix(typ, ">") {
+		return nil, false
+	}
+	inner := typ[len("tuple<") : len(typ)-1]
+	parts := splitGenericArgs(inner)
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts, true
 }
 
 func mapTypes(typ string) (string, string, bool) {

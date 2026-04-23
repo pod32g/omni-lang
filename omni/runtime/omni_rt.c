@@ -7812,6 +7812,32 @@ void omni_chan_close(omni_chan_t* ch) {
     pthread_mutex_unlock(&ch->mu);
 }
 
+// omni_chan_recv_ok: the ok-form. Writes the received element to *out and
+// stores 1 in *ok if a real value was delivered, or (zero, 0) if the
+// channel is closed and drained. Matches Go's `v, ok := <-c` semantics.
+void omni_chan_recv_ok(omni_chan_t* ch, void* out, int32_t* ok) {
+    if (!ch) {
+        if (ok) *ok = 0;
+        return;
+    }
+    pthread_mutex_lock(&ch->mu);
+    while (ch->len == 0 && !ch->closed) {
+        pthread_cond_wait(&ch->not_empty, &ch->mu);
+    }
+    if (ch->len == 0 && ch->closed) {
+        memset(out, 0, (size_t)ch->elem_size);
+        if (ok) *ok = 0;
+        pthread_mutex_unlock(&ch->mu);
+        return;
+    }
+    memcpy(out, ch->buf + ch->head * ch->elem_size, (size_t)ch->elem_size);
+    ch->head = (ch->head + 1) % ch->cap;
+    ch->len--;
+    if (ok) *ok = 1;
+    pthread_cond_signal(&ch->not_full);
+    pthread_mutex_unlock(&ch->mu);
+}
+
 void omni_chan_destroy(omni_chan_t* ch) {
     if (!ch) return;
     pthread_mutex_destroy(&ch->mu);

@@ -646,8 +646,22 @@ func (p *Parser) parseReturnStmt() (ast.Stmt, error) {
 	if err != nil {
 		return nil, err
 	}
-	span := lexer.Span{Start: tok.Span.Start, End: expr.Span().End}
-	return &ast.ReturnStmt{SpanInfo: span, Value: expr}, nil
+	// Multi-return: `return a, b, c`. Each extra expr parses through the
+	// same full-expression grammar as the primary.
+	var extra []ast.Expr
+	for p.match(lexer.TokenComma) {
+		next, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		extra = append(extra, next)
+	}
+	end := expr.Span().End
+	if len(extra) > 0 {
+		end = extra[len(extra)-1].Span().End
+	}
+	span := lexer.Span{Start: tok.Span.Start, End: end}
+	return &ast.ReturnStmt{SpanInfo: span, Value: expr, Extra: extra}, nil
 }
 
 func (p *Parser) parseDeferStmt() (ast.Stmt, error) {
@@ -847,21 +861,51 @@ func (p *Parser) parseForPost() (ast.Stmt, error) {
 func (p *Parser) parseBindingStmt(mutable bool) (ast.Stmt, error) {
 	kw := p.advance()
 	nameTok := p.expect(lexer.TokenIdentifier)
-	var typ *ast.TypeExpr
+
+	// Multi-binding destructure: `let a, b, c = rhs` or `let a: T1, b: T2 = rhs`.
+	// Each name may carry its own annotation. We detect the multi form by a
+	// comma AFTER the first name (or after its type annotation).
+	firstName := nameTok.Lexeme
+	var firstType *ast.TypeExpr
 	if p.match(lexer.TokenColon) {
 		t, err := p.parseTypeExpr()
 		if err != nil {
 			return nil, err
 		}
-		typ = t
+		firstType = t
 	}
+	if p.peekKind() == lexer.TokenComma {
+		names := []string{firstName}
+		types := []*ast.TypeExpr{firstType}
+		for p.match(lexer.TokenComma) {
+			n := p.expect(lexer.TokenIdentifier)
+			names = append(names, n.Lexeme)
+			var t *ast.TypeExpr
+			if p.match(lexer.TokenColon) {
+				parsed, err := p.parseTypeExpr()
+				if err != nil {
+					return nil, err
+				}
+				t = parsed
+			}
+			types = append(types, t)
+		}
+		p.expect(lexer.TokenAssign)
+		value, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		span := lexer.Span{Start: kw.Span.Start, End: value.Span().End}
+		return &ast.TupleBindStmt{SpanInfo: span, Mutable: mutable, Names: names, Types: types, Value: value}, nil
+	}
+
 	p.expect(lexer.TokenAssign)
 	value, err := p.parseExpr()
 	if err != nil {
 		return nil, err
 	}
 	span := lexer.Span{Start: kw.Span.Start, End: value.Span().End}
-	return &ast.BindingStmt{SpanInfo: span, Mutable: mutable, Name: nameTok.Lexeme, Type: typ, Value: value}, nil
+	return &ast.BindingStmt{SpanInfo: span, Mutable: mutable, Name: firstName, Type: firstType, Value: value}, nil
 }
 
 // Expression parsing -------------------------------------------------------
@@ -1798,8 +1842,16 @@ func (p *Parser) parseSingleTypeWithNestedGenerics() (*ast.TypeExpr, error) {
 			return paramTypes[0], nil
 		}
 
-		// Multiple types without -> is an error
-		return nil, p.errorAtCurrent("multiple types in parentheses must be followed by '->' for function type")
+		// `(T1, T2, ...)` without `->` — a tuple type, used as the return
+		// type of a multi-return function (`func f() : (int, bool)`).
+		// Stored with Name="tuple" + Args=[T1, T2, ...], paralleling how
+		// array types use Name="[]" with Args=[elem].
+		end := p.previous().Span.End
+		return &ast.TypeExpr{
+			SpanInfo: lexer.Span{Start: start, End: end},
+			Name:     "tuple",
+			Args:     paramTypes,
+		}, nil
 	}
 
 	// Handle simple identifier types and qualified types (e.g., math.Point, pkg.sub.Type).
@@ -1955,8 +2007,16 @@ func (p *Parser) parseSingleType() (*ast.TypeExpr, error) {
 			return paramTypes[0], nil
 		}
 
-		// Multiple types without -> is an error
-		return nil, p.errorAtCurrent("multiple types in parentheses must be followed by '->' for function type")
+		// `(T1, T2, ...)` without `->` — a tuple type, used as the return
+		// type of a multi-return function (`func f() : (int, bool)`).
+		// Stored with Name="tuple" + Args=[T1, T2, ...], paralleling how
+		// array types use Name="[]" with Args=[elem].
+		end := p.previous().Span.End
+		return &ast.TypeExpr{
+			SpanInfo: lexer.Span{Start: start, End: end},
+			Name:     "tuple",
+			Args:     paramTypes,
+		}, nil
 	}
 
 	// Handle simple identifier types and qualified types (e.g., math.Point, pkg.sub.Type).

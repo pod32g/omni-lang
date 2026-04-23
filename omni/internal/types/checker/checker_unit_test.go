@@ -988,6 +988,94 @@ func parseSource(t *testing.T, src string) (*ast.Module, error) {
 	return parser.Parse("test.omni", src)
 }
 
+func TestMultiReturnAndOkForm(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "multi-return + destructure typechecks",
+			src: `
+func divmod(a: int, b: int) : (int, int) { return a / b, a % b }
+func main() : int {
+    let q: int, r: int = divmod(10, 3)
+    return q + r
+}`,
+		},
+		{
+			name: "return arity mismatch is an error",
+			src: `
+func two() : (int, int) { return 1 }
+func main() : int { return 0 }`,
+			shouldErr: true,
+		},
+		{
+			name: "destructure arity mismatch is an error",
+			src: `
+func pair() : (int, int) { return 1, 2 }
+func main() : int {
+    let a: int, b: int, c: int = pair()
+    return a + b + c
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "destructure non-tuple is an error",
+			src: `
+func main() : int {
+    let a: int, b: int = 42
+    return a + b
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "channel ok-form typechecks",
+			src: `
+func main() : int {
+    let c: chan int = make(chan int, 1)
+    c <- 7
+    let v: int, ok: bool = <-c
+    return v
+}`,
+		},
+		{
+			name: "close(c) typechecks and returns void",
+			src: `
+func main() : int {
+    let c: chan int = make(chan int, 1)
+    close(c)
+    return 0
+}`,
+		},
+		{
+			name: "close on non-channel is an error",
+			src: `
+func main() : int {
+    let x: int = 1
+    close(x)
+    return 0
+}`,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Errorf("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+			}
+		})
+	}
+}
+
 func TestConcurrencySemantics(t *testing.T) {
 	tests := []struct {
 		name      string
