@@ -172,20 +172,6 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
-	// `select` lands front-end + VM first; the C backend needs a
-	// polling or rendezvous runtime which is its own design problem
-	// (Go's select is the complex part of its runtime). Fail fast with
-	// a clear message rather than silently miscompiling.
-	for _, fn := range g.module.Functions {
-		for _, block := range fn.Blocks {
-			for _, inst := range block.Instructions {
-				if inst.Op == "select" {
-					return "", fmt.Errorf("C backend: `select` is not yet supported (function %s). Use the VM backend (omnir) for select-based programs; a C runtime implementation is its own follow-up", fn.Name)
-				}
-			}
-		}
-	}
-
 	g.writeHeader()
 	g.writeStdLibFunctions()
 
@@ -942,6 +928,211 @@ func (g *CGenerator) emitChanRecvOk(inst *mir.Instruction) error {
 	// a real tuple struct. Saves an unnecessary struct copy for the
 	// ok-form hot path.
 	g.tupleSplits[inst.ID] = []string{valName, okName}
+	g.valueTypes[inst.ID] = inst.Type
+	return nil
+}
+
+// emitSelect lowers the `select` MIR op into a runtime call. The op's
+// operand layout is:
+//
+//	[0]: literal case count
+//	Then 6 operands per case:
+//	  [0] kind literal: "send" | "recv" | "recv.ok" | "default"
+//	  [1] channel value (or "-" for default)
+//	  [2] send-value (send only; "-" otherwise)
+//	  [3] recv-dest SSA-id literal "%N" (recv / recv.ok only; "-" otherwise)
+//	  [4] recv-ok-dest SSA-id literal (recv.ok only; "-" otherwise)
+//	  [5] body-block literal (consumed by the cbr chain after this op)
+//
+// We emit a stack-allocated omni_select_case_t array, populate it per
+// case (staging send values into typed temps so we can pass &temp),
+// call omni_select, and store the chosen index into the SSA slot. The
+// cbr chain the MIR builder emitted after the select dispatches to the
+// correct body block.
+func (g *CGenerator) emitSelect(inst *mir.Instruction) error {
+	if len(inst.Operands) == 0 {
+		return fmt.Errorf("select: missing case count")
+	}
+	countOp := inst.Operands[0]
+	if countOp.Kind != mir.OperandLiteral {
+		return fmt.Errorf("select: case count must be literal")
+	}
+	caseCount := 0
+	if _, err := fmt.Sscanf(countOp.Literal, "%d", &caseCount); err != nil {
+		return fmt.Errorf("select: invalid case count %q", countOp.Literal)
+	}
+	if 1+caseCount*6 != len(inst.Operands) {
+		return fmt.Errorf("select: expected %d operands for %d cases, got %d", 1+caseCount*6, caseCount, len(inst.Operands))
+	}
+
+	// Parse the SSA-id literal "%N" the MIR builder emits for recv/ok
+	// destinations into the corresponding C variable name. Returns ""
+	// for the sentinel "-" so callers know the slot is unused.
+	parseDestName := func(lit string) string {
+		if lit == "-" || !strings.HasPrefix(lit, "%") {
+			return ""
+		}
+		var id int
+		if _, err := fmt.Sscanf(lit[1:], "%d", &id); err != nil {
+			return ""
+		}
+		return g.getVariableName(mir.ValueID(id))
+	}
+
+	varName := g.getVariableName(inst.ID)
+
+	// The recv-dest SSA ids the MIR builder allocated for this select
+	// are never produced by a "defining" instruction, so the pre-decl
+	// pass doesn't declare variables for them. Emit plain local decls
+	// for each before the select body so the post-select handoff
+	// assignment has something to write into.
+	base := 1
+	for i := 0; i < caseCount; i++ {
+		kindOp := inst.Operands[base+0]
+		chOp := inst.Operands[base+1]
+		recvDestOp := inst.Operands[base+3]
+		recvOkOp := inst.Operands[base+4]
+		base += 6
+		switch kindOp.Literal {
+		case "recv", "recv.ok":
+			destName := parseDestName(recvDestOp.Literal)
+			if destName != "" {
+				// Look up the recv-dest SSA id so we can check whether
+				// pre-decl already declared it.
+				var id mir.ValueID
+				fmt.Sscanf(recvDestOp.Literal[1:], "%d", (*int)(&id))
+				if !g.declaredVariables[id] {
+					elemC := g.mapType(g.chanElementTypeOf(chOp.Type))
+					g.output.WriteString(fmt.Sprintf("  %s %s = 0;\n", elemC, destName))
+					g.declaredVariables[id] = true
+				}
+			}
+			if kindOp.Literal == "recv.ok" {
+				okName := parseDestName(recvOkOp.Literal)
+				if okName != "" {
+					var id mir.ValueID
+					fmt.Sscanf(recvOkOp.Literal[1:], "%d", (*int)(&id))
+					if !g.declaredVariables[id] {
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = 0;\n", okName))
+						g.declaredVariables[id] = true
+					}
+				}
+			}
+		}
+	}
+
+	g.output.WriteString("  {\n")
+	g.output.WriteString(fmt.Sprintf("    omni_select_case_t __omni_sel_cases[%d];\n", caseCount))
+
+	base = 1
+	sendTempIdx := 0
+	for i := 0; i < caseCount; i++ {
+		kindOp := inst.Operands[base+0]
+		chOp := inst.Operands[base+1]
+		sendOp := inst.Operands[base+2]
+		recvDestOp := inst.Operands[base+3]
+		recvOkOp := inst.Operands[base+4]
+		// body-block at base+5 is consumed by the dispatching cbr.
+		base += 6
+
+		g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].kind = ", i))
+		switch kindOp.Literal {
+		case "send":
+			g.output.WriteString("OMNI_SELECT_KIND_SEND;\n")
+		case "recv":
+			g.output.WriteString("OMNI_SELECT_KIND_RECV;\n")
+		case "recv.ok":
+			g.output.WriteString("OMNI_SELECT_KIND_RECV_OK;\n")
+		case "default":
+			g.output.WriteString("OMNI_SELECT_KIND_DEFAULT;\n")
+		default:
+			return fmt.Errorf("select: unknown case kind %q", kindOp.Literal)
+		}
+
+		if kindOp.Literal != "default" {
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].ch = %s;\n", i, g.getOperandValue(chOp)))
+		} else {
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].ch = NULL;\n", i))
+		}
+
+		switch kindOp.Literal {
+		case "send":
+			elemC := g.mapType(g.chanElementTypeOf(chOp.Type))
+			tempName := fmt.Sprintf("__omni_sel_send_%d", sendTempIdx)
+			sendTempIdx++
+			g.output.WriteString(fmt.Sprintf("    %s %s = %s;\n", elemC, tempName, g.getOperandValue(sendOp)))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].send_value = &%s;\n", i, tempName))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].recv_dest = NULL;\n", i))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].recv_ok = NULL;\n", i))
+		case "recv":
+			destName := parseDestName(recvDestOp.Literal)
+			if destName == "" {
+				return fmt.Errorf("select: recv case %d missing destination", i)
+			}
+			elemC := g.mapType(g.chanElementTypeOf(chOp.Type))
+			// Declare the destination up-front so the body block can
+			// read it. Using a fresh, explicitly-declared local here
+			// sidesteps the pre-decl pass for this SSA slot — the
+			// assignment via &destName into omni_select supplies the
+			// value.
+			g.output.WriteString(fmt.Sprintf("    %s %s_recv;\n", elemC, destName))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].send_value = NULL;\n", i))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].recv_dest = &%s_recv;\n", i, destName))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].recv_ok = NULL;\n", i))
+		case "recv.ok":
+			destName := parseDestName(recvDestOp.Literal)
+			okName := parseDestName(recvOkOp.Literal)
+			if destName == "" || okName == "" {
+				return fmt.Errorf("select: recv.ok case %d missing destination(s)", i)
+			}
+			elemC := g.mapType(g.chanElementTypeOf(chOp.Type))
+			g.output.WriteString(fmt.Sprintf("    %s %s_recv;\n", elemC, destName))
+			g.output.WriteString(fmt.Sprintf("    int32_t %s_ok = 0;\n", okName))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].send_value = NULL;\n", i))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].recv_dest = &%s_recv;\n", i, destName))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].recv_ok = &%s_ok;\n", i, okName))
+		case "default":
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].send_value = NULL;\n", i))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].recv_dest = NULL;\n", i))
+			g.output.WriteString(fmt.Sprintf("    __omni_sel_cases[%d].recv_ok = NULL;\n", i))
+		}
+	}
+
+	// Call omni_select and capture the chosen index into the SSA slot.
+	if g.declaredVariables[inst.ID] {
+		g.output.WriteString(fmt.Sprintf("    %s = omni_select(%d, __omni_sel_cases);\n", varName, caseCount))
+	} else {
+		g.output.WriteString(fmt.Sprintf("    int32_t %s = omni_select(%d, __omni_sel_cases);\n", varName, caseCount))
+		g.declaredVariables[inst.ID] = true
+	}
+
+	// Copy recv/ok temps out to the SSA-id-named variables that the
+	// body blocks read. We did this roundabout dance (temp → named var)
+	// because the pre-decl pass already declares `int32_t v<N>;` for
+	// the recv-dest SSA ids; we can't redeclare them here, so we use
+	// `<name>_recv` as the handoff temp and then assign.
+	base = 1
+	for i := 0; i < caseCount; i++ {
+		kindOp := inst.Operands[base+0]
+		recvDestOp := inst.Operands[base+3]
+		recvOkOp := inst.Operands[base+4]
+		base += 6
+		switch kindOp.Literal {
+		case "recv":
+			destName := parseDestName(recvDestOp.Literal)
+			if destName != "" {
+				g.output.WriteString(fmt.Sprintf("    if (%s == %d) %s = %s_recv;\n", varName, i, destName, destName))
+			}
+		case "recv.ok":
+			destName := parseDestName(recvDestOp.Literal)
+			okName := parseDestName(recvOkOp.Literal)
+			if destName != "" {
+				g.output.WriteString(fmt.Sprintf("    if (%s == %d) { %s = %s_recv; %s = %s_ok; }\n",
+					varName, i, destName, destName, okName, okName))
+			}
+		}
+	}
+	g.output.WriteString("  }\n")
 	g.valueTypes[inst.ID] = inst.Type
 	return nil
 }
@@ -2181,6 +2372,11 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		return nil
 	case "tuple.extract":
 		if err := g.emitTupleExtract(inst); err != nil {
+			return err
+		}
+		return nil
+	case "select":
+		if err := g.emitSelect(inst); err != nil {
 			return err
 		}
 		return nil

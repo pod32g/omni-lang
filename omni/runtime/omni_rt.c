@@ -7733,6 +7733,16 @@ void* omni_slice_subslice(void* slice, int64_t lo, int64_t hi) {
 // heap context — same pattern as the defer codegen.
 // ---------------------------------------------------------------------------
 
+// Forward declaration for the select-waiter type used by `select {}`
+// arms. A waiter is registered with every channel its select mentions;
+// whenever the channel's state flips (send/recv completes, close flags
+// the channel), registered waiters are woken so the selecting thread
+// can re-evaluate its cases. The full definition lives further down the
+// file, alongside omni_select, but struct omni_chan needs the pointer
+// type up here.
+struct omni_select_waiter;
+typedef struct omni_select_waiter omni_select_waiter_t;
+
 // Definition of the struct forward-declared as `omni_chan_t` in omni_rt.h.
 struct omni_chan {
     pthread_mutex_t mu;
@@ -7745,6 +7755,12 @@ struct omni_chan {
     int64_t         tail;      // enqueue position
     int64_t         elem_size;
     int             closed;
+    // Registered select-waiters. Each is a pointer; we notify all of
+    // them on state changes so threads parked in `select` can wake and
+    // retry their cases. Array grows on demand via doubling.
+    omni_select_waiter_t** waiters;
+    int                    waiter_count;
+    int                    waiter_cap;
 };
 
 omni_chan_t* omni_chan_make(int64_t cap, int64_t elem_size) {
@@ -7763,7 +7779,61 @@ omni_chan_t* omni_chan_make(int64_t cap, int64_t elem_size) {
     ch->tail = 0;
     ch->elem_size = elem_size;
     ch->closed = 0;
+    ch->waiters = NULL;
+    ch->waiter_count = 0;
+    ch->waiter_cap = 0;
     return ch;
+}
+
+// omni_select_waiter_t — opaque to channel users; defined alongside
+// omni_select below. Forward-declared above so omni_chan can carry a
+// waiter-list pointer.
+struct omni_select_waiter {
+    pthread_mutex_t mu;
+    pthread_cond_t  cond;
+    int             ready; // flipped by any channel becoming ready
+};
+
+// Wake every registered select-waiter. Called from send/recv/close
+// after the channel's state has changed. The channel's own mutex is
+// already held by the caller; we briefly take each waiter's mutex to
+// signal it. Ordering: chan.mu → waiter.mu. Any contention goes
+// through this ordering, so no deadlock with select (which takes its
+// own mutex first and never holds the channel's mutex).
+static void omni_chan_notify_waiters_locked(omni_chan_t* ch) {
+    for (int i = 0; i < ch->waiter_count; i++) {
+        omni_select_waiter_t* w = ch->waiters[i];
+        pthread_mutex_lock(&w->mu);
+        w->ready = 1;
+        pthread_cond_signal(&w->cond);
+        pthread_mutex_unlock(&w->mu);
+    }
+}
+
+static void omni_chan_add_waiter(omni_chan_t* ch, omni_select_waiter_t* w) {
+    pthread_mutex_lock(&ch->mu);
+    if (ch->waiter_count == ch->waiter_cap) {
+        int new_cap = ch->waiter_cap == 0 ? 4 : ch->waiter_cap * 2;
+        omni_select_waiter_t** nw = (omni_select_waiter_t**)realloc(
+            ch->waiters, (size_t)new_cap * sizeof(*nw));
+        if (!nw) { pthread_mutex_unlock(&ch->mu); return; }
+        ch->waiters = nw;
+        ch->waiter_cap = new_cap;
+    }
+    ch->waiters[ch->waiter_count++] = w;
+    pthread_mutex_unlock(&ch->mu);
+}
+
+static void omni_chan_remove_waiter(omni_chan_t* ch, omni_select_waiter_t* w) {
+    pthread_mutex_lock(&ch->mu);
+    for (int i = 0; i < ch->waiter_count; i++) {
+        if (ch->waiters[i] == w) {
+            ch->waiters[i] = ch->waiters[ch->waiter_count - 1];
+            ch->waiter_count--;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&ch->mu);
 }
 
 void omni_chan_send(omni_chan_t* ch, const void* elem) {
@@ -7781,7 +7851,31 @@ void omni_chan_send(omni_chan_t* ch, const void* elem) {
     ch->tail = (ch->tail + 1) % ch->cap;
     ch->len++;
     pthread_cond_signal(&ch->not_empty);
+    omni_chan_notify_waiters_locked(ch);
     pthread_mutex_unlock(&ch->mu);
+}
+
+// Non-blocking send variant used by `select`. Returns 1 on success, 0 if
+// the channel is full, and -1 if the channel is closed (send-on-closed
+// is a language-level error; callers must have guarded against it).
+int32_t omni_chan_try_send(omni_chan_t* ch, const void* elem) {
+    if (!ch) return 0;
+    pthread_mutex_lock(&ch->mu);
+    if (ch->closed) {
+        pthread_mutex_unlock(&ch->mu);
+        return -1;
+    }
+    if (ch->len == ch->cap) {
+        pthread_mutex_unlock(&ch->mu);
+        return 0;
+    }
+    memcpy(ch->buf + ch->tail * ch->elem_size, elem, (size_t)ch->elem_size);
+    ch->tail = (ch->tail + 1) % ch->cap;
+    ch->len++;
+    pthread_cond_signal(&ch->not_empty);
+    omni_chan_notify_waiters_locked(ch);
+    pthread_mutex_unlock(&ch->mu);
+    return 1;
 }
 
 void omni_chan_recv(omni_chan_t* ch, void* out) {
@@ -7800,7 +7894,53 @@ void omni_chan_recv(omni_chan_t* ch, void* out) {
     ch->head = (ch->head + 1) % ch->cap;
     ch->len--;
     pthread_cond_signal(&ch->not_full);
+    omni_chan_notify_waiters_locked(ch);
     pthread_mutex_unlock(&ch->mu);
+}
+
+// Non-blocking recv variants used by `select`. The plain try_recv
+// returns 1 on a delivered value, 0 if the channel is empty-and-open,
+// and -1 if the channel is closed-and-empty (writes zeroes to *out in
+// that case). The ok-form writes both the value AND the ok flag;
+// callers that don't care about ok can pass NULL for the flag
+// pointer.
+int32_t omni_chan_try_recv(omni_chan_t* ch, void* out) {
+    if (!ch) return -1;
+    pthread_mutex_lock(&ch->mu);
+    if (ch->len == 0) {
+        if (ch->closed) {
+            memset(out, 0, (size_t)ch->elem_size);
+            pthread_mutex_unlock(&ch->mu);
+            return -1;
+        }
+        pthread_mutex_unlock(&ch->mu);
+        return 0;
+    }
+    memcpy(out, ch->buf + ch->head * ch->elem_size, (size_t)ch->elem_size);
+    ch->head = (ch->head + 1) % ch->cap;
+    ch->len--;
+    pthread_cond_signal(&ch->not_full);
+    omni_chan_notify_waiters_locked(ch);
+    pthread_mutex_unlock(&ch->mu);
+    return 1;
+}
+
+int32_t omni_chan_try_recv_ok(omni_chan_t* ch, void* out, int32_t* ok) {
+    int32_t r = omni_chan_try_recv(ch, out);
+    if (ok) {
+        switch (r) {
+        case 1:
+            *ok = 1;
+            break;
+        case -1:
+            *ok = 0;
+            break;
+        default:
+            // empty-and-open: not a delivered value, leave *ok untouched.
+            break;
+        }
+    }
+    return r;
 }
 
 void omni_chan_close(omni_chan_t* ch) {
@@ -7809,6 +7949,7 @@ void omni_chan_close(omni_chan_t* ch) {
     ch->closed = 1;
     pthread_cond_broadcast(&ch->not_empty);
     pthread_cond_broadcast(&ch->not_full);
+    omni_chan_notify_waiters_locked(ch);
     pthread_mutex_unlock(&ch->mu);
 }
 
@@ -7835,14 +7976,129 @@ void omni_chan_recv_ok(omni_chan_t* ch, void* out, int32_t* ok) {
     ch->len--;
     if (ok) *ok = 1;
     pthread_cond_signal(&ch->not_full);
+    omni_chan_notify_waiters_locked(ch);
     pthread_mutex_unlock(&ch->mu);
 }
 
+// ---------------------------------------------------------------------------
+// omni_select — runtime dispatch for `select { case ... }` statements.
+//
+// The C codegen builds an array of omni_select_case_t entries describing
+// each arm, then calls omni_select which returns the chosen case's index.
+// Blocking vs default semantics match Go:
+//   * If any case is ready, pick one uniformly at random.
+//   * Otherwise, if there's a default case, pick it immediately.
+//   * Otherwise, block until one of the channels becomes ready.
+//
+// Implementation: a per-call waiter (mutex + condvar + ready flag) is
+// registered with each channel involved. Each channel's send/recv/close
+// wakes all registered waiters via omni_chan_notify_waiters_locked, so
+// the select thread retries its cases after any relevant state change.
+// ---------------------------------------------------------------------------
+
+// OMNI_SELECT_KIND_* + omni_select_case_t are declared in omni_rt.h so the
+// C backend can build the cases array at the call site.
+
+int32_t omni_select(int32_t n, omni_select_case_t* cases) {
+    if (n <= 0) return -1;
+    // Register a single waiter on every involved channel so any state
+    // change wakes us.
+    omni_select_waiter_t w;
+    pthread_mutex_init(&w.mu, NULL);
+    pthread_cond_init(&w.cond, NULL);
+    w.ready = 0;
+    int default_idx = -1;
+    for (int i = 0; i < n; i++) {
+        if (cases[i].kind == OMNI_SELECT_KIND_DEFAULT) {
+            default_idx = i;
+        } else if (cases[i].ch) {
+            omni_chan_add_waiter(cases[i].ch, &w);
+        }
+    }
+
+    int chosen = -1;
+    int order_buf[32];
+    int* order = order_buf;
+    int* order_heap = NULL;
+    if (n > (int)(sizeof(order_buf) / sizeof(order_buf[0]))) {
+        order_heap = (int*)malloc((size_t)n * sizeof(int));
+        order = order_heap;
+    }
+
+    while (chosen < 0) {
+        // Fisher–Yates shuffle of case indices so ready cases are picked
+        // uniformly at random. rand() is coarse but fine for this — no
+        // security guarantees, just fairness.
+        for (int i = 0; i < n; i++) order[i] = i;
+        for (int i = n - 1; i > 0; i--) {
+            int j = rand() % (i + 1);
+            int tmp = order[i];
+            order[i] = order[j];
+            order[j] = tmp;
+        }
+
+        for (int k = 0; k < n && chosen < 0; k++) {
+            int i = order[k];
+            switch (cases[i].kind) {
+            case OMNI_SELECT_KIND_SEND:
+                if (omni_chan_try_send(cases[i].ch, cases[i].send_value) == 1) {
+                    chosen = i;
+                }
+                break;
+            case OMNI_SELECT_KIND_RECV: {
+                int32_t r = omni_chan_try_recv(cases[i].ch, cases[i].recv_dest);
+                if (r == 1 || r == -1) {
+                    chosen = i;
+                }
+                break;
+            }
+            case OMNI_SELECT_KIND_RECV_OK: {
+                int32_t r = omni_chan_try_recv_ok(cases[i].ch, cases[i].recv_dest, cases[i].recv_ok);
+                if (r == 1 || r == -1) {
+                    chosen = i;
+                }
+                break;
+            }
+            case OMNI_SELECT_KIND_DEFAULT:
+                // handled after the scan
+                break;
+            }
+        }
+        if (chosen >= 0) break;
+        if (default_idx >= 0) {
+            chosen = default_idx;
+            break;
+        }
+        // Nothing ready — wait for a channel to signal.
+        pthread_mutex_lock(&w.mu);
+        while (!w.ready) {
+            pthread_cond_wait(&w.cond, &w.mu);
+        }
+        w.ready = 0;
+        pthread_mutex_unlock(&w.mu);
+    }
+
+    // Unregister waiter + release resources.
+    for (int i = 0; i < n; i++) {
+        if (cases[i].kind != OMNI_SELECT_KIND_DEFAULT && cases[i].ch) {
+            omni_chan_remove_waiter(cases[i].ch, &w);
+        }
+    }
+    pthread_mutex_destroy(&w.mu);
+    pthread_cond_destroy(&w.cond);
+    if (order_heap) free(order_heap);
+    return chosen;
+}
+
+// omni_chan_destroy frees a channel and any waiter-list backing. Does
+// not notify waiters — destroy after all users are gone is the
+// expected pattern.
 void omni_chan_destroy(omni_chan_t* ch) {
     if (!ch) return;
     pthread_mutex_destroy(&ch->mu);
     pthread_cond_destroy(&ch->not_empty);
     pthread_cond_destroy(&ch->not_full);
+    if (ch->waiters) free(ch->waiters);
     free(ch->buf);
     free(ch);
 }

@@ -136,7 +136,29 @@ void omni_chan_recv(omni_chan_t* ch, void* out);
 void omni_chan_close(omni_chan_t* ch);
 void omni_chan_recv_ok(omni_chan_t* ch, void* out, int32_t* ok);
 void omni_chan_destroy(omni_chan_t* ch);
+// Non-blocking channel ops used by `select`. Return 1 on success, 0 if
+// not ready (empty recv / full send), -1 if closed.
+int32_t omni_chan_try_send(omni_chan_t* ch, const void* elem);
+int32_t omni_chan_try_recv(omni_chan_t* ch, void* out);
+int32_t omni_chan_try_recv_ok(omni_chan_t* ch, void* out, int32_t* ok);
 int omni_spawn(void* (*thunk)(void*), void* ctx);
+
+// `select` dispatch. The C codegen builds an array of case descriptors
+// and calls omni_select, which returns the chosen index. Blocking and
+// default semantics match Go (see the implementation alongside the
+// definition).
+#define OMNI_SELECT_KIND_SEND    0
+#define OMNI_SELECT_KIND_RECV    1
+#define OMNI_SELECT_KIND_RECV_OK 2
+#define OMNI_SELECT_KIND_DEFAULT 3
+typedef struct {
+    int32_t      kind;
+    omni_chan_t* ch;
+    const void*  send_value;
+    void*        recv_dest;
+    int32_t*     recv_ok;
+} omni_select_case_t;
+int32_t omni_select(int32_t n, omni_select_case_t* cases);
 
 // Type constants for any type support
 #define OMNI_TYPE_INT 1

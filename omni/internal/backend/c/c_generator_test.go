@@ -3948,6 +3948,68 @@ func TestConcurrencyCodegen(t *testing.T) {
 	}
 }
 
+// TestSelectCodegen asserts the C backend lowers `select` to a call to
+// omni_select with a stack-allocated omni_select_case_t array populated
+// from the op's case metadata. The cbr chain after the op handles
+// branching to the chosen case body.
+func TestSelectCodegen(t *testing.T) {
+	module := &mir.Module{
+		Functions: []*mir.Function{
+			{
+				Name:       "main",
+				ReturnType: "int",
+				Blocks: []*mir.BasicBlock{{
+					Name: "entry",
+					Instructions: []mir.Instruction{
+						{ID: mir.ValueID(0), Op: "const", Type: "int",
+							Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: "1"}}},
+						{ID: mir.ValueID(1), Op: "chan.make", Type: "chan<int>",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandLiteral, Literal: "int"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(0), Type: "int"},
+							}},
+						{ID: mir.ValueID(2), Op: "select", Type: "int",
+							Operands: []mir.Operand{
+								{Kind: mir.OperandLiteral, Literal: "2"},
+								// case 0: recv on ch
+								{Kind: mir.OperandLiteral, Literal: "recv"},
+								{Kind: mir.OperandValue, Value: mir.ValueID(1), Type: "chan<int>"},
+								{Kind: mir.OperandLiteral, Literal: "-"},
+								{Kind: mir.OperandLiteral, Literal: "%3", Type: "int"},
+								{Kind: mir.OperandLiteral, Literal: "-"},
+								{Kind: mir.OperandLiteral, Literal: "case0"},
+								// case 1: default
+								{Kind: mir.OperandLiteral, Literal: "default"},
+								{Kind: mir.OperandLiteral, Literal: "-"},
+								{Kind: mir.OperandLiteral, Literal: "-"},
+								{Kind: mir.OperandLiteral, Literal: "-"},
+								{Kind: mir.OperandLiteral, Literal: "-"},
+								{Kind: mir.OperandLiteral, Literal: "case1"},
+							}},
+					},
+					Terminator: mir.Terminator{Op: "ret", Operands: []mir.Operand{
+						{Kind: mir.OperandValue, Value: mir.ValueID(2), Type: "int"},
+					}},
+				}},
+			},
+		},
+	}
+	result, err := GenerateC(module)
+	if err != nil {
+		t.Fatalf("GenerateC failed: %v", err)
+	}
+	for _, c := range []struct{ name, needle string }{
+		{"stack-allocated case array", "omni_select_case_t __omni_sel_cases[2]"},
+		{"recv kind set", "OMNI_SELECT_KIND_RECV"},
+		{"default kind set", "OMNI_SELECT_KIND_DEFAULT"},
+		{"runtime dispatch call", "omni_select(2, __omni_sel_cases)"},
+	} {
+		if !strings.Contains(result, c.needle) {
+			t.Errorf("%s: generated C is missing %q", c.name, c.needle)
+		}
+	}
+}
+
 // TestTCOCodegen asserts the C backend rewrites a tail-position `call` to
 // the same function as a `goto entry;` after staging arguments through
 // temporaries. Cross-function tail calls use `return f(args);` (left to
