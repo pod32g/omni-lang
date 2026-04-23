@@ -48,6 +48,9 @@ var keywords = map[string]Kind{
 	"defer":    TokenDefer,
 	"spawn":    TokenSpawn,
 	"chan":     TokenChan,
+	"select":   TokenSelect,
+	"case":     TokenCase,
+	"default":  TokenDefault,
 }
 
 // Lexer transforms a source buffer into a stream of tokens while tracking

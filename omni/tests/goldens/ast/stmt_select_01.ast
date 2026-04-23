@@ -1,0 +1,73 @@
+Module {
+  Decls [
+    FuncDecl {
+      Name main
+      Return int
+      Body
+        Block {
+          BindingStmt let {
+            Name ca
+            Type chan<int>
+            Value
+              MakeChan int
+                Cap
+                  Literal int 1
+          }
+          BindingStmt let {
+            Name cb
+            Type chan<int>
+            Value
+              MakeChan int
+                Cap
+                  Literal int 1
+          }
+          SelectStmt {
+            Case0
+              Comm
+                BindingStmt let {
+                  Name v
+                  Type int
+                  Value
+                    Recv
+                      Identifier ca
+                }
+              Body
+                Block {
+                  ReturnStmt {
+                    Value
+                      Identifier v
+                  }
+                }
+            Case1
+              Comm
+                SendStmt {
+                  Chan
+                    Identifier cb
+                  Value
+                    Literal int 7
+                }
+              Body
+                Block {
+                  ReturnStmt {
+                    Value
+                      Literal int 0
+                  }
+                }
+            Case2 default
+              Body
+                Block {
+                  ReturnStmt {
+                    Value
+                      Unary -
+                        Literal int 1
+                  }
+                }
+          }
+          ReturnStmt {
+            Value
+              Literal int 0
+          }
+        }
+    }
+  ]
+}

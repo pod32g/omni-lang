@@ -238,6 +238,28 @@ func (p *printer) writeStmt(stmt Stmt) {
 			p.indent(func() { p.writeExpr(s.Call) })
 		})
 		p.writeLine("}")
+	case *SelectStmt:
+		p.writeLine("SelectStmt {")
+		p.indent(func() {
+			for i, c := range s.Cases {
+				if c.Default {
+					p.writeLine(fmt.Sprintf("Case%d default", i))
+				} else {
+					p.writeLine(fmt.Sprintf("Case%d", i))
+				}
+				p.indent(func() {
+					if c.Comm != nil {
+						p.writeLine("Comm")
+						p.indent(func() { p.writeStmt(c.Comm) })
+					}
+					if c.Body != nil {
+						p.writeLine("Body")
+						p.indent(func() { p.writeBlock(c.Body) })
+					}
+				})
+			}
+		})
+		p.writeLine("}")
 	case *SendStmt:
 		p.writeLine("SendStmt {")
 		p.indent(func() {

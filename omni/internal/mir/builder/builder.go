@@ -60,6 +60,7 @@ type functionBuilder struct {
 	loopStack    []loopContext  // Stack of loop contexts for break/continue
 	modulePrefix string         // Module prefix for this function (e.g., "std.web")
 	hasDefer     bool           // set once any defer.push is emitted in this function
+	selectCount  int            // Bumped for each `select` statement so their block names don't collide
 }
 
 type loopContext struct {
@@ -339,6 +340,8 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 		return fb.lowerSpawn(s)
 	case *ast.SendStmt:
 		return fb.lowerSend(s)
+	case *ast.SelectStmt:
+		return fb.lowerSelect(s)
 	case *ast.TupleBindStmt:
 		return fb.lowerTupleBind(s)
 	case *ast.BindingStmt:
@@ -1610,6 +1613,250 @@ func (fb *functionBuilder) lowerSpawn(s *ast.SpawnStmt) error {
 		Operands: operands,
 	})
 	return nil
+}
+
+// lowerSelect lowers a `select { ... }` statement to a single `select`
+// op followed by a cbr chain that dispatches into per-case body blocks.
+//
+// The select op's operand layout (encoded as a flat list):
+//
+//	[0]: literal count of cases
+//	Then, for each case, 6 operands in order:
+//	  [0] kind literal: "send" | "recv" | "recv.ok" | "default"
+//	  [1] channel value (Value) or literal "-" for default
+//	  [2] send value (Value) for send kind, literal "-" otherwise
+//	  [3] recv-dest SSA-id literal ("%<N>") for recv / recv.ok, "-" otherwise
+//	  [4] recv-ok-dest SSA-id literal for recv.ok only, "-" otherwise
+//	  [5] body-block name literal
+//
+// The select instruction's result is an int — the chosen case index. A
+// chain of cbr terminators then routes to the matching body block. Each
+// body block ends with a jump to a shared merge block that continues
+// with the rest of the enclosing function.
+func (fb *functionBuilder) lowerSelect(s *ast.SelectStmt) error {
+	if len(s.Cases) == 0 {
+		// select {} blocks forever in Go. Reject for now — add later if
+		// a use case appears.
+		return fmt.Errorf("mir builder: empty select statement is not supported")
+	}
+
+	// 1. Allocate body blocks + a merge block up front so the select op
+	//    can reference their names.
+	type prepared struct {
+		kind        string
+		ch          *mirValue
+		sendValue   *mirValue
+		recvDestID  mir.ValueID
+		recvOkID    mir.ValueID
+		recvType    string
+		recvOkType  string
+		bodyBlock   *mir.BasicBlock
+		sourceArm   ast.SelectCase
+	}
+	// Each select statement gets a unique tag so multiple selects in
+	// the same function don't clash on block names (the MIR verifier
+	// rejects duplicates).
+	fb.selectCount++
+	tag := fb.selectCount
+	cases := make([]prepared, 0, len(s.Cases))
+	for i, arm := range s.Cases {
+		block := fb.fn.NewBlock(fmt.Sprintf("select_%d_case_%d", tag, i))
+		cases = append(cases, prepared{
+			bodyBlock: block,
+			sourceArm: arm,
+			recvDestID: mir.InvalidValue,
+			recvOkID:   mir.InvalidValue,
+		})
+	}
+	mergeBlock := fb.fn.NewBlock(fmt.Sprintf("select_%d_merge", tag))
+
+	// 2. For each case, classify its comm statement and lower the
+	//    expressions it reads (channel, send value) — those must be
+	//    evaluated exactly once before the select blocks.
+	for i := range cases {
+		arm := cases[i].sourceArm
+		if arm.Default {
+			cases[i].kind = "default"
+			continue
+		}
+		switch comm := arm.Comm.(type) {
+		case *ast.SendStmt:
+			ch, err := fb.lowerExpr(comm.Chan)
+			if err != nil {
+				return err
+			}
+			val, err := fb.lowerExpr(comm.Value)
+			if err != nil {
+				return err
+			}
+			cases[i].kind = "send"
+			cases[i].ch = &ch
+			cases[i].sendValue = &val
+		case *ast.ExprStmt:
+			recv, ok := comm.Expr.(*ast.RecvExpr)
+			if !ok {
+				return fmt.Errorf("mir builder: select case must be a comm statement")
+			}
+			ch, err := fb.lowerExpr(recv.Chan)
+			if err != nil {
+				return err
+			}
+			cases[i].kind = "recv"
+			cases[i].ch = &ch
+			cases[i].recvType = chanElemFromType(ch.Type)
+			cases[i].recvDestID = fb.fn.NextValue()
+		case *ast.BindingStmt:
+			recv, ok := comm.Value.(*ast.RecvExpr)
+			if !ok {
+				return fmt.Errorf("mir builder: select case binding must receive from a channel")
+			}
+			ch, err := fb.lowerExpr(recv.Chan)
+			if err != nil {
+				return err
+			}
+			cases[i].kind = "recv"
+			cases[i].ch = &ch
+			cases[i].recvType = chanElemFromType(ch.Type)
+			cases[i].recvDestID = fb.fn.NextValue()
+		case *ast.TupleBindStmt:
+			recv, ok := comm.Value.(*ast.RecvExpr)
+			if !ok {
+				return fmt.Errorf("mir builder: select case tuple bind must receive from a channel")
+			}
+			ch, err := fb.lowerExpr(recv.Chan)
+			if err != nil {
+				return err
+			}
+			cases[i].kind = "recv.ok"
+			cases[i].ch = &ch
+			cases[i].recvType = chanElemFromType(ch.Type)
+			cases[i].recvOkType = "bool"
+			cases[i].recvDestID = fb.fn.NextValue()
+			cases[i].recvOkID = fb.fn.NextValue()
+		default:
+			return fmt.Errorf("mir builder: unsupported select case shape %T", arm.Comm)
+		}
+	}
+
+	// 3. Build the select op's operand list.
+	ops := []mir.Operand{
+		{Kind: mir.OperandLiteral, Literal: fmt.Sprintf("%d", len(cases))},
+	}
+	invalid := mir.Operand{Kind: mir.OperandLiteral, Literal: "-"}
+	for _, c := range cases {
+		ops = append(ops, mir.Operand{Kind: mir.OperandLiteral, Literal: c.kind})
+		if c.ch != nil {
+			ops = append(ops, valueOperand(c.ch.ID, c.ch.Type))
+		} else {
+			ops = append(ops, invalid)
+		}
+		if c.sendValue != nil {
+			ops = append(ops, valueOperand(c.sendValue.ID, c.sendValue.Type))
+		} else {
+			ops = append(ops, invalid)
+		}
+		if c.recvDestID != mir.InvalidValue {
+			ops = append(ops, mir.Operand{Kind: mir.OperandLiteral, Literal: fmt.Sprintf("%%%d", int(c.recvDestID)), Type: c.recvType})
+		} else {
+			ops = append(ops, invalid)
+		}
+		if c.recvOkID != mir.InvalidValue {
+			ops = append(ops, mir.Operand{Kind: mir.OperandLiteral, Literal: fmt.Sprintf("%%%d", int(c.recvOkID)), Type: c.recvOkType})
+		} else {
+			ops = append(ops, invalid)
+		}
+		ops = append(ops, mir.Operand{Kind: mir.OperandLiteral, Literal: c.bodyBlock.Name})
+	}
+
+	// 4. Emit the select instruction — result type is int (chosen index).
+	chosenID := fb.fn.NextValue()
+	fb.block.Instructions = append(fb.block.Instructions, mir.Instruction{
+		ID:       chosenID,
+		Op:       "select",
+		Type:     "int",
+		Operands: ops,
+	})
+
+	// 5. Terminate the current block with a cbr chain: compare chosen
+	//    against 0, 1, ... dispatching to each body block. The final
+	//    "else" is a direct branch to the last body (or would point
+	//    back to an error block, but we make the final fallthrough land
+	//    on the last case body since we know chosen is always in range).
+	dispatcher := fb.block
+	for i := 0; i < len(cases); i++ {
+		constID := fb.fn.NextValue()
+		dispatcher.Instructions = append(dispatcher.Instructions, mir.Instruction{
+			ID:       constID,
+			Op:       "const",
+			Type:     "int",
+			Operands: []mir.Operand{{Kind: mir.OperandLiteral, Literal: fmt.Sprintf("%d", i), Type: "int"}},
+		})
+		cmpID := fb.fn.NextValue()
+		dispatcher.Instructions = append(dispatcher.Instructions, mir.Instruction{
+			ID:   cmpID,
+			Op:   "cmp.eq",
+			Type: "bool",
+			Operands: []mir.Operand{
+				valueOperand(chosenID, "int"),
+				valueOperand(constID, "int"),
+			},
+		})
+		if i == len(cases)-1 {
+			// Last case: direct branch (chosen must match one of 0..n-1).
+			dispatcher.Terminator = mir.Terminator{Op: "br", Operands: []mir.Operand{
+				{Kind: mir.OperandLiteral, Literal: cases[i].bodyBlock.Name},
+			}}
+		} else {
+			nextCheck := fb.fn.NewBlock(fmt.Sprintf("select_%d_dispatch_%d", tag, i+1))
+			dispatcher.Terminator = mir.Terminator{Op: "cbr", Operands: []mir.Operand{
+				valueOperand(cmpID, "bool"),
+				{Kind: mir.OperandLiteral, Literal: cases[i].bodyBlock.Name},
+				{Kind: mir.OperandLiteral, Literal: nextCheck.Name},
+			}}
+			dispatcher = nextCheck
+		}
+	}
+
+	// 6. Lower each case's body into its block. Bind any recv
+	//    destinations into the current env so the body source code can
+	//    reference them.
+	for i := range cases {
+		c := &cases[i]
+		fb.block = c.bodyBlock
+		if !c.sourceArm.Default {
+			switch comm := c.sourceArm.Comm.(type) {
+			case *ast.BindingStmt:
+				fb.env[comm.Name] = symbol{Value: c.recvDestID, Type: c.recvType, Mutable: comm.Mutable}
+			case *ast.TupleBindStmt:
+				if len(comm.Names) != 2 {
+					return fmt.Errorf("mir builder: select ok-form expects exactly 2 names")
+				}
+				fb.env[comm.Names[0]] = symbol{Value: c.recvDestID, Type: c.recvType, Mutable: comm.Mutable}
+				fb.env[comm.Names[1]] = symbol{Value: c.recvOkID, Type: c.recvOkType, Mutable: comm.Mutable}
+			}
+		}
+		if err := fb.lowerBlock(c.sourceArm.Body); err != nil {
+			return err
+		}
+		if fb.block != nil && !fb.block.HasTerminator() {
+			fb.block.Terminator = mir.Terminator{Op: "br", Operands: []mir.Operand{
+				{Kind: mir.OperandLiteral, Literal: mergeBlock.Name},
+			}}
+		}
+	}
+
+	// 7. Continue lowering into the merge block.
+	fb.block = mergeBlock
+	return nil
+}
+
+// chanElemFromType pulls T out of `chan<T>`; returns inferTypePlaceholder
+// if the input is not a channel type.
+func chanElemFromType(chanType string) string {
+	if strings.HasPrefix(chanType, "chan<") && strings.HasSuffix(chanType, ">") {
+		return chanType[5 : len(chanType)-1]
+	}
+	return inferTypePlaceholder
 }
 
 // lowerSend lowers `c <- v` to a chan.send op. Operands: [chan, value].

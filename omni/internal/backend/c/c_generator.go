@@ -172,6 +172,20 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
+	// `select` lands front-end + VM first; the C backend needs a
+	// polling or rendezvous runtime which is its own design problem
+	// (Go's select is the complex part of its runtime). Fail fast with
+	// a clear message rather than silently miscompiling.
+	for _, fn := range g.module.Functions {
+		for _, block := range fn.Blocks {
+			for _, inst := range block.Instructions {
+				if inst.Op == "select" {
+					return "", fmt.Errorf("C backend: `select` is not yet supported (function %s). Use the VM backend (omnir) for select-based programs; a C runtime implementation is its own follow-up", fn.Name)
+				}
+			}
+		}
+	}
+
 	g.writeHeader()
 	g.writeStdLibFunctions()
 

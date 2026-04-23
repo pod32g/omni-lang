@@ -1,0 +1,16 @@
+func main():int {
+  let ca:chan int = make(chan int, 1)
+  let cb:chan int = make(chan int, 1)
+  select {
+    case let v:int = <-ca {
+      return v
+    }
+    case cb <- 7 {
+      return 0
+    }
+    default {
+      return -1
+    }
+  }
+  return 0
+}

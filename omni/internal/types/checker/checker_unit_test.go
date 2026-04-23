@@ -988,6 +988,83 @@ func parseSource(t *testing.T, src string) (*ast.Module, error) {
 	return parser.Parse("test.omni", src)
 }
 
+func TestSelectSemantics(t *testing.T) {
+	tests := []struct {
+		name      string
+		src       string
+		shouldErr bool
+	}{
+		{
+			name: "send, recv, and default cases typecheck",
+			src: `
+func main() : int {
+    let ca: chan int = make(chan int, 1)
+    let cb: chan int = make(chan int, 1)
+    select {
+        case let v: int = <-ca { return v }
+        case cb <- 7 { return 0 }
+        default { return -1 }
+    }
+    return 0
+}`,
+		},
+		{
+			name: "ok-form recv in a case typechecks",
+			src: `
+func main() : int {
+    let c: chan int = make(chan int, 1)
+    select {
+        case let v: int, ok: bool = <-c {
+            if ok { return v } else { return -1 }
+        }
+    }
+    return 0
+}`,
+		},
+		{
+			name: "case with non-comm statement is an error",
+			src: `
+func main() : int {
+    let c: chan int = make(chan int, 1)
+    select {
+        case let x: int = 42 { return x }
+    }
+    return 0
+}`,
+			shouldErr: true,
+		},
+		{
+			name: "two default cases is an error",
+			src: `
+func main() : int {
+    let c: chan int = make(chan int, 1)
+    select {
+        case let v: int = <-c { return v }
+        default { return 1 }
+        default { return 2 }
+    }
+    return 0
+}`,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mod, err := parseSource(t, tt.src)
+			if err != nil {
+				t.Fatalf("parse failed: %v", err)
+			}
+			err = checker.Check("test.omni", tt.src, mod)
+			if tt.shouldErr && err == nil {
+				t.Errorf("expected error but got none")
+			} else if !tt.shouldErr && err != nil {
+				t.Errorf("unexpected errors: %v", err)
+			}
+		})
+	}
+}
+
 func TestMultiReturnAndOkForm(t *testing.T) {
 	tests := []struct {
 		name      string

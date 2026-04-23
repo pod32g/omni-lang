@@ -1,0 +1,43 @@
+import std
+
+// Two producers on two separate channels. `select` in drain_one picks
+// whichever is ready first; each producer sends exactly once, so
+// running drain_one twice pulls one value from each channel in an
+// unspecified order. The sum is deterministic (1 + 2).
+func producer_a(c: chan int) { c <- 1 }
+func producer_b(c: chan int) { c <- 2 }
+
+func drain_one(ca: chan int, cb: chan int) : int {
+    select {
+        case let v: int = <-ca {
+            return v
+        }
+        case let v: int = <-cb {
+            return v
+        }
+    }
+    return 0
+}
+
+func main() : int {
+    let ca: chan int = make(chan int, 1)
+    let cb: chan int = make(chan int, 1)
+    spawn producer_a(ca)
+    spawn producer_b(cb)
+    let x: int = drain_one(ca, cb)
+    let y: int = drain_one(ca, cb)
+
+    // `default` turns a select into a non-blocking check.
+    let empty: chan int = make(chan int, 1)
+    var fallback: int = 0
+    select {
+        case let v: int = <-empty {
+            fallback = v
+        }
+        default {
+            fallback = 10
+        }
+    }
+
+    return x + y + fallback   // 1 + 2 + 10 = 13
+}

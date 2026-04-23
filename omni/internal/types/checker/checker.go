@@ -756,6 +756,8 @@ func (c *Checker) checkStmt(stmt ast.Stmt) {
 		c.checkExpr(s.Call)
 	case *ast.TupleBindStmt:
 		c.checkTupleBind(s)
+	case *ast.SelectStmt:
+		c.checkSelectStmt(s)
 	case *ast.SpawnStmt:
 		if _, ok := s.Call.(*ast.CallExpr); !ok {
 			c.report(s.Call.Span(), "spawn operand must be a call expression", "call a function directly, e.g. `spawn worker(in)`")
@@ -1076,6 +1078,62 @@ func (c *Checker) checkWhileStmt(stmt *ast.WhileStmt) {
 		c.leaveScope()
 	}()
 	c.checkBlock(stmt.Body)
+}
+
+// checkSelectStmt validates each arm of a `select`. Legal comm shapes
+// are a bare channel recv, a channel send, or a let/var binding whose
+// RHS is a channel recv (including the ok-form). At most one default
+// arm is allowed. Each case's comm and body share a fresh scope so
+// bindings introduced by the comm (`let v = <-ch`) are visible in the
+// body.
+func (c *Checker) checkSelectStmt(s *ast.SelectStmt) {
+	defaultSeen := false
+	for i, arm := range s.Cases {
+		if arm.Default {
+			if defaultSeen {
+				c.report(arm.Span, "select may have at most one default case", "remove the extra `default`")
+			}
+			defaultSeen = true
+			if arm.Body != nil {
+				c.checkBlock(arm.Body)
+			}
+			continue
+		}
+		c.enterScope()
+		// The comm statement runs inside the case scope so any names it
+		// introduces are visible in the body. Validate that it's a legal
+		// shape — anything else is a parser-accepted-but-meaningless
+		// select arm.
+		switch comm := arm.Comm.(type) {
+		case *ast.SendStmt:
+			c.checkStmt(comm)
+		case *ast.ExprStmt:
+			if _, ok := comm.Expr.(*ast.RecvExpr); !ok {
+				c.report(arm.Span, fmt.Sprintf("select case %d must be a send, recv, or recv-bind", i+1),
+					"use `ch <- v`, `<-ch`, `let v = <-ch`, or `let v, ok = <-ch`")
+			}
+			c.checkStmt(comm)
+		case *ast.BindingStmt:
+			if _, ok := comm.Value.(*ast.RecvExpr); !ok {
+				c.report(arm.Span, fmt.Sprintf("select case %d must be a send, recv, or recv-bind", i+1),
+					"the value on the right of `=` must be a channel recv `<-ch`")
+			}
+			c.checkStmt(comm)
+		case *ast.TupleBindStmt:
+			if _, ok := comm.Value.(*ast.RecvExpr); !ok {
+				c.report(arm.Span, fmt.Sprintf("select case %d must be a send, recv, or recv-bind", i+1),
+					"the value on the right of `=` must be a channel recv `<-ch`")
+			}
+			c.checkStmt(comm)
+		default:
+			c.report(arm.Span, fmt.Sprintf("select case %d has an unsupported communication statement", i+1),
+				"use `ch <- v`, `<-ch`, `let v = <-ch`, or `let v, ok = <-ch`")
+		}
+		if arm.Body != nil {
+			c.checkBlock(arm.Body)
+		}
+		c.leaveScope()
+	}
 }
 
 // checkTupleBind handles `let a, b = rhs` / `var a, b = rhs`. Supported

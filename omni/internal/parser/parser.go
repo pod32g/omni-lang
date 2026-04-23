@@ -591,6 +591,8 @@ func (p *Parser) parseStmt() (ast.Stmt, error) {
 		return p.parseDeferStmt()
 	case lexer.TokenSpawn:
 		return p.parseSpawnStmt()
+	case lexer.TokenSelect:
+		return p.parseSelectStmt()
 	case lexer.TokenIf:
 		return p.parseIfStmt()
 	case lexer.TokenFor:
@@ -687,6 +689,64 @@ func (p *Parser) parseSpawnStmt() (ast.Stmt, error) {
 	}
 	span := lexer.Span{Start: tok.Span.Start, End: expr.Span().End}
 	return &ast.SpawnStmt{SpanInfo: span, Call: expr}, nil
+}
+
+// parseSelectStmt parses a Go-style select with brace-delimited case
+// bodies:
+//
+//	select {
+//	    case <comm> { <body> }
+//	    ...
+//	    default { <body> }
+//	}
+//
+// `<comm>` is any send, recv, or let/var destructure-from-recv — we
+// reuse parseStmt and validate the shape later in the checker.
+func (p *Parser) parseSelectStmt() (ast.Stmt, error) {
+	tok := p.advance() // consume 'select'
+	p.expect(lexer.TokenLBrace)
+	var cases []ast.SelectCase
+	for {
+		// Skip stray semicolons between cases.
+		for p.peekKind() == lexer.TokenSemicolon {
+			p.advance()
+		}
+		if p.match(lexer.TokenRBrace) {
+			break
+		}
+		switch p.peekKind() {
+		case lexer.TokenCase:
+			caseTok := p.advance()
+			comm, err := p.parseStmt()
+			if err != nil {
+				return nil, err
+			}
+			body, err := p.parseBlock()
+			if err != nil {
+				return nil, err
+			}
+			cases = append(cases, ast.SelectCase{
+				Comm: comm,
+				Body: body,
+				Span: lexer.Span{Start: caseTok.Span.Start, End: body.SpanInfo.End},
+			})
+		case lexer.TokenDefault:
+			defTok := p.advance()
+			body, err := p.parseBlock()
+			if err != nil {
+				return nil, err
+			}
+			cases = append(cases, ast.SelectCase{
+				Default: true,
+				Body:    body,
+				Span:    lexer.Span{Start: defTok.Span.Start, End: body.SpanInfo.End},
+			})
+		default:
+			return nil, p.errorAtCurrent("expected `case` or `default` in select, got %s", p.peekKind())
+		}
+	}
+	end := p.previous().Span.End
+	return &ast.SelectStmt{SpanInfo: lexer.Span{Start: tok.Span.Start, End: end}, Cases: cases}, nil
 }
 
 func (p *Parser) parseIfStmt() (ast.Stmt, error) {

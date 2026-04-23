@@ -225,6 +225,31 @@ func (s *DeferStmt) Span() lexer.Span { return s.SpanInfo }
 func (s *DeferStmt) node()            {}
 func (s *DeferStmt) stmt()            {}
 
+// SelectStmt blocks until exactly one of its cases is ready, then runs
+// that case's body. If multiple cases are ready the runtime picks one
+// pseudo-randomly (Go semantics). A `default` case, if present, runs
+// immediately when no communication is ready; its presence changes the
+// semantics from blocking to non-blocking.
+type SelectStmt struct {
+	SpanInfo lexer.Span
+	Cases    []SelectCase
+}
+
+func (s *SelectStmt) Span() lexer.Span { return s.SpanInfo }
+func (s *SelectStmt) node()            {}
+func (s *SelectStmt) stmt()            {}
+
+// SelectCase is one arm of a `select`. For normal cases, Comm holds the
+// communication statement — a SendStmt, a bare RecvExpr wrapped in an
+// ExprStmt, or a BindingStmt / TupleBindStmt whose Value is a RecvExpr.
+// Default=true marks the single default arm (at most one per select).
+type SelectCase struct {
+	Comm    Stmt
+	Body    *BlockStmt
+	Default bool
+	Span    lexer.Span
+}
+
 // SpawnStmt launches a function call as a new goroutine-equivalent
 // concurrent task: `spawn fn(args)`. The Call expression must be a
 // *CallExpr (enforced by the checker). Arguments are evaluated by the

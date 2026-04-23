@@ -11,6 +11,7 @@ import (
 	urlpkg "net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -487,6 +488,7 @@ func init() {
 		"chan.close":      execChanClose,
 		"tuple.new":       execTupleNew,
 		"tuple.extract":   execTupleExtract,
+		"select":          execSelect,
 		"index":           execIndex,
 		"assign":          execAssign,
 		"map.init":        execMapInit,
@@ -1138,6 +1140,146 @@ func execTupleExtract(funcs map[string]*mir.Function, fr *frame, inst mir.Instru
 		r.Type = inst.Type
 	}
 	return r, nil
+}
+
+// execSelect picks one ready case out of a set and performs its
+// communication, binding recv destinations into the frame. Returns the
+// chosen case's index as the instruction's result so the dispatcher
+// after it can cbr to the matching body block.
+//
+// Operand layout matches the MIR builder's lowerSelect encoding:
+//
+//	operand[0]: literal count
+//	Then 6 operands per case:
+//	  [0] kind: "send" | "recv" | "recv.ok" | "default"
+//	  [1] channel value (or "-" for default)
+//	  [2] send value (send only)
+//	  [3] recv-dest SSA-id literal "%N" (recv / recv.ok only)
+//	  [4] recv-ok-dest SSA-id literal (recv.ok only)
+//	  [5] body-block literal
+func execSelect(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
+	if len(inst.Operands) == 0 {
+		return Result{}, fmt.Errorf("select: missing case-count operand")
+	}
+	countOp := inst.Operands[0]
+	if countOp.Kind != mir.OperandLiteral {
+		return Result{}, fmt.Errorf("select: case count must be literal")
+	}
+	caseCount := 0
+	if _, err := fmt.Sscanf(countOp.Literal, "%d", &caseCount); err != nil {
+		return Result{}, fmt.Errorf("select: invalid case count %q", countOp.Literal)
+	}
+	if caseCount == 0 {
+		return Result{}, fmt.Errorf("select: no cases")
+	}
+	if 1+caseCount*6 != len(inst.Operands) {
+		return Result{}, fmt.Errorf("select: expected %d operands for %d cases, got %d", 1+caseCount*6, caseCount, len(inst.Operands))
+	}
+
+	type localCase struct {
+		kind       string
+		ch         chan Result
+		sendValue  Result
+		recvDestID mir.ValueID
+		recvOkID   mir.ValueID
+	}
+	locals := make([]localCase, caseCount)
+	parseSSAID := func(s string) (mir.ValueID, error) {
+		if s == "-" {
+			return mir.InvalidValue, nil
+		}
+		if !strings.HasPrefix(s, "%") {
+			return 0, fmt.Errorf("expected SSA id literal starting with %%, got %q", s)
+		}
+		var n int
+		if _, err := fmt.Sscanf(s[1:], "%d", &n); err != nil {
+			return 0, err
+		}
+		return mir.ValueID(n), nil
+	}
+	base := 1
+	for i := 0; i < caseCount; i++ {
+		kindOp := inst.Operands[base+0]
+		chOp := inst.Operands[base+1]
+		sendOp := inst.Operands[base+2]
+		recvDestOp := inst.Operands[base+3]
+		recvOkOp := inst.Operands[base+4]
+		// body-block operand is base+5; unused here, consumed by the
+		// subsequent cbr dispatcher.
+		base += 6
+		locals[i].kind = kindOp.Literal
+		if kindOp.Literal != "default" {
+			chR := operandValue(fr, chOp)
+			ch, ok := chR.Value.(chan Result)
+			if !ok {
+				return Result{}, fmt.Errorf("select case %d: operand is not a channel (Go type %T)", i, chR.Value)
+			}
+			locals[i].ch = ch
+		}
+		if kindOp.Literal == "send" {
+			locals[i].sendValue = operandValue(fr, sendOp)
+		}
+		if id, err := parseSSAID(recvDestOp.Literal); err == nil {
+			locals[i].recvDestID = id
+		} else {
+			locals[i].recvDestID = mir.InvalidValue
+		}
+		if id, err := parseSSAID(recvOkOp.Literal); err == nil {
+			locals[i].recvOkID = id
+		} else {
+			locals[i].recvOkID = mir.InvalidValue
+		}
+	}
+
+	// Build reflect.SelectCase list.
+	selCases := make([]reflect.SelectCase, caseCount)
+	for i, lc := range locals {
+		switch lc.kind {
+		case "send":
+			selCases[i] = reflect.SelectCase{
+				Dir:  reflect.SelectSend,
+				Chan: reflect.ValueOf(lc.ch),
+				Send: reflect.ValueOf(lc.sendValue),
+			}
+		case "recv", "recv.ok":
+			selCases[i] = reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(lc.ch),
+			}
+		case "default":
+			selCases[i] = reflect.SelectCase{Dir: reflect.SelectDefault}
+		default:
+			return Result{}, fmt.Errorf("select: unknown case kind %q", lc.kind)
+		}
+	}
+
+	chosen, recv, recvOK := reflect.Select(selCases)
+	lc := locals[chosen]
+	switch lc.kind {
+	case "recv":
+		if lc.recvDestID != mir.InvalidValue {
+			if recvOK {
+				fr.values[lc.recvDestID] = recv.Interface().(Result)
+			} else {
+				// Closed + drained: match Go's zero-of-T behavior.
+				fr.values[lc.recvDestID] = Result{Type: "void", Value: nil}
+			}
+		}
+	case "recv.ok":
+		var val Result
+		if recvOK {
+			val = recv.Interface().(Result)
+		} else {
+			val = Result{Type: "void", Value: nil}
+		}
+		if lc.recvDestID != mir.InvalidValue {
+			fr.values[lc.recvDestID] = val
+		}
+		if lc.recvOkID != mir.InvalidValue {
+			fr.values[lc.recvOkID] = Result{Type: "bool", Value: recvOK}
+		}
+	}
+	return Result{Type: "int", Value: chosen}, nil
 }
 
 // execChanClose closes the underlying Go channel so waiting receivers

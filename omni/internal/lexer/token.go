@@ -52,6 +52,9 @@ const (
 	TokenDefer
 	TokenSpawn
 	TokenChan
+	TokenSelect
+	TokenCase
+	TokenDefault
 
 	// Delimiters
 	TokenLParen
@@ -138,6 +141,9 @@ var kindNames = map[Kind]string{
 	TokenDefer:               "DEFER",
 	TokenSpawn:               "SPAWN",
 	TokenChan:                "CHAN",
+	TokenSelect:              "SELECT",
+	TokenCase:                "CASE",
+	TokenDefault:             "DEFAULT",
 	TokenLParen:              "LPAREN",
 	TokenRParen:              "RPAREN",
 	TokenLBrace:              "LBRACE",
