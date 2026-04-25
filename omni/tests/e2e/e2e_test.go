@@ -511,6 +511,31 @@ func TestPhiManual(t *testing.T) {
 	}
 }
 
+// TestVarBranchMerge pins down the phi-drift fix: a `var` reassigned in
+// both arms of an `if` inside a loop must read the same storage slot
+// across iterations. Before the fix, the VM backend returned 8 (only
+// the else-branch slot was observed); the correct sum is 14.
+func TestVarBranchMerge(t *testing.T) {
+	testFile := "var_branch_merge.omni"
+	expected := "14"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 func TestModulo(t *testing.T) {
 	testFile := "modulo_test.omni"
 	expected := "1" // 10 % 3 = 1

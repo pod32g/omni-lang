@@ -388,8 +388,16 @@ func (fb *functionBuilder) lowerStmt(stmt ast.Stmt) error {
 			}
 			fb.block.Instructions = append(fb.block.Instructions, assignInst)
 
-			// Update the environment to point to the new assignment result
-			fb.env[target.Name] = symbol{Value: assignID, Type: rhs.Type, Mutable: sym.Mutable}
+			// Leave fb.env[target.Name] pointing at the original SSA slot
+			// (sym.Value). If we rebind to assignID, subsequent reads of
+			// the var in different branches drift to a branch-local SSA
+			// id. When two branches both assign and rejoin, the merge
+			// block's lookup reads whichever assign ran last at build
+			// time — even if that branch wasn't taken at runtime. Keeping
+			// env pinned to the root means every read and every assign
+			// target the same slot; the VM's execAssign already mutates
+			// that slot in place, and the C backend resolves assign
+			// chains to the same C lvalue.
 			return nil
 		case *ast.MemberExpr:
 			// Struct field assignment: obj.field = value
@@ -1066,8 +1074,10 @@ func (fb *functionBuilder) lowerIncrementStmt(stmt *ast.IncrementStmt) error {
 	}
 	fb.block.Instructions = append(fb.block.Instructions, assignInst)
 
-	// Update the variable with the new value
-	fb.env[target.Name] = symbol{Value: assignID, Type: sym.Type, Mutable: sym.Mutable}
+	// Leave env pinned to the root SSA slot; see the note in
+	// AssignmentStmt lowering. Increment is just `x = x + 1` under the
+	// hood, so the same phi-drift applies.
+	_ = assignID
 
 	return nil
 }

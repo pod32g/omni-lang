@@ -33,32 +33,6 @@ spawned on 2026-04-23.
 
 ## Known quirks (not blocking, not yet filed)
 
-### `var` reassignment doesn't phi-merge across control-flow joins
-The MIR builder's `assign` op creates a fresh SSA value each time a
-`var` is rewritten. When two branches both reassign the same variable
-and rejoin, the post-merge use reads whichever SSA id was created last
-in source order — even if that branch wasn't taken. Concretely, this
-breaks:
-
-```omni
-var sum: int = 0
-while keep {
-    let v: int, ok: bool = <-ch
-    if ok { sum = sum + v } else { keep = false }
-}
-return sum   // reads an SSA slot that was only written in `else`
-```
-
-Hits in: ok-form drain loops, multi-arm `select` cases that mutate an
-outer `var`, anywhere two branches both touch the same outer
-binding. Workaround: use `let` + early `return` inside each branch
-(see how `examples/select_demo.omni` and `examples/multi_return_demo.omni`
-are structured).
-
-The proper fix is a real phi pass at block merges — either fold it
-into the MIR builder or run it as a dedicated pass. Pre-existing,
-not introduced by Phase 5.
-
 ### `std.collections.*` stub bodies use stack returns
 A handful of stub bodies in `std/collections/` (`keys`, `values`,
 `collection_to_array`) used to allocate an array on the stack and

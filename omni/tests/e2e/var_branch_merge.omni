@@ -1,0 +1,20 @@
+// Regression test: a `var` reassigned in both arms of an `if` inside a
+// loop must read the same slot across iterations. Before the fix, the
+// MIR builder rebound env[var] to each assign's result id; the merge
+// block then read whichever branch's id was built last, not the slot
+// the runtime had actually updated.
+//
+// Sum for i=0..4: 0 + 1*2 + 2 + 3*2 + 4 = 14.
+func main():int {
+    var sum:int = 0
+    var i:int = 0
+    while i < 5 {
+        if i % 2 == 0 {
+            sum = sum + i
+        } else {
+            sum = sum + i * 2
+        }
+        i = i + 1
+    }
+    return sum
+}
