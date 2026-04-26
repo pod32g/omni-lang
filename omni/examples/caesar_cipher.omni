@@ -1,0 +1,53 @@
+// Caesar cipher: read an offset and a line of text from stdin,
+// shift each ASCII letter by `offset` positions (preserving case),
+// and print the result. Non-letters pass through unchanged. Offsets
+// outside [-25, 25] are reduced mod 26.
+//
+// Encrypt:  printf '3\nHello, World!\n'   | caesar_cipher  -> Khoor, Zruog!
+// Decrypt:  printf '%s\n' '-3' 'Khoor, Zruog!' | caesar_cipher  -> Hello, World!
+
+import std
+
+func shift_in(alpha: string, ch: string, offset: int): string {
+    let pos: int = std.string.index_of(alpha, ch)
+    if pos < 0 {
+        return ""
+    }
+    var n: int = (pos + offset) % 26
+    if n < 0 {
+        n = n + 26
+    }
+    return std.string.substring(alpha, n, n + 1)
+}
+
+func shift_char(ch: string, offset: int): string {
+    let lower: string = shift_in("abcdefghijklmnopqrstuvwxyz", ch, offset)
+    if std.string.length(lower) > 0 {
+        return lower
+    }
+    let upper: string = shift_in("ABCDEFGHIJKLMNOPQRSTUVWXYZ", ch, offset)
+    if std.string.length(upper) > 0 {
+        return upper
+    }
+    return ch
+}
+
+func cipher(text: string, offset: int): string {
+    var result: string = ""
+    var i: int = 0
+    let n: int = std.string.length(text)
+    while i < n {
+        let ch: string = std.string.substring(text, i, i + 1)
+        result = result + shift_char(ch, offset)
+        i = i + 1
+    }
+    return result
+}
+
+func main(): int {
+    let offset_line: string = std.io.read_line()
+    let offset: int = std.string_to_int(offset_line)
+    let text: string = std.io.read_line()
+    std.io.println(cipher(text, offset))
+    return 0
+}

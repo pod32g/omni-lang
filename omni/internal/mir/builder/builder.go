@@ -2190,9 +2190,57 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 	if calleeName == "len" {
 		resultType = "int"
 	} else if strings.HasPrefix(calleeName, "std.") {
-		// For std functions, determine return type based on function name
+		// For std functions, determine return type based on function name.
+		// std submodules without body-load (std.os, std.string, std.io,
+		// etc. on the C-backend's intrinsic path) skip the AST signature
+		// registration in moduleloader, so we can't fall back to fb.sigs
+		// for them — keep these tables in sync with the std/*.omni
+		// declarations whenever a new intrinsic lands.
 		if strings.Contains(calleeName, "io.") {
-			resultType = "void"
+			switch {
+			case strings.HasSuffix(calleeName, ".read_line"):
+				resultType = "string"
+			case strings.HasSuffix(calleeName, ".read_line_async"):
+				resultType = "Promise<string>"
+			default:
+				resultType = "void"
+			}
+		} else if strings.Contains(calleeName, "os.") {
+			switch {
+			case strings.HasSuffix(calleeName, ".getenv"),
+				strings.HasSuffix(calleeName, ".get_flag"),
+				strings.HasSuffix(calleeName, ".positional_arg"),
+				strings.HasSuffix(calleeName, ".getcwd"),
+				strings.HasSuffix(calleeName, ".read_file"):
+				resultType = "string"
+			case strings.HasSuffix(calleeName, ".read_file_async"):
+				resultType = "Promise<string>"
+			case strings.HasSuffix(calleeName, ".args_count"),
+				strings.HasSuffix(calleeName, ".getpid"),
+				strings.HasSuffix(calleeName, ".getppid"):
+				resultType = "int"
+			case strings.HasSuffix(calleeName, ".has_flag"),
+				strings.HasSuffix(calleeName, ".setenv"),
+				strings.HasSuffix(calleeName, ".unsetenv"),
+				strings.HasSuffix(calleeName, ".chdir"),
+				strings.HasSuffix(calleeName, ".mkdir"),
+				strings.HasSuffix(calleeName, ".rmdir"),
+				strings.HasSuffix(calleeName, ".exists"),
+				strings.HasSuffix(calleeName, ".is_file"),
+				strings.HasSuffix(calleeName, ".is_dir"),
+				strings.HasSuffix(calleeName, ".remove"),
+				strings.HasSuffix(calleeName, ".rename"),
+				strings.HasSuffix(calleeName, ".copy"),
+				strings.HasSuffix(calleeName, ".write_file"),
+				strings.HasSuffix(calleeName, ".append_file"):
+				resultType = "bool"
+			case strings.HasSuffix(calleeName, ".args"):
+				resultType = "array<string>"
+			case strings.HasSuffix(calleeName, ".exit"):
+				resultType = "void"
+			default:
+				resultType = "void"
+			}
 		} else if strings.Contains(calleeName, "math.") {
 			// Determine return type based on specific math function
 			switch {

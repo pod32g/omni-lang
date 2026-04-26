@@ -1,0 +1,13 @@
+// Regression: `let s:string = std.os.positional_arg(...)` (and any
+// std.os.* call returning string) used to be lowered as call.void in
+// MIR, so the C backend dropped the return value and the let bound to
+// "<unknown>". Today the call must round-trip a real string.
+//
+// Exit code is the length of the bound string. With argv[0]="omnitest"
+// and idx=0 default="omnitest", that's 8.
+import std
+
+func main():int {
+    let s:string = std.os.positional_arg(0, "omnitest")
+    return std.string.length(s)
+}

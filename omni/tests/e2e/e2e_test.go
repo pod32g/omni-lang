@@ -536,6 +536,24 @@ func TestVarBranchMerge(t *testing.T) {
 	}
 }
 
+// TestStdOsStringLet pins the call-type fix for std.os.* string-returning
+// intrinsics. Before the fix, `let s:string = std.os.positional_arg(...)`
+// lowered as call.void; the C backend dropped the return value and the
+// let bound to a "<unknown>" placeholder. With idx=0 default="omnitest"
+// and no argv, the binding is "omnitest" so the program returns 8.
+func TestStdOsStringLet(t *testing.T) {
+	testFile := "std_os_string_let.omni"
+	expected := "8"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 func TestModulo(t *testing.T) {
 	testFile := "modulo_test.omni"
 	expected := "1" // 10 % 3 = 1
