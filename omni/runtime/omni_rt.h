@@ -96,6 +96,9 @@ char* omni_bool_to_string(int32_t value);
 int32_t omni_string_to_int(const char* str);
 double omni_string_to_float(const char* str);
 int32_t omni_string_to_bool(const char* str);
+int32_t omni_char_code(int32_t c);
+int32_t omni_char_from_code(int32_t code);
+char* omni_char_to_string(int32_t c);
 
 // Array operations
 int32_t omni_array_length(int32_t* arr);

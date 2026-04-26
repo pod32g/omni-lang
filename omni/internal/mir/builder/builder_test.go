@@ -260,7 +260,10 @@ func TestBuildModuleWithMultipleDeclarations(t *testing.T) {
 		},
 	}
 
-	varDecl := &ast.VarDecl{
+	// Top-level `let` (module-scope constant) — `var` is not supported
+	// here because every function re-initializes its copy on entry, so
+	// mutations wouldn't persist across calls.
+	letDecl := &ast.LetDecl{
 		Name:  "x",
 		Type:  &ast.TypeExpr{Name: "int"},
 		Value: &ast.LiteralExpr{Kind: ast.LiteralInt, Value: "42"},
@@ -268,7 +271,7 @@ func TestBuildModuleWithMultipleDeclarations(t *testing.T) {
 
 	module := &ast.Module{
 		Imports: []*ast.ImportDecl{},
-		Decls:   []ast.Decl{funcDecl, varDecl},
+		Decls:   []ast.Decl{funcDecl, letDecl},
 	}
 
 	result, err := BuildModule(module)

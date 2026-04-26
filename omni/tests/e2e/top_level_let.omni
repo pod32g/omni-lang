@@ -1,0 +1,13 @@
+// Regression: module-scope `let` bindings are visible inside every
+// function in the module. Each function gets its own const SSA slot
+// (no shared global storage yet) — that's fine for immutable values.
+//
+// LOWER has 26 chars; OFFSET is 7. Sum = 33.
+import std
+
+let LOWER:string = "abcdefghijklmnopqrstuvwxyz"
+let OFFSET:int = 7
+
+func main():int {
+    return std.string.length(LOWER) + OFFSET
+}

@@ -1,0 +1,13 @@
+// Regression: std.os.positional_arg should accept `-`-prefixed values
+// (e.g. negative numbers, `-`, or anything after a `--` end-of-flags
+// marker). Before the fix it skipped any argv entry starting with `-`,
+// which made `caesar_cipher -3 ...` impossible.
+//
+// Returns std.string_to_int of the first positional. Driven from a
+// custom Go test that passes "-7" so the program returns -7.
+import std
+
+func main():int {
+    let s:string = std.os.positional_arg(0, "0")
+    return std.string_to_int(s)
+}

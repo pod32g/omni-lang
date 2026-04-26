@@ -1,0 +1,15 @@
+// Regression: std.char_code / std.char_from_code expose the int code
+// point of a char. Before they landed there was no way to do char
+// arithmetic — `c - 'a'` and `int(c)` were both rejected by the type
+// checker.
+//
+// 'z' - 'a' = 25; round-tripping 'a' + 5 through char_from_code -> char_code
+// adds another 102 (= 'f'); 25 + 102 = 127.
+import std
+
+func main():int {
+    let a:int = std.char_code('a')
+    let z:int = std.char_code('z')
+    let f:char = std.char_from_code(a + 5)
+    return (z - a) + std.char_code(f)
+}

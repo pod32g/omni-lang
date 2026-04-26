@@ -577,6 +577,30 @@ int32_t omni_string_to_bool(const char* str) {
     return (strcmp(str, "true") == 0) ? 1 : 0;
 }
 
+// Char ↔ int conversion. Chars are stored as i32 in the C backend so
+// these are identity casts; they exist as named intrinsics so OmniLang
+// code can move between the two without leaning on implicit numeric
+// widening (which the type checker doesn't allow today).
+int32_t omni_char_code(int32_t c) {
+    return c;
+}
+
+int32_t omni_char_from_code(int32_t code) {
+    return code;
+}
+
+// omni_char_to_string allocates a heap-owned 2-byte string containing
+// the single ASCII character `c` followed by a NUL terminator. Higher
+// code points (>0x7F) produce undefined output today; revisit once the
+// runtime grows real UTF-8 support.
+char* omni_char_to_string(int32_t c) {
+    char* s = (char*)malloc(2);
+    if (!s) return NULL;
+    s[0] = (char)(c & 0x7F);
+    s[1] = '\0';
+    return s;
+}
+
 // Array operations
 // NOTE: Array length cannot be determined from a pointer alone in C.
 // The backend should pass array length as a parameter or track it separately.
@@ -1667,13 +1691,26 @@ const char* omni_args_get_flag(const char* name, const char* default_value) {
 const char* omni_args_positional(int32_t index, const char* default_value) {
     if (!omni_args_array) return default_value;
     int32_t pos_idx = 0;
+    int end_of_flags = 0;
     for (int32_t i = 1; i < omni_args_count_val; i++) {
-        if (omni_args_array[i][0] != '-') {
-            if (pos_idx == index) {
-                return omni_args_array[i];
-            }
-            pos_idx++;
+        const char* a = omni_args_array[i];
+        // POSIX `--` ends flag parsing; everything after is positional.
+        if (!end_of_flags && strcmp(a, "--") == 0) {
+            end_of_flags = 1;
+            continue;
         }
+        // A bare `-` is the conventional stdin sentinel — always positional.
+        // A value like `-3` is positional too: real flags start with `--` or
+        // a letter (`-v`, `-h`), never a digit.
+        int is_flag = !end_of_flags && a[0] == '-' && a[1] != '\0' &&
+                      !(a[1] >= '0' && a[1] <= '9');
+        if (is_flag) {
+            continue;
+        }
+        if (pos_idx == index) {
+            return a;
+        }
+        pos_idx++;
     }
     return default_value;
 }

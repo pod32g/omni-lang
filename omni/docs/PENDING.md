@@ -33,32 +33,12 @@ spawned on 2026-04-23.
 
 ## Known quirks (not blocking, not yet filed)
 
-### No `char` ↔ `int` arithmetic or cast
-`'a' - 'A'`, `c as int`, `int(c)` are all rejected by the type checker
-("use numeric expressions (int, float), got char and char"). There's
-no intrinsic for char-code conversion either, so any algorithm that
-needs an alphabet index has to look the character up in a string —
-e.g. `std.string.index_of("abc...xyz", ch)` — instead of doing
-arithmetic. See `examples/caesar_cipher.omni` for the workaround.
-
-The fix wants either: (a) implicit `char ↔ int` widening for the
-arithmetic operators, (b) a `char_code(c) -> int` / `char_from_code(i)
--> char` pair of intrinsics, or (c) explicit `as int` cast support.
-Pick one before more stdlib code grows lookup-string workarounds.
-
-### Top-level `let`/`var` declarations are not supported
-`let LOWER:string = "abc..."` outside a function fails the MIR builder
-with "undefined identifier" at every use site. The parser accepts the
-declaration but the binding never lands in any scope the lowerer
-walks. Workaround: inline the constants into the function that needs
-them, or use a no-arg helper (`func lower():string { return "abc..." }`).
-
-### `std.os.positional_arg` eats `-`-prefixed values
-The runtime's positional/flag parser treats any argv entry starting
-with `-` as a flag, so `caesar_cipher -3 ...` makes `positional_arg(0,
-default)` return the default rather than `"-3"`. Pass via stdin or
-without the leading `-`, or fix the runtime to disambiguate (e.g.
-respect `--` to end flag parsing).
+### Top-level `var` is rejected
+`let` at module scope is fine — it materializes lazily into each
+function's entry block on first reference. `var` would need real
+global storage (every function currently re-initializes its copy on
+entry, so mutations wouldn't persist), and the MIR builder explicitly
+errors when it sees one. Promote when a backend grows real globals.
 
 ### `std.collections.*` stub bodies use stack returns
 A handful of stub bodies in `std/collections/` (`keys`, `values`,

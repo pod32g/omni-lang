@@ -536,6 +536,89 @@ func TestVarBranchMerge(t *testing.T) {
 	}
 }
 
+// TestCharCodeIntrinsic pins down the std.char_code / std.char_from_code
+// intrinsics. Without them, OmniLang code can't move between char and
+// int — neither `c - 'a'` nor `int(c)` is valid.
+func TestCharCodeIntrinsic(t *testing.T) {
+	testFile := "char_code_intrinsic.omni"
+	expected := "127"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+// TestTopLevelLet pins down module-scope `let` bindings: a constant
+// declared outside any function is visible to every function in the
+// module. Top-level `var` is intentionally rejected (no global storage).
+func TestTopLevelLet(t *testing.T) {
+	testFile := "top_level_let.omni"
+	expected := "33"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+// TestPositionalArgDash pins down the std.os.positional_arg flag
+// parsing fix: `-7` should be returned as-is rather than skipped as a
+// flag. The program returns string_to_int of argv[1], so passing "-7"
+// makes the C-backend executable exit with -7 (255 - 7 = 248 once the
+// shell wraps it, but we read the raw exit code via exitErr.ExitCode).
+func TestPositionalArgDash(t *testing.T) {
+	testFile := "positional_dash.omni"
+	// Build via the existing helper so we hit the production codegen
+	// path; it doesn't accept argv though, so re-run the binary by hand.
+	if _, err := runCBackend(testFile); err != nil {
+		t.Fatalf("initial build failed: %v", err)
+	}
+	executable := "./positional_dash"
+	cmd := exec.Command(executable, "-7")
+	cmd.Env = append(os.Environ(),
+		"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+		"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+	)
+	output, err := cmd.Output()
+	exitCode := 0
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			exitCode = ee.ExitCode()
+		} else {
+			t.Fatalf("run failed: %v\nstdout: %s", err, string(output))
+		}
+	}
+	// Negative exits are reported as 256 + signed_value by the shell;
+	// exec.ExitError.ExitCode() returns the raw int, so -7 stays -7.
+	if exitCode != -7 && exitCode != 249 {
+		// Some platforms truncate to uint8: 256 - 7 = 249.
+		t.Errorf("expected exit -7 (or 249), got %d (output: %s)", exitCode, string(output))
+	}
+}
+
 // TestStdOsStringLet pins the call-type fix for std.os.* string-returning
 // intrinsics. Before the fix, `let s:string = std.os.positional_arg(...)`
 // lowered as call.void; the C backend dropped the return value and the

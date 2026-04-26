@@ -100,6 +100,26 @@ func string_to_bool(s:string):bool {
     return s == "true"
 }
 
+// char_code returns the Unicode code point (int) of a char value.
+// Intrinsic; the backend lowers it to a direct cast (chars are i32
+// internally, so this is a free conversion).
+func char_code(c:char):int {
+    return 0
+}
+
+// char_from_code returns the char with the given Unicode code point.
+// Intrinsic; mirror of char_code. The runtime does no validation —
+// passing an out-of-range integer produces an unspecified char.
+func char_from_code(code:int):char {
+    return ' '
+}
+
+// char_to_string returns a single-character string holding `c`.
+// Intrinsic; the runtime allocates a one-character heap-owned string.
+func char_to_string(c:char):string {
+    return ""
+}
+
 // Memory management (for future use)
 func malloc(size:int):int {
     // This is an intrinsic function that will be wired to the runtime

@@ -2407,6 +2407,12 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				// Assign to already declared variable
 				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
 					varName, literalValue))
+			case "char":
+				// Char literals come through as 'a' / '\n' / etc. — C
+				// already understands that syntax (yields an int with the
+				// code-point value), so emit it verbatim.
+				g.output.WriteString(fmt.Sprintf("  %s = %s;\n",
+					varName, literalValue))
 			case "null":
 				// Assign to already declared variable
 				g.output.WriteString(fmt.Sprintf("  %s = NULL;\n",
@@ -5769,6 +5775,11 @@ func (g *CGenerator) mapType(omniType string) string {
 		return "void*"
 	case "bool":
 		return "int32_t"
+	case "char":
+		// Chars hold Unicode code points; the backend stores them as
+		// int32_t so std.char_code / std.char_from_code are identity
+		// casts.
+		return "int32_t"
 	case "ptr":
 		return "void*"
 	default:
@@ -6633,6 +6644,12 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_string_to_float"
 	case "std.string_to_bool":
 		return "omni_string_to_bool"
+	case "std.char_code":
+		return "omni_char_code"
+	case "std.char_from_code":
+		return "omni_char_from_code"
+	case "std.char_to_string":
+		return "omni_char_to_string"
 	// Array operations
 	case "std.array.length":
 		return "omni_array_length"
@@ -6829,6 +6846,9 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.string_to_int":        "omni_string_to_int",
 		"std.string_to_float":      "omni_string_to_float",
 		"std.string_to_bool":       "omni_string_to_bool",
+		"std.char_code":            "omni_char_code",
+		"std.char_from_code":       "omni_char_from_code",
+		"std.char_to_string":       "omni_char_to_string",
 
 		// Logging functions
 		"std.log.debug":     "omni_log_debug",
@@ -7277,6 +7297,9 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.string_to_int":        true,
 		"std.string_to_float":      true,
 		"std.string_to_bool":       true,
+		"std.char_code":            true,
+		"std.char_from_code":       true,
+		"std.char_to_string":       true,
 		"std.log.debug":            true,
 		"std.log.info":             true,
 		"std.log.warn":             true,
@@ -7480,6 +7503,8 @@ func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 		"std.bool_to_string":   true,
 		"std.os.read_file":     true,
 		"os.read_file":         true,
+		"std.char_to_string":   true,
+		"omni_char_to_string":  true,
 		"omni_read_line":       true,
 		"omni_strcat":          true,
 		"omni_substring":       true,
@@ -7533,7 +7558,7 @@ func (g *CGenerator) declareVariable(varName string) {
 // isPrimitiveType checks if a type is a primitive type
 func (g *CGenerator) isPrimitiveType(omniType string) bool {
 	switch omniType {
-	case "int", "float", "double", "string", "void", "void*", "bool", "ptr":
+	case "int", "float", "double", "string", "void", "void*", "bool", "ptr", "char":
 		return true
 	default:
 		return false

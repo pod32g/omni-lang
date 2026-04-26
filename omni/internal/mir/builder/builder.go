@@ -22,6 +22,7 @@ func BuildModule(mod *ast.Module) (*mir.Module, error) {
 	mb.collectFunctionSignatures(mod)
 	mb.collectStructDefinitions(mod)
 	mb.collectInterfaceDefinitions(mod)
+	mb.collectTopLevelBindings(mod)
 
 	for _, decl := range mod.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
@@ -48,6 +49,20 @@ type moduleBuilder struct {
 	structFields   map[string]map[string]string // struct type name -> field name -> field type
 	interfaces     map[string]struct{}          // known interface type names (for dynamic-dispatch lowering)
 	interfaceSigs  map[string][]mir.InterfaceMethod
+	topLevels      []topLevelBinding
+}
+
+// topLevelBinding records a module-scope `let`/`var` declaration so each
+// function can materialize a copy in its own entry block. Globals don't
+// have a single SSA slot — every function gets a fresh const instruction
+// at body start, which is fine for the literal-expression cases this
+// supports today.
+type topLevelBinding struct {
+	Name      string
+	Type      string
+	Value     ast.Expr
+	Mutable   bool
+	rejectVar bool // top-level `var` is not yet supported (no global storage)
 }
 
 type functionBuilder struct {
@@ -149,6 +164,37 @@ func (mb *moduleBuilder) collectInterfaceDefinitions(mod *ast.Module) {
 	}
 }
 
+// collectTopLevelBindings records `let`/`var` declarations sitting at
+// module scope so buildFunction can re-materialize them at the start of
+// each function's entry block.
+func (mb *moduleBuilder) collectTopLevelBindings(mod *ast.Module) {
+	for _, decl := range mod.Decls {
+		switch d := decl.(type) {
+		case *ast.LetDecl:
+			mb.topLevels = append(mb.topLevels, topLevelBinding{
+				Name:    d.Name,
+				Type:    typeExprToString(d.Type),
+				Value:   d.Value,
+				Mutable: false,
+			})
+		case *ast.VarDecl:
+			// Top-level `var` would need real global storage — every
+			// function currently re-initializes its module-scope copy on
+			// entry, so mutations wouldn't persist across calls.
+			// Surface as a build error rather than silently producing
+			// reset-on-call counters; promote to real globals when a
+			// backend grows the storage support.
+			mb.topLevels = append(mb.topLevels, topLevelBinding{
+				Name:        d.Name,
+				Type:        typeExprToString(d.Type),
+				Value:       d.Value,
+				Mutable:     true,
+				rejectVar:   true,
+			})
+		}
+	}
+}
+
 func (mb *moduleBuilder) collectStructDefinitions(mod *ast.Module) {
 	for _, decl := range mod.Decls {
 		structDecl, ok := decl.(*ast.StructDecl)
@@ -211,6 +257,17 @@ func (mb *moduleBuilder) buildFunction(fn *ast.FuncDecl) (*mir.Function, error) 
 
 	for _, p := range mirFunc.Params {
 		fb.env[p.Name] = symbol{Value: p.ID, Type: p.Type, Mutable: true}
+	}
+
+	// Reject top-level `var` early — needs real global storage that no
+	// backend has today. `let` is fine: it gets materialized lazily on
+	// first reference inside this function (see fb.topLevels lookup in
+	// lowerExpr) so unrelated functions, including std stub bodies,
+	// stay clean.
+	for _, tl := range mb.topLevels {
+		if tl.rejectVar {
+			return nil, fmt.Errorf("mir builder: top-level `var %s` is not supported (no global storage); use `let` for module-scope constants", tl.Name)
+		}
 	}
 
 	if fn.ExprBody != nil {
@@ -1104,6 +1161,29 @@ func (fb *functionBuilder) lowerExpr(expr ast.Expr) (mirValue, error) {
 	case *ast.IdentifierExpr:
 		sym, ok := fb.env[e.Name]
 		if !ok {
+			// Module-scope `let`: lower the value lazily into the
+			// current function's entry block on first reference, then
+			// cache in env so subsequent uses share the same slot. This
+			// keeps unrelated functions (notably std.* stub bodies) free
+			// of unused materialized constants, which would otherwise
+			// hide the stub-body shape from the VM's tail-call check.
+			if fb.mb != nil {
+				for _, tl := range fb.mb.topLevels {
+					if tl.Name != e.Name {
+						continue
+					}
+					val, err := fb.lowerExpr(tl.Value)
+					if err != nil {
+						return mirValue{}, fmt.Errorf("mir builder: top-level %q: %w", tl.Name, err)
+					}
+					typ := tl.Type
+					if typ == "" {
+						typ = val.Type
+					}
+					fb.env[tl.Name] = symbol{Value: val.ID, Type: typ, Mutable: tl.Mutable}
+					return mirValue{ID: val.ID, Type: typ}, nil
+				}
+			}
 			// Check if this is a function reference
 			// First try the exact name
 			if sig, exists := fb.sigs[e.Name]; exists {
@@ -2300,6 +2380,12 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			resultType = "float"
 		} else if strings.Contains(calleeName, "string_to_bool") {
 			resultType = "bool"
+		} else if strings.HasSuffix(calleeName, ".char_code") {
+			resultType = "int"
+		} else if strings.HasSuffix(calleeName, ".char_from_code") {
+			resultType = "char"
+		} else if strings.HasSuffix(calleeName, ".char_to_string") {
+			resultType = "string"
 		} else if strings.Contains(calleeName, "array.") {
 			// Array operations
 			switch {

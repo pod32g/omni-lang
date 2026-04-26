@@ -471,6 +471,7 @@ func init() {
 		"call.void":       execCall,
 		"call.string":     execCall,
 		"call.bool":       execCall,
+		"call.char":       execCall,
 		"iface.call":      execIfaceCall,
 		"defer.push":       execDeferPush,
 		"defer.push.func":  execDeferPushFunc,
@@ -743,6 +744,24 @@ func execFunction(funcs map[string]*mir.Function, fn *mir.Function, args []Resul
 // func.call (function-value receiver), intrinsics, and async/Promise calls
 // fall through and execute normally — TCO for those is its own design
 // problem.
+// isStubBody returns true for a function whose body is the canonical
+// "return literal" placeholder used by std.omni declarations whose real
+// implementations live in execIntrinsic / the C runtime. Shape: a
+// single block with one const instruction terminated by `ret <const>`.
+func isStubBody(fn *mir.Function) bool {
+	if fn == nil || len(fn.Blocks) != 1 {
+		return false
+	}
+	b := fn.Blocks[0]
+	if len(b.Instructions) != 1 {
+		return false
+	}
+	if b.Instructions[0].Op != "const" {
+		return false
+	}
+	return b.Terminator.Op == "ret"
+}
+
 func tailCallTarget(funcs map[string]*mir.Function, fr *frame, term mir.Terminator, inst mir.Instruction) (*mir.Function, []Result, bool) {
 	if term.Op != "ret" || len(term.Operands) != 1 {
 		return nil, nil, false
@@ -763,6 +782,16 @@ func tailCallTarget(funcs map[string]*mir.Function, fr *frame, term mir.Terminat
 	callee := inst.Operands[0].Literal
 	fn, ok := funcs[callee]
 	if !ok {
+		return nil, nil, false
+	}
+	// If the user-facing body is just `return <literal>` (the typical
+	// shape of a `std.*` stub kept around to satisfy the type checker),
+	// don't rebind to it — execCall would normally route through
+	// execIntrinsic for the real implementation, but a tail-call
+	// rebind skips that path. Going to the stub would produce the
+	// placeholder default (e.g. ' ' for char_from_code) instead of the
+	// runtime result.
+	if isStubBody(fn) && strings.HasPrefix(callee, "std.") {
 		return nil, nil, false
 	}
 	// Only tail-call functions whose param count matches: a Promise<T>
@@ -2554,6 +2583,41 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				}
 			}
 		}
+	case "std.char_code":
+		if len(operands) == 1 {
+			c := operandValue(fr, operands[0])
+			// Char values come in as rune (alias for int32). Other
+			// integer carrier types are accepted defensively. Result is
+			// returned as Go `int` because that's what the rest of the
+			// VM's arithmetic ops produce (literalResult for int yields
+			// int, not int32).
+			switch v := c.Value.(type) {
+			case int32:
+				return Result{Type: "int", Value: int(v)}, true
+			case int:
+				return Result{Type: "int", Value: v}, true
+			}
+		}
+	case "std.char_from_code":
+		if len(operands) == 1 {
+			i := operandValue(fr, operands[0])
+			switch v := i.Value.(type) {
+			case int:
+				return Result{Type: "char", Value: rune(v)}, true
+			case int32:
+				return Result{Type: "char", Value: rune(v)}, true
+			}
+		}
+	case "std.char_to_string":
+		if len(operands) == 1 {
+			c := operandValue(fr, operands[0])
+			switch v := c.Value.(type) {
+			case int32:
+				return Result{Type: "string", Value: string(rune(v))}, true
+			case int:
+				return Result{Type: "string", Value: string(rune(v))}, true
+			}
+		}
 	// File operations
 	case "std.file.exists":
 		if len(operands) == 1 {
@@ -3540,8 +3604,39 @@ func literalResult(op mir.Operand) (Result, error) {
 			return Result{Type: typ, Value: false}, nil
 		}
 		return Result{}, fmt.Errorf("invalid bool literal %q", op.Literal)
-	case "char", "string":
+	case "string":
 		return Result{Type: typ, Value: strings.Trim(op.Literal, "\"")}, nil
+	case "char":
+		// char literals come through as 'a' / '\n' — strip the wrapping
+		// single quotes and decode common escapes. Stored as rune so
+		// std.char_code can return its int value.
+		body := op.Literal
+		if len(body) >= 2 && body[0] == '\'' && body[len(body)-1] == '\'' {
+			body = body[1 : len(body)-1]
+		}
+		var r rune
+		switch body {
+		case `\n`:
+			r = '\n'
+		case `\t`:
+			r = '\t'
+		case `\r`:
+			r = '\r'
+		case `\\`:
+			r = '\\'
+		case `\'`:
+			r = '\''
+		case `\"`:
+			r = '"'
+		case `\0`:
+			r = 0
+		default:
+			rs := []rune(body)
+			if len(rs) > 0 {
+				r = rs[0]
+			}
+		}
+		return Result{Type: "char", Value: r}, nil
 	case "null":
 		return Result{Type: typ, Value: nil}, nil
 	default:
@@ -3594,6 +3689,11 @@ func toInt(value Result) (int, error) {
 	switch v := value.Value.(type) {
 	case int:
 		return v, nil
+	case int32:
+		// rune values (chars) and any callee that returns int32 land here.
+		return int(v), nil
+	case int64:
+		return int(v), nil
 	case bool:
 		if v {
 			return 1, nil
