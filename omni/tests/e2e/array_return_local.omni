@@ -1,0 +1,16 @@
+// Regression: returning a local array variable from a function.
+// Pre-fix this aborted at runtime with length=-1 because the caller
+// had no compile-time length for the returned array. The C backend
+// now propagates the callee's static return-array length and
+// heap-allocates arrays that escape via `ret`.
+import std
+
+func make_arr():array<int> {
+    let xs:array<int> = [10, 20, 30]
+    return xs
+}
+
+func main():int {
+    let result:array<int> = make_arr()
+    return std.array.get(result, 0)
+}

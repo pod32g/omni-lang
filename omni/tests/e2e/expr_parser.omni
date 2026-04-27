@@ -1,0 +1,144 @@
+// Real-world regression: a recursive-descent expression evaluator.
+//
+// Exercises, in one program, the behaviors that broke when the C backend
+// lost array length across function returns:
+//   - Recursive descent (parse_expr / parse_term / parse_factor).
+//   - Returned arrays used as [value, pos] tuples.
+//   - String substring + equals on the input.
+//   - while loops (with early `return` and with mutated `var` state).
+//   - Arithmetic precedence + parenthesized sub-expressions.
+//
+// Inputs and expected results:
+//   "1+2"                          => 3
+//   "1+2*3"                        => 7
+//   "1 + 2 * (3 + 4)"              => 15
+//   "(10 + 5) * (2 + 3 * (1 + 1))" => 120
+import std
+
+// Returns 0..9 if pos is in range and points to an ASCII digit, else -1.
+func digit_value(s:string, pos:int):int {
+    if pos < 0 { return -1 }
+    if pos >= std.string.length(s) { return -1 }
+    let c:string = std.string.substring(s, pos, pos + 1)
+    if std.string.equals(c, "0") { return 0 }
+    if std.string.equals(c, "1") { return 1 }
+    if std.string.equals(c, "2") { return 2 }
+    if std.string.equals(c, "3") { return 3 }
+    if std.string.equals(c, "4") { return 4 }
+    if std.string.equals(c, "5") { return 5 }
+    if std.string.equals(c, "6") { return 6 }
+    if std.string.equals(c, "7") { return 7 }
+    if std.string.equals(c, "8") { return 8 }
+    if std.string.equals(c, "9") { return 9 }
+    return -1
+}
+
+// True iff s[pos] equals the single-character probe.
+func is_char(s:string, pos:int, probe:string):bool {
+    if pos < 0 { return false }
+    if pos >= std.string.length(s) { return false }
+    return std.string.equals(std.string.substring(s, pos, pos + 1), probe)
+}
+
+// Skip ASCII spaces.
+func skip_ws(s:string, pos:int):int {
+    var p:int = pos
+    let n:int = std.string.length(s)
+    while p < n {
+        if is_char(s, p, " ") {
+            p = p + 1
+        } else {
+            return p
+        }
+    }
+    return p
+}
+
+// Parse a non-negative integer literal. Returns [value, new_pos].
+func parse_number(s:string, pos:int):array<int> {
+    var p:int = skip_ws(s, pos)
+    var v:int = 0
+    let n:int = std.string.length(s)
+    while p < n {
+        let d:int = digit_value(s, p)
+        if d < 0 {
+            return [v, p]
+        }
+        v = v * 10 + d
+        p = p + 1
+    }
+    return [v, p]
+}
+
+// factor := number | '(' expr ')'
+func parse_factor(s:string, pos:int):array<int> {
+    let p0:int = skip_ws(s, pos)
+    if is_char(s, p0, "(") {
+        let inner:array<int> = parse_expr(s, p0 + 1)
+        let v:int = std.array.get(inner, 0)
+        let after:int = skip_ws(s, std.array.get(inner, 1))
+        if is_char(s, after, ")") {
+            return [v, after + 1]
+        }
+        return [v, after]
+    }
+    return parse_number(s, p0)
+}
+
+// term := factor (('*'|'/') factor)*
+func parse_term(s:string, pos:int):array<int> {
+    let first:array<int> = parse_factor(s, pos)
+    var v:int = std.array.get(first, 0)
+    var p:int = std.array.get(first, 1)
+    while true {
+        p = skip_ws(s, p)
+        if is_char(s, p, "*") {
+            let rhs:array<int> = parse_factor(s, p + 1)
+            v = v * std.array.get(rhs, 0)
+            p = std.array.get(rhs, 1)
+        } else if is_char(s, p, "/") {
+            let rhs:array<int> = parse_factor(s, p + 1)
+            v = v / std.array.get(rhs, 0)
+            p = std.array.get(rhs, 1)
+        } else {
+            return [v, p]
+        }
+    }
+    return [v, p]
+}
+
+// expr := term (('+'|'-') term)*
+func parse_expr(s:string, pos:int):array<int> {
+    let first:array<int> = parse_term(s, pos)
+    var v:int = std.array.get(first, 0)
+    var p:int = std.array.get(first, 1)
+    while true {
+        p = skip_ws(s, p)
+        if is_char(s, p, "+") {
+            let rhs:array<int> = parse_term(s, p + 1)
+            v = v + std.array.get(rhs, 0)
+            p = std.array.get(rhs, 1)
+        } else if is_char(s, p, "-") {
+            let rhs:array<int> = parse_term(s, p + 1)
+            v = v - std.array.get(rhs, 0)
+            p = std.array.get(rhs, 1)
+        } else {
+            return [v, p]
+        }
+    }
+    return [v, p]
+}
+
+func calc(s:string):int {
+    let r:array<int> = parse_expr(s, 0)
+    return std.array.get(r, 0)
+}
+
+func main():int {
+    let r1:int = calc("1+2")                          // 3
+    let r2:int = calc("1+2*3")                        // 7
+    let r3:int = calc("1 + 2 * (3 + 4)")              // 15
+    let r4:int = calc("(10 + 5) * (2 + 3 * (1 + 1))") // 120
+    // Pack into one signature: 3 + 7*10 + 15*100 + 120*10000 = 1201573.
+    return r1 + r2 * 10 + r3 * 100 + r4 * 10000
+}

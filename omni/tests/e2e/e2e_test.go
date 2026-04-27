@@ -1590,3 +1590,93 @@ func TestErrorAssertions(t *testing.T) {
 		t.Errorf("Expected %s, got %s", expected, result)
 	}
 }
+
+
+// Returned-array regression tests. These guard against a class of C-backend
+// bugs where a function returning array<T> lost its compile-time length at
+// the call site, causing std.array.get to abort with length=-1 or arrays
+// returned to the caller to dangle off the callee's stack frame. Each .omni
+// file targets one shape of return-array usage.
+
+func TestArrayReturnLocal(t *testing.T) {
+	testFile := "array_return_local.omni"
+	expected := "10"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+func TestArrayReturnLiteral(t *testing.T) {
+	testFile := "array_return_literal.omni"
+	expected := "200"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+func TestArrayReturnGetInline(t *testing.T) {
+	testFile := "array_return_get_inline.omni"
+	expected := "13"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+func TestArrayReturnTuplePair(t *testing.T) {
+	testFile := "array_return_tuple_pair.omni"
+	expected := "47"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+func TestArrayReturnForwarded(t *testing.T) {
+	testFile := "array_return_forwarded.omni"
+	expected := "5"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+// TestExprParser is a real-world regression test driven by the symptoms
+// we hit while building a recursive-descent expression parser entirely in
+// OmniLang. It returns a packed signature (r1 + r2*10 + r3*100 + r4*10000)
+// so that a miscompute in any of the four sub-expressions surfaces
+// uniquely instead of being masked by another. Expected: 1201573.
+func TestExprParser(t *testing.T) {
+	testFile := "expr_parser.omni"
+	expected := "1201573"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}

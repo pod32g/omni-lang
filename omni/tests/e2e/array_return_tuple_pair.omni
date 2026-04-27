@@ -1,0 +1,15 @@
+// Regression: returned array used as a tuple-like parser result [value, pos].
+// Pattern lifted from the expression-parser regression: a sub-parser
+// returns [parsed_value, next_position] and the caller indexes both slots.
+import std
+
+func parse_token():array<int> {
+    return [42, 5]
+}
+
+func main():int {
+    let pair:array<int> = parse_token()
+    let value:int = std.array.get(pair, 0)
+    let pos:int = std.array.get(pair, 1)
+    return value + pos
+}

@@ -1,0 +1,11 @@
+// Regression: returned array passed directly into std.array.get.
+// Tests that no intermediate local is required to preserve ABI.
+import std
+
+func make_arr():array<int> {
+    return [7, 11, 13]
+}
+
+func main():int {
+    return std.array.get(make_arr(), 2)
+}

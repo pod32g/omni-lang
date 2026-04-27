@@ -1,0 +1,11 @@
+// Regression: returning an array literal directly from a function.
+import std
+
+func make_arr():array<int> {
+    return [100, 200, 300]
+}
+
+func main():int {
+    let result:array<int> = make_arr()
+    return std.array.get(result, 1)
+}

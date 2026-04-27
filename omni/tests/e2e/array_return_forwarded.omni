@@ -1,0 +1,17 @@
+// Regression: a function that forwards another function's array return.
+// The forwarder does not synthesize the array itself; it must still hand
+// back something the outer caller can index without an ABI mismatch.
+import std
+
+func leaf():array<int> {
+    return [4, 5, 6]
+}
+
+func forward():array<int> {
+    return leaf()
+}
+
+func main():int {
+    let result:array<int> = forward()
+    return std.array.get(result, 1)
+}
