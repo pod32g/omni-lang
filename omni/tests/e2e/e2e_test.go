@@ -586,6 +586,30 @@ func TestStdStringSplitReplace(t *testing.T) {
 	}
 }
 
+// TestStdCollectionsCompound pins queue / stack / set operations.
+// Before this test these compile-failed on the C side ("unknown
+// type queue<int>") and silently returned defaults on the VM.
+func TestStdCollectionsCompound(t *testing.T) {
+	testFile := "std_collections_compound.omni"
+	expected := "347"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdCollectionsMap pins the basic map operations
 // (size/get/set/has/remove/clear). Previously these were declared as
 // "implemented" but the C side had no wiring and the VM ran the

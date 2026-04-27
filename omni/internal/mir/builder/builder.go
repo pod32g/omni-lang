@@ -2499,12 +2499,43 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			}
 		} else if strings.Contains(calleeName, "collections.") {
 			switch {
-			case strings.HasSuffix(calleeName, ".size"):
+			// Compound-type constructors return a heap-allocated handle.
+			case strings.HasSuffix(calleeName, ".queue_create"):
+				resultType = "queue<int>"
+			case strings.HasSuffix(calleeName, ".stack_create"):
+				resultType = "stack<int>"
+			case strings.HasSuffix(calleeName, ".set_create"):
+				resultType = "set<int>"
+			case strings.HasSuffix(calleeName, ".linked_list_create"):
+				resultType = "linked_list<int>"
+			case strings.HasSuffix(calleeName, ".binary_tree_create"):
+				resultType = "binary_tree<int>"
+			case strings.HasSuffix(calleeName, ".priority_queue_create"):
+				resultType = "priority_queue<int>"
+			case strings.HasSuffix(calleeName, ".set_union"),
+				strings.HasSuffix(calleeName, ".set_intersection"),
+				strings.HasSuffix(calleeName, ".set_difference"):
+				resultType = "set<int>"
+			// Sizes / pops / peeks / dequeues return int.
+			case strings.HasSuffix(calleeName, ".size"),
+				strings.HasSuffix(calleeName, ".queue_size"),
+				strings.HasSuffix(calleeName, ".stack_size"),
+				strings.HasSuffix(calleeName, ".set_size"),
+				strings.HasSuffix(calleeName, ".queue_dequeue"),
+				strings.HasSuffix(calleeName, ".queue_peek"),
+				strings.HasSuffix(calleeName, ".stack_pop"),
+				strings.HasSuffix(calleeName, ".stack_peek"):
 				resultType = "int"
 			case strings.HasSuffix(calleeName, ".get"):
 				resultType = "int"
-			case strings.HasSuffix(calleeName, ".has"), strings.HasSuffix(calleeName, ".remove"),
-				strings.HasSuffix(calleeName, ".set_contains"):
+			// is_empty / contains / add / remove return bool.
+			case strings.HasSuffix(calleeName, ".queue_is_empty"),
+				strings.HasSuffix(calleeName, ".stack_is_empty"),
+				strings.HasSuffix(calleeName, ".set_contains"),
+				strings.HasSuffix(calleeName, ".set_add"),
+				strings.HasSuffix(calleeName, ".set_remove"):
+				resultType = "bool"
+			case strings.HasSuffix(calleeName, ".has"), strings.HasSuffix(calleeName, ".remove"):
 				resultType = "bool"
 			case strings.HasSuffix(calleeName, ".keys"):
 				resultType = "array<string>"

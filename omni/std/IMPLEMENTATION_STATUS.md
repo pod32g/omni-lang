@@ -188,6 +188,9 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `values(m)` - Wired to `omni_map_values_string_int`
 - [IMPLEMENTED] `copy(m)` - Wired to `omni_map_copy_string_int`
 - [IMPLEMENTED] `merge(a, b)` - Wired to `omni_map_merge_string_int`
+- [IMPLEMENTED] `queue_create / enqueue / dequeue / peek / is_empty / size / clear` - C backend now maps `queue<T>` → `omni_queue_t*`; VM uses a `*[]int` carrier
+- [IMPLEMENTED] `stack_create / push / pop / peek / is_empty / size / clear` - C backend maps `stack<T>` → `omni_stack_t*`; VM uses a `*[]int` carrier
+- [IMPLEMENTED] `set_create / add / remove / contains / size / clear / union / intersection / difference` - C backend maps `set<T>` → `omni_set_t*`; VM uses a `map[int]bool` carrier
 - [IMPLEMENTED] `set_create()` - Wired to `omni_set_create`
 - [IMPLEMENTED] `set_add(s, element)` - Wired to `omni_set_add`
 - [IMPLEMENTED] `set_remove(s, element)` - Wired to `omni_set_remove`

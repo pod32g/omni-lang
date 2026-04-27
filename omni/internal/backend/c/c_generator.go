@@ -5932,6 +5932,28 @@ func (g *CGenerator) mapType(omniType string) string {
 		return "omni_map_t*"
 	}
 
+	// std.collections compound types — each backed by a typedef'd
+	// runtime struct in omni_rt.h. Element types don't change the C
+	// carrier today (the runtime holds int32_t elements internally).
+	if strings.HasPrefix(omniType, "queue<") && strings.HasSuffix(omniType, ">") {
+		return "omni_queue_t*"
+	}
+	if strings.HasPrefix(omniType, "stack<") && strings.HasSuffix(omniType, ">") {
+		return "omni_stack_t*"
+	}
+	if strings.HasPrefix(omniType, "set<") && strings.HasSuffix(omniType, ">") {
+		return "omni_set_t*"
+	}
+	if strings.HasPrefix(omniType, "linked_list<") && strings.HasSuffix(omniType, ">") {
+		return "omni_linked_list_t*"
+	}
+	if strings.HasPrefix(omniType, "binary_tree<") && strings.HasSuffix(omniType, ">") {
+		return "omni_binary_tree_t*"
+	}
+	if strings.HasPrefix(omniType, "priority_queue<") && strings.HasSuffix(omniType, ">") {
+		return "omni_priority_queue_t*"
+	}
+
 	// Handle channel types: chan<T> — represented at runtime by an
 	// omni_chan_t* (a pthread-backed bounded ring buffer). Element types
 	// don't widen the C type because the channel stores raw bytes.

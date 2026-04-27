@@ -784,6 +784,29 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.collections.has",
 		"std.collections.remove",
 		"std.collections.clear",
+		"std.collections.queue_create",
+		"std.collections.queue_enqueue",
+		"std.collections.queue_dequeue",
+		"std.collections.queue_peek",
+		"std.collections.queue_is_empty",
+		"std.collections.queue_size",
+		"std.collections.queue_clear",
+		"std.collections.stack_create",
+		"std.collections.stack_push",
+		"std.collections.stack_pop",
+		"std.collections.stack_peek",
+		"std.collections.stack_is_empty",
+		"std.collections.stack_size",
+		"std.collections.stack_clear",
+		"std.collections.set_create",
+		"std.collections.set_add",
+		"std.collections.set_remove",
+		"std.collections.set_contains",
+		"std.collections.set_size",
+		"std.collections.set_clear",
+		"std.collections.set_union",
+		"std.collections.set_intersection",
+		"std.collections.set_difference",
 		"std.algorithms.manhattan_distance",
 		"std.algorithms.levenshtein_distance",
 		"std.array.contains",
@@ -3006,6 +3029,218 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				}
 				return Result{Type: "array<int>", Value: out}, true
 			}
+		}
+	case "std.collections.queue_create":
+		// VM carries the queue as a *[]int — pointer so set/destruct
+		// flows update the same underlying slice across calls.
+		q := &[]int{}
+		return Result{Type: "queue<int>", Value: q}, true
+	case "std.collections.queue_enqueue":
+		if len(operands) == 2 {
+			q := operandValue(fr, operands[0])
+			el, _ := toInt(operandValue(fr, operands[1]))
+			if qp, ok := q.Value.(*[]int); ok {
+				*qp = append(*qp, el)
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.collections.queue_dequeue":
+		if len(operands) == 1 {
+			q := operandValue(fr, operands[0])
+			if qp, ok := q.Value.(*[]int); ok && len(*qp) > 0 {
+				v := (*qp)[0]
+				*qp = (*qp)[1:]
+				return Result{Type: "int", Value: v}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.collections.queue_peek":
+		if len(operands) == 1 {
+			q := operandValue(fr, operands[0])
+			if qp, ok := q.Value.(*[]int); ok && len(*qp) > 0 {
+				return Result{Type: "int", Value: (*qp)[0]}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.collections.queue_is_empty":
+		if len(operands) == 1 {
+			q := operandValue(fr, operands[0])
+			if qp, ok := q.Value.(*[]int); ok {
+				return Result{Type: "bool", Value: len(*qp) == 0}, true
+			}
+			return Result{Type: "bool", Value: true}, true
+		}
+	case "std.collections.queue_size":
+		if len(operands) == 1 {
+			q := operandValue(fr, operands[0])
+			if qp, ok := q.Value.(*[]int); ok {
+				return Result{Type: "int", Value: len(*qp)}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.collections.queue_clear":
+		if len(operands) == 1 {
+			q := operandValue(fr, operands[0])
+			if qp, ok := q.Value.(*[]int); ok {
+				*qp = (*qp)[:0]
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.collections.stack_create":
+		s := &[]int{}
+		return Result{Type: "stack<int>", Value: s}, true
+	case "std.collections.stack_push":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			el, _ := toInt(operandValue(fr, operands[1]))
+			if sp, ok := s.Value.(*[]int); ok {
+				*sp = append(*sp, el)
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.collections.stack_pop":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if sp, ok := s.Value.(*[]int); ok && len(*sp) > 0 {
+				v := (*sp)[len(*sp)-1]
+				*sp = (*sp)[:len(*sp)-1]
+				return Result{Type: "int", Value: v}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.collections.stack_peek":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if sp, ok := s.Value.(*[]int); ok && len(*sp) > 0 {
+				return Result{Type: "int", Value: (*sp)[len(*sp)-1]}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.collections.stack_is_empty":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if sp, ok := s.Value.(*[]int); ok {
+				return Result{Type: "bool", Value: len(*sp) == 0}, true
+			}
+			return Result{Type: "bool", Value: true}, true
+		}
+	case "std.collections.stack_size":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if sp, ok := s.Value.(*[]int); ok {
+				return Result{Type: "int", Value: len(*sp)}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.collections.stack_clear":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if sp, ok := s.Value.(*[]int); ok {
+				*sp = (*sp)[:0]
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.collections.set_create":
+		s := map[int]bool{}
+		return Result{Type: "set<int>", Value: s}, true
+	case "std.collections.set_add":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			el, _ := toInt(operandValue(fr, operands[1]))
+			if sp, ok := s.Value.(map[int]bool); ok {
+				_, present := sp[el]
+				sp[el] = true
+				return Result{Type: "bool", Value: !present}, true
+			}
+			return Result{Type: "bool", Value: false}, true
+		}
+	case "std.collections.set_remove":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			el, _ := toInt(operandValue(fr, operands[1]))
+			if sp, ok := s.Value.(map[int]bool); ok {
+				_, present := sp[el]
+				delete(sp, el)
+				return Result{Type: "bool", Value: present}, true
+			}
+			return Result{Type: "bool", Value: false}, true
+		}
+	case "std.collections.set_contains":
+		if len(operands) == 2 {
+			s := operandValue(fr, operands[0])
+			el, _ := toInt(operandValue(fr, operands[1]))
+			if sp, ok := s.Value.(map[int]bool); ok {
+				_, present := sp[el]
+				return Result{Type: "bool", Value: present}, true
+			}
+			return Result{Type: "bool", Value: false}, true
+		}
+	case "std.collections.set_size":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if sp, ok := s.Value.(map[int]bool); ok {
+				return Result{Type: "int", Value: len(sp)}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.collections.set_clear":
+		if len(operands) == 1 {
+			s := operandValue(fr, operands[0])
+			if sp, ok := s.Value.(map[int]bool); ok {
+				for k := range sp {
+					delete(sp, k)
+				}
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.collections.set_union":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			out := map[int]bool{}
+			if ap, ok := a.Value.(map[int]bool); ok {
+				for k := range ap {
+					out[k] = true
+				}
+			}
+			if bp, ok := b.Value.(map[int]bool); ok {
+				for k := range bp {
+					out[k] = true
+				}
+			}
+			return Result{Type: "set<int>", Value: out}, true
+		}
+	case "std.collections.set_intersection":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			out := map[int]bool{}
+			ap, _ := a.Value.(map[int]bool)
+			bp, _ := b.Value.(map[int]bool)
+			if ap != nil && bp != nil {
+				for k := range ap {
+					if bp[k] {
+						out[k] = true
+					}
+				}
+			}
+			return Result{Type: "set<int>", Value: out}, true
+		}
+	case "std.collections.set_difference":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			out := map[int]bool{}
+			ap, _ := a.Value.(map[int]bool)
+			bp, _ := b.Value.(map[int]bool)
+			if ap != nil {
+				for k := range ap {
+					if bp == nil || !bp[k] {
+						out[k] = true
+					}
+				}
+			}
+			return Result{Type: "set<int>", Value: out}, true
 		}
 	case "std.collections.size":
 		if len(operands) == 1 {

@@ -124,26 +124,74 @@ $ echo "the quick brown fox the lazy dog the" | omnir wc.omni
 6
 ```
 
-## Sets, queues, stacks, …
+## Queue (FIFO)
 
-The `set_*`, `queue_*`, `stack_*`, `linked_list_*`, `binary_tree_*`,
-and `priority_queue_*` families are wired to the C runtime
-(`omni_set_*`, `omni_queue_*`, etc.). Coverage by e2e tests is
-spotty — these are best treated as a useful starting point that
-may have rough edges. The standard set of operations:
+`queue<int>` is a first-in-first-out integer queue.
 
-- `set_create` / `_add` / `_remove` / `_contains` / `_size` /
-  `_clear` / `_union` / `_intersection` / `_difference`
-- `queue_create` / `_enqueue` / `_dequeue` / `_peek` /
-  `_is_empty` / `_size` / `_clear`
-- `stack_create` / `_push` / `_pop` / `_peek` / `_is_empty` /
-  `_size` / `_clear`
-- `linked_list_create` / `_add` / `_remove` / `_get` / `_size` /
-  `_is_empty` / `_clear`
-- `binary_tree_create` / `_insert` / `_search` / `_size` /
-  `_is_empty` / `_clear`
-- `priority_queue_create` / `_enqueue` / `_dequeue` / `_peek` /
-  `_size` / `_is_empty` / `_clear`
+```omni
+let q: queue<int> = std.collections.queue_create()
+std.collections.queue_enqueue(q, 10)
+std.collections.queue_enqueue(q, 20)
+std.collections.queue_enqueue(q, 30)
+std.collections.queue_size(q)        // 3
+std.collections.queue_dequeue(q)     // 10
+std.collections.queue_peek(q)        // 20 (next to dequeue)
+std.collections.queue_is_empty(q)    // false
+std.collections.queue_clear(q)
+```
+
+Operations: `queue_create`, `queue_enqueue`, `queue_dequeue`,
+`queue_peek`, `queue_is_empty`, `queue_size`, `queue_clear`.
+
+## Stack (LIFO)
+
+`stack<int>` is a last-in-first-out integer stack.
+
+```omni
+let s: stack<int> = std.collections.stack_create()
+std.collections.stack_push(s, 1)
+std.collections.stack_push(s, 2)
+std.collections.stack_push(s, 3)
+std.collections.stack_pop(s)         // 3
+std.collections.stack_peek(s)        // 2
+std.collections.stack_size(s)        // 2
+```
+
+Operations: `stack_create`, `stack_push`, `stack_pop`, `stack_peek`,
+`stack_is_empty`, `stack_size`, `stack_clear`.
+
+## Set (unique members)
+
+`set<int>` is a set of unique integers. `set_add` returns `true` if
+the element was newly added (not previously present).
+
+```omni
+let s: set<int> = std.collections.set_create()
+std.collections.set_add(s, 1)        // true
+std.collections.set_add(s, 2)        // true
+std.collections.set_add(s, 1)        // false (already present)
+std.collections.set_size(s)          // 2
+std.collections.set_contains(s, 2)   // true
+std.collections.set_remove(s, 2)     // true (was present)
+```
+
+Operations: `set_create`, `set_add`, `set_remove`, `set_contains`,
+`set_size`, `set_clear`, `set_union(a, b)`, `set_intersection(a, b)`,
+`set_difference(a, b)`. The set-algebra operations return a freshly
+allocated `set<int>`.
+
+## linked_list, binary_tree, priority_queue
+
+These are wired to the runtime
+(`omni_linked_list_*`, `omni_binary_tree_*`, `omni_priority_queue_*`)
+but don't yet have first-class VM intrinsics or e2e regression
+coverage. Treat as experimental — file an issue if you hit a sharp
+edge.
+
+Operations follow the same naming pattern:
+- `linked_list_create / add / remove / get / size / is_empty / clear`
+- `binary_tree_create / insert / search / size / is_empty / clear`
+- `priority_queue_create / enqueue / dequeue / peek / size / is_empty / clear`
 
 ## Limitations
 
