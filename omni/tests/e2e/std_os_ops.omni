@@ -1,0 +1,122 @@
+// Smoke test for std.os: exercises filesystem, env, cwd, mkdir/rmdir,
+// rename/copy/remove, exists/is_file/is_dir, getpid. Each step returns a
+// distinct nonzero error code on failure; success is 0.
+import std
+
+func main():int {
+    let dir:string = "std_os_smoke_dir"
+    let f1:string = "std_os_smoke_dir/a.txt"
+    let f2:string = "std_os_smoke_dir/b.txt"
+    let f3:string = "std_os_smoke_dir/c.txt"
+
+    // Pre-clean (best effort)
+    std.os.remove(f1)
+    std.os.remove(f2)
+    std.os.remove(f3)
+    std.os.rmdir(dir)
+
+    // mkdir
+    if !std.os.mkdir(dir) {
+        return 1
+    }
+    if !std.os.exists(dir) {
+        return 2
+    }
+    if !std.os.is_dir(dir) {
+        return 3
+    }
+    if std.os.is_file(dir) {
+        return 4
+    }
+
+    // write_file / read_file / append_file
+    if !std.os.write_file(f1, "hello") {
+        return 5
+    }
+    if !std.os.is_file(f1) {
+        return 6
+    }
+    if std.os.is_dir(f1) {
+        return 7
+    }
+    let content:string = std.os.read_file(f1)
+    if !std.string.equals(content, "hello") {
+        return 8
+    }
+    if !std.os.append_file(f1, " world") {
+        return 9
+    }
+    let content2:string = std.os.read_file(f1)
+    if !std.string.equals(content2, "hello world") {
+        return 10
+    }
+
+    // copy
+    if !std.os.copy(f1, f2) {
+        return 11
+    }
+    let copied:string = std.os.read_file(f2)
+    if !std.string.equals(copied, "hello world") {
+        return 12
+    }
+
+    // rename
+    if !std.os.rename(f2, f3) {
+        return 13
+    }
+    if std.os.exists(f2) {
+        return 14
+    }
+    if !std.os.exists(f3) {
+        return 15
+    }
+
+    // remove files
+    if !std.os.remove(f1) {
+        return 16
+    }
+    if !std.os.remove(f3) {
+        return 17
+    }
+    if std.os.exists(f1) {
+        return 18
+    }
+
+    // rmdir
+    if !std.os.rmdir(dir) {
+        return 19
+    }
+    if std.os.exists(dir) {
+        return 20
+    }
+
+    // env vars
+    if !std.os.setenv("OMNI_OS_SMOKE", "ok") {
+        return 21
+    }
+    let v:string = std.os.getenv("OMNI_OS_SMOKE")
+    if !std.string.equals(v, "ok") {
+        return 22
+    }
+    if !std.os.unsetenv("OMNI_OS_SMOKE") {
+        return 23
+    }
+    let v2:string = std.os.getenv("OMNI_OS_SMOKE")
+    if !std.string.equals(v2, "") {
+        return 24
+    }
+
+    // cwd: read it and ensure non-empty
+    let cwd:string = std.os.getcwd()
+    if std.string.length(cwd) == 0 {
+        return 25
+    }
+
+    // pid
+    let pid:int = std.os.getpid()
+    if pid <= 0 {
+        return 26
+    }
+
+    return 0
+}

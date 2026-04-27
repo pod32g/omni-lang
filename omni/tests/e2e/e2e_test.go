@@ -683,6 +683,31 @@ func TestStdTimeOps(t *testing.T) {
 	}
 }
 
+// TestStdOsOps pins std.os filesystem, env, cwd, and pid operations
+// on both backends. The audit caught omni_getenv / omni_getcwd
+// returning NULL when the var was missing or getcwd failed; the C
+// backend then dereferenced the NULL string. Both now return "".
+func TestStdOsOps(t *testing.T) {
+	testFile := "std_os_ops.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStdRandomShuffleUnique pins the std.math PRNG (random_seed,
 // random_int) and the algorithms it powers — std.algorithms.shuffle
 // (length-preserving) and std.algorithms.unique (variable output

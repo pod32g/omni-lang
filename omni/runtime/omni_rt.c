@@ -1879,11 +1879,9 @@ void omni_exit(int32_t code) {
 
 // Environment variable operations
 const char* omni_getenv(const char* name) {
-    if (!name) return NULL;
+    if (!name) return "";
     char* value = getenv(name);
-    if (!value) return NULL;
-    // Return a pointer to the environment variable value
-    // Note: This is valid until the environment is modified
+    if (!value) return "";
     return value;
 }
 
@@ -1944,7 +1942,7 @@ const char* omni_getcwd(void) {
         return cwd;
     }
 #endif
-    return NULL;
+    return "";
 }
 
 int32_t omni_chdir(const char* path) {

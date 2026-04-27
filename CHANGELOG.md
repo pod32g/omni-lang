@@ -85,6 +85,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **std.os audit** pinned by `TestStdOsOps`: mkdir/rmdir, write/read/
+  append, copy/rename/remove, exists/is_file/is_dir, set/get/unsetenv,
+  getcwd, and getpid all verified on both backends. `omni_getenv` and
+  `omni_getcwd` previously returned `NULL` on missing-var / failed
+  syscall, which segfaulted the C backend when callers chained the
+  result into `std.string.*`. Both now return `""` to match the
+  OmniLang `string` return type.
 - **std.math.random_seed / random_int**: shared xorshift32 PRNG
   across both backends so the same seed produces the same first
   output. Used by `std.algorithms.shuffle`.

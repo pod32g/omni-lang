@@ -84,3 +84,7 @@ func main():int {
 ```
 
 `get_flag` accepts both `--name=value` and `--name value` forms. Bare flags without values (e.g. `--loud`) evaluate to `true`. `positional_arg` skips entries that begin with `--` (and the value immediately following a bare `--flag`).
+
+## Backend status
+
+`std.os` is fully implemented on both `omnir` (VM) and `omnic` (C). The cross-backend audit is pinned by `TestStdOsOps` in `omni/tests/e2e/`, which exercises mkdir/rmdir, write/read/append, copy/rename/remove, exists/is_file/is_dir, setenv/getenv/unsetenv, getcwd, and getpid. `omni_getenv` and `omni_getcwd` return `""` rather than `NULL` when the var is unset or the syscall fails, so downstream string operations are safe on the C backend.

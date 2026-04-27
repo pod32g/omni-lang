@@ -153,6 +153,13 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `getpid()` - Wired to `omni_getpid`
 - [IMPLEMENTED] `getppid()` - Wired to `omni_getppid`
 
+VM and C backend parity is pinned by `tests/e2e/std_os_ops.omni` /
+`TestStdOsOps`, which exercises mkdir/rmdir, write/read/append, copy/
+rename/remove, exists/is_file/is_dir, set/get/unsetenv, getcwd, and
+getpid. `omni_getenv` and `omni_getcwd` return `""` rather than `NULL`
+on missing-var / failed-syscall so the C backend can chain string ops
+without crashing.
+
 ### std.log
 - [IMPLEMENTED] `debug(message)` - Wired to `omni_log_debug`
 - [IMPLEMENTED] `info(message)` - Wired to `omni_log_info`
