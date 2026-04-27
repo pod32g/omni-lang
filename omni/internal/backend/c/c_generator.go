@@ -3778,7 +3778,30 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						}
 					} else {
 						// Special handling for Time struct conversion functions
-						if funcName == "omni_time_from_unix" && inst.Type != "" && strings.Contains(inst.Type, "Time") {
+						if (funcName == "std.time.now" || funcName == "time.now") && inst.Type != "" && strings.Contains(inst.Type, "Time") {
+							varName := g.getVariableName(inst.ID)
+							yearVar := fmt.Sprintf("_year_%d", inst.ID)
+							monthVar := fmt.Sprintf("_month_%d", inst.ID)
+							dayVar := fmt.Sprintf("_day_%d", inst.ID)
+							hourVar := fmt.Sprintf("_hour_%d", inst.ID)
+							minuteVar := fmt.Sprintf("_minute_%d", inst.ID)
+							secondVar := fmt.Sprintf("_second_%d", inst.ID)
+							nanosecondVar := fmt.Sprintf("_nanosecond_%d", inst.ID)
+
+							g.output.WriteString(fmt.Sprintf("  int32_t %s, %s, %s, %s, %s, %s, %s;\n",
+								yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+							g.output.WriteString(fmt.Sprintf("  omni_time_from_unix(omni_time_now_unix(), &%s, &%s, &%s, &%s, &%s, &%s, &%s);\n",
+								yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
+
+							g.output.WriteString(fmt.Sprintf("  %s = omni_struct_create();\n", varName))
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"year\", %s);\n", varName, yearVar))
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"month\", %s);\n", varName, monthVar))
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"day\", %s);\n", varName, dayVar))
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"hour\", %s);\n", varName, hourVar))
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"minute\", %s);\n", varName, minuteVar))
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"second\", %s);\n", varName, secondVar))
+							g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"nanosecond\", %s);\n", varName, nanosecondVar))
+						} else if cFuncName == "omni_time_from_unix" && inst.Type != "" && strings.Contains(inst.Type, "Time") {
 							// time_from_unix(timestamp) -> Time
 							// Need to extract fields from Time struct and pass as output parameters
 							if len(inst.Operands) >= 2 {
@@ -3807,7 +3830,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"second\", %s);\n", varName, secondVar))
 								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"nanosecond\", %s);\n", varName, nanosecondVar))
 							}
-						} else if funcName == "omni_time_from_string" && inst.Type != "" && strings.Contains(inst.Type, "Time") {
+						} else if cFuncName == "omni_time_from_string" && inst.Type != "" && strings.Contains(inst.Type, "Time") {
 							// time_from_string(time_str) -> Time
 							if len(inst.Operands) >= 2 {
 								timeStr := g.getOperandValue(inst.Operands[1])
@@ -3833,7 +3856,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"second\", %s);\n", varName, secondVar))
 								g.output.WriteString(fmt.Sprintf("  omni_struct_set_int_field(%s, \"nanosecond\", %s);\n", varName, nanosecondVar))
 							}
-						} else if funcName == "omni_time_to_unix" && len(inst.Operands) >= 2 {
+						} else if cFuncName == "omni_time_to_unix" && len(inst.Operands) >= 2 {
 							// time_to_unix(t:Time) -> int
 							// Need to extract fields from Time struct parameter
 							timeStruct := g.getOperandValue(inst.Operands[1])
@@ -3854,7 +3877,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"nanosecond\");\n", nanosecondVar, timeStruct))
 							g.output.WriteString(fmt.Sprintf("  %s = omni_time_to_unix(%s, %s, %s, %s, %s, %s, %s);\n",
 								varName, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
-						} else if funcName == "omni_time_to_string" && len(inst.Operands) >= 2 {
+						} else if cFuncName == "omni_time_to_string" && len(inst.Operands) >= 2 {
 							// time_to_string(t:Time) -> string
 							timeStruct := g.getOperandValue(inst.Operands[1])
 							yearVar := fmt.Sprintf("_year_%d", inst.ID)
@@ -3878,7 +3901,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							if inst.Type == "string" {
 								g.stringsToFree[inst.ID] = true
 							}
-						} else if funcName == "omni_time_to_unix_nano" && len(inst.Operands) >= 2 {
+						} else if cFuncName == "omni_time_to_unix_nano" && len(inst.Operands) >= 2 {
 							// time_to_unix_nano(t:Time) -> int
 							timeStruct := g.getOperandValue(inst.Operands[1])
 							yearVar := fmt.Sprintf("_year_%d", inst.ID)
@@ -3898,7 +3921,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"nanosecond\");\n", nanosecondVar, timeStruct))
 							g.output.WriteString(fmt.Sprintf("  %s = omni_time_to_unix_nano(%s, %s, %s, %s, %s, %s, %s);\n",
 								varName, yearVar, monthVar, dayVar, hourVar, minuteVar, secondVar, nanosecondVar))
-						} else if funcName == "omni_duration_to_string" && len(inst.Operands) >= 2 {
+						} else if cFuncName == "omni_duration_to_string" && len(inst.Operands) >= 2 {
 							// duration_to_string(d:Duration) -> string
 							durationStruct := g.getOperandValue(inst.Operands[1])
 							secondsVar := fmt.Sprintf("_seconds_%d", inst.ID)
@@ -6986,6 +7009,18 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_time_zone_offset"
 	case "std.time.time_zone_name":
 		return "omni_time_zone_name"
+	case "std.time.time_from_unix":
+		return "omni_time_from_unix"
+	case "std.time.time_to_unix":
+		return "omni_time_to_unix"
+	case "std.time.time_to_string":
+		return "omni_time_to_string"
+	case "std.time.time_from_string":
+		return "omni_time_from_string"
+	case "std.time.time_to_unix_nano":
+		return "omni_time_to_unix_nano"
+	case "std.time.duration_to_string":
+		return "omni_duration_to_string"
 	case "time.now":
 		return "omni_time_now_unix"
 	case "time.unix_timestamp":
@@ -7000,6 +7035,18 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_time_zone_offset"
 	case "time.time_zone_name":
 		return "omni_time_zone_name"
+	case "time.time_from_unix":
+		return "omni_time_from_unix"
+	case "time.time_to_unix":
+		return "omni_time_to_unix"
+	case "time.time_to_string":
+		return "omni_time_to_string"
+	case "time.time_from_string":
+		return "omni_time_from_string"
+	case "time.time_to_unix_nano":
+		return "omni_time_to_unix_nano"
+	case "time.duration_to_string":
+		return "omni_duration_to_string"
 
 	// Utility functions
 	case "std.assert":
@@ -7729,6 +7776,33 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"os.read_file":                        true,
 		"os.write_file":                       true,
 		"os.append_file":                      true,
+		// Time operations
+		"std.time.now":                true,
+		"std.time.unix_timestamp":     true,
+		"std.time.unix_nano":          true,
+		"std.time.sleep_seconds":      true,
+		"std.time.sleep_milliseconds": true,
+		"std.time.time_zone_offset":   true,
+		"std.time.time_zone_name":     true,
+		"std.time.time_from_unix":     true,
+		"std.time.time_from_string":   true,
+		"std.time.time_to_unix":       true,
+		"std.time.time_to_string":     true,
+		"std.time.time_to_unix_nano":  true,
+		"std.time.duration_to_string": true,
+		"time.now":                    true,
+		"time.unix_timestamp":         true,
+		"time.unix_nano":              true,
+		"time.sleep_seconds":          true,
+		"time.sleep_milliseconds":     true,
+		"time.time_zone_offset":       true,
+		"time.time_zone_name":         true,
+		"time.time_from_unix":         true,
+		"time.time_from_string":       true,
+		"time.time_to_unix":           true,
+		"time.time_to_string":         true,
+		"time.time_to_unix_nano":      true,
+		"time.duration_to_string":     true,
 		// File operations
 		"std.file.open":            true,
 		"std.file.close":           true,

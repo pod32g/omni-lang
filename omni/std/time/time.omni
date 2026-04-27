@@ -1,4 +1,8 @@
 // std.time - Time and date utilities for OmniLang
+//
+// The runtime-backed core is implemented on both VM and C backends.
+// Pure Omni helper bodies are still a C-backend follow-up because this
+// module is not body-loaded there.
 
 // ============================================================================
 // Time Structure

@@ -659,6 +659,30 @@ func TestStdFileOps(t *testing.T) {
 	}
 }
 
+// TestStdTimeOps pins deterministic std.time conversions and duration
+// helpers on both backends. It intentionally avoids wall-clock assertions
+// beyond allowing zero-duration sleep.
+func TestStdTimeOps(t *testing.T) {
+	testFile := "std_time_ops.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStdRandomShuffleUnique pins the std.math PRNG (random_seed,
 // random_int) and the algorithms it powers — std.algorithms.shuffle
 // (length-preserving) and std.algorithms.unique (variable output

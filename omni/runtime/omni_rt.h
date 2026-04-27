@@ -765,6 +765,12 @@ void omni_time_sleep_seconds(double seconds);
 void omni_time_sleep_milliseconds(int32_t milliseconds);
 int32_t omni_time_zone_offset(void);
 const char* omni_time_zone_name(void);
+void omni_time_from_unix(int64_t timestamp, int32_t* year, int32_t* month, int32_t* day, int32_t* hour, int32_t* minute, int32_t* second, int32_t* nanosecond);
+void omni_time_from_string(const char* time_str, int32_t* year, int32_t* month, int32_t* day, int32_t* hour, int32_t* minute, int32_t* second, int32_t* nanosecond);
+int64_t omni_time_to_unix(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t minute, int32_t second, int32_t nanosecond);
+char* omni_time_to_string(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t minute, int32_t second, int32_t nanosecond);
+int64_t omni_time_to_unix_nano(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t minute, int32_t second, int32_t nanosecond);
+char* omni_duration_to_string(int32_t seconds, int32_t nanoseconds);
 
 // Command-line argument functions
 void omni_args_init(int argc, char** argv);

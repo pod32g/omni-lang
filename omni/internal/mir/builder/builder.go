@@ -43,13 +43,13 @@ func BuildModule(mod *ast.Module) (*mir.Module, error) {
 }
 
 type moduleBuilder struct {
-	module         *mir.Module
-	signatures     map[string]FunctionSignature
-	lambdas        []*mir.Function              // Collect lambda functions
-	structFields   map[string]map[string]string // struct type name -> field name -> field type
-	interfaces     map[string]struct{}          // known interface type names (for dynamic-dispatch lowering)
-	interfaceSigs  map[string][]mir.InterfaceMethod
-	topLevels      []topLevelBinding
+	module        *mir.Module
+	signatures    map[string]FunctionSignature
+	lambdas       []*mir.Function              // Collect lambda functions
+	structFields  map[string]map[string]string // struct type name -> field name -> field type
+	interfaces    map[string]struct{}          // known interface type names (for dynamic-dispatch lowering)
+	interfaceSigs map[string][]mir.InterfaceMethod
+	topLevels     []topLevelBinding
 }
 
 // topLevelBinding records a module-scope `let`/`var` declaration so each
@@ -185,11 +185,11 @@ func (mb *moduleBuilder) collectTopLevelBindings(mod *ast.Module) {
 			// reset-on-call counters; promote to real globals when a
 			// backend grows the storage support.
 			mb.topLevels = append(mb.topLevels, topLevelBinding{
-				Name:        d.Name,
-				Type:        typeExprToString(d.Type),
-				Value:       d.Value,
-				Mutable:     true,
-				rejectVar:   true,
+				Name:      d.Name,
+				Type:      typeExprToString(d.Type),
+				Value:     d.Value,
+				Mutable:   true,
+				rejectVar: true,
 			})
 		}
 	}
@@ -1510,19 +1510,19 @@ func (fb *functionBuilder) emitUnary(expr *ast.UnaryExpr) (mirValue, error) {
 // callee shape. All three snapshot arguments by fully lowering them at the
 // defer site; the actual invocation happens at defer.run time.
 //
-//   1. `defer f(...)` or `defer ModOrPkg.f(...)` or `defer x.m(...)` where x
-//      is a concrete struct with a known method: op = defer.push,
-//      operands = [calleeLit, recv?, args...]. Same layout as `call`.
+//  1. `defer f(...)` or `defer ModOrPkg.f(...)` or `defer x.m(...)` where x
+//     is a concrete struct with a known method: op = defer.push,
+//     operands = [calleeLit, recv?, args...]. Same layout as `call`.
 //
-//   2. `defer x.m(...)` where x has interface type: op = defer.push.iface,
-//      operands = [ifaceLit, methodLit, recv, args...]. Same layout as
-//      iface.call — the backend does a dynamic dispatch via the receiver's
-//      runtime type tag at defer.run time.
+//  2. `defer x.m(...)` where x has interface type: op = defer.push.iface,
+//     operands = [ifaceLit, methodLit, recv, args...]. Same layout as
+//     iface.call — the backend does a dynamic dispatch via the receiver's
+//     runtime type tag at defer.run time.
 //
-//   3. `defer fn(...)` where fn is a local binding with function type: op =
-//      defer.push.func, operands = [fnValue, args...]. Same layout as
-//      func.call — the backend captures the callable value and any needed
-//      closure state, then invokes it at defer.run time.
+//  3. `defer fn(...)` where fn is a local binding with function type: op =
+//     defer.push.func, operands = [fnValue, args...]. Same layout as
+//     func.call — the backend captures the callable value and any needed
+//     closure state, then invokes it at defer.run time.
 func (fb *functionBuilder) lowerDefer(s *ast.DeferStmt) error {
 	callExpr, ok := s.Call.(*ast.CallExpr)
 	if !ok {
@@ -1594,11 +1594,11 @@ func (fb *functionBuilder) lowerDefer(s *ast.DeferStmt) error {
 // lowerTupleBind lowers `let a, b = rhs` / `var a, b = rhs`. Two supported
 // RHS shapes:
 //
-//   1. Any expression whose value is a tuple (a call returning a tuple).
-//      We lower it normally then emit one tuple.extract per name.
-//   2. A channel recv expression `<-c`. In the ok-form context we
-//      switch the lowering to chan.recv.ok, which produces a tuple
-//      whose members are (chan_elem, bool).
+//  1. Any expression whose value is a tuple (a call returning a tuple).
+//     We lower it normally then emit one tuple.extract per name.
+//  2. A channel recv expression `<-c`. In the ok-form context we
+//     switch the lowering to chan.recv.ok, which produces a tuple
+//     whose members are (chan_elem, bool).
 func (fb *functionBuilder) lowerTupleBind(s *ast.TupleBindStmt) error {
 	var tupleValue mirValue
 	var memberTypes []string
@@ -1733,15 +1733,15 @@ func (fb *functionBuilder) lowerSelect(s *ast.SelectStmt) error {
 	// 1. Allocate body blocks + a merge block up front so the select op
 	//    can reference their names.
 	type prepared struct {
-		kind        string
-		ch          *mirValue
-		sendValue   *mirValue
-		recvDestID  mir.ValueID
-		recvOkID    mir.ValueID
-		recvType    string
-		recvOkType  string
-		bodyBlock   *mir.BasicBlock
-		sourceArm   ast.SelectCase
+		kind       string
+		ch         *mirValue
+		sendValue  *mirValue
+		recvDestID mir.ValueID
+		recvOkID   mir.ValueID
+		recvType   string
+		recvOkType string
+		bodyBlock  *mir.BasicBlock
+		sourceArm  ast.SelectCase
 	}
 	// Each select statement gets a unique tag so multiple selects in
 	// the same function don't clash on block names (the MIR verifier
@@ -1752,8 +1752,8 @@ func (fb *functionBuilder) lowerSelect(s *ast.SelectStmt) error {
 	for i, arm := range s.Cases {
 		block := fb.fn.NewBlock(fmt.Sprintf("select_%d_case_%d", tag, i))
 		cases = append(cases, prepared{
-			bodyBlock: block,
-			sourceArm: arm,
+			bodyBlock:  block,
+			sourceArm:  arm,
 			recvDestID: mir.InvalidValue,
 			recvOkID:   mir.InvalidValue,
 		})
@@ -2415,6 +2415,44 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 		} else if strings.Contains(calleeName, "file.") {
 			// File operations return int (file handles, byte counts, etc.)
 			resultType = "int"
+		} else if strings.Contains(calleeName, "time.") {
+			switch {
+			case strings.HasSuffix(calleeName, ".now"),
+				strings.HasSuffix(calleeName, ".time_from_unix"),
+				strings.HasSuffix(calleeName, ".time_from_string"),
+				strings.HasSuffix(calleeName, ".time_parse"):
+				resultType = "Time"
+			case strings.HasSuffix(calleeName, ".time_to_string"),
+				strings.HasSuffix(calleeName, ".duration_to_string"),
+				strings.HasSuffix(calleeName, ".time_format"),
+				strings.HasSuffix(calleeName, ".time_zone_name"):
+				resultType = "string"
+			case strings.HasSuffix(calleeName, ".sleep"),
+				strings.HasSuffix(calleeName, ".sleep_seconds"),
+				strings.HasSuffix(calleeName, ".sleep_milliseconds"):
+				resultType = "void"
+			case strings.HasSuffix(calleeName, ".time_equal"),
+				strings.HasSuffix(calleeName, ".time_before"),
+				strings.HasSuffix(calleeName, ".time_after"),
+				strings.HasSuffix(calleeName, ".duration_equal"),
+				strings.HasSuffix(calleeName, ".duration_less"),
+				strings.HasSuffix(calleeName, ".duration_greater"):
+				resultType = "bool"
+			case strings.HasPrefix(calleeName, "std.time.duration_") &&
+				!strings.HasPrefix(calleeName, "std.time.duration_to_"):
+				resultType = "Duration"
+			case strings.HasPrefix(calleeName, "std.time.time_add_"),
+				strings.HasPrefix(calleeName, "std.time.time_sub_duration"),
+				strings.HasSuffix(calleeName, ".time_create"):
+				resultType = "Time"
+			case strings.HasSuffix(calleeName, ".duration_to_seconds"),
+				strings.HasSuffix(calleeName, ".duration_to_minutes"),
+				strings.HasSuffix(calleeName, ".duration_to_hours"),
+				strings.HasSuffix(calleeName, ".duration_to_days"):
+				resultType = "float"
+			default:
+				resultType = "int"
+			}
 		} else if strings.Contains(calleeName, "int_to_string") {
 			resultType = "string"
 		} else if strings.Contains(calleeName, "float_to_string") {

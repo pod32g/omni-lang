@@ -2587,6 +2587,106 @@ const char* omni_time_zone_name(void) {
     return "UTC";
 }
 
+void omni_time_from_unix(int64_t timestamp, int32_t* year, int32_t* month, int32_t* day, int32_t* hour, int32_t* minute, int32_t* second, int32_t* nanosecond) {
+    time_t ts = (time_t)timestamp;
+    struct tm tm_utc;
+#ifdef _WIN32
+    if (gmtime_s(&tm_utc, &ts) != 0) {
+        memset(&tm_utc, 0, sizeof(tm_utc));
+        tm_utc.tm_year = 70;
+        tm_utc.tm_mday = 1;
+    }
+#else
+    if (gmtime_r(&ts, &tm_utc) == NULL) {
+        memset(&tm_utc, 0, sizeof(tm_utc));
+        tm_utc.tm_year = 70;
+        tm_utc.tm_mday = 1;
+    }
+#endif
+    if (year) *year = tm_utc.tm_year + 1900;
+    if (month) *month = tm_utc.tm_mon + 1;
+    if (day) *day = tm_utc.tm_mday;
+    if (hour) *hour = tm_utc.tm_hour;
+    if (minute) *minute = tm_utc.tm_min;
+    if (second) *second = tm_utc.tm_sec;
+    if (nanosecond) *nanosecond = 0;
+}
+
+static int64_t omni_days_from_civil(int32_t year, int32_t month, int32_t day) {
+    year -= month <= 2;
+    const int32_t era = (year >= 0 ? year : year - 399) / 400;
+    const uint32_t yoe = (uint32_t)(year - era * 400);
+    const uint32_t doy = (153 * (uint32_t)(month + (month > 2 ? -3 : 9)) + 2) / 5 + (uint32_t)day - 1;
+    const uint32_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (int64_t)era * 146097 + (int64_t)doe - 719468;
+}
+
+void omni_time_from_string(const char* time_str, int32_t* year, int32_t* month, int32_t* day, int32_t* hour, int32_t* minute, int32_t* second, int32_t* nanosecond) {
+    int32_t y = 1970, mo = 1, d = 1, h = 0, mi = 0, s = 0, ns = 0;
+    if (time_str != NULL) {
+        int parsed = sscanf(time_str, "%d-%d-%dT%d:%d:%d", &y, &mo, &d, &h, &mi, &s);
+        if (parsed < 6) {
+            y = 1970;
+            mo = 1;
+            d = 1;
+            h = 0;
+            mi = 0;
+            s = 0;
+        }
+        const char* dot = strchr(time_str, '.');
+        if (dot != NULL) {
+            char frac[10] = {0};
+            int i = 0;
+            dot++;
+            while (i < 9 && dot[i] >= '0' && dot[i] <= '9') {
+                frac[i] = dot[i];
+                i++;
+            }
+            while (i < 9) {
+                frac[i++] = '0';
+            }
+            ns = atoi(frac);
+        }
+    }
+    if (year) *year = y;
+    if (month) *month = mo;
+    if (day) *day = d;
+    if (hour) *hour = h;
+    if (minute) *minute = mi;
+    if (second) *second = s;
+    if (nanosecond) *nanosecond = ns;
+}
+
+int64_t omni_time_to_unix(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t minute, int32_t second, int32_t nanosecond) {
+    (void)nanosecond;
+    int64_t days = omni_days_from_civil(year, month, day);
+    return days * 86400LL + (int64_t)hour * 3600LL + (int64_t)minute * 60LL + (int64_t)second;
+}
+
+char* omni_time_to_string(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t minute, int32_t second, int32_t nanosecond) {
+    char buffer[40];
+    if (nanosecond > 0) {
+        snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02d.%09dZ", year, month, day, hour, minute, second, nanosecond);
+    } else {
+        snprintf(buffer, sizeof(buffer), "%04d-%02d-%02dT%02d:%02d:%02dZ", year, month, day, hour, minute, second);
+    }
+    return strdup(buffer);
+}
+
+int64_t omni_time_to_unix_nano(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t minute, int32_t second, int32_t nanosecond) {
+    return omni_time_to_unix(year, month, day, hour, minute, second, nanosecond) * 1000000000LL + (int64_t)nanosecond;
+}
+
+char* omni_duration_to_string(int32_t seconds, int32_t nanoseconds) {
+    char buffer[64];
+    if (nanoseconds == 0) {
+        snprintf(buffer, sizeof(buffer), "%ds", seconds);
+    } else {
+        snprintf(buffer, sizeof(buffer), "%d.%09ds", seconds, nanoseconds);
+    }
+    return strdup(buffer);
+}
+
 // Command-line argument functions
 static char** omni_args_array = NULL;
 static int32_t omni_args_count_val = 0;

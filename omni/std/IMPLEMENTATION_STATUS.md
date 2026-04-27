@@ -161,11 +161,11 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `set_level(level)` - Wired to `omni_log_set_level`
 
 ### std.time
-- [IMPLEMENTED] `now()` - Implemented in OmniLang (uses `unix_timestamp` and `time_from_unix`)
-- [IMPLEMENTED] `unix_timestamp()` - Wired to `omni_unix_timestamp`
-- [IMPLEMENTED] `unix_nano()` - Wired to `omni_unix_nano`
-- [IMPLEMENTED] `sleep_seconds(seconds)` - Wired to `omni_sleep_seconds`
-- [IMPLEMENTED] `sleep_milliseconds(milliseconds)` - Wired to `omni_sleep_milliseconds`
+- [IMPLEMENTED] `now()` - VM intrinsic; C backend lowers through `omni_time_now_unix` + `omni_time_from_unix`
+- [IMPLEMENTED] `unix_timestamp()` - Wired to `omni_time_now_unix`
+- [IMPLEMENTED] `unix_nano()` - Wired to `omni_time_now_unix_nano`
+- [IMPLEMENTED] `sleep_seconds(seconds)` - Wired to `omni_time_sleep_seconds`
+- [IMPLEMENTED] `sleep_milliseconds(milliseconds)` - Wired to `omni_time_sleep_milliseconds`
 - [IMPLEMENTED] `time_zone_offset()` - Wired to `omni_time_zone_offset`
 - [IMPLEMENTED] `time_zone_name()` - Wired to `omni_time_zone_name`
 - [IMPLEMENTED] `time_from_unix(timestamp)` - Wired to `omni_time_from_unix`
@@ -176,6 +176,11 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `duration_to_string(d)` - Wired to `omni_duration_to_string`
 - [PARTIAL] `time_format(t, layout)` - Basic RFC3339 formatting available via `time_to_string`, custom layouts pending
 - [PARTIAL] `time_parse(time_str, layout)` - Basic RFC3339 parsing available via `time_from_string`, custom layouts pending
+
+Runtime-backed `std.time` functions above have VM and C backend smoke
+coverage in `tests/e2e/std_time_ops.omni`. Pure Omni helper bodies such
+as `time_create`, `time_equal`, and duration arithmetic are still a C
+backend follow-up because `std.time` is not body-loaded there.
 
 ### std.collections
 - [IMPLEMENTED] `size(m)` - Wired to `omni_map_size`

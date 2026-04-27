@@ -1,0 +1,56 @@
+import std
+
+func main():int {
+    let epoch:std.time.Time = std.time.time_from_unix(0)
+    if epoch.year != 1970 { return 1 }
+    if epoch.month != 1 { return 2 }
+    if epoch.day != 1 { return 3 }
+    if epoch.hour != 0 { return 4 }
+    if epoch.minute != 0 { return 5 }
+    if epoch.second != 0 { return 6 }
+
+    let fixed:std.time.Time = std.time.Time{
+        year: 2024,
+        month: 4,
+        day: 27,
+        hour: 12,
+        minute: 30,
+        second: 5,
+        nanosecond: 0
+    }
+    if std.time.time_to_unix(fixed) != 1714221005 { return 7 }
+
+    let parsed:std.time.Time = std.time.time_from_string("2024-04-27T12:30:05Z")
+    if parsed.year != fixed.year { return 8 }
+    if parsed.month != fixed.month { return 9 }
+    if parsed.day != fixed.day { return 10 }
+    if parsed.hour != fixed.hour { return 11 }
+    if parsed.minute != fixed.minute { return 12 }
+    if parsed.second != fixed.second { return 13 }
+
+    let formatted:string = std.time.time_to_string(parsed)
+    if std.string.length(formatted) != 20 { return 14 }
+
+    let small:std.time.Time = std.time.Time{
+        year: 1970,
+        month: 1,
+        day: 1,
+        hour: 0,
+        minute: 0,
+        second: 1,
+        nanosecond: 500000000
+    }
+    if std.time.time_to_unix_nano(small) != 1500000000 { return 15 }
+
+    let duration:std.time.Duration = std.time.Duration{
+        seconds: 2,
+        nanoseconds: 500000000
+    }
+    if duration.seconds != 2 { return 16 }
+    if duration.nanoseconds != 500000000 { return 17 }
+    if std.string.length(std.time.duration_to_string(duration)) != 12 { return 18 }
+
+    std.time.sleep_seconds(0.0)
+    std.time.sleep_milliseconds(0)
+    return 0
+}

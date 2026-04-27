@@ -57,6 +57,16 @@ the bytes it reads because Omni strings are immutable and there is no
 mutable byte-buffer type yet. Whole-file reads should use
 `std.os.read_file(path)` until a buffer ABI exists.
 
+### `std.time` pure Omni helpers need C lowering
+The runtime-backed core (`time_from_unix`, `time_from_string`,
+`time_to_unix`, `time_to_string`, `time_to_unix_nano`,
+`duration_to_string`, sleep, timezone) is covered on both backends.
+Helper bodies such as `time_create`, `time_equal`,
+`duration_from_milliseconds`, `duration_add`, and the other
+source-level duration arithmetic helpers are still not emitted for the
+C backend. Either body-load `std.time` for C or promote those helpers
+to runtime intrinsics before marking the whole module complete.
+
 ---
 
 ## Out of scope for the Go-foundations slice

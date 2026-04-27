@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/omni-lang/omni/internal/logging"
 	"github.com/omni-lang/omni/internal/mir"
@@ -442,83 +443,83 @@ func (e ExitError) Error() string {
 
 func init() {
 	instructionHandlers = map[string]instructionHandler{
-		"const":           execConst,
-		"add":             execArithmetic,
-		"sub":             execArithmetic,
-		"mul":             execArithmetic,
-		"div":             execArithmetic,
-		"mod":             execArithmetic,
-		"bitand":          execBitwise,
-		"bitor":           execBitwise,
-		"bitxor":          execBitwise,
-		"lshift":          execBitwise,
-		"rshift":          execBitwise,
-		"strcat":          execStringConcat,
-		"neg":             execUnary,
-		"not":             execUnary,
-		"bitnot":          execUnary,
-		"cast":            execCast,
-		"cmp.eq":          execComparison,
-		"cmp.neq":         execComparison,
-		"cmp.lt":          execComparison,
-		"cmp.lte":         execComparison,
-		"cmp.gt":          execComparison,
-		"cmp.gte":         execComparison,
-		"and":             execLogical,
-		"or":              execLogical,
-		"call":            execCall,
-		"call.int":        execCall,
-		"call.void":       execCall,
-		"call.string":     execCall,
-		"call.bool":       execCall,
-		"call.char":       execCall,
-		"iface.call":      execIfaceCall,
+		"const":            execConst,
+		"add":              execArithmetic,
+		"sub":              execArithmetic,
+		"mul":              execArithmetic,
+		"div":              execArithmetic,
+		"mod":              execArithmetic,
+		"bitand":           execBitwise,
+		"bitor":            execBitwise,
+		"bitxor":           execBitwise,
+		"lshift":           execBitwise,
+		"rshift":           execBitwise,
+		"strcat":           execStringConcat,
+		"neg":              execUnary,
+		"not":              execUnary,
+		"bitnot":           execUnary,
+		"cast":             execCast,
+		"cmp.eq":           execComparison,
+		"cmp.neq":          execComparison,
+		"cmp.lt":           execComparison,
+		"cmp.lte":          execComparison,
+		"cmp.gt":           execComparison,
+		"cmp.gte":          execComparison,
+		"and":              execLogical,
+		"or":               execLogical,
+		"call":             execCall,
+		"call.int":         execCall,
+		"call.void":        execCall,
+		"call.string":      execCall,
+		"call.bool":        execCall,
+		"call.char":        execCall,
+		"iface.call":       execIfaceCall,
 		"defer.push":       execDeferPush,
 		"defer.push.func":  execDeferPushFunc,
 		"defer.push.iface": execDeferPushIface,
 		"defer.run":        execDeferRun,
-		"struct.init":     execStructInit,
-		"array.init":      execArrayInit,
-		"slice.append":    execSliceAppend,
-		"slice.slice":     execSliceSlice,
-		"spawn":           execSpawn,
-		"chan.make":       execChanMake,
-		"chan.send":       execChanSend,
-		"chan.recv":       execChanRecv,
-		"chan.recv.ok":    execChanRecvOk,
-		"chan.close":      execChanClose,
-		"tuple.new":       execTupleNew,
-		"tuple.extract":   execTupleExtract,
-		"select":          execSelect,
-		"index":           execIndex,
-		"assign":          execAssign,
-		"map.init":        execMapInit,
-		"member":          execMember,
-		"phi":             execPhi,
-		"malloc":          execMalloc,
-		"free":            execFree,
-		"realloc":         execRealloc,
-		"file.open":       execFileOpen,
-		"file.close":      execFileClose,
-		"file.read":       execFileRead,
-		"file.write":      execFileWrite,
-		"file.seek":       execFileSeek,
-		"file.tell":       execFileTell,
-		"file.exists":     execFileExists,
-		"file.size":       execFileSize,
-		"test.start":      execTestStart,
-		"test.end":        execTestEnd,
-		"assert":          execAssert,
-		"assert.eq":       execAssertEq,
-		"assert.true":     execAssertTrue,
-		"assert.false":    execAssertFalse,
-		"func.ref":        execFuncRef,
-		"func.assign":     execFuncAssign,
-		"func.call":       execFuncCall,
-		"closure.create":  execClosureCreate,
-		"closure.capture": execClosureCapture,
-		"closure.bind":    execClosureBind,
-		"await":           execAwait,
+		"struct.init":      execStructInit,
+		"array.init":       execArrayInit,
+		"slice.append":     execSliceAppend,
+		"slice.slice":      execSliceSlice,
+		"spawn":            execSpawn,
+		"chan.make":        execChanMake,
+		"chan.send":        execChanSend,
+		"chan.recv":        execChanRecv,
+		"chan.recv.ok":     execChanRecvOk,
+		"chan.close":       execChanClose,
+		"tuple.new":        execTupleNew,
+		"tuple.extract":    execTupleExtract,
+		"select":           execSelect,
+		"index":            execIndex,
+		"assign":           execAssign,
+		"map.init":         execMapInit,
+		"member":           execMember,
+		"phi":              execPhi,
+		"malloc":           execMalloc,
+		"free":             execFree,
+		"realloc":          execRealloc,
+		"file.open":        execFileOpen,
+		"file.close":       execFileClose,
+		"file.read":        execFileRead,
+		"file.write":       execFileWrite,
+		"file.seek":        execFileSeek,
+		"file.tell":        execFileTell,
+		"file.exists":      execFileExists,
+		"file.size":        execFileSize,
+		"test.start":       execTestStart,
+		"test.end":         execTestEnd,
+		"assert":           execAssert,
+		"assert.eq":        execAssertEq,
+		"assert.true":      execAssertTrue,
+		"assert.false":     execAssertFalse,
+		"func.ref":         execFuncRef,
+		"func.assign":      execFuncAssign,
+		"func.call":        execFuncCall,
+		"closure.create":   execClosureCreate,
+		"closure.capture":  execClosureCapture,
+		"closure.bind":     execClosureBind,
+		"await":            execAwait,
 	}
 }
 
@@ -572,13 +573,13 @@ type frame struct {
 // deferredCall snapshots one enqueued defer. Three variants mirror the three
 // MIR ops that enqueue them:
 //
-//   deferKindNamed: named function or intrinsic. `callee` is the MIR-mangled
-//     name; `recv` is unused.
-//   deferKindFunc:  function-valued callee. `recv` holds the captured callable
-//     value (same encoding execFuncCall expects); `callee` is unused.
-//   deferKindIface: method on an interface-typed receiver. `callee` holds the
-//     method name; `recv` holds the receiver whose Type tag drives runtime
-//     dispatch.
+//	deferKindNamed: named function or intrinsic. `callee` is the MIR-mangled
+//	  name; `recv` is unused.
+//	deferKindFunc:  function-valued callee. `recv` holds the captured callable
+//	  value (same encoding execFuncCall expects); `callee` is unused.
+//	deferKindIface: method on an interface-typed receiver. `callee` holds the
+//	  method name; `recv` holds the receiver whose Type tag drives runtime
+//	  dispatch.
 type deferredCall struct {
 	kind   deferKind
 	callee string
@@ -824,7 +825,20 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.file.seek",
 		"std.file.tell",
 		"std.file.exists",
-		"std.file.size":
+		"std.file.size",
+		"std.time.now",
+		"std.time.unix_timestamp",
+		"std.time.unix_nano",
+		"std.time.sleep_seconds",
+		"std.time.sleep_milliseconds",
+		"std.time.time_zone_offset",
+		"std.time.time_zone_name",
+		"std.time.time_from_unix",
+		"std.time.time_from_string",
+		"std.time.time_to_unix",
+		"std.time.time_to_string",
+		"std.time.time_to_unix_nano",
+		"std.time.duration_to_string":
 		return true
 	}
 	return false
@@ -2934,7 +2948,8 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	case "std.algorithms.find_max":
 		if len(operands) == 1 {
 			arr := operandValue(fr, operands[0])
-			xs := vmArrayAsInts(arr.Value); if len(xs) > 0 {
+			xs := vmArrayAsInts(arr.Value)
+			if len(xs) > 0 {
 				m := xs[0]
 				for _, v := range xs[1:] {
 					if v > m {
@@ -2948,7 +2963,8 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	case "std.algorithms.find_min":
 		if len(operands) == 1 {
 			arr := operandValue(fr, operands[0])
-			xs := vmArrayAsInts(arr.Value); if len(xs) > 0 {
+			xs := vmArrayAsInts(arr.Value)
+			if len(xs) > 0 {
 				m := xs[0]
 				for _, v := range xs[1:] {
 					if v < m {
@@ -2963,7 +2979,8 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 		if len(operands) == 2 {
 			arr := operandValue(fr, operands[0])
 			target, _ := toInt(operandValue(fr, operands[1]))
-			xs := vmArrayAsInts(arr.Value); if xs != nil {
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
 				for i, v := range xs {
 					if v == target {
 						return Result{Type: "int", Value: i}, true
@@ -2996,7 +3013,8 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 		if len(operands) == 2 {
 			arr := operandValue(fr, operands[0])
 			target, _ := toInt(operandValue(fr, operands[1]))
-			xs := vmArrayAsInts(arr.Value); if xs != nil {
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
 				count := 0
 				for _, v := range xs {
 					if v == target {
@@ -3010,7 +3028,8 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	case "std.algorithms.bubble_sort", "std.algorithms.selection_sort", "std.algorithms.insertion_sort":
 		if len(operands) == 1 {
 			arr := operandValue(fr, operands[0])
-			xs := vmArrayAsInts(arr.Value); if xs != nil {
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
 				out := make([]int, len(xs))
 				copy(out, xs)
 				// Simple insertion sort — VM doesn't need to honor the
@@ -3030,7 +3049,8 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	case "std.algorithms.reverse":
 		if len(operands) == 1 {
 			arr := operandValue(fr, operands[0])
-			xs := vmArrayAsInts(arr.Value); if xs != nil {
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
 				out := make([]int, len(xs))
 				for i, v := range xs {
 					out[len(xs)-1-i] = v
@@ -3525,6 +3545,83 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			}
 			return Result{Type: "int", Value: prev[n]}, true
 		}
+	case "std.time.now":
+		return Result{Type: "std.time.Time", Value: buildTimeStruct(time.Now().UTC())}, true
+	case "std.time.unix_timestamp":
+		return Result{Type: "int", Value: int(time.Now().Unix())}, true
+	case "std.time.unix_nano":
+		return Result{Type: "int", Value: int(time.Now().UnixNano())}, true
+	case "std.time.sleep_seconds":
+		if len(operands) == 1 {
+			seconds, err := toFloat(operandValue(fr, operands[0]))
+			if err == nil && seconds > 0 {
+				time.Sleep(time.Duration(seconds * float64(time.Second)))
+			}
+		}
+		return Result{Type: "void", Value: nil}, true
+	case "std.time.sleep_milliseconds":
+		if len(operands) == 1 {
+			milliseconds, err := toInt(operandValue(fr, operands[0]))
+			if err == nil && milliseconds > 0 {
+				time.Sleep(time.Duration(milliseconds) * time.Millisecond)
+			}
+		}
+		return Result{Type: "void", Value: nil}, true
+	case "std.time.time_zone_offset":
+		_, offset := time.Now().Zone()
+		return Result{Type: "int", Value: offset}, true
+	case "std.time.time_zone_name":
+		name, _ := time.Now().Zone()
+		return Result{Type: "string", Value: name}, true
+	case "std.time.time_from_unix":
+		if len(operands) == 1 {
+			timestamp, err := toInt(operandValue(fr, operands[0]))
+			if err == nil {
+				return Result{Type: "std.time.Time", Value: buildTimeStruct(time.Unix(int64(timestamp), 0).UTC())}, true
+			}
+		}
+		return Result{Type: "std.time.Time", Value: buildTimeStruct(time.Unix(0, 0).UTC())}, true
+	case "std.time.time_from_string":
+		if len(operands) == 1 {
+			s, err := toString(operandValue(fr, operands[0]))
+			if err == nil {
+				if t, parseErr := time.Parse(time.RFC3339Nano, s); parseErr == nil {
+					return Result{Type: "std.time.Time", Value: buildTimeStruct(t.UTC())}, true
+				}
+			}
+		}
+		return Result{Type: "std.time.Time", Value: buildTimeStruct(time.Unix(0, 0).UTC())}, true
+	case "std.time.time_to_unix":
+		if len(operands) == 1 {
+			if t, ok := timeFromStruct(operandValue(fr, operands[0])); ok {
+				return Result{Type: "int", Value: int(t.Unix())}, true
+			}
+		}
+		return Result{Type: "int", Value: 0}, true
+	case "std.time.time_to_string":
+		if len(operands) == 1 {
+			if t, ok := timeFromStruct(operandValue(fr, operands[0])); ok {
+				return Result{Type: "string", Value: t.Format(time.RFC3339Nano)}, true
+			}
+		}
+		return Result{Type: "string", Value: "1970-01-01T00:00:00Z"}, true
+	case "std.time.time_to_unix_nano":
+		if len(operands) == 1 {
+			if t, ok := timeFromStruct(operandValue(fr, operands[0])); ok {
+				return Result{Type: "int", Value: int(t.UnixNano())}, true
+			}
+		}
+		return Result{Type: "int", Value: 0}, true
+	case "std.time.duration_to_string":
+		if len(operands) == 1 {
+			if seconds, nanoseconds, ok := durationFields(operandValue(fr, operands[0])); ok {
+				if nanoseconds == 0 {
+					return Result{Type: "string", Value: fmt.Sprintf("%ds", seconds)}, true
+				}
+				return Result{Type: "string", Value: fmt.Sprintf("%d.%09ds", seconds, nanoseconds)}, true
+			}
+		}
+		return Result{Type: "string", Value: "0s"}, true
 	// File operations
 	case "std.file.exists":
 		if len(operands) == 1 {
@@ -5681,6 +5778,84 @@ func buildIPAddressStruct(address string) map[string]interface{} {
 		info["is_ipv6"] = true
 	}
 	return info
+}
+
+func buildTimeStruct(t time.Time) map[string]interface{} {
+	t = t.UTC()
+	return map[string]interface{}{
+		"year":       t.Year(),
+		"month":      int(t.Month()),
+		"day":        t.Day(),
+		"hour":       t.Hour(),
+		"minute":     t.Minute(),
+		"second":     t.Second(),
+		"nanosecond": t.Nanosecond(),
+	}
+}
+
+func structIntField(fields map[string]interface{}, name string) (int, bool) {
+	switch v := fields[name].(type) {
+	case int:
+		return v, true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	default:
+		return 0, false
+	}
+}
+
+func timeFromStruct(val Result) (time.Time, bool) {
+	fields, ok := val.Value.(map[string]interface{})
+	if !ok {
+		return time.Time{}, false
+	}
+	year, ok := structIntField(fields, "year")
+	if !ok {
+		return time.Time{}, false
+	}
+	month, ok := structIntField(fields, "month")
+	if !ok {
+		return time.Time{}, false
+	}
+	day, ok := structIntField(fields, "day")
+	if !ok {
+		return time.Time{}, false
+	}
+	hour, ok := structIntField(fields, "hour")
+	if !ok {
+		return time.Time{}, false
+	}
+	minute, ok := structIntField(fields, "minute")
+	if !ok {
+		return time.Time{}, false
+	}
+	second, ok := structIntField(fields, "second")
+	if !ok {
+		return time.Time{}, false
+	}
+	nanosecond, ok := structIntField(fields, "nanosecond")
+	if !ok {
+		return time.Time{}, false
+	}
+	return time.Date(year, time.Month(month), day, hour, minute, second, nanosecond, time.UTC), true
+}
+
+func durationFields(val Result) (int, int, bool) {
+	fields, ok := val.Value.(map[string]interface{})
+	if !ok {
+		return 0, 0, false
+	}
+	seconds, ok := structIntField(fields, "seconds")
+	if !ok {
+		return 0, 0, false
+	}
+	nanoseconds, ok := structIntField(fields, "nanoseconds")
+	if !ok {
+		return 0, 0, false
+	}
+	return seconds, nanoseconds, true
 }
 
 func buildURLStruct(u *urlpkg.URL) map[string]interface{} {
