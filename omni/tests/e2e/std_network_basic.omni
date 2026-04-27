@@ -85,6 +85,38 @@ func main():int {
         return 23
     }
 
+    // IPAddress struct field access
+    if !std.string.equals(lo.address, "127.0.0.1") {
+        return 32
+    }
+    if !lo.is_ipv4 {
+        return 33
+    }
+    if lo.is_ipv6 {
+        return 34
+    }
+
+    // URL field access (path/query/fragment must split correctly)
+    let u:std.network.URL = std.network.url_parse("https://example.com:8443/path?q=1#frag")
+    if !std.string.equals(u.scheme, "https") {
+        return 35
+    }
+    if !std.string.equals(u.host, "example.com") {
+        return 36
+    }
+    if u.port != 8443 {
+        return 37
+    }
+    if !std.string.equals(u.path, "/path") {
+        return 38
+    }
+    if !std.string.equals(u.query, "q=1") {
+        return 39
+    }
+    if !std.string.equals(u.fragment, "frag") {
+        return 40
+    }
+
     // url_is_valid
     if !std.network.url_is_valid("http://example.com") {
         return 24

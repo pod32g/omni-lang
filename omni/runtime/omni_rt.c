@@ -5607,30 +5607,57 @@ omni_url_t* omni_url_parse(const char* url_str) {
         url_str = scheme_end + 3;
     }
     
-    // Extract host and port
-    const char* path_start = strchr(url_str, '/');
-    const char* port_start = strchr(url_str, ':');
-    if (port_start && (!path_start || port_start < path_start)) {
-        size_t host_len = port_start - url_str;
-        if (host_len < sizeof(url->host)) {
-            strncpy(url->host, url_str, host_len);
-            url->host[host_len] = '\0';
-        }
-        sscanf(port_start + 1, "%d", &url->port);
-        if (path_start) {
-            strncpy(url->path, path_start, sizeof(url->path) - 1);
-        }
-    } else if (path_start) {
-        size_t host_len = path_start - url_str;
-        if (host_len < sizeof(url->host)) {
-            strncpy(url->host, url_str, host_len);
-            url->host[host_len] = '\0';
-        }
-        strncpy(url->path, path_start, sizeof(url->path) - 1);
-    } else {
-        strncpy(url->host, url_str, sizeof(url->host) - 1);
+    // Extract host and port. The host ends at the first of: '/' (path
+    // begins), '?' (query begins with no path), '#' (fragment begins),
+    // or end of string. A ':' before any of those starts the port.
+    const char* host_end = url_str;
+    while (*host_end && *host_end != '/' && *host_end != '?' && *host_end != '#' && *host_end != ':') {
+        host_end++;
     }
-    
+    size_t host_len = host_end - url_str;
+    if (host_len < sizeof(url->host)) {
+        strncpy(url->host, url_str, host_len);
+        url->host[host_len] = '\0';
+    }
+    const char* tail = host_end;
+    if (*tail == ':') {
+        tail++;
+        url->port = 0;
+        while (*tail >= '0' && *tail <= '9') {
+            url->port = url->port * 10 + (*tail - '0');
+            tail++;
+        }
+    }
+    // Path runs from '/' (if present) up to '?' or '#'. If there's no
+    // '/', the path stays at its default "/".
+    const char* path_start = (*tail == '/') ? tail : NULL;
+    const char* query_start = strchr(tail, '?');
+    const char* fragment_start = strchr(tail, '#');
+    // Determine each section's end.
+    const char* path_end = NULL;
+    if (path_start) {
+        path_end = path_start;
+        while (*path_end && *path_end != '?' && *path_end != '#') path_end++;
+        size_t plen = path_end - path_start;
+        if (plen >= sizeof(url->path)) plen = sizeof(url->path) - 1;
+        strncpy(url->path, path_start, plen);
+        url->path[plen] = '\0';
+    }
+    if (query_start) {
+        const char* qe = query_start + 1;
+        while (*qe && *qe != '#') qe++;
+        size_t qlen = qe - (query_start + 1);
+        if (qlen >= sizeof(url->query)) qlen = sizeof(url->query) - 1;
+        strncpy(url->query, query_start + 1, qlen);
+        url->query[qlen] = '\0';
+    }
+    if (fragment_start) {
+        size_t flen = strlen(fragment_start + 1);
+        if (flen >= sizeof(url->fragment)) flen = sizeof(url->fragment) - 1;
+        strncpy(url->fragment, fragment_start + 1, flen);
+        url->fragment[flen] = '\0';
+    }
+
     return url;
 }
 

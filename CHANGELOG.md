@@ -85,6 +85,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **std.network: URL parsing + struct field access on C backend**.
+  Several issues stacked together prevented `url_parse(...)`'s
+  fields from being read on the C backend:
+  - `omni_url_parse` dumped path+query+fragment into `path`. Now
+    splits them on `?` and `#` correctly, so `u.path`, `u.query`,
+    `u.fragment` carry their proper sections.
+  - The MIR builder had no return-type heuristic for `std.network.*`,
+    so calls came back as `inst.Type = "void"` and the C-backend
+    member-access path fell through to the generic
+    `omni_struct_get_int_field((omni_struct_t*)v0, "scheme")`
+    accessor, which is wrong for the concrete `omni_url_t*` /
+    `omni_ip_address_t*` / `omni_http_response_t*` runtime structs.
+    Added a network branch to the builder's name-based heuristic and
+    extended the C-backend hoisting + member-access codegen to emit
+    direct field reads (`v0->scheme`, `v0->host`, `v0->port`,
+    `v0->path`, `v0->query`, `v0->fragment`, plus the IPAddress
+    fields). Pinned by an expanded `TestStdNetworkBasic`.
 - **std.network audit** pinned by `TestStdNetworkBasic`. Two real
   validation bugs in the C runtime:
   - `omni_ip_is_valid` previously accepted IPv4 strings whose

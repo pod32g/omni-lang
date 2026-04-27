@@ -2415,6 +2415,57 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 		} else if strings.Contains(calleeName, "file.") {
 			// File operations return int (file handles, byte counts, etc.)
 			resultType = "int"
+		} else if strings.Contains(calleeName, "network.") {
+			// std.network return-type heuristic. Keep this aligned with
+			// omni/std/network/network.omni — it's the C-backend's only
+			// source of return-type info because std.network isn't body-
+			// loaded for that path.
+			switch {
+			case strings.HasSuffix(calleeName, ".ip_parse"),
+				strings.HasSuffix(calleeName, ".network_get_local_ip"):
+				resultType = "IPAddress"
+			case strings.HasSuffix(calleeName, ".url_parse"):
+				resultType = "URL"
+			case strings.HasSuffix(calleeName, ".http_get"),
+				strings.HasSuffix(calleeName, ".http_post"),
+				strings.HasSuffix(calleeName, ".http_put"),
+				strings.HasSuffix(calleeName, ".http_delete"),
+				strings.HasSuffix(calleeName, ".http_request"),
+				strings.HasSuffix(calleeName, ".http_response_set_header"),
+				strings.HasSuffix(calleeName, ".http_request_create"),
+				strings.HasSuffix(calleeName, ".http_request_set_header"),
+				strings.HasSuffix(calleeName, ".http_request_set_body"):
+				resultType = "HTTPResponse"
+			case strings.HasSuffix(calleeName, ".ip_is_valid"),
+				strings.HasSuffix(calleeName, ".ip_is_private"),
+				strings.HasSuffix(calleeName, ".ip_is_loopback"),
+				strings.HasSuffix(calleeName, ".url_is_valid"),
+				strings.HasSuffix(calleeName, ".http_response_is_success"),
+				strings.HasSuffix(calleeName, ".http_response_is_client_error"),
+				strings.HasSuffix(calleeName, ".http_response_is_server_error"),
+				strings.HasSuffix(calleeName, ".socket_connect"),
+				strings.HasSuffix(calleeName, ".socket_bind"),
+				strings.HasSuffix(calleeName, ".socket_listen"),
+				strings.HasSuffix(calleeName, ".socket_close"),
+				strings.HasSuffix(calleeName, ".network_is_connected"),
+				strings.HasSuffix(calleeName, ".network_ping"):
+				resultType = "bool"
+			case strings.HasSuffix(calleeName, ".socket_create"),
+				strings.HasSuffix(calleeName, ".socket_accept"),
+				strings.HasSuffix(calleeName, ".socket_send"):
+				resultType = "int"
+			case strings.HasSuffix(calleeName, ".ip_to_string"),
+				strings.HasSuffix(calleeName, ".url_to_string"),
+				strings.HasSuffix(calleeName, ".dns_reverse_lookup"),
+				strings.HasSuffix(calleeName, ".socket_receive"),
+				strings.HasSuffix(calleeName, ".http_response_get_header"),
+				strings.HasSuffix(calleeName, ".http_request_get_header"):
+				resultType = "string"
+			case strings.HasSuffix(calleeName, ".dns_lookup"):
+				resultType = "array<IPAddress>"
+			default:
+				resultType = "void"
+			}
 		} else if strings.Contains(calleeName, "time.") {
 			switch {
 			case strings.HasSuffix(calleeName, ".now"),

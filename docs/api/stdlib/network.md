@@ -120,11 +120,11 @@ struct HTTPResponse {
 
 ## Backend status
 
-The offline pure-data parts (`ip_is_valid`, `ip_parse`, `ip_is_loopback`, `ip_is_private`, `ip_to_string`, `url_is_valid`) are pinned by `TestStdNetworkBasic` on both `omnir` (VM) and `omnic` (C). The audit found:
+The offline pure-data parts (`ip_is_valid`, `ip_parse`, `ip_is_loopback`, `ip_is_private`, `ip_to_string`, `url_parse`, `url_is_valid`, plus `IPAddress`/`URL` struct field access) are pinned by `TestStdNetworkBasic` on both `omnir` (VM) and `omnic` (C). The audit found and fixed:
 
 - `omni_ip_is_valid` previously accepted IPv4 strings with out-of-range segments (e.g. `999.999.999.999`). Now does strict per-segment validation and a real IPv6 check.
 - `omni_url_is_valid` previously returned true for any string containing `://`. Now requires a real scheme grammar and a non-empty host.
+- `omni_url_parse` previously dumped path+query+fragment into `path`. Now splits them on `?` and `#` correctly, so `u.path`, `u.query`, `u.fragment` carry their proper sections.
+- The C backend used to lower `URL`/`IPAddress` field access through the generic `omni_struct_get_int_field` accessor, which is wrong for these concrete C structs. The codegen now emits direct field reads (`v0->scheme`, `v0->host`, etc.) and the MIR builder propagates the proper struct return type for `url_parse`/`ip_parse`/`network_get_local_ip` so member-access lowering picks the right C type.
 
 Network-touching functions (`http_*`, `dns_*`, `socket_*`, `network_ping`, `network_is_connected`, `network_get_local_ip`) are wired but not exercised in CI — running them requires real network or a fixture server.
-
-The C backend currently has gaps in struct field access for `URL` (lowering `omni_url_t*` fields produces type-mismatch warnings/errors) and missing declarations for the OmniLang-defined `http_response_is_*` helpers when used directly. These are tracked as a separate issue and not blocking for the offline audit.

@@ -2041,6 +2041,27 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						varType = "const char*"
 					}
 				}
+				// Network struct returns: when the MIR type heuristic
+				// produced "URL"/"IPAddress"/"HTTPResponse" for a runtime
+				// call, pin the C type to the concrete runtime struct
+				// pointer so member access can use direct field reads.
+				if inst.Op == "call" && len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandLiteral {
+					switch g.mapFunctionName(inst.Operands[0].Literal) {
+					case "omni_url_parse":
+						if inst.Type == "URL" || strings.HasSuffix(inst.Type, ".URL") {
+							varType = "omni_url_t*"
+						}
+					case "omni_ip_parse", "omni_network_get_local_ip":
+						if inst.Type == "IPAddress" || strings.HasSuffix(inst.Type, ".IPAddress") {
+							varType = "omni_ip_address_t*"
+						}
+					case "omni_http_get", "omni_http_post", "omni_http_put",
+						"omni_http_delete", "omni_http_request":
+						if inst.Type == "HTTPResponse" || strings.HasSuffix(inst.Type, ".HTTPResponse") {
+							varType = "omni_http_response_t*"
+						}
+					}
+				}
 				// User-defined function calls that return a struct type often get
 				// reported with inst.Type empty (the type checker doesn't always
 				// qualify across module boundaries). If the call resolves to a
@@ -2091,6 +2112,35 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 					} else if inst.Type != "" && inst.Type != inferTypePlaceholder {
 						// Use inst.Type if available
 						varType = g.mapType(inst.Type)
+					}
+					// URL string fields and IPAddress fields don't always
+					// have inst.Type set after the MIR builder lowers them
+					// (the type checker may strip the field type). Look at
+					// the producing instruction's MIR type for the source
+					// struct to fill in the gap.
+					if (varType == "" || varType == "int32_t") && len(inst.Operands) >= 1 && inst.Operands[0].Kind == mir.OperandValue {
+						srcType := ""
+						if srcInst, ok := instructionMap[inst.Operands[0].Value]; ok {
+							srcType = srcInst.Type
+						}
+						if srcType == "" {
+							srcType = g.valueTypes[inst.Operands[0].Value]
+						}
+						if srcType == "URL" || strings.HasSuffix(srcType, ".URL") {
+							switch fieldName {
+							case "scheme", "host", "path", "query", "fragment":
+								varType = "const char*"
+							case "port":
+								varType = "int32_t"
+							}
+						} else if srcType == "IPAddress" || strings.HasSuffix(srcType, ".IPAddress") {
+							switch fieldName {
+							case "address":
+								varType = "const char*"
+							case "is_ipv4", "is_ipv6":
+								varType = "int32_t"
+							}
+						}
 					}
 				}
 				// Special case for index - check if indexing into struct array
@@ -2852,7 +2902,6 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			} else {
 				funcName = g.getOperandValue(inst.Operands[0])
 			}
-
 			// Special handling for len() function
 			if funcName == "len" && len(inst.Operands) == 2 {
 				varName := g.getVariableName(inst.ID)
@@ -3600,12 +3649,14 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						} else if funcName == "omni_network_get_local_ip" {
 							g.output.WriteString(fmt.Sprintf("  omni_ip_address_t* %s = omni_network_get_local_ip();\n", varName))
 						}
+						g.valueTypes[inst.ID] = inst.Type
 					} else if funcName == "omni_url_parse" && inst.Type != "" && strings.Contains(inst.Type, "URL") {
 						// URL functions return omni_url_t*
 						varName := g.getVariableName(inst.ID)
 						if len(inst.Operands) >= 2 {
 							urlStr := g.getOperandValue(inst.Operands[1])
 							g.output.WriteString(fmt.Sprintf("  omni_url_t* %s = omni_url_parse(%s);\n", varName, urlStr))
+							g.valueTypes[inst.ID] = inst.Type
 						}
 					} else if funcName == "std.network.http_get" || funcName == "std.network.http_post" || funcName == "std.network.http_put" || funcName == "std.network.http_delete" || funcName == "std.network.http_request" ||
 						cFuncName == "omni_http_get" || cFuncName == "omni_http_post" || cFuncName == "omni_http_put" || cFuncName == "omni_http_delete" || cFuncName == "omni_http_request" {
@@ -4135,6 +4186,23 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								}
 								g.output.WriteString(");\n")
 								g.valueTypes[inst.ID] = inst.Type
+								// Some runtime functions return known concrete C
+								// structs (omni_url_t*, omni_ip_address_t*, etc.).
+								// When inst.Type is empty/inferred, member access
+								// downstream needs to know the OmniLang struct
+								// type to pick direct field access vs the generic
+								// omni_struct_t* getter; record it explicitly here.
+								if existing := g.valueTypes[inst.ID]; existing == "" || existing == "<infer>" || existing == inferTypePlaceholder {
+									switch cFuncName {
+									case "omni_url_parse":
+										g.valueTypes[inst.ID] = "URL"
+									case "omni_ip_parse", "omni_network_get_local_ip":
+										g.valueTypes[inst.ID] = "IPAddress"
+									case "omni_http_get", "omni_http_post", "omni_http_put",
+										"omni_http_delete", "omni_http_request":
+										g.valueTypes[inst.ID] = "HTTPResponse"
+									}
+								}
 								// Propagate array length for length-preserving
 								// intrinsics. Sorts and reverse return a fresh
 								// array of the same size as their input, so the
@@ -5023,6 +5091,60 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			if !isHTTPResponse && (fieldName == "status_code" || fieldName == "status_text") {
 				if inst.Operands[0].Kind == mir.OperandValue && structType == "" {
 					isHTTPResponse = true
+				}
+			}
+
+			// URL is a concrete C struct (omni_url_t) returned by
+			// omni_url_parse — use direct field access.
+			isURL := strings.Contains(structType, "URL") && !strings.Contains(structType, "HTTPResponse") && !strings.Contains(structType, "URLs")
+			if !isURL && inst.Operands[0].Type != "" && strings.Contains(inst.Operands[0].Type, "URL") {
+				isURL = true
+			}
+			if isURL {
+				switch fieldName {
+				case "scheme", "host", "path", "query", "fragment":
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->%s;\n", varName, structVar, fieldName))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  const char* %s = %s->%s;\n", varName, structVar, fieldName))
+					}
+					g.valueTypes[inst.ID] = "string"
+					return nil
+				case "port":
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->port;\n", varName, structVar))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = %s->port;\n", varName, structVar))
+					}
+					g.valueTypes[inst.ID] = "int"
+					return nil
+				}
+			}
+
+			// IPAddress is a concrete C struct (omni_ip_address_t) returned
+			// by omni_ip_parse — use direct field access.
+			isIPAddress := strings.Contains(structType, "IPAddress")
+			if !isIPAddress && inst.Operands[0].Type != "" && strings.Contains(inst.Operands[0].Type, "IPAddress") {
+				isIPAddress = true
+			}
+			if isIPAddress {
+				switch fieldName {
+				case "address":
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->address;\n", varName, structVar))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  const char* %s = %s->address;\n", varName, structVar))
+					}
+					g.valueTypes[inst.ID] = "string"
+					return nil
+				case "is_ipv4", "is_ipv6":
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->%s;\n", varName, structVar, fieldName))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  int32_t %s = %s->%s;\n", varName, structVar, fieldName))
+					}
+					g.valueTypes[inst.ID] = "bool"
+					return nil
 				}
 			}
 
