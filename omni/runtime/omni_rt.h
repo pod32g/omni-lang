@@ -49,10 +49,21 @@ int32_t omni_contains(const char* str, const char* substr);
 int32_t omni_index_of(const char* str, const char* substr);
 int32_t omni_last_index_of(const char* str, const char* substr);
 char* omni_trim(const char* str);
+char* omni_trim_left(const char* str);
+char* omni_trim_right(const char* str);
+char* omni_trim_all(const char* str);
 char* omni_to_upper(const char* str);
 char* omni_to_lower(const char* str);
+char* omni_to_title(const char* str);
+char* omni_capitalize(const char* str);
+char* omni_string_reverse(const char* str);
 int32_t omni_string_equals(const char* a, const char* b);
 int32_t omni_string_compare(const char* a, const char* b);
+int32_t omni_string_equals_ignore_case(const char* a, const char* b);
+int32_t omni_string_compare_ignore_case(const char* a, const char* b);
+int32_t omni_count_occurrences(const char* str, const char* substr);
+int32_t omni_count_lines(const char* str);
+int32_t omni_count_words(const char* str);
 
 // Promise/Async support (simplified synchronous implementation)
 typedef struct {

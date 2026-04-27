@@ -138,25 +138,62 @@ func trim(s:string):string {
     return ""
 }
 
+// is_whitespace_char checks whether `c` is ASCII whitespace
+// (space, tab, newline, carriage return, vertical tab, form feed).
+// Internal helper for the trim family.
+func is_whitespace_char(c:char):bool {
+    let code:int = std.char_code(c)
+    if code == 32 { return true }    // space
+    if code == 9  { return true }    // tab
+    if code == 10 { return true }    // newline
+    if code == 13 { return true }    // carriage return
+    if code == 11 { return true }    // vertical tab
+    if code == 12 { return true }    // form feed
+    return false
+}
+
 // trim_left removes leading whitespace
+// [IMPLEMENTED] Implemented in OmniLang
 func trim_left(s:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    let n:int = std.string.length(s)
+    var i:int = 0
+    while i < n {
+        if !std.string.is_whitespace_char(std.string.char_at(s, i)) {
+            return std.string.substring(s, i, n)
+        }
+        i = i + 1
+    }
     return ""
 }
 
 // trim_right removes trailing whitespace
+// [IMPLEMENTED] Implemented in OmniLang
 func trim_right(s:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    let n:int = std.string.length(s)
+    var i:int = n - 1
+    while i >= 0 {
+        if !std.string.is_whitespace_char(std.string.char_at(s, i)) {
+            return std.string.substring(s, 0, i + 1)
+        }
+        i = i - 1
+    }
     return ""
 }
 
-// trim_all removes all whitespace characters
+// trim_all removes all whitespace characters anywhere in the string
+// [IMPLEMENTED] Implemented in OmniLang
 func trim_all(s:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    let n:int = std.string.length(s)
+    var result:string = ""
+    var i:int = 0
+    while i < n {
+        let c:char = std.string.char_at(s, i)
+        if !std.string.is_whitespace_char(c) {
+            result = result + std.char_to_string(c)
+        }
+        i = i + 1
+    }
+    return result
 }
 
 // to_upper converts a string to uppercase
@@ -173,25 +210,81 @@ func to_lower(s:string):string {
     return ""
 }
 
-// to_title converts a string to title case
+// upper_char_code returns the uppercase code point for an ASCII letter,
+// or the original code unchanged for everything else.
+func upper_char_code(c:char):int {
+    let code:int = std.char_code(c)
+    if code >= 97 {
+        if code <= 122 {
+            return code - 32
+        }
+    }
+    return code
+}
+
+// lower_char_code returns the lowercase code point for an ASCII letter,
+// or the original code unchanged for everything else.
+func lower_char_code(c:char):int {
+    let code:int = std.char_code(c)
+    if code >= 65 {
+        if code <= 90 {
+            return code + 32
+        }
+    }
+    return code
+}
+
+// to_title converts a string to title case: the first letter of each
+// whitespace-separated word becomes uppercase, the rest become
+// lowercase.
+// [IMPLEMENTED] Implemented in OmniLang
 func to_title(s:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    let n:int = std.string.length(s)
+    var result:string = ""
+    var at_word_start:bool = true
+    var i:int = 0
+    while i < n {
+        let c:char = std.string.char_at(s, i)
+        if std.string.is_whitespace_char(c) {
+            result = result + std.char_to_string(c)
+            at_word_start = true
+        } else {
+            if at_word_start {
+                result = result + std.char_to_string(std.char_from_code(std.string.upper_char_code(c)))
+                at_word_start = false
+            } else {
+                result = result + std.char_to_string(std.char_from_code(std.string.lower_char_code(c)))
+            }
+        }
+        i = i + 1
+    }
+    return result
 }
 
-// capitalize capitalizes the first character of a string
+// capitalize uppercases the first character; the rest of the string
+// is left untouched.
+// [IMPLEMENTED] Implemented in OmniLang
 func capitalize(s:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    let n:int = std.string.length(s)
+    if n == 0 {
+        return s
+    }
+    let first:char = std.string.char_at(s, 0)
+    let rest:string = std.string.substring(s, 1, n)
+    return std.char_to_string(std.char_from_code(std.string.upper_char_code(first))) + rest
 }
 
-// reverse reverses a string
+// reverse returns the input with its characters in reverse order.
+// [IMPLEMENTED] Implemented in OmniLang
 func reverse(s:string):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return ""
+    let n:int = std.string.length(s)
+    var result:string = ""
+    var i:int = n - 1
+    while i >= 0 {
+        result = result + std.char_to_string(std.string.char_at(s, i))
+        i = i - 1
+    }
+    return result
 }
 
 // ============================================================================
@@ -206,10 +299,9 @@ func equals(a:string, b:string):bool {
 }
 
 // equals_ignore_case checks if two strings are equal ignoring case
+// [IMPLEMENTED] Implemented in OmniLang
 func equals_ignore_case(a:string, b:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return false
+    return std.string.equals(std.string.to_lower(a), std.string.to_lower(b))
 }
 
 // compare compares two strings lexicographically
@@ -220,10 +312,9 @@ func compare(a:string, b:string):int {
 }
 
 // compare_ignore_case compares two strings lexicographically ignoring case
+// [IMPLEMENTED] Implemented in OmniLang
 func compare_ignore_case(a:string, b:string):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return 0
+    return std.string.compare(std.string.to_lower(a), std.string.to_lower(b))
 }
 
 // ============================================================================
@@ -635,25 +726,72 @@ func escape_shell(s:string):string {
 // String Statistics
 // ============================================================================
 
-// count_occurrences counts occurrences of a substring
+// count_occurrences counts non-overlapping occurrences of `substr`.
+// An empty `substr` returns 0 (no work to count).
+// [IMPLEMENTED] Implemented in OmniLang
 func count_occurrences(s:string, substr:string):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return 0
+    let sub_len:int = std.string.length(substr)
+    if sub_len == 0 {
+        return 0
+    }
+    let s_len:int = std.string.length(s)
+    var count:int = 0
+    var pos:int = 0
+    while pos <= s_len - sub_len {
+        let window:string = std.string.substring(s, pos, pos + sub_len)
+        if std.string.equals(window, substr) {
+            count = count + 1
+            pos = pos + sub_len
+        } else {
+            pos = pos + 1
+        }
+    }
+    return count
 }
 
-// count_lines counts the number of lines in a string
+// count_lines counts newline-delimited lines. A trailing newline is
+// not counted as an extra empty line: "a\nb" and "a\nb\n" both return 2.
+// An empty string returns 0.
+// [IMPLEMENTED] Implemented in OmniLang
 func count_lines(s:string):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return 0
+    let n:int = std.string.length(s)
+    if n == 0 {
+        return 0
+    }
+    var count:int = 1
+    var i:int = 0
+    while i < n {
+        if std.char_code(std.string.char_at(s, i)) == 10 {
+            // Don't double-count a trailing newline.
+            if i < n - 1 {
+                count = count + 1
+            }
+        }
+        i = i + 1
+    }
+    return count
 }
 
-// count_words counts the number of words in a string
+// count_words counts whitespace-separated word runs. Leading, trailing,
+// and consecutive whitespace are collapsed.
+// [IMPLEMENTED] Implemented in OmniLang
 func count_words(s:string):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return 0
+    let n:int = std.string.length(s)
+    var count:int = 0
+    var in_word:bool = false
+    var i:int = 0
+    while i < n {
+        if std.string.is_whitespace_char(std.string.char_at(s, i)) {
+            in_word = false
+        } else {
+            if !in_word {
+                count = count + 1
+                in_word = true
+            }
+        }
+        i = i + 1
+    }
+    return count
 }
 
 // count_chars counts the number of characters in a string

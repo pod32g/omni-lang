@@ -6462,14 +6462,36 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_last_index_of"
 	case "std.string.trim":
 		return "omni_trim"
+	case "std.string.trim_left":
+		return "omni_trim_left"
+	case "std.string.trim_right":
+		return "omni_trim_right"
+	case "std.string.trim_all":
+		return "omni_trim_all"
 	case "std.string.to_upper":
 		return "omni_to_upper"
 	case "std.string.to_lower":
 		return "omni_to_lower"
+	case "std.string.to_title":
+		return "omni_to_title"
+	case "std.string.capitalize":
+		return "omni_capitalize"
+	case "std.string.reverse":
+		return "omni_string_reverse"
 	case "std.string.equals":
 		return "omni_string_equals"
 	case "std.string.compare":
 		return "omni_string_compare"
+	case "std.string.equals_ignore_case":
+		return "omni_string_equals_ignore_case"
+	case "std.string.compare_ignore_case":
+		return "omni_string_compare_ignore_case"
+	case "std.string.count_occurrences":
+		return "omni_count_occurrences"
+	case "std.string.count_lines":
+		return "omni_count_lines"
+	case "std.string.count_words":
+		return "omni_count_words"
 
 	// OS functions
 	case "std.os.exit":
@@ -6758,10 +6780,21 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.string.index_of":      "omni_index_of",
 		"std.string.last_index_of": "omni_last_index_of",
 		"std.string.trim":          "omni_trim",
+		"std.string.trim_left":     "omni_trim_left",
+		"std.string.trim_right":    "omni_trim_right",
+		"std.string.trim_all":      "omni_trim_all",
 		"std.string.to_upper":      "omni_to_upper",
 		"std.string.to_lower":      "omni_to_lower",
+		"std.string.to_title":      "omni_to_title",
+		"std.string.capitalize":    "omni_capitalize",
+		"std.string.reverse":       "omni_string_reverse",
 		"std.string.equals":        "omni_string_equals",
 		"std.string.compare":       "omni_string_compare",
+		"std.string.equals_ignore_case":  "omni_string_equals_ignore_case",
+		"std.string.compare_ignore_case": "omni_string_compare_ignore_case",
+		"std.string.count_occurrences":   "omni_count_occurrences",
+		"std.string.count_lines":         "omni_count_lines",
+		"std.string.count_words":         "omni_count_words",
 		"string.length":            "omni_strlen",
 		"string.concat":            "omni_strcat",
 		"string.substring":         "omni_substring",
@@ -7233,10 +7266,21 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.string.index_of":      true,
 		"std.string.last_index_of": true,
 		"std.string.trim":          true,
+		"std.string.trim_left":     true,
+		"std.string.trim_right":    true,
+		"std.string.trim_all":      true,
 		"std.string.to_upper":      true,
 		"std.string.to_lower":      true,
+		"std.string.to_title":      true,
+		"std.string.capitalize":    true,
+		"std.string.reverse":       true,
 		"std.string.equals":        true,
 		"std.string.compare":       true,
+		"std.string.equals_ignore_case":  true,
+		"std.string.compare_ignore_case": true,
+		"std.string.count_occurrences":   true,
+		"std.string.count_lines":         true,
+		"std.string.count_words":         true,
 		"string.length":            true,
 		"string.concat":            true,
 		"string.substring":         true,
@@ -7495,10 +7539,16 @@ func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 		"io.read_line":         true,
 		"std.string.concat":    true,
 		"std.string.substring": true,
-		"std.string.trim":      true,
-		"std.string.to_upper":  true,
-		"std.string.to_lower":  true,
-		"std.int_to_string":    true,
+		"std.string.trim":       true,
+		"std.string.trim_left":  true,
+		"std.string.trim_right": true,
+		"std.string.trim_all":   true,
+		"std.string.to_upper":   true,
+		"std.string.to_lower":   true,
+		"std.string.to_title":   true,
+		"std.string.capitalize": true,
+		"std.string.reverse":    true,
+		"std.int_to_string":     true,
 		"std.float_to_string":  true,
 		"std.bool_to_string":   true,
 		"std.os.read_file":     true,

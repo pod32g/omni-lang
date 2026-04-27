@@ -2269,6 +2269,14 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 	// `len` is a builtin over arrays and always returns int.
 	if calleeName == "len" {
 		resultType = "int"
+	} else if sig, exists := fb.sigs[calleeName]; exists {
+		// Prefer real signatures whenever the moduleloader has registered
+		// them — this covers user code, std modules on the body-load path
+		// (std, std.string, std.testing, std.math, std.collections,
+		// std.web), and any explicit imports. The name-based heuristic
+		// below is the fallback for std.* submodules whose bodies aren't
+		// merged into the build (std.os, std.io, std.array, etc.).
+		resultType = sig.Return
 	} else if strings.HasPrefix(calleeName, "std.") {
 		// For std functions, determine return type based on function name.
 		// std submodules without body-load (std.os, std.string, std.io,
@@ -2341,8 +2349,19 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 				resultType = "int"
 			}
 		} else if strings.Contains(calleeName, "string.") {
-			// Determine return type based on specific string function
+			// Determine return type based on specific string function.
+			// Order matters: equals_ignore_case must beat equals, and the
+			// count_* / compare_* shapes must beat their substring matches.
 			switch {
+			case strings.HasSuffix(calleeName, ".equals_ignore_case"):
+				resultType = "bool"
+			case strings.HasSuffix(calleeName, ".compare_ignore_case"):
+				resultType = "int"
+			case strings.HasSuffix(calleeName, ".count_occurrences"),
+				strings.HasSuffix(calleeName, ".count_lines"),
+				strings.HasSuffix(calleeName, ".count_words"),
+				strings.HasSuffix(calleeName, ".count_chars"):
+				resultType = "int"
 			case strings.Contains(calleeName, "length"):
 				resultType = "int"
 			case strings.Contains(calleeName, "index_of"):
@@ -2362,7 +2381,8 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			case strings.Contains(calleeName, "char_at"):
 				resultType = "char"
 			default:
-				// concat, substring, trim, to_upper, to_lower, etc.
+				// concat, substring, trim*, to_upper/lower/title, capitalize,
+				// reverse, etc.
 				resultType = "string"
 			}
 		} else if strings.Contains(calleeName, "file.") {

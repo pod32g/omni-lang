@@ -64,6 +64,17 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `unescape_html(s)` - Wired to `omni_unescape_html`
 - [IMPLEMENTED] `escape_json(s)` - Wired to `omni_escape_json`
 - [IMPLEMENTED] `escape_shell(s)` - Wired to `omni_escape_shell`
+- [IMPLEMENTED] `trim_left(s)` - Wired to `omni_trim_left` (C); OmniLang body for VM
+- [IMPLEMENTED] `trim_right(s)` - Wired to `omni_trim_right` (C); OmniLang body for VM
+- [IMPLEMENTED] `trim_all(s)` - Wired to `omni_trim_all` (C); OmniLang body for VM
+- [IMPLEMENTED] `to_title(s)` - Wired to `omni_to_title` (C); OmniLang body for VM
+- [IMPLEMENTED] `capitalize(s)` - Wired to `omni_capitalize` (C); OmniLang body for VM
+- [IMPLEMENTED] `reverse(s)` - Wired to `omni_string_reverse` (C); OmniLang body for VM
+- [IMPLEMENTED] `equals_ignore_case(a, b)` - Wired to `omni_string_equals_ignore_case` (C); OmniLang body for VM
+- [IMPLEMENTED] `compare_ignore_case(a, b)` - Wired to `omni_string_compare_ignore_case` (C); OmniLang body for VM
+- [IMPLEMENTED] `count_occurrences(s, substr)` - Wired to `omni_count_occurrences` (C); OmniLang body for VM
+- [IMPLEMENTED] `count_lines(s)` - Wired to `omni_count_lines` (C); OmniLang body for VM
+- [IMPLEMENTED] `count_words(s)` - Wired to `omni_count_words` (C); OmniLang body for VM
 
 ### std.math
 - [IMPLEMENTED] `abs(x)` - Wired to `omni_abs` (also implemented in OmniLang)
@@ -319,10 +330,8 @@ This document tracks which standard library functions are actually implemented v
 - [STUB] `reverse()`, `sort()` - Not implemented
 
 ### std.string
-- [STUB] `trim_left()`, `trim_right()`, `trim_all()` - Not implemented
-- [STUB] `to_title()`, `capitalize()`, `reverse()` - Not implemented
-- [STUB] `equals_ignore_case()`, `compare_ignore_case()` - Not implemented
-- [STUB] `count_occurrences()`, `count_lines()`, `count_words()` - Not implemented
+- (all previously-stubbed string helpers are now implemented; see the
+  "Implemented" section above)
 
 ### std.dev
 - [STUB] All dev functions - Not implemented

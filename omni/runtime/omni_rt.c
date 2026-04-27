@@ -476,6 +476,169 @@ char* omni_to_lower(const char* str) {
     return result;
 }
 
+// is_ws returns 1 for ASCII whitespace (space, tab, newline, CR, VT, FF).
+// Internal helper used by trim_left/trim_right/trim_all and the
+// word-counting helpers below.
+static int is_ws(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f';
+}
+
+char* omni_trim_left(const char* str) {
+    if (!str) return NULL;
+    while (*str && is_ws(*str)) {
+        str++;
+    }
+    size_t len = strlen(str);
+    char* result = malloc(len + 1);
+    if (!result) return NULL;
+    memcpy(result, str, len + 1);
+    return result;
+}
+
+char* omni_trim_right(const char* str) {
+    if (!str) return NULL;
+    size_t len = strlen(str);
+    while (len > 0 && is_ws(str[len - 1])) {
+        len--;
+    }
+    char* result = malloc(len + 1);
+    if (!result) return NULL;
+    memcpy(result, str, len);
+    result[len] = '\0';
+    return result;
+}
+
+char* omni_trim_all(const char* str) {
+    if (!str) return NULL;
+    size_t len = strlen(str);
+    char* result = malloc(len + 1);
+    if (!result) return NULL;
+    size_t out = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (!is_ws(str[i])) {
+            result[out++] = str[i];
+        }
+    }
+    result[out] = '\0';
+    return result;
+}
+
+char* omni_to_title(const char* str) {
+    if (!str) return NULL;
+    size_t len = strlen(str);
+    char* result = malloc(len + 1);
+    if (!result) return NULL;
+    int at_word_start = 1;
+    for (size_t i = 0; i < len; i++) {
+        char c = str[i];
+        if (is_ws(c)) {
+            result[i] = c;
+            at_word_start = 1;
+        } else if (at_word_start) {
+            result[i] = (c >= 'a' && c <= 'z') ? (char)(c - 'a' + 'A') : c;
+            at_word_start = 0;
+        } else {
+            result[i] = (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c;
+        }
+    }
+    result[len] = '\0';
+    return result;
+}
+
+char* omni_capitalize(const char* str) {
+    if (!str) return NULL;
+    size_t len = strlen(str);
+    char* result = malloc(len + 1);
+    if (!result) return NULL;
+    memcpy(result, str, len + 1);
+    if (len > 0 && result[0] >= 'a' && result[0] <= 'z') {
+        result[0] = (char)(result[0] - 'a' + 'A');
+    }
+    return result;
+}
+
+char* omni_string_reverse(const char* str) {
+    if (!str) return NULL;
+    size_t len = strlen(str);
+    char* result = malloc(len + 1);
+    if (!result) return NULL;
+    for (size_t i = 0; i < len; i++) {
+        result[i] = str[len - 1 - i];
+    }
+    result[len] = '\0';
+    return result;
+}
+
+int32_t omni_string_equals_ignore_case(const char* a, const char* b) {
+    if (!a || !b) return (a == b) ? 1 : 0;
+    while (*a && *b) {
+        char ca = (*a >= 'A' && *a <= 'Z') ? (char)(*a + 32) : *a;
+        char cb = (*b >= 'A' && *b <= 'Z') ? (char)(*b + 32) : *b;
+        if (ca != cb) return 0;
+        a++;
+        b++;
+    }
+    return (*a == '\0' && *b == '\0') ? 1 : 0;
+}
+
+int32_t omni_string_compare_ignore_case(const char* a, const char* b) {
+    if (!a || !b) {
+        if (a == b) return 0;
+        return a ? 1 : -1;
+    }
+    while (*a && *b) {
+        char ca = (*a >= 'A' && *a <= 'Z') ? (char)(*a + 32) : *a;
+        char cb = (*b >= 'A' && *b <= 'Z') ? (char)(*b + 32) : *b;
+        if (ca != cb) return ca < cb ? -1 : 1;
+        a++;
+        b++;
+    }
+    if (*a == '\0' && *b == '\0') return 0;
+    return *a == '\0' ? -1 : 1;
+}
+
+int32_t omni_count_occurrences(const char* str, const char* substr) {
+    if (!str || !substr) return 0;
+    size_t sub_len = strlen(substr);
+    if (sub_len == 0) return 0;
+    int32_t count = 0;
+    const char* p = str;
+    while ((p = strstr(p, substr)) != NULL) {
+        count++;
+        p += sub_len;
+    }
+    return count;
+}
+
+int32_t omni_count_lines(const char* str) {
+    if (!str) return 0;
+    size_t len = strlen(str);
+    if (len == 0) return 0;
+    int32_t count = 1;
+    // Don't double-count a trailing newline.
+    for (size_t i = 0; i < len; i++) {
+        if (str[i] == '\n' && i < len - 1) {
+            count++;
+        }
+    }
+    return count;
+}
+
+int32_t omni_count_words(const char* str) {
+    if (!str) return 0;
+    int32_t count = 0;
+    int in_word = 0;
+    for (const char* p = str; *p; p++) {
+        if (is_ws(*p)) {
+            in_word = 0;
+        } else if (!in_word) {
+            count++;
+            in_word = 1;
+        }
+    }
+    return count;
+}
+
 int32_t omni_string_equals(const char* a, const char* b) {
     if (!a || !b) {
         return (a == b) ? 1 : 0;

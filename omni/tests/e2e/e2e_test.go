@@ -536,6 +536,31 @@ func TestVarBranchMerge(t *testing.T) {
 	}
 }
 
+// TestStdStringExtras pins the previously-stubbed std.string functions:
+// trim_left/right/all, to_title, capitalize, reverse, equals/compare
+// _ignore_case, count_occurrences/lines/words. Both backends now run
+// real implementations rather than returning placeholders.
+func TestStdStringExtras(t *testing.T) {
+	testFile := "std_string_extras.omni"
+	expected := "20"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestCharCodeIntrinsic pins down the std.char_code / std.char_from_code
 // intrinsics. Without them, OmniLang code can't move between char and
 // int — neither `c - 'a'` nor `int(c)` is valid.
