@@ -50,3 +50,25 @@ func exists(filename:string):int {
 func size(filename:string):int {
     return 0
 }
+
+// read_all reads remaining bytes from the file handle to EOF and
+// returns them as a string. Useful when the existing read() can't
+// return content because OmniLang strings are immutable.
+func read_all(file_handle:int):string {
+    // INTRINSIC: wired to omni_file_read_all_handle.
+    return ""
+}
+
+// read_line reads one line from the file handle (newline stripped).
+// Returns "" at EOF.
+func read_line(file_handle:int):string {
+    // INTRINSIC: wired to omni_file_read_line_handle.
+    return ""
+}
+
+// write_string writes a string to the file handle. Returns the number
+// of bytes written, or -1 on error.
+func write_string(file_handle:int, s:string):int {
+    // INTRINSIC: wired to omni_file_write_string.
+    return 0
+}

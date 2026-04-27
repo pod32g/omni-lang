@@ -85,6 +85,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **File-handle wrappers (Go os/bufio analogs)**: `std.file` gains
+  `read_all(handle)`, `read_line(handle)`, `write_string(handle, s)`
+  — fills the existing hole where `read(handle, ...)` couldn't
+  return content because OmniLang strings are immutable. `std.io`
+  gains `fprint(handle, value)`, `fprintln(handle, value)`,
+  `fprintf(handle, format, args)` mirroring Go's `Fprint(w, ...)`.
+  `std.os` gains `read_file_lines(path)` and
+  `write_file_lines(path, lines)` for the very common whole-file
+  line workflow. All wired through both backends. Pinned by
+  `TestStdFileHandles` (round-trips a fixture file through every
+  new helper).
 - **VM string-literal escape decoding**: `"a\nb"` used to measure
   length 4 on the VM and 3 on the C backend, because the VM's
   `literalResult` stripped the wrapping quotes but never decoded

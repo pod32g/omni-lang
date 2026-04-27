@@ -2305,6 +2305,10 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 				strings.HasSuffix(calleeName, ".magenta"),
 				strings.HasSuffix(calleeName, ".cyan"):
 				resultType = "string"
+			case strings.HasSuffix(calleeName, ".fprint"),
+				strings.HasSuffix(calleeName, ".fprintln"),
+				strings.HasSuffix(calleeName, ".fprintf"):
+				resultType = "void"
 			case strings.HasSuffix(calleeName, ".read_lines"):
 				resultType = "array<string>"
 			case strings.HasSuffix(calleeName, ".read_line_async"):
@@ -2350,9 +2354,11 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 				strings.HasSuffix(calleeName, ".rename"),
 				strings.HasSuffix(calleeName, ".copy"),
 				strings.HasSuffix(calleeName, ".write_file"),
-				strings.HasSuffix(calleeName, ".append_file"):
+				strings.HasSuffix(calleeName, ".append_file"),
+				strings.HasSuffix(calleeName, ".write_file_lines"):
 				resultType = "bool"
-			case strings.HasSuffix(calleeName, ".args"):
+			case strings.HasSuffix(calleeName, ".args"),
+				strings.HasSuffix(calleeName, ".read_file_lines"):
 				resultType = "array<string>"
 			case strings.HasSuffix(calleeName, ".exit"):
 				resultType = "void"
@@ -2443,8 +2449,16 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 				resultType = "string"
 			}
 		} else if strings.Contains(calleeName, "file.") {
-			// File operations return int (file handles, byte counts, etc.)
-			resultType = "int"
+			// File operations: handle-based ops mostly return int (handle
+			// or byte count), but the new content-returning helpers
+			// follow Go's bufio shape.
+			switch {
+			case strings.HasSuffix(calleeName, ".read_all"),
+				strings.HasSuffix(calleeName, ".read_line"):
+				resultType = "string"
+			default:
+				resultType = "int"
+			}
 		} else if strings.Contains(calleeName, "network.") {
 			// std.network return-type heuristic. Keep this aligned with
 			// omni/std/network/network.omni — it's the C-backend's only

@@ -683,6 +683,31 @@ func TestStdTimeOps(t *testing.T) {
 	}
 }
 
+// TestStdFileHandles pins the handle-based file ops added to mirror
+// Go's os/bufio: std.file.read_all/read_line/write_string,
+// std.io.fprint/fprintln/fprintf, and std.os.read_file_lines /
+// write_file_lines. Round-trips a fixture file through all of them.
+func TestStdFileHandles(t *testing.T) {
+	testFile := "std_file_handles.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStringEscapes pins the lexer-accepted string-literal escape
 // set (\n, \t, \r, \\, \", \', \0, \xHH, \uHHHH) on both backends.
 // VM used to skip decoding so `"a\nb"` measured length 4; the C

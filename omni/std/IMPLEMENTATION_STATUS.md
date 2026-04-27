@@ -34,6 +34,9 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `style(s, code)` - Wired to `omni_io_style` (generic ANSI SGR wrap)
 - [IMPLEMENTED] `bold(s)`, `dim(s)`, `italic(s)`, `underline(s)` - ANSI text styles
 - [IMPLEMENTED] `red(s)`, `green(s)`, `yellow(s)`, `blue(s)`, `magenta(s)`, `cyan(s)` - ANSI foreground colors
+- [IMPLEMENTED] `fprint(handle, value)` - Wired to `omni_io_fprint` (write to file handle)
+- [IMPLEMENTED] `fprintln(handle, value)` - Wired to `omni_io_fprintln`
+- [IMPLEMENTED] `fprintf(handle, format, args)` - Wired to `omni_io_fprintf`
 
 Surface mirrors Go's `fmt` + `bufio` + `io` as far as makes sense
 without varargs, byte arrays, or Reader/Writer interfaces. ANSI
@@ -163,12 +166,17 @@ VM and C backend parity pinned by `tests/e2e/std_io_basic.omni`,
 - [IMPLEMENTED] `tell(handle)` - Wired to `omni_file_tell`
 - [IMPLEMENTED] `exists(filename)` - Wired to `omni_file_exists`
 - [IMPLEMENTED] `size(filename)` - Wired to `omni_file_size`
+- [IMPLEMENTED] `read_all(handle)` - Wired to `omni_file_read_all_handle` (returns remaining content as string)
+- [IMPLEMENTED] `read_line(handle)` - Wired to `omni_file_read_line_handle` (one line, newline stripped)
+- [IMPLEMENTED] `write_string(handle, s)` - Wired to `omni_file_write_string` (returns bytes written)
 
 ### std.os
 - [IMPLEMENTED] `exit(code)` - Wired to `omni_exit`
 - [IMPLEMENTED] `read_file(path)` - Wired to `omni_read_file`
 - [IMPLEMENTED] `write_file(path, content)` - Wired to `omni_write_file`
 - [IMPLEMENTED] `append_file(path, content)` - Wired to `omni_append_file`
+- [IMPLEMENTED] `read_file_lines(path)` - Wired to `omni_os_read_file_lines` (drops trailing empty)
+- [IMPLEMENTED] `write_file_lines(path, lines)` - Wired to `omni_os_write_file_lines`
 - [IMPLEMENTED] `getenv(name)` - Wired to `omni_getenv`
 - [IMPLEMENTED] `setenv(name, value)` - Wired to `omni_setenv`
 - [IMPLEMENTED] `unsetenv(name)` - Wired to `omni_unsetenv`

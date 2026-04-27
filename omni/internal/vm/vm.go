@@ -2779,6 +2779,65 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 		return ansiIntrinsic(fr, operands, "35")
 	case "std.io.cyan":
 		return ansiIntrinsic(fr, operands, "36")
+	case "std.io.fprint":
+		if len(operands) >= 2 {
+			handle, _ := vmIntValue(operandValue(fr, operands[0]))
+			arg := operandValue(fr, operands[1])
+			vmFprint(handle, fmt.Sprint(arg.Value), false)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.fprintln":
+		if len(operands) >= 2 {
+			handle, _ := vmIntValue(operandValue(fr, operands[0]))
+			arg := operandValue(fr, operands[1])
+			vmFprint(handle, fmt.Sprint(arg.Value), true)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.fprintf":
+		if len(operands) >= 3 {
+			handle, _ := vmIntValue(operandValue(fr, operands[0]))
+			format, _ := operandValue(fr, operands[1]).Value.(string)
+			args := vmStringSlice(operandValue(fr, operands[2]))
+			vmFprint(handle, vmSprintf(format, args), false)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.file.read_all":
+		if len(operands) == 1 {
+			handle, _ := vmIntValue(operandValue(fr, operands[0]))
+			return Result{Type: "string", Value: vmFileReadAll(handle)}, true
+		}
+	case "std.file.read_line":
+		if len(operands) == 1 {
+			handle, _ := vmIntValue(operandValue(fr, operands[0]))
+			return Result{Type: "string", Value: vmFileReadLine(handle)}, true
+		}
+	case "std.file.write_string":
+		if len(operands) == 2 {
+			handle, _ := vmIntValue(operandValue(fr, operands[0]))
+			s, _ := operandValue(fr, operands[1]).Value.(string)
+			n := vmFileWriteString(handle, s)
+			return Result{Type: "int", Value: n}, true
+		}
+	case "std.os.read_file_lines":
+		if len(operands) == 1 {
+			path, _ := operandValue(fr, operands[0]).Value.(string)
+			data, err := vmReadFile(path)
+			if err != nil {
+				return Result{Type: "array<string>", Value: []string{}}, true
+			}
+			lines := strings.Split(data, "\n")
+			if len(lines) > 0 && lines[len(lines)-1] == "" {
+				lines = lines[:len(lines)-1]
+			}
+			return Result{Type: "array<string>", Value: lines}, true
+		}
+	case "std.os.write_file_lines":
+		if len(operands) == 2 {
+			path, _ := operandValue(fr, operands[0]).Value.(string)
+			lines := vmStringSlice(operandValue(fr, operands[1]))
+			ok := vmWriteFileLines(path, lines)
+			return Result{Type: "bool", Value: ok}, true
+		}
 	case "std.io.read_line_async":
 		// Async version - execute in goroutine and return Promise
 		promiseID := newPromise()
@@ -5941,6 +6000,106 @@ func buildLogMessage(operands []mir.Operand, fr *frame) string {
 		parts = append(parts, str)
 	}
 	return strings.Join(parts, " ")
+}
+
+// vmIntValue extracts an int from a Result. Helps when an operand
+// could be int64 (from the VM's int convention) or int (from file
+// handles).
+func vmIntValue(r Result) (int, bool) {
+	switch v := r.Value.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	}
+	return 0, false
+}
+
+func vmFprint(handle int, s string, newline bool) {
+	file, err := getFileHandle(handle)
+	if err != nil {
+		return
+	}
+	io.WriteString(file, s)
+	if newline {
+		io.WriteString(file, "\n")
+	}
+}
+
+func vmFileReadAll(handle int) string {
+	file, err := getFileHandle(handle)
+	if err != nil {
+		return ""
+	}
+	data, err := io.ReadAll(file)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return ""
+	}
+	return string(data)
+}
+
+func vmFileReadLine(handle int) string {
+	file, err := getFileHandle(handle)
+	if err != nil {
+		return ""
+	}
+	var buf []byte
+	one := make([]byte, 1)
+	for {
+		n, err := file.Read(one)
+		if n == 0 || err != nil {
+			break
+		}
+		if one[0] == '\r' {
+			// Try to consume a paired \n. If next byte isn't \n, leave
+			// it in the file (we can't unread on os.File without seeking).
+			// Best effort: peek via Seek+Read.
+			pos, _ := file.Seek(0, io.SeekCurrent)
+			if _, err := file.Read(one); err == nil && one[0] != '\n' {
+				file.Seek(pos, io.SeekStart)
+			}
+			break
+		}
+		if one[0] == '\n' {
+			break
+		}
+		buf = append(buf, one[0])
+	}
+	return string(buf)
+}
+
+func vmFileWriteString(handle int, s string) int {
+	file, err := getFileHandle(handle)
+	if err != nil {
+		return -1
+	}
+	n, err := io.WriteString(file, s)
+	if err != nil {
+		return -1
+	}
+	return n
+}
+
+func vmReadFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func vmWriteFileLines(path string, lines []string) bool {
+	f, err := os.Create(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	for _, line := range lines {
+		if _, err := io.WriteString(f, line+"\n"); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func vmFileOpen(filename, mode string) (int, error) {

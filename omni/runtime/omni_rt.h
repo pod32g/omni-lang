@@ -724,6 +724,14 @@ int32_t omni_file_seek(intptr_t file_handle, int32_t offset, int32_t whence);
 int32_t omni_file_tell(intptr_t file_handle);
 int32_t omni_file_exists(const char* filename);
 int32_t omni_file_size(const char* filename);
+char* omni_file_read_all_handle(intptr_t file_handle);
+char* omni_file_read_line_handle(intptr_t file_handle);
+int32_t omni_file_write_string(intptr_t file_handle, const char* s);
+void omni_io_fprint(intptr_t file_handle, const char* s);
+void omni_io_fprintln(intptr_t file_handle, const char* s);
+void omni_io_fprintf(intptr_t file_handle, const char* format, const char** args, int32_t args_len);
+const char** omni_os_read_file_lines(const char* path, int32_t* out_len);
+int32_t omni_os_write_file_lines(const char* path, const char** lines, int32_t n);
 
 // File I/O convenience functions (for async operations)
 // Returns a newly allocated string - caller must free it using free()

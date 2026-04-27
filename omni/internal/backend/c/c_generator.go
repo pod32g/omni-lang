@@ -1931,9 +1931,12 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 							"std.io.yellow", "io.yellow",
 							"std.io.blue", "io.blue",
 							"std.io.magenta", "io.magenta",
-							"std.io.cyan", "io.cyan":
+							"std.io.cyan", "io.cyan",
+							"std.file.read_all", "file.read_all",
+							"std.file.read_line", "file.read_line":
 							varType = "const char*"
-						case "std.io.read_lines", "io.read_lines":
+						case "std.io.read_lines", "io.read_lines",
+							"std.os.read_file_lines", "os.read_file_lines":
 							varType = "const char**"
 						case "std.string.char_at", "string.char_at":
 							varType = "char"
@@ -2048,7 +2051,8 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						"omni_is_file", "omni_is_dir",
 						"omni_url_is_valid",
 						"omni_io_is_terminal", "omni_io_is_int", "omni_io_is_float",
-						"omni_io_parse_int", "omni_io_confirm":
+						"omni_io_parse_int", "omni_io_confirm",
+						"omni_file_write_string", "omni_os_write_file_lines":
 						varType = "int32_t"
 					case "omni_io_parse_float":
 						varType = "double"
@@ -3185,6 +3189,101 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				arr := g.getOperandValue(inst.Operands[1])
 				arrLen := g.getOperandLengthExpr(inst.Operands[1])
 				g.output.WriteString(fmt.Sprintf("  omni_io_eprint_each(%s, %s);\n", arr, arrLen))
+				return nil
+			}
+			if (funcName == "std.io.fprint" || funcName == "io.fprint") && len(inst.Operands) >= 3 {
+				handle := g.getOperandValue(inst.Operands[1])
+				op := inst.Operands[2]
+				var arg string
+				if op.Type == "string" {
+					arg = g.getOperandValue(op)
+				} else {
+					arg = g.convertOperandToString(op)
+				}
+				g.output.WriteString(fmt.Sprintf("  omni_io_fprint((intptr_t)%s, %s);\n", handle, arg))
+				return nil
+			}
+			if (funcName == "std.io.fprintln" || funcName == "io.fprintln") && len(inst.Operands) >= 3 {
+				handle := g.getOperandValue(inst.Operands[1])
+				op := inst.Operands[2]
+				var arg string
+				if op.Type == "string" {
+					arg = g.getOperandValue(op)
+				} else {
+					arg = g.convertOperandToString(op)
+				}
+				g.output.WriteString(fmt.Sprintf("  omni_io_fprintln((intptr_t)%s, %s);\n", handle, arg))
+				return nil
+			}
+			if (funcName == "std.io.fprintf" || funcName == "io.fprintf") && len(inst.Operands) >= 4 {
+				handle := g.getOperandValue(inst.Operands[1])
+				fmtArg := g.getOperandValue(inst.Operands[2])
+				argsArr := g.getOperandValue(inst.Operands[3])
+				argsLen := g.getOperandLengthExpr(inst.Operands[3])
+				g.output.WriteString(fmt.Sprintf("  omni_io_fprintf((intptr_t)%s, %s, %s, %s);\n", handle, fmtArg, argsArr, argsLen))
+				return nil
+			}
+			if (funcName == "std.file.read_all" || funcName == "file.read_all") && len(inst.Operands) >= 2 {
+				varName := g.getVariableName(inst.ID)
+				handle := g.getOperandValue(inst.Operands[1])
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_file_read_all_handle((intptr_t)%s);\n", varName, handle))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_file_read_all_handle((intptr_t)%s);\n", varName, handle))
+				}
+				g.valueTypes[inst.ID] = "string"
+				g.stringsToFree[inst.ID] = true
+				return nil
+			}
+			if (funcName == "std.file.read_line" || funcName == "file.read_line") && len(inst.Operands) >= 2 {
+				varName := g.getVariableName(inst.ID)
+				handle := g.getOperandValue(inst.Operands[1])
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_file_read_line_handle((intptr_t)%s);\n", varName, handle))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_file_read_line_handle((intptr_t)%s);\n", varName, handle))
+				}
+				g.valueTypes[inst.ID] = "string"
+				g.stringsToFree[inst.ID] = true
+				return nil
+			}
+			if (funcName == "std.file.write_string" || funcName == "file.write_string") && len(inst.Operands) >= 3 {
+				varName := g.getVariableName(inst.ID)
+				handle := g.getOperandValue(inst.Operands[1])
+				s := g.getOperandValue(inst.Operands[2])
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_write_string((intptr_t)%s, %s);\n", varName, handle, s))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_file_write_string((intptr_t)%s, %s);\n", varName, handle, s))
+				}
+				g.valueTypes[inst.ID] = "int"
+				return nil
+			}
+			if (funcName == "std.os.read_file_lines" || funcName == "os.read_file_lines") && len(inst.Operands) >= 2 {
+				varName := g.getVariableName(inst.ID)
+				path := g.getOperandValue(inst.Operands[1])
+				lenVar := fmt.Sprintf("__omni_read_file_lines_len_%d", inst.ID)
+				g.output.WriteString(fmt.Sprintf("  int32_t %s = 0;\n", lenVar))
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char** %s = omni_os_read_file_lines(%s, &%s);\n", varName, path, lenVar))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_os_read_file_lines(%s, &%s);\n", varName, path, lenVar))
+				}
+				g.valueTypes[inst.ID] = "array<string>"
+				g.arrayLengthExprs[inst.ID] = lenVar
+				return nil
+			}
+			if (funcName == "std.os.write_file_lines" || funcName == "os.write_file_lines") && len(inst.Operands) >= 3 {
+				varName := g.getVariableName(inst.ID)
+				path := g.getOperandValue(inst.Operands[1])
+				arr := g.getOperandValue(inst.Operands[2])
+				arrLen := g.getOperandLengthExpr(inst.Operands[2])
+				g.output.WriteString(fmt.Sprintf("  %s = omni_os_write_file_lines(%s, %s, %s);\n", varName, path, arr, arrLen))
+				g.valueTypes[inst.ID] = "bool"
 				return nil
 			}
 			if funcName == "std.io.flush_stderr" || funcName == "io.flush_stderr" {
@@ -7251,6 +7350,22 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_io_magenta"
 	case "std.io.cyan":
 		return "omni_io_cyan"
+	case "std.io.fprint":
+		return "omni_io_fprint"
+	case "std.io.fprintln":
+		return "omni_io_fprintln"
+	case "std.io.fprintf":
+		return "omni_io_fprintf"
+	case "std.file.read_all":
+		return "omni_file_read_all_handle"
+	case "std.file.read_line":
+		return "omni_file_read_line_handle"
+	case "std.file.write_string":
+		return "omni_file_write_string"
+	case "std.os.read_file_lines":
+		return "omni_os_read_file_lines"
+	case "std.os.write_file_lines":
+		return "omni_os_write_file_lines"
 
 	// Logging functions
 	case "std.log.debug":
@@ -7723,6 +7838,22 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"io.magenta":         "omni_io_magenta",
 		"std.io.cyan":        "omni_io_cyan",
 		"io.cyan":            "omni_io_cyan",
+		"std.io.fprint":      "omni_io_fprint",
+		"io.fprint":          "omni_io_fprint",
+		"std.io.fprintln":    "omni_io_fprintln",
+		"io.fprintln":        "omni_io_fprintln",
+		"std.io.fprintf":     "omni_io_fprintf",
+		"io.fprintf":         "omni_io_fprintf",
+		"std.file.read_all":  "omni_file_read_all_handle",
+		"file.read_all":      "omni_file_read_all_handle",
+		"std.file.read_line": "omni_file_read_line_handle",
+		"file.read_line":     "omni_file_read_line_handle",
+		"std.file.write_string": "omni_file_write_string",
+		"file.write_string":     "omni_file_write_string",
+		"std.os.read_file_lines": "omni_os_read_file_lines",
+		"os.read_file_lines":     "omni_os_read_file_lines",
+		"std.os.write_file_lines": "omni_os_write_file_lines",
+		"os.write_file_lines":     "omni_os_write_file_lines",
 
 		// String functions
 		"std.string.length":                   "omni_strlen",
@@ -8617,6 +8748,10 @@ func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 		"io.magenta":               true,
 		"std.io.cyan":              true,
 		"io.cyan":                  true,
+		"std.file.read_all":        true,
+		"file.read_all":            true,
+		"std.file.read_line":       true,
+		"file.read_line":           true,
 		"std.string.concat":        true,
 		"std.string.substring":     true,
 		"std.string.trim":          true,

@@ -2058,6 +2058,118 @@ int32_t omni_file_size(const char* filename) {
     return (int32_t)st.st_size;
 }
 
+// Read remaining bytes from `file_handle` into a freshly allocated heap
+// string. Caller must free the result. Returns "" on error or EOF —
+// never NULL — to keep callers safe to chain into string ops.
+char* omni_file_read_all_handle(intptr_t file_handle) {
+    if (file_handle == (intptr_t)-1) return strdup("");
+    FILE* f = (FILE*)file_handle;
+    size_t cap = 1024;
+    size_t len = 0;
+    char* buf = (char*)malloc(cap);
+    if (!buf) return strdup("");
+    int c;
+    while ((c = fgetc(f)) != EOF) {
+        if (len + 1 >= cap) {
+            cap *= 2;
+            char* nb = (char*)realloc(buf, cap);
+            if (!nb) { free(buf); return strdup(""); }
+            buf = nb;
+        }
+        buf[len++] = (char)c;
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
+// Read one line from `file_handle` (stripping a trailing CR/LF).
+// Returns "" on EOF or error.
+char* omni_file_read_line_handle(intptr_t file_handle) {
+    if (file_handle == (intptr_t)-1) return strdup("");
+    FILE* f = (FILE*)file_handle;
+    size_t cap = 128;
+    size_t len = 0;
+    char* buf = (char*)malloc(cap);
+    if (!buf) return strdup("");
+    int c;
+    while ((c = fgetc(f)) != EOF) {
+        if (c == '\r') {
+            int next = fgetc(f);
+            if (next != '\n' && next != EOF) ungetc(next, f);
+            break;
+        }
+        if (c == '\n') break;
+        if (len + 1 >= cap) {
+            cap *= 2;
+            char* nb = (char*)realloc(buf, cap);
+            if (!nb) { free(buf); return strdup(""); }
+            buf = nb;
+        }
+        buf[len++] = (char)c;
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
+// Convenience: write a NUL-terminated string. Returns bytes written.
+int32_t omni_file_write_string(intptr_t file_handle, const char* s) {
+    if (file_handle == (intptr_t)-1 || !s) return -1;
+    FILE* f = (FILE*)file_handle;
+    size_t n = strlen(s);
+    return (int32_t)fwrite(s, 1, n, f);
+}
+
+// fprint family: write to a file handle. Used by std.io.fprint /
+// fprintln / fprintf to mirror Go's Fprint(w, ...).
+void omni_io_fprint(intptr_t file_handle, const char* s) {
+    if (file_handle == (intptr_t)-1 || !s) return;
+    fputs(s, (FILE*)file_handle);
+}
+
+void omni_io_fprintln(intptr_t file_handle, const char* s) {
+    if (file_handle == (intptr_t)-1) return;
+    FILE* f = (FILE*)file_handle;
+    if (s) fputs(s, f);
+    fputc('\n', f);
+}
+
+void omni_io_fprintf(intptr_t file_handle, const char* format, const char** args, int32_t args_len) {
+    if (file_handle == (intptr_t)-1) return;
+    char* result = omni_io_sprintf(format, args, args_len);
+    if (result) {
+        fputs(result, (FILE*)file_handle);
+        free(result);
+    }
+}
+
+// Whole-file line helpers (std.os).
+const char** omni_os_read_file_lines(const char* path, int32_t* out_len) {
+    if (out_len) *out_len = 0;
+    if (!path) return NULL;
+    char* all = omni_read_file(path);
+    if (!all) return NULL;
+    int32_t n = 0;
+    const char** lines = omni_string_split_lines(all, &n);
+    if (n > 0 && lines && lines[n-1] && lines[n-1][0] == '\0') {
+        n--;
+    }
+    if (out_len) *out_len = n;
+    free(all);
+    return lines;
+}
+
+int32_t omni_os_write_file_lines(const char* path, const char** lines, int32_t n) {
+    if (!path) return 0;
+    FILE* f = fopen(path, "w");
+    if (!f) return 0;
+    for (int32_t i = 0; i < n; i++) {
+        if (lines && lines[i]) fputs(lines[i], f);
+        fputc('\n', f);
+    }
+    fclose(f);
+    return 1;
+}
+
 // Testing framework
 void omni_test_start(const char* test_name) {
     printf("Running test: %s\n", test_name);

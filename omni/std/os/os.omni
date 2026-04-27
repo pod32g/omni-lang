@@ -185,6 +185,21 @@ func append_file(path:string, contents:string):bool {
     return false
 }
 
+// read_file_lines reads `path` and returns its contents one line per
+// entry. Trailing newlines are stripped; a final newline does not
+// produce a phantom blank entry.
+func read_file_lines(path:string):array<string> {
+    // INTRINSIC: wired to omni_os_read_file_lines.
+    return []
+}
+
+// write_file_lines writes each entry of `lines` to `path` followed by
+// a newline. Truncates any existing file. Returns true on success.
+func write_file_lines(path:string, lines:array<string>):bool {
+    // INTRINSIC: wired to omni_os_write_file_lines.
+    return false
+}
+
 // read_file_async reads the contents of a file asynchronously
 async func read_file_async(path:string):string {
     // This is an intrinsic function that will be wired to the runtime

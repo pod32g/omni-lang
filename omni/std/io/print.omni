@@ -251,6 +251,24 @@ func cyan(s:string):string {
     return s
 }
 
+// fprint writes a printable value to the given file handle (no
+// trailing newline). Mirrors fmt.Fprint(w, ...) over a single value.
+// Use std.file.open to obtain a handle for files; for stdout/stderr,
+// prefer print/eprint.
+func fprint(file_handle:int, value:string | int | float | double | bool) {
+    // INTRINSIC: compiled via sprint + omni_io_fprint.
+}
+
+// fprintln writes the value followed by a newline.
+func fprintln(file_handle:int, value:string | int | float | double | bool) {
+    // INTRINSIC: compiled via sprint + omni_io_fprintln.
+}
+
+// fprintf writes sprintf(format, args) to the file handle.
+func fprintf(file_handle:int, format:string, args:array<string>) {
+    // INTRINSIC: wired to omni_io_fprintf.
+}
+
 // read_line_async reads a line from standard input asynchronously
 // [PARTIAL] Returns a Promise but currently executes synchronously
 // The Promise is immediately resolved with the result.

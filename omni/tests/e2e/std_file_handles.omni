@@ -1,0 +1,91 @@
+// E2E for the file-handle wrappers added to mirror Go's os/bufio:
+// std.file.read_all, read_line, write_string; std.io.fprint /
+// fprintln / fprintf; std.os.read_file_lines, write_file_lines.
+import std
+
+func main():int {
+    let path:string = "std_file_handles_tmp.txt"
+
+    // Write lines via std.os.write_file_lines
+    let lines_in:array<string> = ["alpha", "beta", "gamma"]
+    if !std.os.write_file_lines(path, lines_in) {
+        return 1
+    }
+
+    // Read back via std.os.read_file_lines
+    let lines:array<string> = std.os.read_file_lines(path)
+    if len(lines) != 3 {
+        return 2
+    }
+    if !std.string.equals(lines[0], "alpha") {
+        return 3
+    }
+    if !std.string.equals(lines[2], "gamma") {
+        return 4
+    }
+
+    // Open for handle-based ops
+    let h:int = std.file.open(path, "r")
+    if h < 0 {
+        return 5
+    }
+
+    // read_line should return "alpha"
+    let line1:string = std.file.read_line(h)
+    if !std.string.equals(line1, "alpha") {
+        return 6
+    }
+
+    // read_all returns the rest
+    let rest:string = std.file.read_all(h)
+    if std.string.length(rest) != 11 {
+        return 7
+    }
+    if !std.string.starts_with(rest, "beta") {
+        return 8
+    }
+
+    if std.file.close(h) != 0 {
+        return 9
+    }
+
+    // Write via handle
+    let h2:int = std.file.open(path, "w")
+    if h2 < 0 {
+        return 10
+    }
+    if std.file.write_string(h2, "hello\n") != 6 {
+        return 11
+    }
+    if std.file.write_string(h2, "world") != 5 {
+        return 12
+    }
+    std.file.close(h2)
+
+    // fprint family
+    let h3:int = std.file.open(path, "a")
+    if h3 < 0 {
+        return 13
+    }
+    std.io.fprint(h3, "x")
+    std.io.fprintln(h3, 42)
+    let fmt_args:array<string> = ["zz"]
+    std.io.fprintf(h3, "[%s]", fmt_args)
+    std.file.close(h3)
+
+    // Read whole file back
+    let final:string = std.os.read_file(path)
+    // Expected: "hello\nworld" + "x42\n[zz]" = "hello\nworldx42\n[zz]"
+    if !std.string.starts_with(final, "hello") {
+        return 14
+    }
+    if !std.string.contains(final, "x42") {
+        return 15
+    }
+    if !std.string.contains(final, "[zz]") {
+        return 16
+    }
+
+    std.os.remove(path)
+    return 0
+}
