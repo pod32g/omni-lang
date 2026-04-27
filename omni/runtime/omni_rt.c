@@ -230,6 +230,91 @@ char* omni_io_sprintln(const char* str) {
     return buf;
 }
 
+void omni_io_printf(const char* format, const char** args, int32_t args_len) {
+    char* result = omni_io_sprintf(format, args, args_len);
+    if (result) {
+        fputs(result, stdout);
+        free(result);
+    }
+}
+
+void omni_io_eprintf(const char* format, const char** args, int32_t args_len) {
+    char* result = omni_io_sprintf(format, args, args_len);
+    if (result) {
+        fputs(result, stderr);
+        free(result);
+    }
+}
+
+void omni_io_print_each(const char** items, int32_t n) {
+    if (!items) return;
+    for (int32_t i = 0; i < n; i++) {
+        if (items[i]) fputs(items[i], stdout);
+        fputc('\n', stdout);
+    }
+}
+
+void omni_io_eprint_each(const char** items, int32_t n) {
+    if (!items) return;
+    for (int32_t i = 0; i < n; i++) {
+        if (items[i]) fputs(items[i], stderr);
+        fputc('\n', stderr);
+    }
+}
+
+char* omni_io_eprompt(const char* message) {
+    if (message) fputs(message, stderr);
+    fflush(stderr);
+    return omni_read_line();
+}
+
+// omni_io_confirm prints a yes/no prompt and returns 1 if the user
+// answers with a string starting in 'y' or 'Y'. Empty input or any
+// other input returns 0.
+int32_t omni_io_confirm(const char* message) {
+    if (message) fputs(message, stdout);
+    fflush(stdout);
+    char* line = omni_read_line();
+    int32_t result = 0;
+    if (line && (line[0] == 'y' || line[0] == 'Y')) {
+        result = 1;
+    }
+    if (line) free(line);
+    return result;
+}
+
+void omni_io_flush_stderr(void) {
+    fflush(stderr);
+}
+
+// ANSI style/color helpers. Each wraps `s` in an SGR escape sequence
+// and resets at the end. They always emit the codes — gate on
+// is_terminal() in OmniLang code if you want to skip when stdout is
+// not a TTY.
+static char* omni_io_ansi_wrap_internal(const char* s, const char* code) {
+    if (!s) s = "";
+    if (!code) code = "0";
+    size_t slen = strlen(s);
+    size_t clen = strlen(code);
+    size_t bufsz = slen + clen + 16;
+    char* buf = (char*)malloc(bufsz);
+    if (!buf) return strdup(s);
+    snprintf(buf, bufsz, "\x1b[%sm%s\x1b[0m", code, s);
+    return buf;
+}
+
+char* omni_io_style(const char* s, const char* code) { return omni_io_ansi_wrap_internal(s, code); }
+char* omni_io_bold(const char* s)      { return omni_io_ansi_wrap_internal(s, "1"); }
+char* omni_io_dim(const char* s)       { return omni_io_ansi_wrap_internal(s, "2"); }
+char* omni_io_italic(const char* s)    { return omni_io_ansi_wrap_internal(s, "3"); }
+char* omni_io_underline(const char* s) { return omni_io_ansi_wrap_internal(s, "4"); }
+char* omni_io_red(const char* s)       { return omni_io_ansi_wrap_internal(s, "31"); }
+char* omni_io_green(const char* s)     { return omni_io_ansi_wrap_internal(s, "32"); }
+char* omni_io_yellow(const char* s)    { return omni_io_ansi_wrap_internal(s, "33"); }
+char* omni_io_blue(const char* s)      { return omni_io_ansi_wrap_internal(s, "34"); }
+char* omni_io_magenta(const char* s)   { return omni_io_ansi_wrap_internal(s, "35"); }
+char* omni_io_cyan(const char* s)      { return omni_io_ansi_wrap_internal(s, "36"); }
+
 // Quiet integer parser: returns the parsed value or 0 on any failure.
 // Pair with omni_io_is_int when you need to distinguish a parsed 0 from
 // a parse failure.

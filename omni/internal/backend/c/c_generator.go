@@ -1919,7 +1919,19 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 							"std.io.sprint", "io.sprint",
 							"std.io.sprintln", "io.sprintln",
 							"std.io.sprintf", "io.sprintf",
-							"std.io.prompt", "io.prompt":
+							"std.io.prompt", "io.prompt",
+							"std.io.eprompt", "io.eprompt",
+							"std.io.style", "io.style",
+							"std.io.bold", "io.bold",
+							"std.io.dim", "io.dim",
+							"std.io.italic", "io.italic",
+							"std.io.underline", "io.underline",
+							"std.io.red", "io.red",
+							"std.io.green", "io.green",
+							"std.io.yellow", "io.yellow",
+							"std.io.blue", "io.blue",
+							"std.io.magenta", "io.magenta",
+							"std.io.cyan", "io.cyan":
 							varType = "const char*"
 						case "std.io.read_lines", "io.read_lines":
 							varType = "const char**"
@@ -2036,7 +2048,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						"omni_is_file", "omni_is_dir",
 						"omni_url_is_valid",
 						"omni_io_is_terminal", "omni_io_is_int", "omni_io_is_float",
-						"omni_io_parse_int":
+						"omni_io_parse_int", "omni_io_confirm":
 						varType = "int32_t"
 					case "omni_io_parse_float":
 						varType = "double"
@@ -3148,6 +3160,111 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.valueTypes[inst.ID] = "string"
 				g.stringsToFree[inst.ID] = true
 				return nil
+			}
+			if (funcName == "std.io.printf" || funcName == "io.printf") && len(inst.Operands) >= 3 {
+				fmtArg := g.getOperandValue(inst.Operands[1])
+				argsArr := g.getOperandValue(inst.Operands[2])
+				argsLen := g.getOperandLengthExpr(inst.Operands[2])
+				g.output.WriteString(fmt.Sprintf("  omni_io_printf(%s, %s, %s);\n", fmtArg, argsArr, argsLen))
+				return nil
+			}
+			if (funcName == "std.io.eprintf" || funcName == "io.eprintf") && len(inst.Operands) >= 3 {
+				fmtArg := g.getOperandValue(inst.Operands[1])
+				argsArr := g.getOperandValue(inst.Operands[2])
+				argsLen := g.getOperandLengthExpr(inst.Operands[2])
+				g.output.WriteString(fmt.Sprintf("  omni_io_eprintf(%s, %s, %s);\n", fmtArg, argsArr, argsLen))
+				return nil
+			}
+			if (funcName == "std.io.print_each" || funcName == "io.print_each") && len(inst.Operands) >= 2 {
+				arr := g.getOperandValue(inst.Operands[1])
+				arrLen := g.getOperandLengthExpr(inst.Operands[1])
+				g.output.WriteString(fmt.Sprintf("  omni_io_print_each(%s, %s);\n", arr, arrLen))
+				return nil
+			}
+			if (funcName == "std.io.eprint_each" || funcName == "io.eprint_each") && len(inst.Operands) >= 2 {
+				arr := g.getOperandValue(inst.Operands[1])
+				arrLen := g.getOperandLengthExpr(inst.Operands[1])
+				g.output.WriteString(fmt.Sprintf("  omni_io_eprint_each(%s, %s);\n", arr, arrLen))
+				return nil
+			}
+			if funcName == "std.io.flush_stderr" || funcName == "io.flush_stderr" {
+				g.output.WriteString("  omni_io_flush_stderr();\n")
+				return nil
+			}
+			if (funcName == "std.io.eprompt" || funcName == "io.eprompt") && len(inst.Operands) >= 2 {
+				varName := g.getVariableName(inst.ID)
+				msg := g.getOperandValue(inst.Operands[1])
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_io_eprompt(%s);\n", varName, msg))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_io_eprompt(%s);\n", varName, msg))
+				}
+				g.valueTypes[inst.ID] = "string"
+				g.stringsToFree[inst.ID] = true
+				return nil
+			}
+			if (funcName == "std.io.confirm" || funcName == "io.confirm") && len(inst.Operands) >= 2 {
+				varName := g.getVariableName(inst.ID)
+				msg := g.getOperandValue(inst.Operands[1])
+				g.output.WriteString(fmt.Sprintf("  %s = omni_io_confirm(%s);\n", varName, msg))
+				g.valueTypes[inst.ID] = "bool"
+				return nil
+			}
+			// ANSI color/style: each takes a string and returns a heap
+			// string. Same one-arg shape so a single dispatch table
+			// covers all of them.
+			ansiName := ""
+			switch funcName {
+			case "std.io.style", "io.style":
+				ansiName = "omni_io_style"
+			case "std.io.bold", "io.bold":
+				ansiName = "omni_io_bold"
+			case "std.io.dim", "io.dim":
+				ansiName = "omni_io_dim"
+			case "std.io.italic", "io.italic":
+				ansiName = "omni_io_italic"
+			case "std.io.underline", "io.underline":
+				ansiName = "omni_io_underline"
+			case "std.io.red", "io.red":
+				ansiName = "omni_io_red"
+			case "std.io.green", "io.green":
+				ansiName = "omni_io_green"
+			case "std.io.yellow", "io.yellow":
+				ansiName = "omni_io_yellow"
+			case "std.io.blue", "io.blue":
+				ansiName = "omni_io_blue"
+			case "std.io.magenta", "io.magenta":
+				ansiName = "omni_io_magenta"
+			case "std.io.cyan", "io.cyan":
+				ansiName = "omni_io_cyan"
+			}
+			if ansiName != "" {
+				varName := g.getVariableName(inst.ID)
+				if ansiName == "omni_io_style" && len(inst.Operands) >= 3 {
+					s := g.getOperandValue(inst.Operands[1])
+					code := g.getOperandValue(inst.Operands[2])
+					if !g.declaredVariables[inst.ID] {
+						g.output.WriteString(fmt.Sprintf("  const char* %s = omni_io_style(%s, %s);\n", varName, s, code))
+						g.declaredVariables[inst.ID] = true
+					} else {
+						g.output.WriteString(fmt.Sprintf("  %s = omni_io_style(%s, %s);\n", varName, s, code))
+					}
+					g.valueTypes[inst.ID] = "string"
+					g.stringsToFree[inst.ID] = true
+					return nil
+				} else if len(inst.Operands) >= 2 {
+					s := g.getOperandValue(inst.Operands[1])
+					if !g.declaredVariables[inst.ID] {
+						g.output.WriteString(fmt.Sprintf("  const char* %s = %s(%s);\n", varName, ansiName, s))
+						g.declaredVariables[inst.ID] = true
+					} else {
+						g.output.WriteString(fmt.Sprintf("  %s = %s(%s);\n", varName, ansiName, s))
+					}
+					g.valueTypes[inst.ID] = "string"
+					g.stringsToFree[inst.ID] = true
+					return nil
+				}
 			}
 
 			// Special-case async I/O functions - they return Promise<T>
@@ -7098,6 +7215,42 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_io_is_int"
 	case "std.io.is_float":
 		return "omni_io_is_float"
+	case "std.io.printf":
+		return "omni_io_printf"
+	case "std.io.eprintf":
+		return "omni_io_eprintf"
+	case "std.io.print_each":
+		return "omni_io_print_each"
+	case "std.io.eprint_each":
+		return "omni_io_eprint_each"
+	case "std.io.eprompt":
+		return "omni_io_eprompt"
+	case "std.io.confirm":
+		return "omni_io_confirm"
+	case "std.io.flush_stderr":
+		return "omni_io_flush_stderr"
+	case "std.io.style":
+		return "omni_io_style"
+	case "std.io.bold":
+		return "omni_io_bold"
+	case "std.io.dim":
+		return "omni_io_dim"
+	case "std.io.italic":
+		return "omni_io_italic"
+	case "std.io.underline":
+		return "omni_io_underline"
+	case "std.io.red":
+		return "omni_io_red"
+	case "std.io.green":
+		return "omni_io_green"
+	case "std.io.yellow":
+		return "omni_io_yellow"
+	case "std.io.blue":
+		return "omni_io_blue"
+	case "std.io.magenta":
+		return "omni_io_magenta"
+	case "std.io.cyan":
+		return "omni_io_cyan"
 
 	// Logging functions
 	case "std.log.debug":
@@ -7534,6 +7687,42 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"io.is_int":          "omni_io_is_int",
 		"std.io.is_float":    "omni_io_is_float",
 		"io.is_float":        "omni_io_is_float",
+		"std.io.printf":      "omni_io_printf",
+		"io.printf":          "omni_io_printf",
+		"std.io.eprintf":     "omni_io_eprintf",
+		"io.eprintf":         "omni_io_eprintf",
+		"std.io.print_each":  "omni_io_print_each",
+		"io.print_each":      "omni_io_print_each",
+		"std.io.eprint_each": "omni_io_eprint_each",
+		"io.eprint_each":     "omni_io_eprint_each",
+		"std.io.eprompt":     "omni_io_eprompt",
+		"io.eprompt":         "omni_io_eprompt",
+		"std.io.confirm":     "omni_io_confirm",
+		"io.confirm":         "omni_io_confirm",
+		"std.io.flush_stderr": "omni_io_flush_stderr",
+		"io.flush_stderr":     "omni_io_flush_stderr",
+		"std.io.style":       "omni_io_style",
+		"io.style":           "omni_io_style",
+		"std.io.bold":        "omni_io_bold",
+		"io.bold":            "omni_io_bold",
+		"std.io.dim":         "omni_io_dim",
+		"io.dim":             "omni_io_dim",
+		"std.io.italic":      "omni_io_italic",
+		"io.italic":          "omni_io_italic",
+		"std.io.underline":   "omni_io_underline",
+		"io.underline":       "omni_io_underline",
+		"std.io.red":         "omni_io_red",
+		"io.red":             "omni_io_red",
+		"std.io.green":       "omni_io_green",
+		"io.green":           "omni_io_green",
+		"std.io.yellow":      "omni_io_yellow",
+		"io.yellow":          "omni_io_yellow",
+		"std.io.blue":        "omni_io_blue",
+		"io.blue":            "omni_io_blue",
+		"std.io.magenta":     "omni_io_magenta",
+		"io.magenta":         "omni_io_magenta",
+		"std.io.cyan":        "omni_io_cyan",
+		"io.cyan":            "omni_io_cyan",
 
 		// String functions
 		"std.string.length":                   "omni_strlen",
@@ -8404,6 +8593,30 @@ func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 		"io.sprintln":              true,
 		"std.io.sprintf":           true,
 		"io.sprintf":               true,
+		"std.io.eprompt":           true,
+		"io.eprompt":               true,
+		"std.io.style":             true,
+		"io.style":                 true,
+		"std.io.bold":              true,
+		"io.bold":                  true,
+		"std.io.dim":               true,
+		"io.dim":                   true,
+		"std.io.italic":             true,
+		"io.italic":                true,
+		"std.io.underline":         true,
+		"io.underline":             true,
+		"std.io.red":               true,
+		"io.red":                   true,
+		"std.io.green":             true,
+		"io.green":                 true,
+		"std.io.yellow":            true,
+		"io.yellow":                true,
+		"std.io.blue":              true,
+		"io.blue":                  true,
+		"std.io.magenta":           true,
+		"io.magenta":               true,
+		"std.io.cyan":              true,
+		"io.cyan":                  true,
 		"std.string.concat":        true,
 		"std.string.substring":     true,
 		"std.string.trim":          true,

@@ -2291,7 +2291,19 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 				strings.HasSuffix(calleeName, ".sprint"),
 				strings.HasSuffix(calleeName, ".sprintln"),
 				strings.HasSuffix(calleeName, ".sprintf"),
-				strings.HasSuffix(calleeName, ".prompt"):
+				strings.HasSuffix(calleeName, ".prompt"),
+				strings.HasSuffix(calleeName, ".eprompt"),
+				strings.HasSuffix(calleeName, ".style"),
+				strings.HasSuffix(calleeName, ".bold"),
+				strings.HasSuffix(calleeName, ".dim"),
+				strings.HasSuffix(calleeName, ".italic"),
+				strings.HasSuffix(calleeName, ".underline"),
+				strings.HasSuffix(calleeName, ".red"),
+				strings.HasSuffix(calleeName, ".green"),
+				strings.HasSuffix(calleeName, ".yellow"),
+				strings.HasSuffix(calleeName, ".blue"),
+				strings.HasSuffix(calleeName, ".magenta"),
+				strings.HasSuffix(calleeName, ".cyan"):
 				resultType = "string"
 			case strings.HasSuffix(calleeName, ".read_lines"):
 				resultType = "array<string>"
@@ -2299,7 +2311,8 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 				resultType = "Promise<string>"
 			case strings.HasSuffix(calleeName, ".is_terminal"),
 				strings.HasSuffix(calleeName, ".is_int"),
-				strings.HasSuffix(calleeName, ".is_float"):
+				strings.HasSuffix(calleeName, ".is_float"),
+				strings.HasSuffix(calleeName, ".confirm"):
 				resultType = "bool"
 			case strings.HasSuffix(calleeName, ".parse_int"),
 				strings.HasSuffix(calleeName, ".read_int"):

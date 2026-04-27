@@ -1,0 +1,70 @@
+// Audit for the io formatting/styling extensions: printf, eprintf,
+// print_each, eprint_each, flush_stderr, ANSI styles/colors. We test
+// the side-effect-free string wrappers by checking length growth and
+// substring containment; the side-effecting writers must just not
+// crash (output verification happens via TestStdIoFormat in
+// e2e_test.go for the C backend; VM result is the program return
+// code only).
+import std
+
+func main():int {
+    let plain:string = "hi"
+
+    // ANSI styles: each must produce a longer string that still
+    // contains the original text.
+    if std.string.length(std.io.bold(plain)) <= std.string.length(plain) {
+        return 1
+    }
+    if !std.string.contains(std.io.bold(plain), plain) {
+        return 2
+    }
+    if std.string.length(std.io.dim(plain)) <= std.string.length(plain) {
+        return 3
+    }
+    if std.string.length(std.io.italic(plain)) <= std.string.length(plain) {
+        return 4
+    }
+    if std.string.length(std.io.underline(plain)) <= std.string.length(plain) {
+        return 5
+    }
+
+    // ANSI colors.
+    if !std.string.contains(std.io.red(plain), plain) {
+        return 6
+    }
+    if !std.string.contains(std.io.green(plain), plain) {
+        return 7
+    }
+    if !std.string.contains(std.io.yellow(plain), plain) {
+        return 8
+    }
+    if !std.string.contains(std.io.blue(plain), plain) {
+        return 9
+    }
+    if !std.string.contains(std.io.magenta(plain), plain) {
+        return 10
+    }
+    if !std.string.contains(std.io.cyan(plain), plain) {
+        return 11
+    }
+
+    // Generic style with custom code.
+    let custom:string = std.io.style(plain, "95")
+    if !std.string.contains(custom, "95") {
+        return 12
+    }
+    if !std.string.contains(custom, plain) {
+        return 13
+    }
+
+    // Side-effecting writers — just verify they don't crash.
+    let args:array<string> = ["world"]
+    std.io.printf("hello %s ", args)
+    std.io.eprintf("warn %s ", args)
+    let items:array<string> = ["a", "b"]
+    std.io.print_each(items)
+    std.io.eprint_each(items)
+    std.io.flush_stderr()
+
+    return 0
+}

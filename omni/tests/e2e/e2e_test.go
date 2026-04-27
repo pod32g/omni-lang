@@ -817,6 +817,115 @@ func TestStdIoExtras(t *testing.T) {
 	}
 }
 
+// TestStdIoFormat pins the io formatting/styling extensions: ANSI
+// helpers (bold, dim, italic, underline, red, green, yellow, blue,
+// magenta, cyan, style), printf, eprintf, print_each, eprint_each,
+// flush_stderr. The .omni file checks the string-returning helpers
+// for shape (length growth + substring containment); the side-
+// effecting writers must just not crash.
+func TestStdIoFormat(t *testing.T) {
+	testFile := "std_io_format.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if !strings.HasSuffix(strings.TrimRight(result, "\n"), "0") {
+		t.Errorf("runVM(%q) = %q, want trailing 0", testFile, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
+// TestStdIoConfirm pins std.io.confirm on both backends. Pipes "y\n"
+// and expects the program to return 0; pipes "n\n" and expects 1.
+func TestStdIoConfirm(t *testing.T) {
+	testFile := "std_io_confirm.omni"
+
+	runWithStdin := func(stdin string) (int, string, error) {
+		// Build via shared helper, then re-run with custom stdin.
+		if _, err := runCBackend(testFile); err != nil {
+			return -1, "", fmt.Errorf("build failed: %w", err)
+		}
+		executable := "./std_io_confirm"
+		cmd := exec.Command(executable)
+		cmd.Env = append(os.Environ(),
+			"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+			"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+		)
+		cmd.Stdin = strings.NewReader(stdin)
+		out, err := cmd.CombinedOutput()
+		exit := 0
+		if err != nil {
+			if ee, ok := err.(*exec.ExitError); ok {
+				exit = ee.ExitCode()
+			} else {
+				return -1, string(out), err
+			}
+		}
+		return exit, string(out), nil
+	}
+
+	for _, tc := range []struct {
+		stdin string
+		want  string
+	}{
+		{"y\n", "0"},
+		{"n\n", "1"},
+	} {
+		out := ""
+		_, fullOut, err := runWithStdin(tc.stdin)
+		if err != nil {
+			t.Fatalf("C run failed for stdin=%q: %v", tc.stdin, err)
+		}
+		// Prompt has no trailing newline so the result line may be
+		// glued to it. Look anywhere in the output.
+		idx := strings.Index(fullOut, "OmniLang program result: ")
+		if idx >= 0 {
+			tail := fullOut[idx+len("OmniLang program result: "):]
+			if nl := strings.IndexByte(tail, '\n'); nl >= 0 {
+				tail = tail[:nl]
+			}
+			out = strings.TrimSpace(tail)
+		}
+		if out != tc.want {
+			t.Errorf("stdin=%q: got %q, want %q\nfull output: %s", tc.stdin, out, tc.want, fullOut)
+		}
+	}
+
+	// VM
+	for _, tc := range []struct {
+		stdin string
+		want  string
+	}{
+		{"y\n", "0"},
+		{"n\n", "1"},
+	} {
+		absTestFile, _ := filepath.Abs(testFile)
+		cmd := exec.Command("../../bin/omnir", absTestFile)
+		cmd.Env = append(os.Environ(),
+			"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+			"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+		)
+		cmd.Stdin = strings.NewReader(tc.stdin)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("VM run failed for stdin=%q: %v\nout: %s", tc.stdin, err, string(out))
+		}
+		// VM prints the main return value on stdout.
+		if !strings.HasSuffix(strings.TrimRight(string(out), "\n"), tc.want) {
+			t.Errorf("VM stdin=%q: out=%q want trailing %s", tc.stdin, string(out), tc.want)
+		}
+	}
+}
+
 // TestStdIoReadLines pins std.io.read_lines on both backends by piping a
 // known string into stdin. The trailing newline must NOT produce a
 // phantom blank entry at the end.

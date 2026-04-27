@@ -147,6 +147,110 @@ func read_float():float {
     return parse_float(read_line())
 }
 
+// printf(format, args) is sprintf + print. Mirrors fmt.Printf with %s.
+func printf(format:string, args:array<string>) {
+    // INTRINSIC: wired to omni_io_printf.
+}
+
+// eprintf is printf to stderr.
+func eprintf(format:string, args:array<string>) {
+    // INTRINSIC: wired to omni_io_eprintf.
+}
+
+// print_each prints each item on its own line to stdout.
+func print_each(items:array<string>) {
+    // INTRINSIC: wired to omni_io_print_each.
+}
+
+// eprint_each prints each item on its own line to stderr.
+func eprint_each(items:array<string>) {
+    // INTRINSIC: wired to omni_io_eprint_each.
+}
+
+// eprompt is like prompt but writes the message to stderr instead of
+// stdout. Useful when stdout is being piped to another program and the
+// prompt shouldn't end up in the pipeline.
+func eprompt(message:string):string {
+    // INTRINSIC: wired to omni_io_eprompt.
+    return ""
+}
+
+// confirm displays `message`, reads one line, and returns true when
+// the answer starts with 'y' or 'Y'. Anything else (including EOF
+// and empty input) returns false.
+func confirm(message:string):bool {
+    // INTRINSIC: wired to omni_io_confirm.
+    return false
+}
+
+// flush_stderr forces buffered stderr to be written. Stderr is usually
+// unbuffered, but Windows can buffer it under some conditions.
+func flush_stderr() {
+    // INTRINSIC: wired to omni_io_flush_stderr.
+}
+
+// style wraps `s` in an ANSI SGR escape sequence with the given code,
+// followed by a reset. Use this for unusual codes (e.g. 256-color fg
+// "38;5;208"); for common styles use the named helpers below.
+func style(s:string, code:string):string {
+    // INTRINSIC: wired to omni_io_style.
+    return s
+}
+
+// Text styles. Each wraps `s` in the appropriate SGR escape sequence.
+// They always emit the escape codes — gate on is_terminal() if you
+// want to skip when stdout isn't a TTY.
+func bold(s:string):string {
+    // INTRINSIC: wired to omni_io_bold.
+    return s
+}
+
+func dim(s:string):string {
+    // INTRINSIC: wired to omni_io_dim.
+    return s
+}
+
+func italic(s:string):string {
+    // INTRINSIC: wired to omni_io_italic.
+    return s
+}
+
+func underline(s:string):string {
+    // INTRINSIC: wired to omni_io_underline.
+    return s
+}
+
+// Foreground colors.
+func red(s:string):string {
+    // INTRINSIC: wired to omni_io_red.
+    return s
+}
+
+func green(s:string):string {
+    // INTRINSIC: wired to omni_io_green.
+    return s
+}
+
+func yellow(s:string):string {
+    // INTRINSIC: wired to omni_io_yellow.
+    return s
+}
+
+func blue(s:string):string {
+    // INTRINSIC: wired to omni_io_blue.
+    return s
+}
+
+func magenta(s:string):string {
+    // INTRINSIC: wired to omni_io_magenta.
+    return s
+}
+
+func cyan(s:string):string {
+    // INTRINSIC: wired to omni_io_cyan.
+    return s
+}
+
 // read_line_async reads a line from standard input asynchronously
 // [PARTIAL] Returns a Promise but currently executes synchronously
 // The Promise is immediately resolved with the result.

@@ -37,6 +37,24 @@ int32_t omni_io_is_float(const char* str);
 char* omni_io_prompt(const char* message);
 const char** omni_io_read_lines(int32_t* out_len);
 char* omni_io_sprintln(const char* str);
+void omni_io_printf(const char* format, const char** args, int32_t args_len);
+void omni_io_eprintf(const char* format, const char** args, int32_t args_len);
+void omni_io_print_each(const char** items, int32_t n);
+void omni_io_eprint_each(const char** items, int32_t n);
+char* omni_io_eprompt(const char* message);
+int32_t omni_io_confirm(const char* message);
+void omni_io_flush_stderr(void);
+char* omni_io_style(const char* s, const char* code);
+char* omni_io_bold(const char* s);
+char* omni_io_dim(const char* s);
+char* omni_io_italic(const char* s);
+char* omni_io_underline(const char* s);
+char* omni_io_red(const char* s);
+char* omni_io_green(const char* s);
+char* omni_io_yellow(const char* s);
+char* omni_io_blue(const char* s);
+char* omni_io_magenta(const char* s);
+char* omni_io_cyan(const char* s);
 
 // Logging functions
 void omni_log_debug(const char* message);

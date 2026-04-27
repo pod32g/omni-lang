@@ -1,0 +1,11 @@
+// Stdin-driven test for std.io.confirm. e2e_test.go pipes "y\n" then
+// "n\n" and expects exit 0 and 1 respectively.
+import std
+
+func main():int {
+    let yes:bool = std.io.confirm("ok? ")
+    if yes {
+        return 0
+    }
+    return 1
+}

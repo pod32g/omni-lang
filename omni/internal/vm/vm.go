@@ -211,6 +211,39 @@ func parseFloatStrict(s string) (float64, bool) {
 	return f, true
 }
 
+// vmStringSlice extracts an []string from a Result whose value is an
+// array<string>. Falls back to a permissive []interface{} unbox.
+func vmStringSlice(r Result) []string {
+	if s, ok := r.Value.([]string); ok {
+		return s
+	}
+	if as, ok := r.Value.([]interface{}); ok {
+		out := make([]string, 0, len(as))
+		for _, a := range as {
+			if s, ok := a.(string); ok {
+				out = append(out, s)
+			} else {
+				out = append(out, fmt.Sprint(a))
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// ansiWrap returns s wrapped in an SGR escape sequence with the given code.
+func ansiWrap(s, code string) string {
+	return "\x1b[" + code + "m" + s + "\x1b[0m"
+}
+
+func ansiIntrinsic(fr *frame, operands []mir.Operand, code string) (Result, bool) {
+	if len(operands) == 1 {
+		s, _ := operandValue(fr, operands[0]).Value.(string)
+		return Result{Type: "string", Value: ansiWrap(s, code)}, true
+	}
+	return Result{}, false
+}
+
 // vmSprintf mirrors omni_io_sprintf in the C runtime: %s is replaced in
 // order by entries in args; %% emits a literal '%'; other % directives
 // are left intact.
@@ -2596,6 +2629,90 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			_, ok := parseFloatStrict(s)
 			return Result{Type: "bool", Value: ok}, true
 		}
+	case "std.io.printf":
+		if len(operands) >= 2 {
+			format, _ := operandValue(fr, operands[0]).Value.(string)
+			args := vmStringSlice(operandValue(fr, operands[1]))
+			fmt.Print(vmSprintf(format, args))
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.eprintf":
+		if len(operands) >= 2 {
+			format, _ := operandValue(fr, operands[0]).Value.(string)
+			args := vmStringSlice(operandValue(fr, operands[1]))
+			fmt.Fprint(os.Stderr, vmSprintf(format, args))
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.print_each":
+		if len(operands) == 1 {
+			items := vmStringSlice(operandValue(fr, operands[0]))
+			for _, item := range items {
+				fmt.Println(item)
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.eprint_each":
+		if len(operands) == 1 {
+			items := vmStringSlice(operandValue(fr, operands[0]))
+			for _, item := range items {
+				fmt.Fprintln(os.Stderr, item)
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.eprompt":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Fprint(os.Stderr, arg.Value)
+			os.Stderr.Sync()
+			line, err := readLineFromStdin()
+			if err != nil && !errors.Is(err, io.EOF) {
+				return Result{Type: "string", Value: ""}, true
+			}
+			return Result{Type: "string", Value: line}, true
+		}
+	case "std.io.confirm":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Print(arg.Value)
+			os.Stdout.Sync()
+			line, err := readLineFromStdin()
+			yes := false
+			if err == nil || errors.Is(err, io.EOF) {
+				if len(line) > 0 && (line[0] == 'y' || line[0] == 'Y') {
+					yes = true
+				}
+			}
+			return Result{Type: "bool", Value: yes}, true
+		}
+	case "std.io.flush_stderr":
+		os.Stderr.Sync()
+		return Result{Type: "void", Value: nil}, true
+	case "std.io.style":
+		if len(operands) == 2 {
+			s, _ := operandValue(fr, operands[0]).Value.(string)
+			code, _ := operandValue(fr, operands[1]).Value.(string)
+			return Result{Type: "string", Value: ansiWrap(s, code)}, true
+		}
+	case "std.io.bold":
+		return ansiIntrinsic(fr, operands, "1")
+	case "std.io.dim":
+		return ansiIntrinsic(fr, operands, "2")
+	case "std.io.italic":
+		return ansiIntrinsic(fr, operands, "3")
+	case "std.io.underline":
+		return ansiIntrinsic(fr, operands, "4")
+	case "std.io.red":
+		return ansiIntrinsic(fr, operands, "31")
+	case "std.io.green":
+		return ansiIntrinsic(fr, operands, "32")
+	case "std.io.yellow":
+		return ansiIntrinsic(fr, operands, "33")
+	case "std.io.blue":
+		return ansiIntrinsic(fr, operands, "34")
+	case "std.io.magenta":
+		return ansiIntrinsic(fr, operands, "35")
+	case "std.io.cyan":
+		return ansiIntrinsic(fr, operands, "36")
 	case "std.io.read_line_async":
 		// Async version - execute in goroutine and return Promise
 		promiseID := newPromise()

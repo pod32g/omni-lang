@@ -24,13 +24,27 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `parse_float(s)` - Wired to `omni_io_parse_float` (returns 0.0 on failure)
 - [IMPLEMENTED] `is_int(s)` - Wired to `omni_io_is_int` (predicate)
 - [IMPLEMENTED] `is_float(s)` - Wired to `omni_io_is_float` (predicate)
+- [IMPLEMENTED] `printf(format, args)` - Wired to `omni_io_printf` (sprintf + write to stdout)
+- [IMPLEMENTED] `eprintf(format, args)` - Wired to `omni_io_eprintf` (sprintf + write to stderr)
+- [IMPLEMENTED] `print_each(items)` - Wired to `omni_io_print_each` (one line per item)
+- [IMPLEMENTED] `eprint_each(items)` - Wired to `omni_io_eprint_each` (stderr)
+- [IMPLEMENTED] `eprompt(message)` - Wired to `omni_io_eprompt` (prompt to stderr)
+- [IMPLEMENTED] `confirm(message)` - Wired to `omni_io_confirm` (y/n prompt)
+- [IMPLEMENTED] `flush_stderr()` - Wired to `omni_io_flush_stderr`
+- [IMPLEMENTED] `style(s, code)` - Wired to `omni_io_style` (generic ANSI SGR wrap)
+- [IMPLEMENTED] `bold(s)`, `dim(s)`, `italic(s)`, `underline(s)` - ANSI text styles
+- [IMPLEMENTED] `red(s)`, `green(s)`, `yellow(s)`, `blue(s)`, `magenta(s)`, `cyan(s)` - ANSI foreground colors
 
 Surface mirrors Go's `fmt` + `bufio` + `io` as far as makes sense
-without varargs, byte arrays, or Reader/Writer interfaces. VM and C
-backend parity pinned by `tests/e2e/std_io_basic.omni`,
-`std_io_read.omni`, `std_io_extras.omni`, `std_io_lines.omni`
-(`TestStdIoBasic`, `TestStdIoRead`, `TestStdIoExtras`,
-`TestStdIoReadLines`).
+without varargs, byte arrays, or Reader/Writer interfaces. ANSI
+helpers always emit escape codes — gate on `is_terminal()` if you
+want to skip when stdout isn't a TTY.
+
+VM and C backend parity pinned by `tests/e2e/std_io_basic.omni`,
+`std_io_read.omni`, `std_io_extras.omni`, `std_io_lines.omni`,
+`std_io_format.omni`, `std_io_confirm.omni` (`TestStdIoBasic`,
+`TestStdIoRead`, `TestStdIoExtras`, `TestStdIoReadLines`,
+`TestStdIoFormat`, `TestStdIoConfirm`).
 
 ### std.string
 - [IMPLEMENTED] `length(s)` - Wired to `omni_strlen`

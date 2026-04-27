@@ -85,6 +85,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **std.io: printing, prompting, ANSI styling, formatted writes**.
+  Adds `printf` / `eprintf` (sprintf + stdout/stderr), `print_each` /
+  `eprint_each` (one line per array entry), `eprompt` (prompt to
+  stderr — keeps stdout pipes clean), `confirm` (y/n prompt),
+  `flush_stderr`, plus ANSI styling: a generic `style(s, code)` and
+  named shortcuts `bold`, `dim`, `italic`, `underline`, `red`,
+  `green`, `yellow`, `blue`, `magenta`, `cyan`. Helpers always emit
+  the SGR escape codes — call sites should gate on `is_terminal()`
+  when output may be piped. Pinned by `TestStdIoFormat` and
+  `TestStdIoConfirm` (the latter pipes both `y\n` and `n\n` to
+  verify the predicate's truthy/falsy paths on both backends).
 - **std.io expansion (Go fmt/bufio analogs)**: `is_terminal`,
   `read_lines`, `read_int`, `read_float`, `prompt`, `sprint`,
   `sprintln`, `sprintf` (`%s` only), `parse_int`, `parse_float`,

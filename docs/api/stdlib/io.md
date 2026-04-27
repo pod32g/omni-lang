@@ -202,6 +202,67 @@ func main():int {
 }
 ```
 
+### printf, eprintf
+
+`printf(format, args)` is `sprintf` + write to stdout; `eprintf` writes to stderr. Same `%s`-only substitution rules as `sprintf`.
+
+```omni
+import std.io as io
+
+func main():int {
+    let args:array<string> = ["world"]
+    io.printf("hello, %s!\n", args)
+    return 0
+}
+```
+
+### print_each, eprint_each
+
+Write each entry of `items` on its own line. `print_each` to stdout, `eprint_each` to stderr.
+
+### eprompt(message): string
+
+Like `prompt` but writes the message to stderr. Use this when stdout is being piped to another tool and the prompt shouldn't end up in the pipeline.
+
+### confirm(message): bool
+
+Display `message`, read one line, return `true` when the answer starts with `y` or `Y`. Anything else (including EOF and empty input) returns `false`.
+
+### flush_stderr(): void
+
+Force buffered stderr to be written. Stderr is usually unbuffered, but Windows can buffer it under some conditions.
+
+### Colors and styles
+
+ANSI SGR helpers wrap `s` in an escape sequence and reset at the end. They always emit codes — call `is_terminal()` and choose at the call site if you want to skip color when piping.
+
+| Function | SGR code |
+|----------|----------|
+| `bold(s)` | `1` |
+| `dim(s)` | `2` |
+| `italic(s)` | `3` |
+| `underline(s)` | `4` |
+| `red(s)` | `31` |
+| `green(s)` | `32` |
+| `yellow(s)` | `33` |
+| `blue(s)` | `34` |
+| `magenta(s)` | `35` |
+| `cyan(s)` | `36` |
+| `style(s, code)` | any (e.g. `"38;5;208"` for orange in 256-color) |
+
+```omni
+import std.io as io
+
+func main():int {
+    if io.is_terminal() {
+        io.println(io.bold(io.green("ok")))
+    } else {
+        io.println("ok")
+    }
+    return 0
+}
+```
+
 ## Usage Examples
 
 ### Basic Output
