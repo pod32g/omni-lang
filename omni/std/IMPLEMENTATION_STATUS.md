@@ -10,11 +10,27 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `eprint(value)` - Wired to `omni_eprint_string` (stderr)
 - [IMPLEMENTED] `eprintln(value)` - Wired to `omni_eprintln_string` (stderr)
 - [IMPLEMENTED] `flush()` - Wired to `omni_io_flush`
+- [IMPLEMENTED] `is_terminal()` - Wired to `omni_io_is_terminal` (stdout TTY check)
 - [IMPLEMENTED] `read_line()` - Wired to `omni_read_line`
 - [IMPLEMENTED] `read_all()` - Wired to `omni_read_all`
+- [IMPLEMENTED] `read_lines()` - Wired to `omni_io_read_lines` (split + drop trailing empty)
+- [IMPLEMENTED] `read_int()` - Wired (read_line + omni_io_parse_int)
+- [IMPLEMENTED] `read_float()` - Wired (read_line + omni_io_parse_float)
+- [IMPLEMENTED] `prompt(message)` - Wired to `omni_io_prompt` (print + flush + read_line)
+- [IMPLEMENTED] `sprint(value)` - Compile-time dispatched to omni_*_to_string
+- [IMPLEMENTED] `sprintln(value)` - Wired to `omni_io_sprintln` (sprint + "\n")
+- [IMPLEMENTED] `sprintf(format, args)` - Wired to `omni_io_sprintf` (`%s` substitution, `%%` escape)
+- [IMPLEMENTED] `parse_int(s)` - Wired to `omni_io_parse_int` (returns 0 on failure)
+- [IMPLEMENTED] `parse_float(s)` - Wired to `omni_io_parse_float` (returns 0.0 on failure)
+- [IMPLEMENTED] `is_int(s)` - Wired to `omni_io_is_int` (predicate)
+- [IMPLEMENTED] `is_float(s)` - Wired to `omni_io_is_float` (predicate)
 
-VM and C backend parity pinned by `tests/e2e/std_io_basic.omni` /
-`std_io_read.omni` (`TestStdIoBasic`, `TestStdIoRead`).
+Surface mirrors Go's `fmt` + `bufio` + `io` as far as makes sense
+without varargs, byte arrays, or Reader/Writer interfaces. VM and C
+backend parity pinned by `tests/e2e/std_io_basic.omni`,
+`std_io_read.omni`, `std_io_extras.omni`, `std_io_lines.omni`
+(`TestStdIoBasic`, `TestStdIoRead`, `TestStdIoExtras`,
+`TestStdIoReadLines`).
 
 ### std.string
 - [IMPLEMENTED] `length(s)` - Wired to `omni_strlen`

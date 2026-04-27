@@ -1,0 +1,22 @@
+// Stdin-driven smoke for std.io.read_lines: e2e_test.go pipes
+// "alpha\nbeta\ngamma\n" into stdin. read_lines must drop the trailing
+// empty entry created by the final newline, returning exactly three
+// lines.
+import std
+
+func main():int {
+    let lines:array<string> = std.io.read_lines()
+    if len(lines) != 3 {
+        return 1
+    }
+    if !std.string.equals(lines[0], "alpha") {
+        return 2
+    }
+    if !std.string.equals(lines[1], "beta") {
+        return 3
+    }
+    if !std.string.equals(lines[2], "gamma") {
+        return 4
+    }
+    return 0
+}

@@ -26,8 +26,17 @@ void omni_println_string(const char* str);
 void omni_eprint_string(const char* str);
 void omni_eprintln_string(const char* str);
 void omni_io_flush(void);
+int32_t omni_io_is_terminal(void);
 char* omni_read_line(void);
 char* omni_read_all(void);
+char* omni_io_sprintf(const char* format, const char** args, int32_t args_len);
+int32_t omni_io_parse_int(const char* str);
+double omni_io_parse_float(const char* str);
+int32_t omni_io_is_int(const char* str);
+int32_t omni_io_is_float(const char* str);
+char* omni_io_prompt(const char* message);
+const char** omni_io_read_lines(int32_t* out_len);
+char* omni_io_sprintln(const char* str);
 
 // Logging functions
 void omni_log_debug(const char* message);

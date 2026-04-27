@@ -184,6 +184,145 @@ void omni_io_flush(void) {
     fflush(stdout);
 }
 
+int32_t omni_io_is_terminal(void) {
+#ifdef _WIN32
+    return _isatty(_fileno(stdout)) ? 1 : 0;
+#else
+    return isatty(fileno(stdout)) ? 1 : 0;
+#endif
+}
+
+// omni_io_prompt: print message, flush, read one line. Caller frees.
+char* omni_io_prompt(const char* message) {
+    if (message) fputs(message, stdout);
+    fflush(stdout);
+    return omni_read_line();
+}
+
+// omni_io_read_lines: read all of stdin and split on newlines. Drops the
+// final empty entry when the input ended in '\n' so a file ending with a
+// newline doesn't produce a phantom blank line at the end.
+const char** omni_io_read_lines(int32_t* out_len) {
+    char* all = omni_read_all();
+    if (!all) {
+        if (out_len) *out_len = 0;
+        return NULL;
+    }
+    int32_t n = 0;
+    const char** lines = omni_string_split_lines(all, &n);
+    if (n > 0 && lines && lines[n-1] && lines[n-1][0] == '\0') {
+        n--;
+    }
+    if (out_len) *out_len = n;
+    free(all);
+    return lines;
+}
+
+// omni_io_sprintln: returns str + "\n" as a fresh heap string.
+char* omni_io_sprintln(const char* str) {
+    if (!str) str = "";
+    size_t n = strlen(str);
+    char* buf = (char*)malloc(n + 2);
+    if (!buf) return strdup("\n");
+    memcpy(buf, str, n);
+    buf[n] = '\n';
+    buf[n + 1] = '\0';
+    return buf;
+}
+
+// Quiet integer parser: returns the parsed value or 0 on any failure.
+// Pair with omni_io_is_int when you need to distinguish a parsed 0 from
+// a parse failure.
+int32_t omni_io_parse_int(const char* str) {
+    if (!str || !*str) return 0;
+    errno = 0;
+    char* endptr;
+    long result = strtol(str, &endptr, 10);
+    if (errno == ERANGE || result < INT32_MIN || result > INT32_MAX) return 0;
+    if (endptr == str || *endptr != '\0') return 0;
+    return (int32_t)result;
+}
+
+double omni_io_parse_float(const char* str) {
+    if (!str || !*str) return 0.0;
+    errno = 0;
+    char* endptr;
+    double result = strtod(str, &endptr);
+    if (errno == ERANGE) return 0.0;
+    if (endptr == str || *endptr != '\0') return 0.0;
+    return result;
+}
+
+int32_t omni_io_is_int(const char* str) {
+    if (!str || !*str) return 0;
+    errno = 0;
+    char* endptr;
+    long result = strtol(str, &endptr, 10);
+    if (errno == ERANGE || result < INT32_MIN || result > INT32_MAX) return 0;
+    if (endptr == str || *endptr != '\0') return 0;
+    return 1;
+}
+
+int32_t omni_io_is_float(const char* str) {
+    if (!str || !*str) return 0;
+    errno = 0;
+    char* endptr;
+    (void)strtod(str, &endptr);
+    if (errno == ERANGE) return 0;
+    if (endptr == str || *endptr != '\0') return 0;
+    return 1;
+}
+
+// omni_io_sprintf does %s-substitution: each "%s" in `format` is replaced
+// in order by the next entry in `args`. A literal "%%" emits a single "%".
+// Other % directives are left intact (unlike C's printf — we don't try to
+// type-dispatch since OmniLang has no varargs yet). Caller must free the
+// returned heap string.
+char* omni_io_sprintf(const char* format, const char** args, int32_t args_len) {
+    if (!format) return strdup("");
+    size_t cap = strlen(format) + 32;
+    size_t len = 0;
+    char* buf = (char*)malloc(cap);
+    if (!buf) return strdup("");
+    int32_t arg_idx = 0;
+    for (const char* p = format; *p; ) {
+        const char* chunk = NULL;
+        size_t chunk_len = 0;
+        if (p[0] == '%' && p[1] == 's') {
+            if (arg_idx < args_len && args && args[arg_idx]) {
+                chunk = args[arg_idx];
+                chunk_len = strlen(chunk);
+            } else {
+                chunk = "";
+                chunk_len = 0;
+            }
+            arg_idx++;
+            p += 2;
+        } else if (p[0] == '%' && p[1] == '%') {
+            chunk = "%";
+            chunk_len = 1;
+            p += 2;
+        } else {
+            chunk = p;
+            chunk_len = 1;
+            p++;
+        }
+        if (len + chunk_len + 1 >= cap) {
+            while (len + chunk_len + 1 >= cap) cap *= 2;
+            char* nb = (char*)realloc(buf, cap);
+            if (!nb) {
+                free(buf);
+                return strdup("");
+            }
+            buf = nb;
+        }
+        memcpy(buf + len, chunk, chunk_len);
+        len += chunk_len;
+    }
+    buf[len] = '\0';
+    return buf;
+}
+
 // NOTE: Returns a newly allocated string - caller must free it using free()
 // This function allocates memory that must be freed by the caller to avoid leaks.
 char* omni_read_line(void) {

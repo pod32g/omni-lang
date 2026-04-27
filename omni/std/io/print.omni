@@ -1,8 +1,14 @@
 // std.io - Input/Output functions for OmniLang
 //
+// Surface mirrors Go's fmt + bufio + io as closely as makes sense without
+// goroutines, varargs, or Reader/Writer interfaces.
+//
 // IMPLEMENTATION STATUS:
 // [IMPLEMENTED] (Runtime): print, println, eprint, eprintln, flush,
-//    read_line, read_all
+//    is_terminal, read_line, read_all, sprintf, parse_int, parse_float,
+//    is_int, is_float
+// [IMPLEMENTED] (OmniLang body): sprint, sprintln, prompt, read_lines,
+//    read_int, read_float
 // [PARTIAL] read_line_async (returns Promise but is synchronous)
 
 // print outputs a printable value to stdout without a newline
@@ -49,6 +55,96 @@ func read_line():string {
 func read_all():string {
     // INTRINSIC: wired to omni_read_all.
     return ""
+}
+
+// is_terminal reports whether stdout is connected to a terminal (TTY).
+// Use this to decide whether to emit colors or interactive prompts when
+// the program might be redirected to a file or pipe.
+// Mirrors golang.org/x/term.IsTerminal(os.Stdout.Fd()).
+func is_terminal():bool {
+    // INTRINSIC: wired to omni_io_is_terminal.
+    return false
+}
+
+// sprint converts a printable value to a string. Mirrors fmt.Sprint
+// (without the variadic spacing rules — single-value only, since we
+// don't have varargs).
+func sprint(value:string | int | float | double | bool):string {
+    // INTRINSIC: compiled to the appropriate omni_*_to_string call.
+    return ""
+}
+
+// sprintln is sprint(value) + "\n". Mirrors fmt.Sprintln.
+func sprintln(value:string | int | float | double | bool):string {
+    return sprint(value) + "\n"
+}
+
+// sprintf substitutes "%s" placeholders in `format` with successive
+// entries from `args`. "%%" emits a literal '%'. Other % directives
+// are left intact (we don't type-dispatch since OmniLang has no
+// varargs). Loosely mirrors fmt.Sprintf, scoped to %s.
+func sprintf(format:string, args:array<string>):string {
+    // INTRINSIC: wired to omni_io_sprintf.
+    return ""
+}
+
+// prompt writes a message to stdout, flushes, then reads one line. The
+// trailing newline is stripped from the returned string. Common pattern
+// for interactive CLIs; Go composes this manually each time.
+func prompt(message:string):string {
+    print(message)
+    flush()
+    return read_line()
+}
+
+// read_lines slurps stdin to EOF and returns each line as an array
+// element. The trailing newline of each line is stripped. Mirrors the
+// bufio.Scanner-over-stdin pattern in Go.
+func read_lines():array<string> {
+    return std.string.split_lines(read_all())
+}
+
+// parse_int parses a decimal integer string. Returns the parsed value
+// or 0 on any error (overflow, non-digit characters, empty input).
+// Pair with is_int when you need to distinguish a parsed 0 from a
+// parse failure. Mirrors strconv.Atoi but discards the error.
+func parse_int(s:string):int {
+    // INTRINSIC: wired to omni_io_parse_int.
+    return 0
+}
+
+// parse_float parses a floating-point string. Returns 0.0 on failure.
+// Pair with is_float to distinguish a parsed 0.0 from a parse failure.
+// Mirrors strconv.ParseFloat with the error discarded.
+func parse_float(s:string):float {
+    // INTRINSIC: wired to omni_io_parse_float.
+    return 0.0
+}
+
+// is_int reports whether `s` parses cleanly as an int (no leading
+// space, no trailing junk, in range).
+func is_int(s:string):bool {
+    // INTRINSIC: wired to omni_io_is_int.
+    return false
+}
+
+// is_float reports whether `s` parses cleanly as a float.
+func is_float(s:string):bool {
+    // INTRINSIC: wired to omni_io_is_float.
+    return false
+}
+
+// read_int reads one line from stdin and parses it as an int. Returns
+// 0 on parse failure or EOF. Roughly equivalent to fmt.Scan(&n) but
+// without the err return.
+func read_int():int {
+    return parse_int(read_line())
+}
+
+// read_float reads one line from stdin and parses it as a float.
+// Returns 0.0 on parse failure or EOF.
+func read_float():float {
+    return parse_float(read_line())
 }
 
 // read_line_async reads a line from standard input asynchronously

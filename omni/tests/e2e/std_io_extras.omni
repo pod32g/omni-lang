@@ -1,0 +1,85 @@
+// Audit for the io extensions that mirror Go's fmt + bufio: sprint,
+// sprintln, sprintf, parse_int, parse_float, is_int, is_float, and
+// is_terminal. Each step returns a distinct nonzero error code on
+// failure; success is 0.
+import std
+
+func main():int {
+    // sprint family
+    if !std.string.equals(std.io.sprint(42), "42") {
+        return 1
+    }
+    if !std.string.equals(std.io.sprint("hello"), "hello") {
+        return 2
+    }
+    let s3:string = std.io.sprintln(7)
+    if std.string.length(s3) != 2 {
+        return 3
+    }
+    if !std.string.starts_with(s3, "7") {
+        return 4
+    }
+
+    // sprintf %s substitution
+    let args:array<string> = ["world", "42"]
+    if !std.string.equals(std.io.sprintf("hello %s, num %s", args), "hello world, num 42") {
+        return 5
+    }
+    if !std.string.equals(std.io.sprintf("100%% sure", args), "100% sure") {
+        return 6
+    }
+
+    // parse_int
+    if std.io.parse_int("42") != 42 {
+        return 7
+    }
+    if std.io.parse_int("-7") != -7 {
+        return 8
+    }
+    if std.io.parse_int("abc") != 0 {
+        return 9
+    }
+    if std.io.parse_int("") != 0 {
+        return 10
+    }
+
+    // is_int
+    if !std.io.is_int("42") {
+        return 11
+    }
+    if !std.io.is_int("-7") {
+        return 12
+    }
+    if std.io.is_int("abc") {
+        return 13
+    }
+    if std.io.is_int("12.3") {
+        return 14
+    }
+    if std.io.is_int("") {
+        return 15
+    }
+    if std.io.is_int("42 ") {
+        return 16
+    }
+
+    // is_float (acceptance — value-checking would need float comparison)
+    if !std.io.is_float("3.14") {
+        return 17
+    }
+    if !std.io.is_float("42") {
+        return 18
+    }
+    if std.io.is_float("abc") {
+        return 19
+    }
+    if std.io.is_float("") {
+        return 20
+    }
+
+    // is_terminal: just verify it returns without error. Value depends
+    // on the CI environment so we don't assert true/false.
+    let _t:bool = std.io.is_terminal()
+
+    return 0
+}

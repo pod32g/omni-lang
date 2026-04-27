@@ -2286,10 +2286,27 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 		// declarations whenever a new intrinsic lands.
 		if strings.Contains(calleeName, "io.") {
 			switch {
-			case strings.HasSuffix(calleeName, ".read_line"):
+			case strings.HasSuffix(calleeName, ".read_line"),
+				strings.HasSuffix(calleeName, ".read_all"),
+				strings.HasSuffix(calleeName, ".sprint"),
+				strings.HasSuffix(calleeName, ".sprintln"),
+				strings.HasSuffix(calleeName, ".sprintf"),
+				strings.HasSuffix(calleeName, ".prompt"):
 				resultType = "string"
+			case strings.HasSuffix(calleeName, ".read_lines"):
+				resultType = "array<string>"
 			case strings.HasSuffix(calleeName, ".read_line_async"):
 				resultType = "Promise<string>"
+			case strings.HasSuffix(calleeName, ".is_terminal"),
+				strings.HasSuffix(calleeName, ".is_int"),
+				strings.HasSuffix(calleeName, ".is_float"):
+				resultType = "bool"
+			case strings.HasSuffix(calleeName, ".parse_int"),
+				strings.HasSuffix(calleeName, ".read_int"):
+				resultType = "int"
+			case strings.HasSuffix(calleeName, ".parse_float"),
+				strings.HasSuffix(calleeName, ".read_float"):
+				resultType = "float"
 			default:
 				resultType = "void"
 			}

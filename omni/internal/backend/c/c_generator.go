@@ -1915,8 +1915,14 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						funcName := inst.Operands[0].Literal
 						switch funcName {
 						case "std.io.read_line", "io.read_line",
-							"std.io.read_all", "io.read_all":
+							"std.io.read_all", "io.read_all",
+							"std.io.sprint", "io.sprint",
+							"std.io.sprintln", "io.sprintln",
+							"std.io.sprintf", "io.sprintf",
+							"std.io.prompt", "io.prompt":
 							varType = "const char*"
+						case "std.io.read_lines", "io.read_lines":
+							varType = "const char**"
 						case "std.string.char_at", "string.char_at":
 							varType = "char"
 						}
@@ -2028,8 +2034,12 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						"omni_chdir", "omni_mkdir", "omni_rmdir", "omni_remove",
 						"omni_rename", "omni_copy", "omni_exists",
 						"omni_is_file", "omni_is_dir",
-						"omni_url_is_valid":
+						"omni_url_is_valid",
+						"omni_io_is_terminal", "omni_io_is_int", "omni_io_is_float",
+						"omni_io_parse_int":
 						varType = "int32_t"
+					case "omni_io_parse_float":
+						varType = "double"
 					case "omni_ip_parse", "omni_network_get_local_ip":
 						varType = "omni_ip_address_t*"
 					case "omni_url_parse":
@@ -2987,6 +2997,37 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.output.WriteString("  omni_io_flush();\n")
 				return nil
 			}
+			if funcName == "std.io.is_terminal" || funcName == "io.is_terminal" {
+				if inst.ID != mir.InvalidValue {
+					varName := g.getVariableName(inst.ID)
+					g.output.WriteString(fmt.Sprintf("  %s = omni_io_is_terminal();\n", varName))
+					g.valueTypes[inst.ID] = "bool"
+				} else {
+					g.output.WriteString("  omni_io_is_terminal();\n")
+				}
+				return nil
+			}
+			if (funcName == "std.io.sprint" || funcName == "io.sprint") && len(inst.Operands) >= 2 {
+				varName := g.getVariableName(inst.ID)
+				op := inst.Operands[1]
+				var arg string
+				if op.Type == "string" {
+					arg = g.getOperandValue(op)
+				} else {
+					arg = g.convertOperandToString(op)
+				}
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = %s;\n", varName, arg))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = %s;\n", varName, arg))
+				}
+				g.valueTypes[inst.ID] = "string"
+				// convertOperandToString already registers a temp for
+				// cleanup; v_id and that temp alias the same heap pointer,
+				// so we don't add v_id to stringsToFree (would double-free).
+				return nil
+			}
 
 			// Special-case std.io.read_line to ensure result is assigned
 			if funcName == "std.io.read_line" || funcName == "io.read_line" {
@@ -3013,6 +3054,99 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				} else {
 					g.output.WriteString("  omni_read_all();\n")
 				}
+				return nil
+			}
+			if (funcName == "std.io.sprintln" || funcName == "io.sprintln") && len(inst.Operands) >= 2 {
+				varName := g.getVariableName(inst.ID)
+				op := inst.Operands[1]
+				var arg string
+				if op.Type == "string" {
+					arg = g.getOperandValue(op)
+				} else {
+					arg = g.convertOperandToString(op)
+				}
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_io_sprintln(%s);\n", varName, arg))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_io_sprintln(%s);\n", varName, arg))
+				}
+				g.valueTypes[inst.ID] = "string"
+				// omni_io_sprintln returns a fresh heap string distinct
+				// from any temp that convertOperandToString may have
+				// emitted, so we *do* free this one — but the
+				// convert-temp is already separately freed.
+				g.stringsToFree[inst.ID] = true
+				return nil
+			}
+			if (funcName == "std.io.prompt" || funcName == "io.prompt") && len(inst.Operands) >= 2 {
+				varName := g.getVariableName(inst.ID)
+				msg := g.getOperandValue(inst.Operands[1])
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_io_prompt(%s);\n", varName, msg))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_io_prompt(%s);\n", varName, msg))
+				}
+				g.valueTypes[inst.ID] = "string"
+				g.stringsToFree[inst.ID] = true
+				return nil
+			}
+			if funcName == "std.io.read_lines" || funcName == "io.read_lines" {
+				varName := g.getVariableName(inst.ID)
+				lenVar := fmt.Sprintf("__omni_read_lines_len_%d", inst.ID)
+				g.output.WriteString(fmt.Sprintf("  int32_t %s = 0;\n", lenVar))
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char** %s = omni_io_read_lines(&%s);\n", varName, lenVar))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_io_read_lines(&%s);\n", varName, lenVar))
+				}
+				g.valueTypes[inst.ID] = "array<string>"
+				g.arrayLengthExprs[inst.ID] = lenVar
+				return nil
+			}
+			if funcName == "std.io.read_int" || funcName == "io.read_int" {
+				varName := g.getVariableName(inst.ID)
+				tmp := fmt.Sprintf("__omni_read_int_tmp_%d", inst.ID)
+				g.output.WriteString(fmt.Sprintf("  const char* %s = omni_read_line();\n", tmp))
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_io_parse_int(%s);\n", varName, tmp))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_io_parse_int(%s);\n", varName, tmp))
+				}
+				g.output.WriteString(fmt.Sprintf("  free((void*)%s);\n", tmp))
+				g.valueTypes[inst.ID] = "int"
+				return nil
+			}
+			if funcName == "std.io.read_float" || funcName == "io.read_float" {
+				varName := g.getVariableName(inst.ID)
+				tmp := fmt.Sprintf("__omni_read_float_tmp_%d", inst.ID)
+				g.output.WriteString(fmt.Sprintf("  const char* %s = omni_read_line();\n", tmp))
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  double %s = omni_io_parse_float(%s);\n", varName, tmp))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_io_parse_float(%s);\n", varName, tmp))
+				}
+				g.output.WriteString(fmt.Sprintf("  free((void*)%s);\n", tmp))
+				g.valueTypes[inst.ID] = "float"
+				return nil
+			}
+			if (funcName == "std.io.sprintf" || funcName == "io.sprintf") && len(inst.Operands) >= 3 {
+				varName := g.getVariableName(inst.ID)
+				fmtArg := g.getOperandValue(inst.Operands[1])
+				argsArr := g.getOperandValue(inst.Operands[2])
+				argsLen := g.getOperandLengthExpr(inst.Operands[2])
+				if !g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = omni_io_sprintf(%s, %s, %s);\n", varName, fmtArg, argsArr, argsLen))
+					g.declaredVariables[inst.ID] = true
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_io_sprintf(%s, %s, %s);\n", varName, fmtArg, argsArr, argsLen))
+				}
+				g.valueTypes[inst.ID] = "string"
+				g.stringsToFree[inst.ID] = true
 				return nil
 			}
 
@@ -6948,10 +7082,22 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_eprintln_string"
 	case "std.io.flush":
 		return "omni_io_flush"
+	case "std.io.is_terminal":
+		return "omni_io_is_terminal"
 	case "std.io.read_line":
 		return "omni_read_line"
 	case "std.io.read_all":
 		return "omni_read_all"
+	case "std.io.sprintf":
+		return "omni_io_sprintf"
+	case "std.io.parse_int":
+		return "omni_io_parse_int"
+	case "std.io.parse_float":
+		return "omni_io_parse_float"
+	case "std.io.is_int":
+		return "omni_io_is_int"
+	case "std.io.is_float":
+		return "omni_io_is_float"
 
 	// Logging functions
 	case "std.log.debug":
@@ -7360,10 +7506,34 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"io.eprintln":      "omni_eprintln_string",
 		"std.io.flush":     "omni_io_flush",
 		"io.flush":         "omni_io_flush",
+		"std.io.is_terminal": "omni_io_is_terminal",
+		"io.is_terminal":     "omni_io_is_terminal",
 		"std.io.read_line": "omni_read_line",
 		"io.read_line":     "omni_read_line",
 		"std.io.read_all":  "omni_read_all",
 		"io.read_all":      "omni_read_all",
+		"std.io.read_lines": "omni_io_read_lines",
+		"io.read_lines":     "omni_io_read_lines",
+		"std.io.read_int":   "omni_io_parse_int",
+		"io.read_int":       "omni_io_parse_int",
+		"std.io.read_float": "omni_io_parse_float",
+		"io.read_float":     "omni_io_parse_float",
+		"std.io.prompt":     "omni_io_prompt",
+		"io.prompt":         "omni_io_prompt",
+		"std.io.sprint":     "omni_int_to_string",
+		"io.sprint":         "omni_int_to_string",
+		"std.io.sprintln":   "omni_io_sprintln",
+		"io.sprintln":       "omni_io_sprintln",
+		"std.io.sprintf":   "omni_io_sprintf",
+		"io.sprintf":       "omni_io_sprintf",
+		"std.io.parse_int":   "omni_io_parse_int",
+		"io.parse_int":       "omni_io_parse_int",
+		"std.io.parse_float": "omni_io_parse_float",
+		"io.parse_float":     "omni_io_parse_float",
+		"std.io.is_int":      "omni_io_is_int",
+		"io.is_int":          "omni_io_is_int",
+		"std.io.is_float":    "omni_io_is_float",
+		"io.is_float":        "omni_io_is_float",
 
 		// String functions
 		"std.string.length":                   "omni_strlen",
@@ -8228,6 +8398,12 @@ func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 		"io.read_line":             true,
 		"std.io.read_all":          true,
 		"io.read_all":              true,
+		"std.io.sprint":            true,
+		"io.sprint":                true,
+		"std.io.sprintln":          true,
+		"io.sprintln":              true,
+		"std.io.sprintf":           true,
+		"io.sprintf":               true,
 		"std.string.concat":        true,
 		"std.string.substring":     true,
 		"std.string.trim":          true,

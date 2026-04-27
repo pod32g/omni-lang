@@ -187,6 +187,59 @@ func readAllFromStdin() (string, error) {
 	return string(data), nil
 }
 
+// parseIntStrict mirrors omni_io_parse_int / omni_io_is_int: requires
+// the entire string to be a decimal integer in int32 range.
+func parseIntStrict(s string) (int32, bool) {
+	if s == "" {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return 0, false
+	}
+	return int32(n), true
+}
+
+func parseFloatStrict(s string) (float64, bool) {
+	if s == "" {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, false
+	}
+	return f, true
+}
+
+// vmSprintf mirrors omni_io_sprintf in the C runtime: %s is replaced in
+// order by entries in args; %% emits a literal '%'; other % directives
+// are left intact.
+func vmSprintf(format string, args []string) string {
+	var out strings.Builder
+	out.Grow(len(format))
+	argIdx := 0
+	for i := 0; i < len(format); {
+		if i+1 < len(format) && format[i] == '%' {
+			switch format[i+1] {
+			case 's':
+				if argIdx < len(args) {
+					out.WriteString(args[argIdx])
+				}
+				argIdx++
+				i += 2
+				continue
+			case '%':
+				out.WriteByte('%')
+				i += 2
+				continue
+			}
+		}
+		out.WriteByte(format[i])
+		i++
+	}
+	return out.String()
+}
+
 // newPromise creates a new promise and returns its ID
 func newPromise() int {
 	promiseMu.Lock()
@@ -2415,6 +2468,33 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	case "std.io.flush":
 		os.Stdout.Sync()
 		return Result{Type: "void", Value: nil}, true
+	case "std.io.is_terminal":
+		stat, err := os.Stdout.Stat()
+		if err != nil {
+			return Result{Type: "bool", Value: false}, true
+		}
+		isTTY := (stat.Mode() & os.ModeCharDevice) != 0
+		return Result{Type: "bool", Value: isTTY}, true
+	case "std.io.sprintf":
+		if len(operands) >= 2 {
+			fmtArg := operandValue(fr, operands[0])
+			argsArg := operandValue(fr, operands[1])
+			format, _ := fmtArg.Value.(string)
+			argsSlice, _ := argsArg.Value.([]string)
+			if argsSlice == nil {
+				if as, ok := argsArg.Value.([]interface{}); ok {
+					for _, a := range as {
+						if s, ok := a.(string); ok {
+							argsSlice = append(argsSlice, s)
+						} else {
+							argsSlice = append(argsSlice, fmt.Sprint(a))
+						}
+					}
+				}
+			}
+			result := vmSprintf(format, argsSlice)
+			return Result{Type: "string", Value: result}, true
+		}
 	case "std.io.read_line":
 		line, err := readLineFromStdin()
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -2427,6 +2507,95 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			return Result{Type: "string", Value: ""}, true
 		}
 		return Result{Type: "string", Value: data}, true
+	case "std.io.sprint":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			return Result{Type: "string", Value: fmt.Sprint(arg.Value)}, true
+		}
+	case "std.io.sprintln":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			return Result{Type: "string", Value: fmt.Sprint(arg.Value) + "\n"}, true
+		}
+	case "std.io.prompt":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Print(arg.Value)
+			os.Stdout.Sync()
+			line, err := readLineFromStdin()
+			if err != nil && !errors.Is(err, io.EOF) {
+				return Result{Type: "string", Value: ""}, true
+			}
+			return Result{Type: "string", Value: line}, true
+		}
+	case "std.io.read_lines":
+		data, err := readAllFromStdin()
+		if err != nil && !errors.Is(err, io.EOF) {
+			return Result{Type: "array<string>", Value: []string{}}, true
+		}
+		if data == "" {
+			return Result{Type: "array<string>", Value: []string{}}, true
+		}
+		// Split on \n; drop the final empty element if the input ended in \n.
+		lines := strings.Split(data, "\n")
+		if len(lines) > 0 && lines[len(lines)-1] == "" {
+			lines = lines[:len(lines)-1]
+		}
+		return Result{Type: "array<string>", Value: lines}, true
+	case "std.io.read_int":
+		line, err := readLineFromStdin()
+		if err != nil && !errors.Is(err, io.EOF) {
+			return Result{Type: "int", Value: int64(0)}, true
+		}
+		n, ok := parseIntStrict(line)
+		if !ok {
+			n = 0
+		}
+		return Result{Type: "int", Value: int64(n)}, true
+	case "std.io.read_float":
+		line, err := readLineFromStdin()
+		if err != nil && !errors.Is(err, io.EOF) {
+			return Result{Type: "float", Value: 0.0}, true
+		}
+		f, ok := parseFloatStrict(line)
+		if !ok {
+			f = 0.0
+		}
+		return Result{Type: "float", Value: f}, true
+	case "std.io.parse_int":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			s, _ := arg.Value.(string)
+			n, ok := parseIntStrict(s)
+			if !ok {
+				n = 0
+			}
+			return Result{Type: "int", Value: int64(n)}, true
+		}
+	case "std.io.parse_float":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			s, _ := arg.Value.(string)
+			f, ok := parseFloatStrict(s)
+			if !ok {
+				f = 0.0
+			}
+			return Result{Type: "float", Value: f}, true
+		}
+	case "std.io.is_int":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			s, _ := arg.Value.(string)
+			_, ok := parseIntStrict(s)
+			return Result{Type: "bool", Value: ok}, true
+		}
+	case "std.io.is_float":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			s, _ := arg.Value.(string)
+			_, ok := parseFloatStrict(s)
+			return Result{Type: "bool", Value: ok}, true
+		}
 	case "std.io.read_line_async":
 		// Async version - execute in goroutine and return Promise
 		promiseID := newPromise()

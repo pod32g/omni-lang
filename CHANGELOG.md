@@ -85,6 +85,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **std.io expansion (Go fmt/bufio analogs)**: `is_terminal`,
+  `read_lines`, `read_int`, `read_float`, `prompt`, `sprint`,
+  `sprintln`, `sprintf` (`%s` only), `parse_int`, `parse_float`,
+  `is_int`, `is_float`. Surface mirrors Go's `fmt` + `bufio` + `io`
+  as far as makes sense without varargs, byte arrays, or Reader/
+  Writer interfaces. Wired through both backends — runtime adds
+  `omni_io_is_terminal`, `omni_io_sprintf`, `omni_io_sprintln`,
+  `omni_io_prompt`, `omni_io_read_lines`, `omni_io_parse_int`,
+  `omni_io_parse_float`, `omni_io_is_int`, `omni_io_is_float`.
+  Pinned by `TestStdIoExtras` and `TestStdIoReadLines`.
 - **std.network: URL parsing + struct field access on C backend**.
   Several issues stacked together prevented `url_parse(...)`'s
   fields from being read on the C backend:

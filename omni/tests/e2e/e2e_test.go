@@ -793,6 +793,80 @@ func TestStdIoRead(t *testing.T) {
 	t.Errorf("C result line not found; output: %s", string(out))
 }
 
+// TestStdIoExtras pins the post-audit io extensions (sprint, sprintln,
+// sprintf, parse_int, parse_float, is_int, is_float, is_terminal) on
+// both backends.
+func TestStdIoExtras(t *testing.T) {
+	testFile := "std_io_extras.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
+// TestStdIoReadLines pins std.io.read_lines on both backends by piping a
+// known string into stdin. The trailing newline must NOT produce a
+// phantom blank entry at the end.
+func TestStdIoReadLines(t *testing.T) {
+	testFile := "std_io_lines.omni"
+	stdin := "alpha\nbeta\ngamma\n"
+
+	{
+		absTestFile, _ := filepath.Abs(testFile)
+		cmd := exec.Command("../../bin/omnir", absTestFile)
+		cmd.Env = append(os.Environ(),
+			"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+			"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+		)
+		cmd.Stdin = strings.NewReader(stdin)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("VM run failed: %v\nOutput: %s", err, string(out))
+		}
+		if !strings.HasSuffix(strings.TrimRight(string(out), "\n"), "0") {
+			t.Errorf("VM stdout = %q, want trailing 0", string(out))
+		}
+	}
+
+	if _, err := runCBackend(testFile); err != nil {
+		t.Fatalf("initial build failed: %v", err)
+	}
+	executable := "./std_io_lines"
+	cmd := exec.Command(executable)
+	cmd.Env = append(os.Environ(),
+		"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+		"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+	)
+	cmd.Stdin = strings.NewReader(stdin)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("C run failed: %v\nOutput: %s", err, string(out))
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "OmniLang program result: ") {
+			got := strings.TrimSpace(line[len("OmniLang program result: "):])
+			if got != "0" {
+				t.Errorf("C result = %s, want 0\nFull output: %s", got, string(out))
+			}
+			return
+		}
+	}
+	t.Errorf("C result line not found; output: %s", string(out))
+}
+
 // TestArrayReturnLength pins the C-backend fix for arrays returned by
 // user-defined functions: the result was losing its length companion,
 // so std.array.get / index lowering aborted with length=-1. Now the

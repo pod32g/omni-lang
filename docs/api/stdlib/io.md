@@ -106,6 +106,102 @@ func main():int {
 }
 ```
 
+### read_lines(): array<string>
+
+Slurp stdin to EOF and return one entry per line. Trailing newlines are stripped; a final newline does not produce a phantom blank entry. Mirrors the `bufio.Scanner`-over-stdin pattern in Go.
+
+```omni
+import std.io as io
+
+func main():int {
+    let lines:array<string> = io.read_lines()
+    io.println(len(lines))
+    return 0
+}
+```
+
+### read_int() / read_float()
+
+Read one line from stdin and parse it as an int or float. Returns `0` / `0.0` on parse failure or EOF (compose with `is_int` / `is_float` if you need to distinguish).
+
+```omni
+import std.io as io
+
+func main():int {
+    io.print("How many? ")
+    io.flush()
+    return io.read_int()
+}
+```
+
+### prompt(message:string): string
+
+Writes `message` to stdout, flushes, then reads one line. Saves the print + flush + read_line dance for interactive CLIs.
+
+```omni
+import std.io as io
+
+func main():int {
+    let name:string = io.prompt("Name: ")
+    io.println("Hello, " + name)
+    return 0
+}
+```
+
+### is_terminal(): bool
+
+True when stdout is connected to a terminal (TTY). Use this to gate ANSI colors or interactive output when the program might be redirected to a file or pipe. Mirrors `golang.org/x/term.IsTerminal(os.Stdout.Fd())`.
+
+### sprint(value), sprintln(value)
+
+Like `fmt.Sprint` / `fmt.Sprintln` for one value: convert a primitive (`int` / `float` / `bool` / `string`) to its string form, with `sprintln` adding a trailing newline.
+
+```omni
+import std.io as io
+
+func main():int {
+    let s:string = io.sprint(42)
+    io.println(s)        // "42"
+    io.print(io.sprintln(7))  // "7\n"
+    return 0
+}
+```
+
+### sprintf(format:string, args:array<string>): string
+
+`%s`-substitution: each `%s` in `format` is replaced in order by entries from `args`. `%%` emits a literal `%`. Other `%`-directives are left intact (no type-dispatch since OmniLang has no varargs). Loosely mirrors `fmt.Sprintf`, scoped to `%s`.
+
+```omni
+import std.io as io
+
+func main():int {
+    let args:array<string> = ["world", "42"]
+    io.println(io.sprintf("hello %s, num %s", args))
+    return 0
+}
+```
+
+### parse_int(s:string): int / parse_float(s:string): float
+
+Quiet parsers that return the parsed value or `0` / `0.0` on any failure. Pair with `is_int` / `is_float` when you need to distinguish a parsed zero from a parse failure. Roughly equivalent to `strconv.Atoi` / `strconv.ParseFloat` with the error discarded.
+
+### is_int(s:string): bool / is_float(s:string): bool
+
+Predicates that report whether `s` parses cleanly (no leading/trailing junk, in range).
+
+```omni
+import std.io as io
+
+func main():int {
+    let line:string = io.read_line()
+    if !io.is_int(line) {
+        io.eprintln("expected an integer")
+        return 1
+    }
+    return io.parse_int(line)
+}
+```
+
 ## Usage Examples
 
 ### Basic Output
