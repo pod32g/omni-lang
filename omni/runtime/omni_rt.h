@@ -66,6 +66,12 @@ int32_t omni_count_lines(const char* str);
 int32_t omni_count_words(const char* str);
 int32_t omni_string_is_empty(const char* str);
 
+// Random number generation. The runtime keeps a single global xorshift
+// state seeded once on first use; std.math.random_seed lets a caller
+// pin it for deterministic tests.
+void omni_random_seed(int32_t seed);
+int32_t omni_random_int(int32_t bound);
+
 // Algorithms — distance metrics
 double omni_euclidean_distance(double x1, double y1, double x2, double y2);
 double omni_manhattan_distance(double x1, double y1, double x2, double y2);
@@ -99,6 +105,11 @@ int32_t* omni_array_int_insert(int32_t* arr, int32_t n, int32_t index, int32_t v
 int32_t* omni_array_int_remove(int32_t* arr, int32_t n, int32_t index);
 int32_t* omni_array_int_concat(int32_t* a, int32_t alen, int32_t* b, int32_t blen);
 int32_t* omni_array_int_slice(int32_t* arr, int32_t n, int32_t start, int32_t end);
+int32_t* omni_array_int_shuffle(int32_t* arr, int32_t n);
+// omni_array_int_unique writes the result length to `*out_len` and
+// returns the freshly allocated deduplicated array. Order of first
+// occurrence is preserved.
+int32_t* omni_array_int_unique(int32_t* arr, int32_t n, int32_t* out_len);
 
 // std.array — string-specialized siblings. Element compares use
 // strcmp; output arrays alias the input strings (no deep copy of the
@@ -111,6 +122,8 @@ const char** omni_array_str_insert(const char** arr, int32_t n, int32_t index, c
 const char** omni_array_str_remove(const char** arr, int32_t n, int32_t index);
 const char** omni_array_str_concat(const char** a, int32_t alen, const char** b, int32_t blen);
 const char** omni_array_str_slice(const char** arr, int32_t n, int32_t start, int32_t end);
+const char** omni_array_str_shuffle(const char** arr, int32_t n);
+const char** omni_array_str_unique(const char** arr, int32_t n, int32_t* out_len);
 
 // Promise/Async support (simplified synchronous implementation)
 typedef struct {

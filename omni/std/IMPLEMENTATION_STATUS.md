@@ -114,6 +114,8 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `lerp(a, b, t)` - Implemented in OmniLang
 - [IMPLEMENTED] `deg_to_rad(degrees)` - Implemented in OmniLang
 - [IMPLEMENTED] `rad_to_deg(radians)` - Implemented in OmniLang
+- [IMPLEMENTED] `random_seed(seed)` - Wired to `omni_random_seed` (C); xorshift32 state, mirrored in the VM
+- [IMPLEMENTED] `random_int(bound)` - Wired to `omni_random_int` (C); returns int in [0, bound)
 
 ### std.file / file
 - [IMPLEMENTED] `open(filename, mode)` - Wired to `omni_file_open`
@@ -358,8 +360,8 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `count_occurrences(arr, value)` - Wired to `omni_array_count_occurrences`
 - [IMPLEMENTED] `reverse(arr)` - Wired to `omni_array_reverse`; returns a freshly allocated reversed copy
 - [IMPLEMENTED] `rotate(arr, k)` - Wired to `omni_array_rotate`; freshly allocated, normalizes k mod n
-- [STUB] `shuffle(arr)` - Not implemented (needs a runtime PRNG abstraction)
-- [STUB] `unique(arr)` - Not implemented (output length differs from input; needs the variable-length-return story)
+- [IMPLEMENTED] `shuffle(arr)` - Wired to `omni_array_<int|str>_shuffle`; Fisher–Yates on the shared xorshift32 PRNG. Both int and string element variants
+- [IMPLEMENTED] `unique(arr)` - Wired to `omni_array_<int|str>_unique`; runtime writes the result length to a stack-allocated companion the codegen registers as the array's runtime length. Both element variants
 - [STUB] `is_connected()` - Not implemented (needs a graph representation)
 
 ## Warnings

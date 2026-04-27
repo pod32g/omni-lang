@@ -2899,13 +2899,17 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			isArraySetFunc := cFuncName == "omni_array_set_int" || funcName == "std.array.set"
 			isAssertEqCall := funcName == "std.assert.eq" || funcName == "assert.eq" || cFuncName == "omni_assert_eq"
 			// std.array.append/prepend/insert/remove/reverse/slice/concat/fill/copy
-			// don't have real runtime implementations yet; emit placeholder values
-			// so tests that exercise them compile.
+			// route through emitStdArrayIntOp for int / string element types; the
+			// rest fall back to the legacy passthrough that returns the input
+			// array unchanged. std.algorithms.shuffle / unique share the same
+			// element-typed runtime layout (omni_array_<int|str>_<op>) so they
+			// piggy-back on the same dispatcher.
 			isArrayPassthroughFunc := funcName == "std.array.append" || funcName == "std.array.prepend" ||
 				funcName == "std.array.insert" || funcName == "std.array.remove" ||
 				funcName == "std.array.reverse" || funcName == "std.array.slice" ||
 				funcName == "std.array.concat" || funcName == "std.array.fill" ||
-				funcName == "std.array.copy"
+				funcName == "std.array.copy" ||
+				funcName == "std.algorithms.shuffle" || funcName == "std.algorithms.unique"
 			isArrayContainsFunc := funcName == "std.array.contains"
 			isArrayIndexOfFunc := funcName == "std.array.index_of"
 			isWebBoolIntrinsic := cFuncName == "omni_validate_string" || cFuncName == "omni_validate_int" ||
@@ -6660,6 +6664,10 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_array_reverse"
 	case "std.algorithms.rotate":
 		return "omni_array_rotate"
+	case "std.math.random_seed":
+		return "omni_random_seed"
+	case "std.math.random_int":
+		return "omni_random_int"
 
 	// OS functions
 	case "std.os.exit":
@@ -6977,6 +6985,8 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.algorithms.count_occurrences":    "omni_array_count_occurrences",
 		"std.algorithms.reverse":              "omni_array_reverse",
 		"std.algorithms.rotate":               "omni_array_rotate",
+		"std.math.random_seed":                "omni_random_seed",
+		"std.math.random_int":                 "omni_random_int",
 		"string.length":            "omni_strlen",
 		"string.concat":            "omni_strcat",
 		"string.substring":         "omni_substring",
@@ -7477,6 +7487,8 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.algorithms.count_occurrences":    true,
 		"std.algorithms.reverse":              true,
 		"std.algorithms.rotate":               true,
+		"std.math.random_seed":                true,
+		"std.math.random_int":                 true,
 		"string.length":            true,
 		"string.concat":            true,
 		"string.substring":         true,
@@ -7948,6 +7960,24 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 		end := g.getOperandValue(inst.Operands[3])
 		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_slice(%s, %s, %s, %s)", rtSuffix, arr, arrLen, start, end))
 		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) - (%s)", end, start)
+		g.valueTypes[inst.ID] = retArrType
+		return true
+	case "std.algorithms.shuffle":
+		// Length-preserving Fisher–Yates. Forward the input length onto
+		// the result so a downstream len() / index keeps working.
+		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_shuffle(%s, %s)", rtSuffix, arr, arrLen))
+		g.arrayLengthExprs[inst.ID] = arrLen
+		g.valueTypes[inst.ID] = retArrType
+		return true
+	case "std.algorithms.unique":
+		// Variable-length output: the runtime writes the result count
+		// to an int32_t we allocate next to the array variable. We
+		// register that variable as the array's runtime length so
+		// len(unique(arr)) works downstream.
+		lenVar := fmt.Sprintf("__omni_unique_len_%d", inst.ID)
+		g.output.WriteString(fmt.Sprintf("  int32_t %s = 0;\n", lenVar))
+		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_unique(%s, %s, &%s)", rtSuffix, arr, arrLen, lenVar))
+		g.arrayLengthExprs[inst.ID] = lenVar
 		g.valueTypes[inst.ID] = retArrType
 		return true
 	}

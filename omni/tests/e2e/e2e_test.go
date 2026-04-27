@@ -560,6 +560,33 @@ func TestStdAlgorithmsDistance(t *testing.T) {
 	}
 }
 
+// TestStdRandomShuffleUnique pins the std.math PRNG (random_seed,
+// random_int) and the algorithms it powers — std.algorithms.shuffle
+// (length-preserving) and std.algorithms.unique (variable output
+// length, threaded through a runtime out-pointer). Both backends
+// share the same xorshift32 with the same default seed, so the same
+// seed produces the same first random_int.
+func TestStdRandomShuffleUnique(t *testing.T) {
+	testFile := "std_random_shuffle_unique.omni"
+	expected := "67"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdMiscExtras pins two small finishers: std.string.is_empty
 // and std.algorithms.rotate. Catches both backends.
 func TestStdMiscExtras(t *testing.T) {

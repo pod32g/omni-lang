@@ -764,7 +764,11 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.algorithms.count_occurrences",
 		"std.algorithms.reverse",
 		"std.algorithms.rotate",
+		"std.algorithms.shuffle",
+		"std.algorithms.unique",
 		"std.algorithms.euclidean_distance",
+		"std.math.random_seed",
+		"std.math.random_int",
 		"std.algorithms.manhattan_distance",
 		"std.algorithms.levenshtein_distance",
 		"std.array.contains",
@@ -2988,6 +2992,67 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				return Result{Type: "array<int>", Value: out}, true
 			}
 		}
+	case "std.math.random_seed":
+		if len(operands) == 1 {
+			seed, _ := toInt(operandValue(fr, operands[0]))
+			vmRandomSeed(uint32(seed))
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.math.random_int":
+		if len(operands) == 1 {
+			bound, _ := toInt(operandValue(fr, operands[0]))
+			return Result{Type: "int", Value: vmRandomInt(bound)}, true
+		}
+	case "std.algorithms.shuffle":
+		if len(operands) == 1 {
+			arr := operandValue(fr, operands[0])
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				out := make([]string, len(ss))
+				copy(out, ss)
+				for i := len(out) - 1; i > 0; i-- {
+					j := vmRandomInt(i + 1)
+					out[i], out[j] = out[j], out[i]
+				}
+				return Result{Type: "array<string>", Value: out}, true
+			}
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				out := make([]int, len(xs))
+				copy(out, xs)
+				for i := len(out) - 1; i > 0; i-- {
+					j := vmRandomInt(i + 1)
+					out[i], out[j] = out[j], out[i]
+				}
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
+	case "std.algorithms.unique":
+		if len(operands) == 1 {
+			arr := operandValue(fr, operands[0])
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				out := make([]string, 0, len(ss))
+				seen := map[string]bool{}
+				for _, v := range ss {
+					if !seen[v] {
+						seen[v] = true
+						out = append(out, v)
+					}
+				}
+				return Result{Type: "array<string>", Value: out}, true
+			}
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				out := make([]int, 0, len(xs))
+				seen := map[int]bool{}
+				for _, v := range xs {
+					if !seen[v] {
+						seen[v] = true
+						out = append(out, v)
+					}
+				}
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
 	case "std.algorithms.rotate":
 		if len(operands) == 2 {
 			arr := operandValue(fr, operands[0])
@@ -4117,6 +4182,41 @@ func convertLiteralToDecimal(literal string) string {
 	}
 	// Return as-is for regular decimal literals
 	return literal
+}
+
+// VM-side xorshift32 mirroring the runtime PRNG. Sharing the same
+// algorithm keeps tests that pin the seed reproducible across both
+// backends.
+var (
+	vmRngMu    sync.Mutex
+	vmRngState uint32 = 0x9E3779B9
+)
+
+func vmRandomSeed(seed uint32) {
+	vmRngMu.Lock()
+	defer vmRngMu.Unlock()
+	if seed == 0 {
+		vmRngState = 0x9E3779B9
+	} else {
+		vmRngState = seed
+	}
+}
+
+func vmRandomInt(bound int) int {
+	if bound <= 0 {
+		return 0
+	}
+	vmRngMu.Lock()
+	defer vmRngMu.Unlock()
+	x := vmRngState
+	if x == 0 {
+		x = 0x9E3779B9
+	}
+	x ^= x << 13
+	x ^= x >> 17
+	x ^= x << 5
+	vmRngState = x
+	return int(x % uint32(bound))
 }
 
 // vmArrayAsStrings coerces a VM array carrier into `[]string`. Same

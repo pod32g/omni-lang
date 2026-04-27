@@ -1,0 +1,40 @@
+// Regression for std.math.random_{seed,int}, std.algorithms.shuffle,
+// and std.algorithms.unique. Both backends share an xorshift32 PRNG
+// with the same seed, so the shuffled order is reproducible — but we
+// only assert the permutation invariant (sum) so the test stays
+// resilient if the PRNG ever changes algorithms.
+//
+//   sum(shuffle([1..5])) = 15
+//   unique([1,2,2,3,1,4,3,5]) = [1,2,3,4,5], sum = 15
+//   len(unique([1,2,2,3,1,4,3,5])) = 5
+//   first random_int(100) after seeding to 42:
+//     seed' = 0x9E3779B9 if seed == 0 else seed
+//     For seed=42: xorshift32 yields 32 (verified empirically).
+// Total: 15 + 15 + 5 + 32 = 67
+import std
+
+func main():int {
+    std.math.random_seed(42)
+    let r:int = std.math.random_int(100)
+
+    let arr:array<int> = [1, 2, 3, 4, 5]
+    let shuffled:array<int> = std.algorithms.shuffle(arr)
+    var s:int = 0
+    var i:int = 0
+    while i < len(shuffled) {
+        s = s + shuffled[i]
+        i = i + 1
+    }
+
+    let dups:array<int> = [1, 2, 2, 3, 1, 4, 3, 5]
+    let uniq:array<int> = std.algorithms.unique(dups)
+    var u:int = 0
+    var j:int = 0
+    while j < len(uniq) {
+        u = u + uniq[j]
+        j = j + 1
+    }
+    let ulen:int = len(uniq)
+
+    return s + u + ulen + r
+}

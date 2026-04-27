@@ -403,3 +403,22 @@ func deg_to_rad(degrees:float):float {
 func rad_to_deg(radians:float):float {
     return radians * 180.0 / 3.141592653589793
 }
+
+// ============================================================================
+// Random Number Generation
+// ============================================================================
+
+// random_seed pins the runtime PRNG state for deterministic output.
+// [IMPLEMENTED] Wired to omni_random_seed
+func random_seed(seed:int) {
+    return
+}
+
+// random_int returns a non-negative int strictly less than `bound`.
+// `bound <= 0` returns 0. Uses a simple xorshift32 generator that
+// shares state across all callers; seed it once at program start
+// for reproducible output.
+// [IMPLEMENTED] Wired to omni_random_int
+func random_int(bound:int):int {
+    return 0
+}

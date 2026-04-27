@@ -807,6 +807,43 @@ int32_t* omni_array_rotate(int32_t* arr, int32_t n, int32_t k) {
     return out;
 }
 
+// xorshift32: cheap, decent-quality PRNG with a single 32-bit state.
+// Default seed is non-zero; std.math.random_seed lets callers replace
+// it deterministically.
+static uint32_t omni_rng_state = 0x9E3779B9;
+static int omni_rng_seeded = 0;
+
+static uint32_t omni_xorshift32(void) {
+    uint32_t x = omni_rng_state;
+    if (x == 0) {
+        // xorshift can't escape zero; reseed defensively.
+        x = 0x9E3779B9;
+    }
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    omni_rng_state = x;
+    return x;
+}
+
+void omni_random_seed(int32_t seed) {
+    omni_rng_state = (uint32_t)seed;
+    if (omni_rng_state == 0) {
+        omni_rng_state = 0x9E3779B9;
+    }
+    omni_rng_seeded = 1;
+}
+
+// omni_random_int returns a non-negative int strictly less than bound.
+// `bound <= 0` returns 0.
+int32_t omni_random_int(int32_t bound) {
+    if (bound <= 0) return 0;
+    if (!omni_rng_seeded) {
+        omni_rng_seeded = 1;
+    }
+    return (int32_t)(omni_xorshift32() % (uint32_t)bound);
+}
+
 // std.array — int32_t-specialized list operations. Each one returns a
 // freshly heap-allocated array; callers manage lifetimes the same way
 // they do for runtime-allocated strings.
@@ -891,6 +928,49 @@ int32_t* omni_array_int_slice(int32_t* arr, int32_t n, int32_t start, int32_t en
     int32_t* out = (int32_t*)malloc((size_t)(span > 0 ? span : 1) * sizeof(int32_t));
     if (!out) return NULL;
     if (arr && span > 0) memcpy(out, arr + start, (size_t)span * sizeof(int32_t));
+    return out;
+}
+
+// Fisher–Yates shuffle backed by the global xorshift PRNG. Length is
+// preserved; the result is a freshly allocated array.
+int32_t* omni_array_int_shuffle(int32_t* arr, int32_t n) {
+    int32_t* out = omni_array_clone_int(arr, n);
+    if (!out || n <= 1) return out;
+    for (int32_t i = n - 1; i > 0; i--) {
+        int32_t j = omni_random_int(i + 1);
+        int32_t tmp = out[i];
+        out[i] = out[j];
+        out[j] = tmp;
+    }
+    return out;
+}
+
+// omni_array_int_unique returns a freshly allocated array containing
+// the first occurrence of each distinct value in input order. Writes
+// the result length to `*out_len`. O(n^2) — fine for the small
+// arrays this stdlib supports today.
+int32_t* omni_array_int_unique(int32_t* arr, int32_t n, int32_t* out_len) {
+    if (out_len) *out_len = 0;
+    if (n <= 0 || !arr) {
+        int32_t* empty = (int32_t*)malloc(sizeof(int32_t));
+        return empty;
+    }
+    int32_t* out = (int32_t*)malloc((size_t)n * sizeof(int32_t));
+    if (!out) return NULL;
+    int32_t k = 0;
+    for (int32_t i = 0; i < n; i++) {
+        int dup = 0;
+        for (int32_t j = 0; j < k; j++) {
+            if (out[j] == arr[i]) {
+                dup = 1;
+                break;
+            }
+        }
+        if (!dup) {
+            out[k++] = arr[i];
+        }
+    }
+    if (out_len) *out_len = k;
     return out;
 }
 
@@ -990,6 +1070,43 @@ const char** omni_array_str_slice(const char** arr, int32_t n, int32_t start, in
     const char** out = (const char**)malloc((size_t)(span > 0 ? span : 1) * sizeof(const char*));
     if (!out) return NULL;
     if (arr && span > 0) memcpy(out, arr + start, (size_t)span * sizeof(const char*));
+    return out;
+}
+
+const char** omni_array_str_shuffle(const char** arr, int32_t n) {
+    const char** out = omni_array_clone_str(arr, n);
+    if (!out || n <= 1) return out;
+    for (int32_t i = n - 1; i > 0; i--) {
+        int32_t j = omni_random_int(i + 1);
+        const char* tmp = out[i];
+        out[i] = out[j];
+        out[j] = tmp;
+    }
+    return out;
+}
+
+const char** omni_array_str_unique(const char** arr, int32_t n, int32_t* out_len) {
+    if (out_len) *out_len = 0;
+    if (n <= 0 || !arr) {
+        const char** empty = (const char**)malloc(sizeof(const char*));
+        return empty;
+    }
+    const char** out = (const char**)malloc((size_t)n * sizeof(const char*));
+    if (!out) return NULL;
+    int32_t k = 0;
+    for (int32_t i = 0; i < n; i++) {
+        int dup = 0;
+        for (int32_t j = 0; j < k; j++) {
+            if (omni_str_eq(out[j], arr[i])) {
+                dup = 1;
+                break;
+            }
+        }
+        if (!dup) {
+            out[k++] = arr[i];
+        }
+    }
+    if (out_len) *out_len = k;
     return out;
 }
 

@@ -2332,6 +2332,10 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 		} else if strings.Contains(calleeName, "math.") {
 			// Determine return type based on specific math function
 			switch {
+			case strings.HasSuffix(calleeName, ".random_seed"):
+				resultType = "void"
+			case strings.HasSuffix(calleeName, ".random_int"):
+				resultType = "int"
 			case strings.Contains(calleeName, "pow"):
 				resultType = "float"
 			case strings.Contains(calleeName, "sqrt"):
@@ -2431,8 +2435,20 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 				strings.HasSuffix(calleeName, ".selection_sort"),
 				strings.HasSuffix(calleeName, ".insertion_sort"),
 				strings.HasSuffix(calleeName, ".reverse"),
-				strings.HasSuffix(calleeName, ".rotate"):
+				strings.HasSuffix(calleeName, ".rotate"),
+				strings.HasSuffix(calleeName, ".shuffle"),
+				strings.HasSuffix(calleeName, ".unique"):
 				resultType = "array<int>"
+				// Forward the input element type when we can see it,
+				// so array<string> arguments produce array<string>
+				// results instead of a coerced array<int>.
+				if len(expr.Args) > 0 {
+					if firstArg, err := fb.lowerExpr(expr.Args[0]); err == nil {
+						if strings.HasPrefix(firstArg.Type, "array<") || strings.HasPrefix(firstArg.Type, "[]<") {
+							resultType = firstArg.Type
+						}
+					}
+				}
 			default:
 				resultType = "int"
 			}
