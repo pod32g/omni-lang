@@ -683,6 +683,38 @@ func TestStdTimeOps(t *testing.T) {
 	}
 }
 
+// TestStdNetworkBasic pins the offline parts of std.network on both
+// backends: IP validation/classification (ip_is_valid, ip_is_private,
+// ip_is_loopback, ip_to_string) and URL validation. The audit caught
+// `omni_ip_is_valid` accepting out-of-range IPv4 segments
+// (e.g. 999.999.999.999) and `omni_url_is_valid` accepting any string
+// containing "://". Both runtime helpers now do real validation.
+//
+// Functions that need real network (http_get, dns_lookup, socket_*)
+// are deliberately excluded. URL/HTTPResponse struct field access on
+// the C backend is a separate pre-existing gap (the C codegen lowers
+// omni_url_t fields incompatibly).
+func TestStdNetworkBasic(t *testing.T) {
+	testFile := "std_network_basic.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStdIoBasic pins std.io print/println/eprint/eprintln/flush on
 // both backends. Each program writes "ab\n" to stdout and "cd\n" to
 // stderr and returns 0; we just verify it exits successfully.

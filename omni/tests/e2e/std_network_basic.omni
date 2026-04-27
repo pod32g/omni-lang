@@ -1,0 +1,115 @@
+// std.network audit: IP and URL validation/classification on both
+// backends. Excludes URL field access and HTTPResponse struct helpers
+// which the C backend doesn't yet handle (separate, larger gap).
+import std
+
+func main():int {
+    // ip_is_valid: IPv4
+    if !std.network.ip_is_valid("127.0.0.1") {
+        return 1
+    }
+    if !std.network.ip_is_valid("0.0.0.0") {
+        return 2
+    }
+    if !std.network.ip_is_valid("255.255.255.255") {
+        return 3
+    }
+    if std.network.ip_is_valid("256.0.0.0") {
+        return 4
+    }
+    if std.network.ip_is_valid("999.999.999.999") {
+        return 5
+    }
+    if std.network.ip_is_valid("1.2.3") {
+        return 6
+    }
+    if std.network.ip_is_valid("1.2.3.4.5") {
+        return 7
+    }
+    if std.network.ip_is_valid("not.an.ip.really") {
+        return 8
+    }
+    if std.network.ip_is_valid("") {
+        return 9
+    }
+
+    // ip_is_valid: IPv6
+    if !std.network.ip_is_valid("::1") {
+        return 10
+    }
+    if !std.network.ip_is_valid("2001:db8::1") {
+        return 11
+    }
+    if !std.network.ip_is_valid("fe80::1") {
+        return 12
+    }
+    if std.network.ip_is_valid("fe80::1::2") {
+        return 13
+    }
+    if std.network.ip_is_valid(":::") {
+        return 14
+    }
+    if std.network.ip_is_valid("g::1") {
+        return 15
+    }
+    if std.network.ip_is_valid("12345::1") {
+        return 16
+    }
+
+    // ip_parse + classification
+    let lo:std.network.IPAddress = std.network.ip_parse("127.0.0.1")
+    if !std.network.ip_is_loopback(lo) {
+        return 17
+    }
+    if std.network.ip_is_private(lo) {
+        return 18
+    }
+
+    let priv:std.network.IPAddress = std.network.ip_parse("192.168.1.1")
+    if !std.network.ip_is_private(priv) {
+        return 19
+    }
+    if std.network.ip_is_loopback(priv) {
+        return 20
+    }
+
+    let pub:std.network.IPAddress = std.network.ip_parse("8.8.8.8")
+    if std.network.ip_is_private(pub) {
+        return 21
+    }
+    if std.network.ip_is_loopback(pub) {
+        return 22
+    }
+
+    if !std.string.equals(std.network.ip_to_string(lo), "127.0.0.1") {
+        return 23
+    }
+
+    // url_is_valid
+    if !std.network.url_is_valid("http://example.com") {
+        return 24
+    }
+    if !std.network.url_is_valid("https://example.com:8080/path?q=1#frag") {
+        return 25
+    }
+    if !std.network.url_is_valid("ftp://files.example.com/foo") {
+        return 26
+    }
+    if std.network.url_is_valid("not a url") {
+        return 27
+    }
+    if std.network.url_is_valid("://nohost") {
+        return 28
+    }
+    if std.network.url_is_valid("http://") {
+        return 29
+    }
+    if std.network.url_is_valid("") {
+        return 30
+    }
+    if std.network.url_is_valid("hello world://example") {
+        return 31
+    }
+
+    return 0
+}

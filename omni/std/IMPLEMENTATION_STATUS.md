@@ -285,6 +285,17 @@ backend follow-up because `std.time` is not body-loaded there.
 - [IMPLEMENTED] `network_get_local_ip()` - Wired to `omni_network_get_local_ip` (returns first non-loopback IPv4 address)
 - [IMPLEMENTED] `network_ping(host)` - Wired to `omni_network_ping` (ICMP on Windows, TCP fallback on POSIX)
 
+Offline parts (`ip_is_valid`, `ip_parse`, `ip_is_loopback`, `ip_is_private`,
+`ip_to_string`, `url_is_valid`) pinned by `tests/e2e/std_network_basic.omni` /
+`TestStdNetworkBasic` on both backends. The audit caught `omni_ip_is_valid`
+accepting out-of-range IPv4 segments and `omni_url_is_valid` returning true
+for any string containing `://`; both runtime helpers now do real
+validation. Network-touching functions (HTTP, DNS, sockets,
+`network_ping`/`is_connected`/`get_local_ip`) are wired but not exercised
+in CI. C-backend struct-field access for `omni_url_t*` and undeclared
+`http_response_is_*` user helpers are pre-existing gaps tracked
+separately.
+
 ### std.web
 - [IMPLEMENTED] `server_create(port, options)` - Wired to `omni_server_create`
 - [IMPLEMENTED] `server_listen(server)` - Wired to `omni_server_listen`

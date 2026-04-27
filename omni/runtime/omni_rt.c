@@ -5460,25 +5460,100 @@ omni_ip_address_t* omni_ip_parse(const char* ip_str) {
 }
 
 int32_t omni_ip_is_valid(const char* ip_str) {
-    if (!ip_str) return 0;
-    // Basic validation - check for IPv4 format (dotted decimal)
-    int dot_count = 0;
-    int digit_count = 0;
-    for (const char* p = ip_str; *p; p++) {
-        if (*p == '.') {
-            dot_count++;
-            digit_count = 0;
+    if (!ip_str || !*ip_str) return 0;
+    // IPv6: any string containing ':' must look like a colon-separated
+    // run of hex groups (with at most one "::" elision and an optional
+    // embedded IPv4 tail). Validate strictly.
+    if (strchr(ip_str, ':') != NULL) {
+        int groups = 0;
+        int double_colon = 0;
+        int seen_dot = 0;
+        const char* p = ip_str;
+        if (p[0] == ':' && p[1] == ':') {
+            double_colon = 1;
+            p += 2;
+            // bare "::" is the all-zeros address; trailing junk handled below
+        } else if (p[0] == ':') {
+            return 0;
+        }
+        while (*p) {
+            if (*p == ':') {
+                // A single ':' at this point must be a separator between
+                // two groups, not a trailing colon.
+                if (p[1] == ':') {
+                    if (double_colon) return 0;
+                    double_colon = 1;
+                    p += 2;
+                    continue;
+                }
+                if (p[1] == '\0') return 0;
+                p++;
+                continue;
+            }
+            int hex_len = 0;
+            while ((*p >= '0' && *p <= '9') ||
+                   (*p >= 'a' && *p <= 'f') ||
+                   (*p >= 'A' && *p <= 'F')) {
+                hex_len++;
+                p++;
+            }
+            if (hex_len == 0) return 0;
+            if (hex_len > 4) return 0;
+            // Embedded IPv4 (e.g. ::ffff:192.0.2.1)
+            if (*p == '.') {
+                seen_dot = 1;
+                // back up: rescan the last group as the start of an IPv4 dotted-quad
+                const char* dot_start = p - hex_len;
+                int seg = 0, seg_digits = 0, dots = 0, val = 0;
+                for (const char* q = dot_start; *q && *q != ':'; q++) {
+                    if (*q == '.') {
+                        if (seg_digits == 0) return 0;
+                        if (val > 255) return 0;
+                        dots++; seg++; seg_digits = 0; val = 0;
+                    } else if (*q >= '0' && *q <= '9') {
+                        val = val * 10 + (*q - '0');
+                        seg_digits++;
+                        if (seg_digits > 3) return 0;
+                    } else {
+                        return 0;
+                    }
+                }
+                if (dots != 3 || seg_digits == 0 || val > 255) return 0;
+                groups += 2;
+                while (*p && *p != ':') p++;
+                continue;
+            }
+            groups++;
+        }
+        if (seen_dot) {
+            return (groups <= 8) ? 1 : 0;
+        }
+        if (double_colon) {
+            return (groups <= 7) ? 1 : 0;
+        }
+        return (groups == 8) ? 1 : 0;
+    }
+    // IPv4: exactly 4 dot-separated decimal segments, each 0..255.
+    int seg_val = 0;
+    int seg_digits = 0;
+    int dots = 0;
+    for (const char* p = ip_str; ; p++) {
+        if (*p == '\0' || *p == '.') {
+            if (seg_digits == 0) return 0;
+            if (seg_val > 255) return 0;
+            if (*p == '\0') break;
+            dots++;
+            seg_val = 0;
+            seg_digits = 0;
         } else if (*p >= '0' && *p <= '9') {
-            digit_count++;
-            if (digit_count > 3) return 0;
-        } else if (*p == ':') {
-            // IPv6 format
-            return 1; // Basic check - assume valid if contains colon
+            seg_val = seg_val * 10 + (*p - '0');
+            seg_digits++;
+            if (seg_digits > 3) return 0;
         } else {
             return 0;
         }
     }
-    return (dot_count == 3) ? 1 : 0;
+    return (dots == 3) ? 1 : 0;
 }
 
 int32_t omni_ip_is_private(omni_ip_address_t* ip) {
@@ -5584,9 +5659,24 @@ char* omni_url_to_string(omni_url_t* url) {
 }
 
 int32_t omni_url_is_valid(const char* url_str) {
-    if (!url_str) return 0;
-    // Basic validation - check for scheme://host format
-    return (strstr(url_str, "://") != NULL) ? 1 : 0;
+    if (!url_str || !*url_str) return 0;
+    // Require a scheme: leading run of [A-Za-z][A-Za-z0-9+.-]*, then "://".
+    const char* p = url_str;
+    if (!((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))) return 0;
+    p++;
+    while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') ||
+           (*p >= '0' && *p <= '9') || *p == '+' || *p == '-' || *p == '.') {
+        p++;
+    }
+    if (p[0] != ':' || p[1] != '/' || p[2] != '/') return 0;
+    p += 3;
+    // Require a non-empty host before any of: '/', '?', '#', or end-of-string.
+    // Reject whitespace anywhere.
+    if (*p == '\0' || *p == '/' || *p == '?' || *p == '#') return 0;
+    for (const char* q = url_str; *q; q++) {
+        if (*q == ' ' || *q == '\t' || *q == '\n' || *q == '\r') return 0;
+    }
+    return 1;
 }
 
 // Network includes (needed for DNS and HTTP functions)

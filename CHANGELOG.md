@@ -85,6 +85,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **std.network audit** pinned by `TestStdNetworkBasic`. Two real
+  validation bugs in the C runtime:
+  - `omni_ip_is_valid` previously accepted IPv4 strings whose
+    segments were out of range (e.g. `999.999.999.999`, `256.0.0.0`).
+    Replaced with strict per-segment validation. The IPv6 check was
+    "contains a colon → valid"; replaced with a real grammar
+    (≤8 hex groups of 1–4 chars, at most one `::` elision, optional
+    embedded IPv4 tail) so junk like `hello:world` and `1::2::3` is
+    rejected.
+  - `omni_url_is_valid` previously returned true for any string
+    containing `://`. Now requires a real scheme
+    (`[A-Za-z][A-Za-z0-9+.-]*`) followed by `://` and a non-empty
+    host before any of `/?#`; whitespace is rejected.
+  Network-touching parts (HTTP, DNS, sockets) wired but not
+  exercised in CI; the C-backend struct-access gap for `URL`/
+  `HTTPResponse` is a known pre-existing issue tracked separately.
+- **Empty-map literal in typed `let`/`var`**: writing
+  `let h: map<string, string> = {}` used to fail with
+  `cannot assign <empty_map> to map<string, string>`. The empty-map
+  placeholder type is now coerced to the declared `map<...>`
+  annotation in the binding-statement type checker (it already worked
+  in function arguments).
 - **std.io expansion + audit** pinned by `TestStdIoBasic` and
   `TestStdIoRead`. Added `eprint(value)`, `eprintln(value)` (stderr
   variants of print/println), `flush()` (force stdout flush), and

@@ -694,6 +694,12 @@ func (c *Checker) checkLet(decl *ast.LetDecl, mutable bool) {
 	if finalType == typeInfer {
 		finalType = valueType
 	} else if valueType != typeInfer && valueType != typeError {
+		// Empty-map literals get an "<empty_map>" placeholder type; coerce
+		// them to the declared map<...> annotation here so users can write
+		// `let h: map<string, string> = {}` without a type-mismatch error.
+		if valueType == "<empty_map>" && strings.HasPrefix(finalType, "map<") {
+			valueType = finalType
+		}
 		// Special case: if expected type is map<*, any>, allow any inferred map type
 		if strings.HasPrefix(finalType, "map<") && strings.HasSuffix(finalType, ">") {
 			inner := finalType[4 : len(finalType)-1]
@@ -942,9 +948,17 @@ func (c *Checker) checkBindingStmt(stmt *ast.BindingStmt) {
 	finalType := declaredType
 	if declaredType == typeInfer {
 		finalType = valueType
-	} else if valueType != typeInfer && valueType != typeError && !c.isAssignable(valueType, declaredType) {
-		c.report(stmt.Span(), fmt.Sprintf("type mismatch: cannot assign %s to %s", valueType, declaredType),
-			fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
+	} else if valueType != typeInfer && valueType != typeError {
+		// Empty-map literals get an "<empty_map>" placeholder; coerce to
+		// the declared map<...> annotation so users can write
+		// `let h: map<string, string> = {}` without a type-mismatch error.
+		if valueType == "<empty_map>" && strings.HasPrefix(declaredType, "map<") {
+			valueType = declaredType
+		}
+		if !c.isAssignable(valueType, declaredType) {
+			c.report(stmt.Span(), fmt.Sprintf("type mismatch: cannot assign %s to %s", valueType, declaredType),
+				fmt.Sprintf("convert the expression to %s or change the variable type to %s", declaredType, valueType))
+		}
 	}
 	c.declare(stmt.Name, finalType, stmt.Mutable, stmt.Span())
 }
