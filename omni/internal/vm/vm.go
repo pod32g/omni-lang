@@ -211,6 +211,72 @@ func parseFloatStrict(s string) (float64, bool) {
 	return f, true
 }
 
+// decodeStringLiteral strips wrapping double quotes and decodes the
+// escape sequences accepted by the lexer: \n, \t, \r, \\, \", \', \0,
+// \xHH, \uHHHH. Anything else inside a backslash is left as the
+// backslash + char (defensive — the lexer should have rejected unknown
+// escapes already).
+func decodeStringLiteral(raw string) string {
+	if len(raw) >= 2 && raw[0] == '"' && raw[len(raw)-1] == '"' {
+		raw = raw[1 : len(raw)-1]
+	}
+	if !strings.ContainsRune(raw, '\\') {
+		return raw
+	}
+	var out strings.Builder
+	out.Grow(len(raw))
+	for i := 0; i < len(raw); i++ {
+		if raw[i] != '\\' || i+1 >= len(raw) {
+			out.WriteByte(raw[i])
+			continue
+		}
+		switch raw[i+1] {
+		case 'n':
+			out.WriteByte('\n')
+			i++
+		case 't':
+			out.WriteByte('\t')
+			i++
+		case 'r':
+			out.WriteByte('\r')
+			i++
+		case '\\':
+			out.WriteByte('\\')
+			i++
+		case '"':
+			out.WriteByte('"')
+			i++
+		case '\'':
+			out.WriteByte('\'')
+			i++
+		case '0':
+			out.WriteByte(0)
+			i++
+		case 'x':
+			if i+3 < len(raw) {
+				if v, err := strconv.ParseUint(raw[i+2:i+4], 16, 8); err == nil {
+					out.WriteByte(byte(v))
+					i += 3
+					continue
+				}
+			}
+			out.WriteByte(raw[i])
+		case 'u':
+			if i+5 < len(raw) {
+				if v, err := strconv.ParseUint(raw[i+2:i+6], 16, 32); err == nil {
+					out.WriteRune(rune(v))
+					i += 5
+					continue
+				}
+			}
+			out.WriteByte(raw[i])
+		default:
+			out.WriteByte(raw[i])
+		}
+	}
+	return out.String()
+}
+
 // vmStringSlice extracts an []string from a Result whose value is an
 // array<string>. Falls back to a permissive []interface{} unbox.
 func vmStringSlice(r Result) []string {
@@ -4927,7 +4993,11 @@ func literalResult(op mir.Operand) (Result, error) {
 		}
 		return Result{}, fmt.Errorf("invalid bool literal %q", op.Literal)
 	case "string":
-		return Result{Type: typ, Value: strings.Trim(op.Literal, "\"")}, nil
+		// Strip the wrapping quotes and decode escape sequences. The C
+		// backend gets the same behavior for free because it forwards
+		// the raw source lexeme to the C compiler, which decodes escapes
+		// when it parses the C string literal.
+		return Result{Type: typ, Value: decodeStringLiteral(op.Literal)}, nil
 	case "char":
 		// char literals come through as 'a' / '\n' — strip the wrapping
 		// single quotes and decode common escapes. Stored as rune so

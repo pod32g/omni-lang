@@ -683,6 +683,32 @@ func TestStdTimeOps(t *testing.T) {
 	}
 }
 
+// TestStringEscapes pins the lexer-accepted string-literal escape
+// set (\n, \t, \r, \\, \", \', \0, \xHH, \uHHHH) on both backends.
+// VM used to skip decoding so `"a\nb"` measured length 4; the C
+// backend got escape decoding for free from the C compiler. Both now
+// agree.
+func TestStringEscapes(t *testing.T) {
+	testFile := "string_escapes.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStdNetworkBasic pins the offline parts of std.network on both
 // backends: IP validation/classification (ip_is_valid, ip_is_private,
 // ip_is_loopback, ip_to_string) and URL validation. The audit caught

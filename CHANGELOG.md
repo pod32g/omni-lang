@@ -85,6 +85,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **VM string-literal escape decoding**: `"a\nb"` used to measure
+  length 4 on the VM and 3 on the C backend, because the VM's
+  `literalResult` stripped the wrapping quotes but never decoded
+  escape sequences — the lexer only validated them. The C backend
+  got correct decoding for free by forwarding the raw lexeme to the
+  C compiler. The VM now decodes the same set the lexer accepts
+  (`\n`, `\t`, `\r`, `\\`, `\"`, `\'`, `\0`, `\xHH`, `\uHHHH`), so
+  string semantics match across backends. Pinned by
+  `TestStringEscapes`. NUL-byte-in-string (`\0` mid-string) still
+  diverges — `omni_strlen` truncates at NUL on the C side; that's
+  a C-string-representation choice, not in scope here.
 - **std.io: printing, prompting, ANSI styling, formatted writes**.
   Adds `printf` / `eprintf` (sprintf + stdout/stderr), `print_each` /
   `eprint_each` (one line per array entry), `eprompt` (prompt to

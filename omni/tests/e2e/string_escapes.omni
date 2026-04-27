@@ -1,0 +1,33 @@
+// Regression: VM used to leave escape sequences (\n, \t, etc.) in
+// string literals as literal backslash-letter pairs, while the C
+// backend forwarded them to the C compiler which decoded them. So
+// `"a\nb"` had length 4 on VM but 3 on C, and `std.string.equals`
+// disagreed across backends. The VM now decodes the lexer-accepted
+// escape set in literalResult so both backends see the same bytes.
+import std
+
+func main():int {
+    if std.string.length("a\nb") != 3 {
+        return 1
+    }
+    if std.string.length("a\tb") != 3 {
+        return 2
+    }
+    if std.string.length("a\\b") != 3 {
+        return 3
+    }
+    if std.string.length("a\"b") != 3 {
+        return 4
+    }
+    if !std.string.equals("\x41", "A") {
+        return 5
+    }
+    if !std.string.starts_with("hello\nworld", "hello") {
+        return 6
+    }
+    // sprintln("x") returns "x\n" which equals the literal "x\n".
+    if !std.string.equals(std.io.sprintln("x"), "x\n") {
+        return 7
+    }
+    return 0
+}
