@@ -324,10 +324,18 @@ This document tracks which standard library functions are actually implemented v
 ## Stubs (No Runtime Implementation)
 
 ### std.array
-- [STUB] All generic array functions - Not implemented (arrays are fixed-size in C)
-- [STUB] `append()`, `prepend()`, `insert()`, `remove()` - Not implemented
-- [STUB] `slice()`, `concat()`, `fill()`, `copy()` - Not implemented
-- [STUB] `reverse()`, `sort()` - Not implemented
+- [IMPLEMENTED] (int arrays) `contains(arr, value)` - Wired to `omni_array_int_contains`
+- [IMPLEMENTED] (int arrays) `index_of(arr, value)` - Wired to `omni_array_int_index_of`
+- [IMPLEMENTED] (int arrays) `append(arr, value)` - Wired to `omni_array_int_append`; output length = input + 1
+- [IMPLEMENTED] (int arrays) `prepend(arr, value)` - Wired to `omni_array_int_prepend`; output length = input + 1
+- [IMPLEMENTED] (int arrays) `insert(arr, index, value)` - Wired to `omni_array_int_insert`; output length = input + 1
+- [IMPLEMENTED] (int arrays) `remove(arr, index)` - Wired to `omni_array_int_remove`; output length = input - 1
+- [IMPLEMENTED] (int arrays) `concat(a, b)` - Wired to `omni_array_int_concat`; output length = a + b
+- [IMPLEMENTED] (int arrays) `slice(arr, start, end)` - Wired to `omni_array_int_slice`; output length = end - start
+- [STUB] (non-int arrays) all of the above pass through to the input array unchanged; specialize per element type when needed
+- [STUB] `fill()`, `copy()` - Not implemented (in-place mutation through parameter; needs a different ABI)
+- [STUB] `reverse()` - Use `std.algorithms.reverse(arr)` instead (same shape, real implementation)
+- [STUB] `length()`, `get()`, `set()` - Use the built-in `len(arr)` / `arr[i]` / `arr[i] = v` instead
 
 ### std.string
 - (all previously-stubbed string helpers are now implemented; see the

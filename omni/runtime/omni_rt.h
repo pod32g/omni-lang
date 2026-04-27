@@ -85,6 +85,19 @@ int32_t omni_array_find_min(int32_t* arr, int32_t n);
 int32_t omni_array_count_occurrences(int32_t* arr, int32_t n, int32_t value);
 int32_t* omni_array_reverse(int32_t* arr, int32_t n);
 
+// std.array — int32_t-specialized implementations of the generic
+// list operations. The C backend recognizes std.array.<op> on
+// `array<int>` values and routes to these. Other element types still
+// fall through to the placeholder branch.
+int32_t omni_array_int_contains(int32_t* arr, int32_t n, int32_t value);
+int32_t omni_array_int_index_of(int32_t* arr, int32_t n, int32_t value);
+int32_t* omni_array_int_append(int32_t* arr, int32_t n, int32_t value);
+int32_t* omni_array_int_prepend(int32_t* arr, int32_t n, int32_t value);
+int32_t* omni_array_int_insert(int32_t* arr, int32_t n, int32_t index, int32_t value);
+int32_t* omni_array_int_remove(int32_t* arr, int32_t n, int32_t index);
+int32_t* omni_array_int_concat(int32_t* a, int32_t alen, int32_t* b, int32_t blen);
+int32_t* omni_array_int_slice(int32_t* arr, int32_t n, int32_t start, int32_t end);
+
 // Promise/Async support (simplified synchronous implementation)
 typedef struct {
     void* value;

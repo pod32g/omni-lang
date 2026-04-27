@@ -786,6 +786,93 @@ int32_t* omni_array_reverse(int32_t* arr, int32_t n) {
     return a;
 }
 
+// std.array — int32_t-specialized list operations. Each one returns a
+// freshly heap-allocated array; callers manage lifetimes the same way
+// they do for runtime-allocated strings.
+
+int32_t omni_array_int_contains(int32_t* arr, int32_t n, int32_t value) {
+    if (!arr) return 0;
+    for (int32_t i = 0; i < n; i++) {
+        if (arr[i] == value) return 1;
+    }
+    return 0;
+}
+
+int32_t omni_array_int_index_of(int32_t* arr, int32_t n, int32_t value) {
+    if (!arr) return -1;
+    for (int32_t i = 0; i < n; i++) {
+        if (arr[i] == value) return i;
+    }
+    return -1;
+}
+
+int32_t* omni_array_int_append(int32_t* arr, int32_t n, int32_t value) {
+    int32_t new_n = n + 1;
+    int32_t* out = (int32_t*)malloc((size_t)new_n * sizeof(int32_t));
+    if (!out) return NULL;
+    if (arr && n > 0) memcpy(out, arr, (size_t)n * sizeof(int32_t));
+    out[n] = value;
+    return out;
+}
+
+int32_t* omni_array_int_prepend(int32_t* arr, int32_t n, int32_t value) {
+    int32_t new_n = n + 1;
+    int32_t* out = (int32_t*)malloc((size_t)new_n * sizeof(int32_t));
+    if (!out) return NULL;
+    out[0] = value;
+    if (arr && n > 0) memcpy(out + 1, arr, (size_t)n * sizeof(int32_t));
+    return out;
+}
+
+int32_t* omni_array_int_insert(int32_t* arr, int32_t n, int32_t index, int32_t value) {
+    if (index < 0) index = 0;
+    if (index > n) index = n;
+    int32_t new_n = n + 1;
+    int32_t* out = (int32_t*)malloc((size_t)new_n * sizeof(int32_t));
+    if (!out) return NULL;
+    if (index > 0) memcpy(out, arr, (size_t)index * sizeof(int32_t));
+    out[index] = value;
+    if (n - index > 0) memcpy(out + index + 1, arr + index, (size_t)(n - index) * sizeof(int32_t));
+    return out;
+}
+
+int32_t* omni_array_int_remove(int32_t* arr, int32_t n, int32_t index) {
+    if (n <= 0 || index < 0 || index >= n) {
+        // Out-of-range remove returns a copy of the input; callers see
+        // unchanged length via the codegen's length-forward formula.
+        int32_t* out = (int32_t*)malloc((size_t)(n > 0 ? n : 1) * sizeof(int32_t));
+        if (!out) return NULL;
+        if (arr && n > 0) memcpy(out, arr, (size_t)n * sizeof(int32_t));
+        return out;
+    }
+    int32_t new_n = n - 1;
+    int32_t* out = (int32_t*)malloc((size_t)(new_n > 0 ? new_n : 1) * sizeof(int32_t));
+    if (!out) return NULL;
+    if (index > 0) memcpy(out, arr, (size_t)index * sizeof(int32_t));
+    if (n - index - 1 > 0) memcpy(out + index, arr + index + 1, (size_t)(n - index - 1) * sizeof(int32_t));
+    return out;
+}
+
+int32_t* omni_array_int_concat(int32_t* a, int32_t alen, int32_t* b, int32_t blen) {
+    int32_t total = alen + blen;
+    int32_t* out = (int32_t*)malloc((size_t)(total > 0 ? total : 1) * sizeof(int32_t));
+    if (!out) return NULL;
+    if (a && alen > 0) memcpy(out, a, (size_t)alen * sizeof(int32_t));
+    if (b && blen > 0) memcpy(out + alen, b, (size_t)blen * sizeof(int32_t));
+    return out;
+}
+
+int32_t* omni_array_int_slice(int32_t* arr, int32_t n, int32_t start, int32_t end) {
+    if (start < 0) start = 0;
+    if (end > n) end = n;
+    if (end < start) end = start;
+    int32_t span = end - start;
+    int32_t* out = (int32_t*)malloc((size_t)(span > 0 ? span : 1) * sizeof(int32_t));
+    if (!out) return NULL;
+    if (arr && span > 0) memcpy(out, arr + start, (size_t)span * sizeof(int32_t));
+    return out;
+}
+
 int32_t omni_levenshtein_distance(const char* s1, const char* s2) {
     if (!s1) s1 = "";
     if (!s2) s2 = "";

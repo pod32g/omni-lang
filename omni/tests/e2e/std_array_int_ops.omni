@@ -1,0 +1,32 @@
+// Regression: std.array list operations on int arrays now have real
+// runtime implementations. Each lowering uses the implicit-length
+// companion ABI to know the input size; mutators forward the new
+// length onto the result so a downstream len() / index keeps working.
+//
+// arr = [10, 20, 30, 40, 50]
+//   contains(arr, 30) = true                       (else early -1)
+//   index_of(arr, 40) = 3
+//   append(arr, 60)[5]    = 60
+//   prepend(arr, 5)[0]    = 5
+//   remove(arr, 2)[2]     = 40
+//   insert(arr, 1, 99)[1] = 99
+//   concat(arr, [60, 70])[6] = 70
+//   slice(arr, 1, 4)[2]   = 40
+// Sum: 3 + 60 + 5 + 40 + 99 + 70 + 40 = 317
+import std
+
+func main():int {
+    let arr:array<int> = [10, 20, 30, 40, 50]
+    if !std.array.contains(arr, 30) { return -1 }
+
+    let idx40:int = std.array.index_of(arr, 40)
+    let appended:array<int> = std.array.append(arr, 60)
+    let prepended:array<int> = std.array.prepend(arr, 5)
+    let removed:array<int> = std.array.remove(arr, 2)
+    let inserted:array<int> = std.array.insert(arr, 1, 99)
+    let other:array<int> = [60, 70]
+    let combined:array<int> = std.array.concat(arr, other)
+    let middle:array<int> = std.array.slice(arr, 1, 4)
+
+    return idx40 + appended[5] + prepended[0] + removed[2] + inserted[1] + combined[6] + middle[2]
+}

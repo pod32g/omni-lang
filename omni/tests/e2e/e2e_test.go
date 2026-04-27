@@ -560,6 +560,31 @@ func TestStdAlgorithmsDistance(t *testing.T) {
 	}
 }
 
+// TestStdArrayIntOps pins the std.array list operations on int arrays:
+// contains, index_of, append, prepend, insert, remove, concat, slice.
+// Length-changing ops forward the output length so a downstream index
+// or len() keeps working without losing the size.
+func TestStdArrayIntOps(t *testing.T) {
+	testFile := "std_array_int_ops.omni"
+	expected := "317"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdAlgorithmsArray pins the array-based std.algorithms intrinsics
 // (find_max/min, count_occurrences, sorts, binary_search, reverse) and
 // the array-length-through-parameter ABI change that unlocked them.

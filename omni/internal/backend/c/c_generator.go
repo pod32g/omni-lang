@@ -3053,10 +3053,10 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				g.valueTypes[inst.ID] = recordType
 				return nil
 			} else if isArrayPassthroughFunc && inst.ID != mir.InvalidValue && len(inst.Operands) >= 2 {
-				// Passthrough: return the input array unchanged. Good enough for
-				// tests that only exercise the stub's presence, not its behavior.
-				// Preserve the input element type so string arrays don't get
-				// mis-typed as int arrays downstream.
+				if g.emitStdArrayIntOp(inst, funcName) {
+					return nil
+				}
+				// Fall through to legacy passthrough for non-int element types.
 				varName := g.getVariableName(inst.ID)
 				arr := g.getOperandValue(inst.Operands[1])
 				elemCType := "int32_t"
@@ -3082,6 +3082,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				return nil
 			} else if isArrayContainsFunc && inst.ID != mir.InvalidValue {
+				if g.emitStdArrayIntOp(inst, funcName) {
+					return nil
+				}
 				varName := g.getVariableName(inst.ID)
 				if g.declaredVariables[inst.ID] {
 					g.output.WriteString(fmt.Sprintf("  %s = 0;\n", varName))
@@ -3091,6 +3094,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				return nil
 			} else if isArrayIndexOfFunc && inst.ID != mir.InvalidValue {
+				if g.emitStdArrayIntOp(inst, funcName) {
+					return nil
+				}
 				varName := g.getVariableName(inst.ID)
 				if g.declaredVariables[inst.ID] {
 					g.output.WriteString(fmt.Sprintf("  %s = -1;\n", varName))
@@ -7807,6 +7813,123 @@ func isArrayParamType(omniType string) bool {
 // emitted alongside an array parameter named `name`.
 func arrayLenParamName(name string) string {
 	return "__omni_len_" + name
+}
+
+// emitStdArrayIntOp lowers a std.array.* call on an int-typed array
+// to its specialized runtime intrinsic. Returns true when the call
+// was handled; the caller falls back to the legacy placeholder
+// branches for non-int element types we haven't specialized yet.
+func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) bool {
+	if inst.ID == mir.InvalidValue || len(inst.Operands) < 2 {
+		return false
+	}
+	arrOp := inst.Operands[1]
+	if arrOp.Kind != mir.OperandValue {
+		return false
+	}
+	// Only specialize when we know the element type is int.
+	elemType := ""
+	if t, ok := g.valueTypes[arrOp.Value]; ok && t != "" {
+		if strings.HasPrefix(t, "array<") && strings.HasSuffix(t, ">") {
+			elemType = strings.TrimSpace(t[6 : len(t)-1])
+		} else if strings.HasPrefix(t, "[]<") && strings.HasSuffix(t, ">") {
+			elemType = strings.TrimSpace(t[3 : len(t)-1])
+		}
+	}
+	if elemType != "int" && elemType != "" && elemType != "<infer>" && elemType != inferTypePlaceholder {
+		return false
+	}
+
+	varName := g.getVariableName(inst.ID)
+	arr := g.getOperandValue(arrOp)
+	arrLen := g.getOperandLengthExpr(arrOp)
+
+	declOrAssign := func(cType, expr string) {
+		if g.declaredVariables[inst.ID] {
+			g.output.WriteString(fmt.Sprintf("  %s = %s;\n", varName, expr))
+		} else {
+			g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n", cType, varName, expr))
+			g.declaredVariables[inst.ID] = true
+		}
+	}
+
+	switch funcName {
+	case "std.array.contains":
+		if len(inst.Operands) < 3 {
+			return false
+		}
+		val := g.getOperandValue(inst.Operands[2])
+		declOrAssign("int32_t", fmt.Sprintf("omni_array_int_contains(%s, %s, %s)", arr, arrLen, val))
+		g.valueTypes[inst.ID] = "bool"
+		return true
+	case "std.array.index_of":
+		if len(inst.Operands) < 3 {
+			return false
+		}
+		val := g.getOperandValue(inst.Operands[2])
+		declOrAssign("int32_t", fmt.Sprintf("omni_array_int_index_of(%s, %s, %s)", arr, arrLen, val))
+		g.valueTypes[inst.ID] = "int"
+		return true
+	case "std.array.append":
+		if len(inst.Operands) < 3 {
+			return false
+		}
+		val := g.getOperandValue(inst.Operands[2])
+		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_append(%s, %s, %s)", arr, arrLen, val))
+		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) + 1", arrLen)
+		g.valueTypes[inst.ID] = "array<int>"
+		return true
+	case "std.array.prepend":
+		if len(inst.Operands) < 3 {
+			return false
+		}
+		val := g.getOperandValue(inst.Operands[2])
+		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_prepend(%s, %s, %s)", arr, arrLen, val))
+		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) + 1", arrLen)
+		g.valueTypes[inst.ID] = "array<int>"
+		return true
+	case "std.array.insert":
+		if len(inst.Operands) < 4 {
+			return false
+		}
+		idx := g.getOperandValue(inst.Operands[2])
+		val := g.getOperandValue(inst.Operands[3])
+		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_insert(%s, %s, %s, %s)", arr, arrLen, idx, val))
+		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) + 1", arrLen)
+		g.valueTypes[inst.ID] = "array<int>"
+		return true
+	case "std.array.remove":
+		if len(inst.Operands) < 3 {
+			return false
+		}
+		idx := g.getOperandValue(inst.Operands[2])
+		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_remove(%s, %s, %s)", arr, arrLen, idx))
+		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) - 1", arrLen)
+		g.valueTypes[inst.ID] = "array<int>"
+		return true
+	case "std.array.concat":
+		if len(inst.Operands) < 3 {
+			return false
+		}
+		bOp := inst.Operands[2]
+		bArr := g.getOperandValue(bOp)
+		bLen := g.getOperandLengthExpr(bOp)
+		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_concat(%s, %s, %s, %s)", arr, arrLen, bArr, bLen))
+		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) + (%s)", arrLen, bLen)
+		g.valueTypes[inst.ID] = "array<int>"
+		return true
+	case "std.array.slice":
+		if len(inst.Operands) < 4 {
+			return false
+		}
+		start := g.getOperandValue(inst.Operands[2])
+		end := g.getOperandValue(inst.Operands[3])
+		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_slice(%s, %s, %s, %s)", arr, arrLen, start, end))
+		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) - (%s)", end, start)
+		g.valueTypes[inst.ID] = "array<int>"
+		return true
+	}
+	return false
 }
 
 // isLengthPreservingArrayIntrinsic reports whether `name` is an

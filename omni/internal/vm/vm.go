@@ -765,7 +765,15 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.algorithms.reverse",
 		"std.algorithms.euclidean_distance",
 		"std.algorithms.manhattan_distance",
-		"std.algorithms.levenshtein_distance":
+		"std.algorithms.levenshtein_distance",
+		"std.array.contains",
+		"std.array.index_of",
+		"std.array.append",
+		"std.array.prepend",
+		"std.array.insert",
+		"std.array.remove",
+		"std.array.concat",
+		"std.array.slice":
 		return true
 	}
 	return false
@@ -2659,6 +2667,129 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			x2, _ := toFloat(operandValue(fr, operands[2]))
 			y2, _ := toFloat(operandValue(fr, operands[3]))
 			return Result{Type: "float", Value: math.Abs(x2-x1) + math.Abs(y2-y1)}, true
+		}
+	case "std.array.contains":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			target, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				for _, v := range xs {
+					if v == target {
+						return Result{Type: "bool", Value: true}, true
+					}
+				}
+				return Result{Type: "bool", Value: false}, true
+			}
+		}
+	case "std.array.index_of":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			target, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				for i, v := range xs {
+					if v == target {
+						return Result{Type: "int", Value: i}, true
+					}
+				}
+				return Result{Type: "int", Value: -1}, true
+			}
+		}
+	case "std.array.append":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			val, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				out := make([]int, len(xs)+1)
+				copy(out, xs)
+				out[len(xs)] = val
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
+	case "std.array.prepend":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			val, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				out := make([]int, len(xs)+1)
+				out[0] = val
+				copy(out[1:], xs)
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
+	case "std.array.insert":
+		if len(operands) == 3 {
+			arr := operandValue(fr, operands[0])
+			idx, _ := toInt(operandValue(fr, operands[1]))
+			val, _ := toInt(operandValue(fr, operands[2]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				if idx < 0 {
+					idx = 0
+				}
+				if idx > len(xs) {
+					idx = len(xs)
+				}
+				out := make([]int, len(xs)+1)
+				copy(out, xs[:idx])
+				out[idx] = val
+				copy(out[idx+1:], xs[idx:])
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
+	case "std.array.remove":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			idx, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				if idx < 0 || idx >= len(xs) {
+					out := make([]int, len(xs))
+					copy(out, xs)
+					return Result{Type: "array<int>", Value: out}, true
+				}
+				out := make([]int, 0, len(xs)-1)
+				out = append(out, xs[:idx]...)
+				out = append(out, xs[idx+1:]...)
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
+	case "std.array.concat":
+		if len(operands) == 2 {
+			a := operandValue(fr, operands[0])
+			b := operandValue(fr, operands[1])
+			as := vmArrayAsInts(a.Value)
+			bs := vmArrayAsInts(b.Value)
+			if as != nil && bs != nil {
+				out := make([]int, 0, len(as)+len(bs))
+				out = append(out, as...)
+				out = append(out, bs...)
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
+	case "std.array.slice":
+		if len(operands) == 3 {
+			arr := operandValue(fr, operands[0])
+			lo, _ := toInt(operandValue(fr, operands[1]))
+			hi, _ := toInt(operandValue(fr, operands[2]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				if lo < 0 {
+					lo = 0
+				}
+				if hi > len(xs) {
+					hi = len(xs)
+				}
+				if hi < lo {
+					hi = lo
+				}
+				out := make([]int, hi-lo)
+				copy(out, xs[lo:hi])
+				return Result{Type: "array<int>", Value: out}, true
+			}
 		}
 	case "std.algorithms.find_max":
 		if len(operands) == 1 {
