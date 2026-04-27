@@ -1,0 +1,27 @@
+// Regression: a function returns a `var` string that was conditionally
+// assigned from a heap-allocating helper (here std.string.substring).
+//
+// Before the fix, the function epilogue freed the substring's SSA local
+// after `__omni_return_value` had already aliased the same heap pointer,
+// so callers saw freed memory. The symptom was a comparison like
+// `equals(c, "1")` returning false even when `c` was "1".
+import std
+
+func char_str(s:string, pos:int):string {
+    let n:int = std.string.length(s)
+    var out:string = ""
+    if pos < n {
+        if pos >= 0 {
+            out = std.string.substring(s, pos, pos + 1)
+        }
+    }
+    return out
+}
+
+func main():int {
+    let c:string = char_str("123", 0)
+    if std.string.equals(c, "1") {
+        return 100
+    }
+    return 200
+}

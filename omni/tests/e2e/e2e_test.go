@@ -1680,3 +1680,21 @@ func TestExprParser(t *testing.T) {
 		t.Errorf("C backend: expected %s, got %s", expected, result)
 	}
 }
+
+// TestStringVarConditionalReturn guards against a use-after-free in the
+// C-backend cleanup epilogue. A function that returns a `var` string
+// conditionally assigned from a heap-allocating helper would have its
+// helper result freed before the return slot read it, producing
+// corrupted strings to callers (manifested as failed string comparisons).
+func TestStringVarConditionalReturn(t *testing.T) {
+	testFile := "string_var_conditional_return.omni"
+	expected := "100"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}

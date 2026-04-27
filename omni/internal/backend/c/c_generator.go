@@ -1674,17 +1674,31 @@ func (g *CGenerator) emitFunctionEpilogue(funcName string, originalReturnType st
 
 	if len(g.stringsToFree) > 0 {
 		g.output.WriteString("  // Cleanup: free heap-allocated strings\n")
-		var stringIDs []mir.ValueID
+		// Skip cleanup for any C variable that aliases a returned heap
+		// value. SSA `assign` instructions let multiple ids share one C
+		// variable, so checking returnedValueIDs by id misses the other
+		// aliases — collect the protected variable *names* and dedupe
+		// the free list by name.
+		protectedVars := make(map[string]bool)
+		for id := range g.returnedValueIDs {
+			protectedVars[g.getVariableName(id)] = true
+		}
+		seen := make(map[string]bool)
+		var freeVars []string
 		for id := range g.stringsToFree {
 			if g.returnedValueIDs[id] {
 				continue
 			}
-			stringIDs = append(stringIDs, id)
+			name := g.getVariableName(id)
+			if protectedVars[name] || seen[name] {
+				continue
+			}
+			seen[name] = true
+			freeVars = append(freeVars, name)
 		}
-		for i := len(stringIDs) - 1; i >= 0; i-- {
-			id := stringIDs[i]
-			varName := g.getVariableName(id)
-			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { free((void*)%s); %s = NULL; }\n", varName, varName, varName))
+		for i := len(freeVars) - 1; i >= 0; i-- {
+			name := freeVars[i]
+			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { free((void*)%s); %s = NULL; }\n", name, name, name))
 		}
 	}
 
@@ -5814,6 +5828,27 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 
 			// Update the variable mapping to point to the target
 			g.variables[inst.ID] = target
+
+			// Transfer string ownership through the assign. After
+			// `target = source`, the C variable for `target` holds the
+			// same heap pointer as `source`. If `source` was tracked in
+			// stringsToFree, freeing it at the epilogue would also kill
+			// `target`'s data — and `target` is what callers see if it
+			// flows into a `ret`. Move the ownership marker onto the
+			// target's SSA id (and onto this assign's result id, since
+			// `ret %assign_id` is the common return shape) so the
+			// existing returnedValueIDs check in the epilogue protects
+			// the right value.
+			if inst.Operands[0].Kind == mir.OperandValue && inst.Operands[1].Kind == mir.OperandValue {
+				srcID := inst.Operands[1].Value
+				if g.stringsToFree[srcID] {
+					delete(g.stringsToFree, srcID)
+					g.stringsToFree[inst.Operands[0].Value] = true
+					if inst.ID != mir.InvalidValue {
+						g.stringsToFree[inst.ID] = true
+					}
+				}
+			}
 		}
 	case "phi":
 		// Handle PHI nodes - for loops, we need to create mutable variables
