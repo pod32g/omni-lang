@@ -33,22 +33,6 @@ spawned on 2026-04-23.
 
 ## Known quirks (not blocking, not yet filed)
 
-### Array length isn't tracked through function parameters
-The C backend records `arrayLengths[id]` for arrays whose length is
-known at compile time (literals, locals), but the map doesn't survive
-a function call boundary. `len(arr)` on a parameter emits a warning
-("array length unknown") and returns -1, so any function shaped like
-`func find_max(arr: array<int>): int { let n = len(arr); ... }`
-silently does the wrong thing. This is what's blocking the remaining
-`std.algorithms` stubs (sorts, searches, find_max/min, unique,
-reverse, rotate, shuffle) from getting real implementations.
-
-The fix wants either: (a) fat-pointer arrays (struct of `{ptr, len}`
-threaded through the ABI), (b) an extra implicit length parameter
-that the codegen passes alongside every array argument, or (c) an
-explicit `len:int` argument on each algorithm signature. (a) is the
-right long-term shape; (c) would land sooner.
-
 ### Top-level `var` is rejected
 `let` at module scope is fine — it materializes lazily into each
 function's entry block on first reference. `var` would need real

@@ -341,11 +341,15 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `euclidean_distance(x1, y1, x2, y2)` - Wired to `omni_euclidean_distance`
 - [IMPLEMENTED] `manhattan_distance(x1, y1, x2, y2)` - Wired to `omni_manhattan_distance`
 - [IMPLEMENTED] `levenshtein_distance(s1, s2)` - Wired to `omni_levenshtein_distance` (two-row DP, O(n) memory)
-- [STUB] `bubble_sort()`, `selection_sort()`, `insertion_sort()` - blocked on array-length tracking through function params
-- [STUB] `linear_search()`, `binary_search()` - blocked on array-length tracking through function params
-- [STUB] `reverse()`, `rotate()`, `shuffle()` - blocked on array mutation through function params
-- [STUB] `find_max()`, `find_min()`, `count_occurrences()`, `unique()` - blocked on array-length tracking
-- [STUB] `is_connected()` - blocked on graph representation
+- [IMPLEMENTED] `bubble_sort(arr)`, `selection_sort(arr)`, `insertion_sort(arr)` - Wired to `omni_*_sort`; return a freshly allocated sorted copy
+- [IMPLEMENTED] `linear_search(arr, target)` - Wired to `omni_linear_search`
+- [IMPLEMENTED] `binary_search(arr, target)` - Wired to `omni_binary_search` (assumes `arr` is sorted ascending)
+- [IMPLEMENTED] `find_max(arr)`, `find_min(arr)` - Wired to `omni_array_find_max` / `_min`
+- [IMPLEMENTED] `count_occurrences(arr, value)` - Wired to `omni_array_count_occurrences`
+- [IMPLEMENTED] `reverse(arr)` - Wired to `omni_array_reverse`; returns a freshly allocated reversed copy
+- [STUB] `rotate(arr, k)`, `shuffle(arr)` - Not implemented (rotate is a small follow-up; shuffle needs a runtime PRNG)
+- [STUB] `unique(arr)` - Not implemented (output length differs from input; needs the variable-length-return story)
+- [STUB] `is_connected()` - Not implemented (needs a graph representation)
 
 ## Warnings
 

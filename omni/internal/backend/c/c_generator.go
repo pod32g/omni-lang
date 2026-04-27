@@ -30,6 +30,15 @@ type CGenerator struct {
 	mapTypes map[mir.ValueID]string
 	// Track array lengths by value ID (for runtime bounds checking and len())
 	arrayLengths map[mir.ValueID]int
+	// arrayLengthExprs holds C expressions (variable names, usually) that
+	// evaluate to the runtime length of an array value. Populated for
+	// array function parameters via the synthetic __len_<name> companion
+	// param the codegen inserts. Looked up after arrayLengths misses.
+	arrayLengthExprs map[mir.ValueID]string
+	// userFuncArrayParams maps a user-defined function name (mangled
+	// or unmangled) to the indices of its array<T> parameters. Used by
+	// call sites to know where to inject the synthetic length argument.
+	userFuncArrayParams map[string][]int
 	// Debug symbol tracking
 	sourceMap map[string]int // Maps source locations to line numbers
 	lineMap   map[int]string // Maps line numbers to source locations
@@ -79,6 +88,8 @@ func NewCGenerator(module *mir.Module) *CGenerator {
 		mapVars:           make(map[string]bool),
 		mapTypes:          make(map[mir.ValueID]string),
 		arrayLengths:      make(map[mir.ValueID]int),
+		arrayLengthExprs:  make(map[mir.ValueID]string),
+		userFuncArrayParams: make(map[string][]int),
 		sourceMap:         make(map[string]int),
 		lineMap:           make(map[int]string),
 		valueTypes:        make(map[mir.ValueID]string),
@@ -106,6 +117,8 @@ func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator 
 		mapVars:           make(map[string]bool),
 		mapTypes:          make(map[mir.ValueID]string),
 		arrayLengths:      make(map[mir.ValueID]int),
+		arrayLengthExprs:  make(map[mir.ValueID]string),
+		userFuncArrayParams: make(map[string][]int),
 		sourceMap:         make(map[string]int),
 		lineMap:           make(map[int]string),
 		valueTypes:        make(map[mir.ValueID]string),
@@ -133,6 +146,8 @@ func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool,
 		mapVars:           make(map[string]bool),
 		mapTypes:          make(map[mir.ValueID]string),
 		arrayLengths:      make(map[mir.ValueID]int),
+		arrayLengthExprs:  make(map[mir.ValueID]string),
+		userFuncArrayParams: make(map[string][]int),
 		sourceMap:         make(map[string]int),
 		lineMap:           make(map[int]string),
 		valueTypes:        make(map[mir.ValueID]string),
@@ -172,6 +187,40 @@ func (g *CGenerator) Generate() (string, error) {
 
 // generate produces the complete C code
 func (g *CGenerator) generate() (string, error) {
+	// Pre-compute the indices of array<T> parameters for every user-
+	// defined function so call-site emission knows where to splice in
+	// the synthetic length argument.
+	for _, fn := range g.module.Functions {
+		var idx []int
+		for i, p := range fn.Params {
+			if isArrayParamType(p.Type) {
+				idx = append(idx, i)
+			}
+		}
+		if len(idx) > 0 {
+			g.userFuncArrayParams[fn.Name] = idx
+			g.userFuncArrayParams[g.mapFunctionName(fn.Name)] = idx
+		}
+	}
+	// Intrinsics that take array<T> at parameter slot 0 also need the
+	// synthetic length argument splice (sorts, searches, aggregates).
+	// std.algorithms.linear_search / binary_search / count_occurrences
+	// take (arr, target) so the array is still at index 0; the trailing
+	// scalar follows the synthesized length cleanly.
+	for _, name := range []string{
+		"std.algorithms.bubble_sort",
+		"std.algorithms.selection_sort",
+		"std.algorithms.insertion_sort",
+		"std.algorithms.linear_search",
+		"std.algorithms.binary_search",
+		"std.algorithms.find_max",
+		"std.algorithms.find_min",
+		"std.algorithms.count_occurrences",
+		"std.algorithms.reverse",
+	} {
+		g.userFuncArrayParams[name] = []int{0}
+	}
+
 	g.writeHeader()
 	g.writeStdLibFunctions()
 
@@ -330,11 +379,15 @@ func (g *CGenerator) writeFunctionDeclarations() {
 		} else {
 			g.output.WriteString(fmt.Sprintf("%s %s(", returnType, funcName))
 
-			// Generate parameters
-			for i, param := range fn.Params {
-				if i > 0 {
+			// Generate parameters. Mirrors the definition: each
+			// array<T> parameter gets a synthetic int32_t length
+			// companion right after it. See isArrayParamType.
+			first := true
+			for _, param := range fn.Params {
+				if !first {
 					g.output.WriteString(", ")
 				}
+				first = false
 				// Check if this is a function pointer type
 				if strings.Contains(param.Type, ") -> ") {
 					// Generate function pointer parameter with correct C syntax
@@ -348,6 +401,9 @@ func (g *CGenerator) writeFunctionDeclarations() {
 					}
 
 					g.output.WriteString(fmt.Sprintf("%s %s", paramType, param.Name))
+					if isArrayParamType(param.Type) {
+						g.output.WriteString(fmt.Sprintf(", int32_t %s", arrayLenParamName(param.Name)))
+					}
 				}
 			}
 			g.output.WriteString(");\n")
@@ -1573,11 +1629,16 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	} else {
 		g.output.WriteString(fmt.Sprintf("%s %s(", returnType, funcName))
 
-		// Generate parameters
-		for i, param := range fn.Params {
-			if i > 0 {
+		// Generate parameters. Each `array<T>` parameter gets a
+		// synthetic `int32_t __omni_len_<name>` companion so the
+		// callee can resolve len() at runtime — see
+		// isArrayParamType / arrayLenParamName.
+		first := true
+		for _, param := range fn.Params {
+			if !first {
 				g.output.WriteString(", ")
 			}
+			first = false
 			// Check if this is a function pointer type
 			if strings.Contains(param.Type, ") -> ") {
 				// Generate function pointer parameter with correct C syntax
@@ -1591,6 +1652,9 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				}
 
 				g.output.WriteString(fmt.Sprintf("%s %s", paramType, param.Name))
+				if isArrayParamType(param.Type) {
+					g.output.WriteString(fmt.Sprintf(", int32_t %s", arrayLenParamName(param.Name)))
+				}
 			}
 		}
 		g.output.WriteString(") {\n")
@@ -1624,6 +1688,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	g.mapTypes = make(map[mir.ValueID]string)
 	g.valueTypes = make(map[mir.ValueID]string)
 	g.arrayLengths = make(map[mir.ValueID]int)
+	g.arrayLengthExprs = make(map[mir.ValueID]string)
 
 	// Map parameter SSA values to their names and types so downstream codegen
 	// (e.g. string concat) can pick the right conversion helper instead of
@@ -1632,6 +1697,9 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 		g.variables[param.ID] = param.Name
 		if param.Type != "" {
 			g.valueTypes[param.ID] = param.Type
+		}
+		if isArrayParamType(param.Type) {
+			g.arrayLengthExprs[param.ID] = arrayLenParamName(param.Name)
 		}
 	}
 
@@ -2248,14 +2316,22 @@ func (g *CGenerator) emitTailCall(inst mir.Instruction, fn *mir.Function) {
 	if callee == fn.Name && len(argOps) == len(fn.Params) {
 		// Self-recursive: stage new args into temporaries first so we
 		// don't clobber a parameter that another arg expression reads.
+		// Array params also need the synthetic length companion staged
+		// so the rebind into entry: keeps len() working.
 		g.output.WriteString("  {\n")
 		for i, op := range argOps {
 			pType := g.mapType(fn.Params[i].Type)
 			g.output.WriteString(fmt.Sprintf("    %s __omni_tco_a%d = %s;\n", pType, i, g.getOperandValue(op)))
+			if isArrayParamType(fn.Params[i].Type) {
+				g.output.WriteString(fmt.Sprintf("    int32_t __omni_tco_a%d_len = %s;\n", i, g.getOperandLengthExpr(op)))
+			}
 		}
 		for i, p := range fn.Params {
 			paramName := g.formatParamRef(p)
 			g.output.WriteString(fmt.Sprintf("    %s = __omni_tco_a%d;\n", paramName, i))
+			if isArrayParamType(p.Type) {
+				g.output.WriteString(fmt.Sprintf("    %s = __omni_tco_a%d_len;\n", arrayLenParamName(p.Name), i))
+			}
 		}
 		g.output.WriteString("    goto entry;\n")
 		g.output.WriteString("  }\n")
@@ -2265,9 +2341,18 @@ func (g *CGenerator) emitTailCall(inst mir.Instruction, fn *mir.Function) {
 	// Cross-function: emit `return callee(args);` directly. Clang at -O2+
 	// with -foptimize-sibling-calls turns this into a jump.
 	calleeC := g.mapFunctionName(callee)
+	arrayParamSet := map[int]bool{}
+	if idxs, ok := g.userFuncArrayParams[callee]; ok {
+		for _, i := range idxs {
+			arrayParamSet[i] = true
+		}
+	}
 	var argExprs []string
-	for _, op := range argOps {
+	for i, op := range argOps {
 		argExprs = append(argExprs, g.getOperandValue(op))
+		if arrayParamSet[i] {
+			argExprs = append(argExprs, g.getOperandLengthExpr(op))
+		}
 	}
 	g.output.WriteString(fmt.Sprintf("  return %s(%s);\n", calleeC, strings.Join(argExprs, ", ")))
 }
@@ -2651,18 +2736,19 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			if funcName == "len" && len(inst.Operands) == 2 {
 				varName := g.getVariableName(inst.ID)
 				arrayVar := g.getOperandValue(inst.Operands[1])
-				// Get array length from tracked array lengths
-				arrayLength := -1 // Use -1 as sentinel for "unknown length"
+				// Get array length: prefer compile-time tracking, fall
+				// back to the runtime length expression we register for
+				// function-parameter arrays.
+				arrayLength := -1
+				lengthExpr := ""
 				if inst.Operands[1].Kind == mir.OperandValue {
 					arrayOperandID := inst.Operands[1].Value
 					if length, ok := g.arrayLengths[arrayOperandID]; ok {
 						arrayLength = length
+					} else if expr, ok := g.arrayLengthExprs[arrayOperandID]; ok {
+						lengthExpr = expr
 					} else {
-						// Array length not found - this might be a parameter or passed array
-						// For function parameters, we need to track array lengths separately
-						// For now, fail loudly to prevent silent bugs
 						g.errors = append(g.errors, fmt.Sprintf("WARNING: array length not known for variable %s (ID: %d) - len() requires compile-time known array length or explicit length parameter", arrayVar, arrayOperandID))
-						// Still emit code with -1 so the program fails at runtime rather than silently returning 0
 						arrayLength = -1
 					}
 				}
@@ -2685,16 +2771,20 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				// Map element type to C type to get element size
 				elementCType := g.mapType(arrayType)
-				// Calculate element size
 				elementSize := "sizeof(" + elementCType + ")"
-				// Use runtime function omni_len with explicit length
-				// If length is -1 (unknown), the runtime should handle it (currently returns -1, which is wrong)
-				// TODO: Implement proper array length tracking through function parameters
-				if arrayLength < 0 {
-					g.output.WriteString(fmt.Sprintf("  // WARNING: Array length unknown for %s, len() may return incorrect value\n", arrayVar))
+				// Prefer the runtime length expression (function-param
+				// arrays) when we have one; fall back to the compile-time
+				// length otherwise.
+				if lengthExpr != "" {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_len((void*)%s, %s, %s);\n",
+						varName, arrayVar, elementSize, lengthExpr))
+				} else {
+					if arrayLength < 0 {
+						g.output.WriteString(fmt.Sprintf("  // WARNING: Array length unknown for %s, len() may return incorrect value\n", arrayVar))
+					}
+					g.output.WriteString(fmt.Sprintf("  %s = omni_len((void*)%s, %s, %d);\n",
+						varName, arrayVar, elementSize, arrayLength))
 				}
-				g.output.WriteString(fmt.Sprintf("  %s = omni_len((void*)%s, %s, %d);\n",
-					varName, arrayVar, elementSize, arrayLength))
 				return nil
 			}
 
@@ -3784,15 +3874,40 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								} else {
 									g.output.WriteString(fmt.Sprintf("  %s = %s(", varName, cFuncName))
 								}
-								// Add arguments
+								// Add arguments. For each user-defined function whose
+								// signature includes array<T> parameters, splice in the
+								// synthetic length companion right after each array arg.
+								arrayParamSet := map[int]bool{}
+								if idxs, ok := g.userFuncArrayParams[funcName]; ok {
+									for _, i := range idxs {
+										arrayParamSet[i] = true
+									}
+								}
+								wroteAny := false
 								for i, arg := range inst.Operands[1:] {
-									if i > 0 {
+									if wroteAny {
 										g.output.WriteString(", ")
 									}
+									wroteAny = true
 									g.output.WriteString(g.getOperandValue(arg))
+									if arrayParamSet[i] {
+										g.output.WriteString(", ")
+										g.output.WriteString(g.getOperandLengthExpr(arg))
+									}
 								}
 								g.output.WriteString(");\n")
 								g.valueTypes[inst.ID] = inst.Type
+								// Propagate array length for length-preserving
+								// intrinsics. Sorts and reverse return a fresh
+								// array of the same size as their input, so the
+								// caller can len() the result without losing
+								// track. Without this, a sort feeding a search
+								// would lose the length and produce -1.
+								if isLengthPreservingArrayIntrinsic(funcName) && len(inst.Operands) > 1 {
+									if expr := g.getOperandLengthExpr(inst.Operands[1]); expr != "-1" {
+										g.arrayLengthExprs[inst.ID] = expr
+									}
+								}
 							}
 							// Track strings that need freeing if this function returns a heap-allocated string
 							if g.isStringReturningFunction(funcName) && inst.Type == "string" {
@@ -5528,6 +5643,24 @@ func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string, o
 }
 
 // getOperandValue converts an operand to its C representation
+// getOperandLengthExpr returns a C expression for the length of an
+// array-valued operand: a literal int when we tracked it at compile
+// time, or a variable name when the array is a function parameter.
+// Falls back to "-1" when the length is unknown — call sites should
+// avoid emitting calls into runtime intrinsics in that case.
+func (g *CGenerator) getOperandLengthExpr(op mir.Operand) string {
+	if op.Kind != mir.OperandValue {
+		return "-1"
+	}
+	if length, ok := g.arrayLengths[op.Value]; ok {
+		return fmt.Sprintf("%d", length)
+	}
+	if expr, ok := g.arrayLengthExprs[op.Value]; ok {
+		return expr
+	}
+	return "-1"
+}
+
 func (g *CGenerator) getOperandValue(op mir.Operand) string {
 	switch op.Kind {
 	case mir.OperandValue:
@@ -6498,6 +6631,24 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_manhattan_distance"
 	case "std.algorithms.levenshtein_distance":
 		return "omni_levenshtein_distance"
+	case "std.algorithms.bubble_sort":
+		return "omni_bubble_sort"
+	case "std.algorithms.selection_sort":
+		return "omni_selection_sort"
+	case "std.algorithms.insertion_sort":
+		return "omni_insertion_sort"
+	case "std.algorithms.linear_search":
+		return "omni_linear_search"
+	case "std.algorithms.binary_search":
+		return "omni_binary_search"
+	case "std.algorithms.find_max":
+		return "omni_array_find_max"
+	case "std.algorithms.find_min":
+		return "omni_array_find_min"
+	case "std.algorithms.count_occurrences":
+		return "omni_array_count_occurrences"
+	case "std.algorithms.reverse":
+		return "omni_array_reverse"
 
 	// OS functions
 	case "std.os.exit":
@@ -6804,6 +6955,15 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.algorithms.euclidean_distance":   "omni_euclidean_distance",
 		"std.algorithms.manhattan_distance":   "omni_manhattan_distance",
 		"std.algorithms.levenshtein_distance": "omni_levenshtein_distance",
+		"std.algorithms.bubble_sort":          "omni_bubble_sort",
+		"std.algorithms.selection_sort":       "omni_selection_sort",
+		"std.algorithms.insertion_sort":       "omni_insertion_sort",
+		"std.algorithms.linear_search":        "omni_linear_search",
+		"std.algorithms.binary_search":        "omni_binary_search",
+		"std.algorithms.find_max":             "omni_array_find_max",
+		"std.algorithms.find_min":             "omni_array_find_min",
+		"std.algorithms.count_occurrences":    "omni_array_count_occurrences",
+		"std.algorithms.reverse":              "omni_array_reverse",
 		"string.length":            "omni_strlen",
 		"string.concat":            "omni_strcat",
 		"string.substring":         "omni_substring",
@@ -7293,6 +7453,15 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.algorithms.euclidean_distance":   true,
 		"std.algorithms.manhattan_distance":   true,
 		"std.algorithms.levenshtein_distance": true,
+		"std.algorithms.bubble_sort":          true,
+		"std.algorithms.selection_sort":       true,
+		"std.algorithms.insertion_sort":       true,
+		"std.algorithms.linear_search":        true,
+		"std.algorithms.binary_search":        true,
+		"std.algorithms.find_max":             true,
+		"std.algorithms.find_min":             true,
+		"std.algorithms.count_occurrences":    true,
+		"std.algorithms.reverse":              true,
 		"string.length":            true,
 		"string.concat":            true,
 		"string.substring":         true,
@@ -7618,6 +7787,44 @@ func (g *CGenerator) declareVariable(varName string) {
 }
 
 // isPrimitiveType checks if a type is a primitive type
+// isArrayParamType reports whether a function-parameter type spelled in
+// MIR (e.g. "array<int>", "[]<string>") needs the implicit length
+// companion the codegen attaches. Function-pointer types containing a
+// parenthesized arrow are explicitly excluded so we don't mistake
+// e.g. "(array<int>) -> int" for an array.
+func isArrayParamType(omniType string) bool {
+	t := strings.TrimSpace(omniType)
+	if t == "" {
+		return false
+	}
+	if strings.Contains(t, ") -> ") {
+		return false
+	}
+	return strings.HasPrefix(t, "array<") || strings.HasPrefix(t, "[]<")
+}
+
+// arrayLenParamName returns the C name of the implicit length companion
+// emitted alongside an array parameter named `name`.
+func arrayLenParamName(name string) string {
+	return "__omni_len_" + name
+}
+
+// isLengthPreservingArrayIntrinsic reports whether `name` is an
+// std.algorithms intrinsic that returns a fresh array of the same
+// length as its first input. Used at call sites to forward the
+// runtime length to the result so a downstream len() / search call
+// keeps working.
+func isLengthPreservingArrayIntrinsic(name string) bool {
+	switch name {
+	case "std.algorithms.bubble_sort",
+		"std.algorithms.selection_sort",
+		"std.algorithms.insertion_sort",
+		"std.algorithms.reverse":
+		return true
+	}
+	return false
+}
+
 func (g *CGenerator) isPrimitiveType(omniType string) bool {
 	switch omniType {
 	case "int", "float", "double", "string", "void", "void*", "bool", "ptr", "char":

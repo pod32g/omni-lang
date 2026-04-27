@@ -1,0 +1,30 @@
+// Regression: std.algorithms array operations now have real
+// implementations. The C backend pairs every array<T> parameter with
+// a synthetic int32_t length companion at the ABI level, so len(arr)
+// works on a parameter and the algorithms can compute over the
+// caller's array. Length-preserving intrinsics (sorts, reverse)
+// forward the input length to the result so a downstream search
+// keeps working.
+//
+// Sequence:
+//   arr = [5, 2, 8, 1, 9, 3]
+//   max = 9, min = 1, count(arr, 8) = 1
+//   sorted = [1, 2, 3, 5, 8, 9]
+//   binary_search(sorted, 8) = 4
+//   reversed = [9, 8, 5, 3, 2, 1]
+//   reversed[0] = 9, reversed[5] = 1
+//
+// Returns max + min + count + binary_idx + reversed[0] + reversed[5]
+//       = 9 + 1 + 1 + 4 + 9 + 1 = 25
+import std
+
+func main():int {
+    let arr:array<int> = [5, 2, 8, 1, 9, 3]
+    let mx:int = std.algorithms.find_max(arr)
+    let mn:int = std.algorithms.find_min(arr)
+    let cnt:int = std.algorithms.count_occurrences(arr, 8)
+    let sorted:array<int> = std.algorithms.bubble_sort(arr)
+    let bidx:int = std.algorithms.binary_search(sorted, 8)
+    let reversed:array<int> = std.algorithms.reverse(sorted)
+    return mx + mn + cnt + bidx + reversed[0] + reversed[5]
+}

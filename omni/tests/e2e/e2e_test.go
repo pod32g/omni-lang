@@ -560,6 +560,54 @@ func TestStdAlgorithmsDistance(t *testing.T) {
 	}
 }
 
+// TestStdAlgorithmsArray pins the array-based std.algorithms intrinsics
+// (find_max/min, count_occurrences, sorts, binary_search, reverse) and
+// the array-length-through-parameter ABI change that unlocked them.
+func TestStdAlgorithmsArray(t *testing.T) {
+	testFile := "std_algorithms_array.omni"
+	expected := "25"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+// TestArrayLenOnParam pins the synthetic-length companion: a function
+// that takes an array<T> can now call len(arr) and get the real
+// length back. Sums [10, 20, 30, 40] = 100.
+func TestArrayLenOnParam(t *testing.T) {
+	testFile := "array_len_on_param.omni"
+	expected := "100"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdStringExtras pins the previously-stubbed std.string functions:
 // trim_left/right/all, to_title, capitalize, reverse, equals/compare
 // _ignore_case, count_occurrences/lines/words. Both backends now run

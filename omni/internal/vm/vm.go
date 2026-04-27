@@ -748,6 +748,29 @@ func execFunction(funcs map[string]*mir.Function, fn *mir.Function, args []Resul
 // "return literal" placeholder used by std.omni declarations whose real
 // implementations live in execIntrinsic / the C runtime. Shape: a
 // single block with one const instruction terminated by `ret <const>`.
+// isVMIntrinsicOverride reports whether the VM has its own
+// execIntrinsic case for a std.* callee. Used by the tail-call
+// detector to avoid rebinding into the OmniLang body when the
+// runtime path is the source of truth.
+func isVMIntrinsicOverride(callee string) bool {
+	switch callee {
+	case "std.algorithms.bubble_sort",
+		"std.algorithms.selection_sort",
+		"std.algorithms.insertion_sort",
+		"std.algorithms.linear_search",
+		"std.algorithms.binary_search",
+		"std.algorithms.find_max",
+		"std.algorithms.find_min",
+		"std.algorithms.count_occurrences",
+		"std.algorithms.reverse",
+		"std.algorithms.euclidean_distance",
+		"std.algorithms.manhattan_distance",
+		"std.algorithms.levenshtein_distance":
+		return true
+	}
+	return false
+}
+
 func isStubBody(fn *mir.Function) bool {
 	if fn == nil || len(fn.Blocks) != 1 {
 		return false
@@ -784,15 +807,16 @@ func tailCallTarget(funcs map[string]*mir.Function, fr *frame, term mir.Terminat
 	if !ok {
 		return nil, nil, false
 	}
-	// If the user-facing body is just `return <literal>` (the typical
-	// shape of a `std.*` stub kept around to satisfy the type checker),
-	// don't rebind to it — execCall would normally route through
-	// execIntrinsic for the real implementation, but a tail-call
-	// rebind skips that path. Going to the stub would produce the
-	// placeholder default (e.g. ' ' for char_from_code) instead of the
-	// runtime result.
-	if isStubBody(fn) && strings.HasPrefix(callee, "std.") {
-		return nil, nil, false
+	// Skip tail-call rebind into a callee whose real implementation
+	// lives in execIntrinsic. The user-side body is either a stub kept
+	// around to satisfy the type checker (`return <literal>` shape) or
+	// a partially-correct OmniLang implementation that depends on
+	// other stubs — either way, going there bypasses the runtime
+	// result we actually want.
+	if strings.HasPrefix(callee, "std.") {
+		if isStubBody(fn) || isVMIntrinsicOverride(callee) {
+			return nil, nil, false
+		}
 	}
 	// Only tail-call functions whose param count matches: a Promise<T>
 	// callee would require unwrapping at the call site, which the normal
@@ -2636,6 +2660,113 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			y2, _ := toFloat(operandValue(fr, operands[3]))
 			return Result{Type: "float", Value: math.Abs(x2-x1) + math.Abs(y2-y1)}, true
 		}
+	case "std.algorithms.find_max":
+		if len(operands) == 1 {
+			arr := operandValue(fr, operands[0])
+			xs := vmArrayAsInts(arr.Value); if len(xs) > 0 {
+				m := xs[0]
+				for _, v := range xs[1:] {
+					if v > m {
+						m = v
+					}
+				}
+				return Result{Type: "int", Value: m}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.algorithms.find_min":
+		if len(operands) == 1 {
+			arr := operandValue(fr, operands[0])
+			xs := vmArrayAsInts(arr.Value); if len(xs) > 0 {
+				m := xs[0]
+				for _, v := range xs[1:] {
+					if v < m {
+						m = v
+					}
+				}
+				return Result{Type: "int", Value: m}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.algorithms.linear_search":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			target, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value); if xs != nil {
+				for i, v := range xs {
+					if v == target {
+						return Result{Type: "int", Value: i}, true
+					}
+				}
+			}
+			return Result{Type: "int", Value: -1}, true
+		}
+	case "std.algorithms.binary_search":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			target, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				lo, hi := 0, len(xs)-1
+				for lo <= hi {
+					mid := lo + (hi-lo)/2
+					if xs[mid] == target {
+						return Result{Type: "int", Value: mid}, true
+					} else if xs[mid] < target {
+						lo = mid + 1
+					} else {
+						hi = mid - 1
+					}
+				}
+			}
+			return Result{Type: "int", Value: -1}, true
+		}
+	case "std.algorithms.count_occurrences":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			target, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value); if xs != nil {
+				count := 0
+				for _, v := range xs {
+					if v == target {
+						count++
+					}
+				}
+				return Result{Type: "int", Value: count}, true
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.algorithms.bubble_sort", "std.algorithms.selection_sort", "std.algorithms.insertion_sort":
+		if len(operands) == 1 {
+			arr := operandValue(fr, operands[0])
+			xs := vmArrayAsInts(arr.Value); if xs != nil {
+				out := make([]int, len(xs))
+				copy(out, xs)
+				// Simple insertion sort — VM doesn't need to honor the
+				// algorithm's name, only its sorted-output contract.
+				for i := 1; i < len(out); i++ {
+					key := out[i]
+					j := i - 1
+					for j >= 0 && out[j] > key {
+						out[j+1] = out[j]
+						j--
+					}
+					out[j+1] = key
+				}
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
+	case "std.algorithms.reverse":
+		if len(operands) == 1 {
+			arr := operandValue(fr, operands[0])
+			xs := vmArrayAsInts(arr.Value); if xs != nil {
+				out := make([]int, len(xs))
+				for i, v := range xs {
+					out[len(xs)-1-i] = v
+				}
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
 	case "std.algorithms.levenshtein_distance":
 		if len(operands) == 2 {
 			a, _ := toString(operandValue(fr, operands[0]))
@@ -3743,6 +3874,33 @@ func convertLiteralToDecimal(literal string) string {
 	}
 	// Return as-is for regular decimal literals
 	return literal
+}
+
+// vmArrayAsInts coerces a VM array carrier (Go `[]int` for typed
+// integer arrays, `[]interface{}` for heterogeneous or generic ones)
+// into a `[]int` for the std.algorithms intrinsics. Returns nil when
+// the value isn't array-shaped or contains a non-integer element.
+func vmArrayAsInts(v interface{}) []int {
+	switch xs := v.(type) {
+	case []int:
+		return xs
+	case []interface{}:
+		out := make([]int, 0, len(xs))
+		for _, e := range xs {
+			switch n := e.(type) {
+			case int:
+				out = append(out, n)
+			case int32:
+				out = append(out, int(n))
+			case int64:
+				out = append(out, int(n))
+			default:
+				return nil
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 func toInt(value Result) (int, error) {

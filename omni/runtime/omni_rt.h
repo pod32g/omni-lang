@@ -65,10 +65,25 @@ int32_t omni_count_occurrences(const char* str, const char* substr);
 int32_t omni_count_lines(const char* str);
 int32_t omni_count_words(const char* str);
 
-// Algorithms
+// Algorithms — distance metrics
 double omni_euclidean_distance(double x1, double y1, double x2, double y2);
 double omni_manhattan_distance(double x1, double y1, double x2, double y2);
 int32_t omni_levenshtein_distance(const char* s1, const char* s2);
+
+// Algorithms — array operations. The C backend pairs every array
+// argument with its length, so each of these takes (T* arr, int32_t n)
+// even though the OmniLang signature is just (arr: array<int>).
+// Sorts return a freshly heap-allocated copy of `arr` sorted in place;
+// callers receive the new pointer (also of length `n`).
+int32_t* omni_bubble_sort(int32_t* arr, int32_t n);
+int32_t* omni_selection_sort(int32_t* arr, int32_t n);
+int32_t* omni_insertion_sort(int32_t* arr, int32_t n);
+int32_t omni_linear_search(int32_t* arr, int32_t n, int32_t target);
+int32_t omni_binary_search(int32_t* arr, int32_t n, int32_t target);
+int32_t omni_array_find_max(int32_t* arr, int32_t n);
+int32_t omni_array_find_min(int32_t* arr, int32_t n);
+int32_t omni_array_count_occurrences(int32_t* arr, int32_t n, int32_t value);
+int32_t* omni_array_reverse(int32_t* arr, int32_t n);
 
 // Promise/Async support (simplified synchronous implementation)
 typedef struct {

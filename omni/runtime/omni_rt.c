@@ -657,6 +657,135 @@ double omni_manhattan_distance(double x1, double y1, double x2, double y2) {
     return dx + dy;
 }
 
+// Helpers for the in-place int32_t array algorithms below. Each one
+// allocates a fresh copy so the OmniLang caller's array is never
+// mutated — sorts return the new pointer, and the original stays
+// addressable for any later code path that aliases it.
+static int32_t* omni_array_clone_int(int32_t* arr, int32_t n) {
+    if (n <= 0 || !arr) {
+        int32_t* empty = (int32_t*)malloc(1);
+        return empty;
+    }
+    int32_t* copy = (int32_t*)malloc((size_t)n * sizeof(int32_t));
+    if (!copy) return NULL;
+    memcpy(copy, arr, (size_t)n * sizeof(int32_t));
+    return copy;
+}
+
+int32_t* omni_bubble_sort(int32_t* arr, int32_t n) {
+    int32_t* a = omni_array_clone_int(arr, n);
+    if (!a || n <= 1) return a;
+    for (int32_t i = 0; i < n - 1; i++) {
+        int swapped = 0;
+        for (int32_t j = 0; j < n - i - 1; j++) {
+            if (a[j] > a[j + 1]) {
+                int32_t tmp = a[j];
+                a[j] = a[j + 1];
+                a[j + 1] = tmp;
+                swapped = 1;
+            }
+        }
+        if (!swapped) break;
+    }
+    return a;
+}
+
+int32_t* omni_selection_sort(int32_t* arr, int32_t n) {
+    int32_t* a = omni_array_clone_int(arr, n);
+    if (!a || n <= 1) return a;
+    for (int32_t i = 0; i < n - 1; i++) {
+        int32_t min = i;
+        for (int32_t j = i + 1; j < n; j++) {
+            if (a[j] < a[min]) min = j;
+        }
+        if (min != i) {
+            int32_t tmp = a[i];
+            a[i] = a[min];
+            a[min] = tmp;
+        }
+    }
+    return a;
+}
+
+int32_t* omni_insertion_sort(int32_t* arr, int32_t n) {
+    int32_t* a = omni_array_clone_int(arr, n);
+    if (!a || n <= 1) return a;
+    for (int32_t i = 1; i < n; i++) {
+        int32_t key = a[i];
+        int32_t j = i - 1;
+        while (j >= 0 && a[j] > key) {
+            a[j + 1] = a[j];
+            j--;
+        }
+        a[j + 1] = key;
+    }
+    return a;
+}
+
+int32_t omni_linear_search(int32_t* arr, int32_t n, int32_t target) {
+    if (!arr) return -1;
+    for (int32_t i = 0; i < n; i++) {
+        if (arr[i] == target) return i;
+    }
+    return -1;
+}
+
+// omni_binary_search assumes `arr` is already sorted in ascending
+// order. Returns the matching index or -1 if `target` isn't present.
+int32_t omni_binary_search(int32_t* arr, int32_t n, int32_t target) {
+    if (!arr) return -1;
+    int32_t lo = 0;
+    int32_t hi = n - 1;
+    while (lo <= hi) {
+        int32_t mid = lo + (hi - lo) / 2;
+        if (arr[mid] == target) return mid;
+        if (arr[mid] < target) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return -1;
+}
+
+int32_t omni_array_find_max(int32_t* arr, int32_t n) {
+    if (!arr || n <= 0) return 0;
+    int32_t m = arr[0];
+    for (int32_t i = 1; i < n; i++) {
+        if (arr[i] > m) m = arr[i];
+    }
+    return m;
+}
+
+int32_t omni_array_find_min(int32_t* arr, int32_t n) {
+    if (!arr || n <= 0) return 0;
+    int32_t m = arr[0];
+    for (int32_t i = 1; i < n; i++) {
+        if (arr[i] < m) m = arr[i];
+    }
+    return m;
+}
+
+int32_t omni_array_count_occurrences(int32_t* arr, int32_t n, int32_t value) {
+    if (!arr) return 0;
+    int32_t count = 0;
+    for (int32_t i = 0; i < n; i++) {
+        if (arr[i] == value) count++;
+    }
+    return count;
+}
+
+int32_t* omni_array_reverse(int32_t* arr, int32_t n) {
+    int32_t* a = omni_array_clone_int(arr, n);
+    if (!a || n <= 1) return a;
+    for (int32_t i = 0; i < n / 2; i++) {
+        int32_t tmp = a[i];
+        a[i] = a[n - 1 - i];
+        a[n - 1 - i] = tmp;
+    }
+    return a;
+}
+
 int32_t omni_levenshtein_distance(const char* s1, const char* s2) {
     if (!s1) s1 = "";
     if (!s2) s2 = "";

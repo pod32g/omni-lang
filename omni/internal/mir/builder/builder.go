@@ -2411,11 +2411,19 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			case strings.HasSuffix(calleeName, ".euclidean_distance"),
 				strings.HasSuffix(calleeName, ".manhattan_distance"):
 				resultType = "float"
-			case strings.HasSuffix(calleeName, ".levenshtein_distance"):
+			case strings.HasSuffix(calleeName, ".levenshtein_distance"),
+				strings.HasSuffix(calleeName, ".linear_search"),
+				strings.HasSuffix(calleeName, ".binary_search"),
+				strings.HasSuffix(calleeName, ".find_max"),
+				strings.HasSuffix(calleeName, ".find_min"),
+				strings.HasSuffix(calleeName, ".count_occurrences"):
 				resultType = "int"
+			case strings.HasSuffix(calleeName, ".bubble_sort"),
+				strings.HasSuffix(calleeName, ".selection_sort"),
+				strings.HasSuffix(calleeName, ".insertion_sort"),
+				strings.HasSuffix(calleeName, ".reverse"):
+				resultType = "array<int>"
 			default:
-				// Sorts/searches/etc. still ride the heuristic-fallback
-				// since they're not yet runtime-implemented.
 				resultType = "int"
 			}
 		} else if strings.Contains(calleeName, "array.") {
