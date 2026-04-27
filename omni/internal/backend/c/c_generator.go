@@ -54,6 +54,9 @@ type CGenerator struct {
 	tempStringsToFree []string
 	// Track the value ID that is being returned (to exclude from cleanup)
 	returnedValueID mir.ValueID
+	// Track every value ID returned by this function. A single function can
+	// have multiple return sites, and each returned heap value is caller-owned.
+	returnedValueIDs map[mir.ValueID]bool
 	// Track which variables were declared at the top of the function
 	declaredVariables map[mir.ValueID]bool
 	// currentDeferFn is the MIR function currently being generated. The defer
@@ -78,87 +81,90 @@ type CGenerator struct {
 // NewCGenerator creates a new C code generator
 func NewCGenerator(module *mir.Module) *CGenerator {
 	return &CGenerator{
-		module:            module,
-		optLevel:          "2", // Default to standard optimization
-		debugInfo:         false,
-		sourceFile:        "",
-		variables:         make(map[mir.ValueID]string),
-		phiVars:           make(map[mir.ValueID]bool),
-		mutableVars:       make(map[mir.ValueID]bool),
-		mapVars:           make(map[string]bool),
-		mapTypes:          make(map[mir.ValueID]string),
-		arrayLengths:      make(map[mir.ValueID]int),
-		arrayLengthExprs:  make(map[mir.ValueID]string),
+		module:              module,
+		optLevel:            "2", // Default to standard optimization
+		debugInfo:           false,
+		sourceFile:          "",
+		variables:           make(map[mir.ValueID]string),
+		phiVars:             make(map[mir.ValueID]bool),
+		mutableVars:         make(map[mir.ValueID]bool),
+		mapVars:             make(map[string]bool),
+		mapTypes:            make(map[mir.ValueID]string),
+		arrayLengths:        make(map[mir.ValueID]int),
+		arrayLengthExprs:    make(map[mir.ValueID]string),
 		userFuncArrayParams: make(map[string][]int),
-		sourceMap:         make(map[string]int),
-		lineMap:           make(map[int]string),
-		valueTypes:        make(map[mir.ValueID]string),
-		errors:            []string{},
-		stringsToFree:     make(map[mir.ValueID]bool),
-		promisesToFree:    make(map[mir.ValueID]bool),
-		tempStringsToFree: []string{},
-		returnedValueID:   mir.InvalidValue,
-		declaredVariables: make(map[mir.ValueID]bool),
-		tupleStructs:      make(map[string]string),
-		tupleSplits:       make(map[mir.ValueID][]string),
+		sourceMap:           make(map[string]int),
+		lineMap:             make(map[int]string),
+		valueTypes:          make(map[mir.ValueID]string),
+		errors:              []string{},
+		stringsToFree:       make(map[mir.ValueID]bool),
+		promisesToFree:      make(map[mir.ValueID]bool),
+		tempStringsToFree:   []string{},
+		returnedValueID:     mir.InvalidValue,
+		returnedValueIDs:    make(map[mir.ValueID]bool),
+		declaredVariables:   make(map[mir.ValueID]bool),
+		tupleStructs:        make(map[string]string),
+		tupleSplits:         make(map[mir.ValueID][]string),
 	}
 }
 
 // NewCGeneratorWithOptLevel creates a new C code generator with specified optimization level
 func NewCGeneratorWithOptLevel(module *mir.Module, optLevel string) *CGenerator {
 	return &CGenerator{
-		module:            module,
-		optLevel:          optLevel,
-		debugInfo:         false,
-		sourceFile:        "",
-		variables:         make(map[mir.ValueID]string),
-		phiVars:           make(map[mir.ValueID]bool),
-		mutableVars:       make(map[mir.ValueID]bool),
-		mapVars:           make(map[string]bool),
-		mapTypes:          make(map[mir.ValueID]string),
-		arrayLengths:      make(map[mir.ValueID]int),
-		arrayLengthExprs:  make(map[mir.ValueID]string),
+		module:              module,
+		optLevel:            optLevel,
+		debugInfo:           false,
+		sourceFile:          "",
+		variables:           make(map[mir.ValueID]string),
+		phiVars:             make(map[mir.ValueID]bool),
+		mutableVars:         make(map[mir.ValueID]bool),
+		mapVars:             make(map[string]bool),
+		mapTypes:            make(map[mir.ValueID]string),
+		arrayLengths:        make(map[mir.ValueID]int),
+		arrayLengthExprs:    make(map[mir.ValueID]string),
 		userFuncArrayParams: make(map[string][]int),
-		sourceMap:         make(map[string]int),
-		lineMap:           make(map[int]string),
-		valueTypes:        make(map[mir.ValueID]string),
-		errors:            []string{},
-		stringsToFree:     make(map[mir.ValueID]bool),
-		promisesToFree:    make(map[mir.ValueID]bool),
-		tempStringsToFree: []string{},
-		returnedValueID:   mir.InvalidValue,
-		declaredVariables: make(map[mir.ValueID]bool),
-		tupleStructs:      make(map[string]string),
-		tupleSplits:       make(map[mir.ValueID][]string),
+		sourceMap:           make(map[string]int),
+		lineMap:             make(map[int]string),
+		valueTypes:          make(map[mir.ValueID]string),
+		errors:              []string{},
+		stringsToFree:       make(map[mir.ValueID]bool),
+		promisesToFree:      make(map[mir.ValueID]bool),
+		tempStringsToFree:   []string{},
+		returnedValueID:     mir.InvalidValue,
+		returnedValueIDs:    make(map[mir.ValueID]bool),
+		declaredVariables:   make(map[mir.ValueID]bool),
+		tupleStructs:        make(map[string]string),
+		tupleSplits:         make(map[mir.ValueID][]string),
 	}
 }
 
 // NewCGeneratorWithDebug creates a new C code generator with debug information
 func NewCGeneratorWithDebug(module *mir.Module, optLevel string, debugInfo bool, sourceFile string) *CGenerator {
 	return &CGenerator{
-		module:            module,
-		optLevel:          optLevel,
-		debugInfo:         debugInfo,
-		sourceFile:        sourceFile,
-		variables:         make(map[mir.ValueID]string),
-		phiVars:           make(map[mir.ValueID]bool),
-		mutableVars:       make(map[mir.ValueID]bool),
-		mapVars:           make(map[string]bool),
-		mapTypes:          make(map[mir.ValueID]string),
-		arrayLengths:      make(map[mir.ValueID]int),
-		arrayLengthExprs:  make(map[mir.ValueID]string),
+		module:              module,
+		optLevel:            optLevel,
+		debugInfo:           debugInfo,
+		sourceFile:          sourceFile,
+		variables:           make(map[mir.ValueID]string),
+		phiVars:             make(map[mir.ValueID]bool),
+		mutableVars:         make(map[mir.ValueID]bool),
+		mapVars:             make(map[string]bool),
+		mapTypes:            make(map[mir.ValueID]string),
+		arrayLengths:        make(map[mir.ValueID]int),
+		arrayLengthExprs:    make(map[mir.ValueID]string),
 		userFuncArrayParams: make(map[string][]int),
-		sourceMap:         make(map[string]int),
-		lineMap:           make(map[int]string),
-		valueTypes:        make(map[mir.ValueID]string),
-		errors:            []string{},
-		stringsToFree:     make(map[mir.ValueID]bool),
-		promisesToFree:    make(map[mir.ValueID]bool),
-		tempStringsToFree: []string{},
-		returnedValueID:   mir.InvalidValue,
-		declaredVariables: make(map[mir.ValueID]bool),
-		tupleStructs:      make(map[string]string),
-		tupleSplits:       make(map[mir.ValueID][]string),
+		sourceMap:           make(map[string]int),
+		lineMap:             make(map[int]string),
+		valueTypes:          make(map[mir.ValueID]string),
+		errors:              []string{},
+		stringsToFree:       make(map[mir.ValueID]bool),
+		promisesToFree:      make(map[mir.ValueID]bool),
+		tempStringsToFree:   []string{},
+		returnedValueID:     mir.InvalidValue,
+		returnedValueIDs:    make(map[mir.ValueID]bool),
+		declaredVariables:   make(map[mir.ValueID]bool),
+		tupleStructs:        make(map[string]string),
+		tupleSplits:         make(map[mir.ValueID][]string),
 	}
 }
 
@@ -1575,6 +1581,139 @@ func isLikelyTypeName(s string) bool {
 	return true
 }
 
+func (g *CGenerator) functionNeedsReturnValue(funcName, originalReturnType string) bool {
+	if funcName == "omni_main" {
+		return true
+	}
+	return strings.TrimSpace(originalReturnType) != "" && strings.TrimSpace(originalReturnType) != "void"
+}
+
+func (g *CGenerator) returnSlotDeclaration(funcName, originalReturnType string) string {
+	if funcName == "omni_main" {
+		return "int32_t __omni_return_value = 0"
+	}
+	if strings.HasPrefix(originalReturnType, "Promise<") {
+		return "omni_promise_t* __omni_return_value = NULL"
+	}
+	if strings.Contains(originalReturnType, ") -> ") {
+		return g.mapFunctionTypeWithName(originalReturnType, "__omni_return_value") + " = NULL"
+	}
+
+	cType := g.mapType(originalReturnType)
+	switch {
+	case cType == "double":
+		return cType + " __omni_return_value = 0.0"
+	case cType == "int32_t" || cType == "int64_t":
+		return cType + " __omni_return_value = 0"
+	case strings.HasSuffix(cType, "*"):
+		return cType + " __omni_return_value = NULL"
+	default:
+		return cType + " __omni_return_value = {0}"
+	}
+}
+
+func (g *CGenerator) emitReturnThroughEpilogue(value string, funcName string, originalReturnType string) {
+	if !g.functionNeedsReturnValue(funcName, originalReturnType) {
+		g.output.WriteString("  goto __omni_epilogue;\n")
+		return
+	}
+
+	if funcName == "omni_main" && strings.HasPrefix(originalReturnType, "Promise<") {
+		innerType := originalReturnType[8 : len(originalReturnType)-1]
+		switch innerType {
+		case "int":
+			g.output.WriteString(fmt.Sprintf("  __omni_return_value = %s;\n", value))
+		case "string":
+			g.output.WriteString("  // String return from main not supported, return 0\n")
+			g.output.WriteString("  __omni_return_value = 0;\n")
+		case "float", "double":
+			g.output.WriteString(fmt.Sprintf("  __omni_return_value = (int32_t)%s;\n", value))
+		case "bool":
+			g.output.WriteString(fmt.Sprintf("  __omni_return_value = %s ? 0 : 1;\n", value))
+		default:
+			g.output.WriteString(fmt.Sprintf("  __omni_return_value = %s;\n", value))
+		}
+		g.output.WriteString("  goto __omni_epilogue;\n")
+		return
+	}
+
+	if strings.HasPrefix(originalReturnType, "Promise<") {
+		innerType := originalReturnType[8 : len(originalReturnType)-1]
+		promiseFunc := "omni_promise_create_int"
+		switch innerType {
+		case "int":
+			promiseFunc = "omni_promise_create_int"
+		case "string":
+			promiseFunc = "omni_promise_create_string"
+		case "float", "double":
+			promiseFunc = "omni_promise_create_float"
+		case "bool":
+			promiseFunc = "omni_promise_create_bool"
+		default:
+			g.errors = append(g.errors, fmt.Sprintf("cannot create promise for user-defined type: %s", innerType))
+		}
+		g.output.WriteString(fmt.Sprintf("  __omni_return_value = %s(%s);\n", promiseFunc, value))
+		g.output.WriteString("  goto __omni_epilogue;\n")
+		return
+	}
+
+	g.output.WriteString(fmt.Sprintf("  __omni_return_value = %s;\n", value))
+	g.output.WriteString("  goto __omni_epilogue;\n")
+}
+
+func (g *CGenerator) emitReturnDefaultThroughEpilogue(funcName string, originalReturnType string) {
+	if g.functionNeedsReturnValue(funcName, originalReturnType) {
+		g.output.WriteString("  __omni_return_value = 0;\n")
+	}
+	g.output.WriteString("  goto __omni_epilogue;\n")
+}
+
+func (g *CGenerator) emitFunctionEpilogue(funcName string, originalReturnType string) {
+	g.output.WriteString("  __omni_epilogue:\n")
+	g.output.WriteString("  ;\n")
+
+	if len(g.stringsToFree) > 0 {
+		g.output.WriteString("  // Cleanup: free heap-allocated strings\n")
+		var stringIDs []mir.ValueID
+		for id := range g.stringsToFree {
+			if g.returnedValueIDs[id] {
+				continue
+			}
+			stringIDs = append(stringIDs, id)
+		}
+		for i := len(stringIDs) - 1; i >= 0; i-- {
+			id := stringIDs[i]
+			varName := g.getVariableName(id)
+			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { free((void*)%s); %s = NULL; }\n", varName, varName, varName))
+		}
+	}
+
+	if len(g.tempStringsToFree) > 0 {
+		g.output.WriteString("  // Cleanup: free temporary string conversion variables\n")
+		for i := len(g.tempStringsToFree) - 1; i >= 0; i-- {
+			tempVar := g.tempStringsToFree[i]
+			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { free((void*)%s); %s = NULL; }\n", tempVar, tempVar, tempVar))
+		}
+	}
+
+	if len(g.promisesToFree) > 0 {
+		g.output.WriteString("  // Cleanup: free promises\n")
+		for id := range g.promisesToFree {
+			if g.returnedValueIDs[id] {
+				continue
+			}
+			varName := g.getVariableName(id)
+			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { omni_promise_free(%s); %s = NULL; }\n", varName, varName, varName))
+		}
+	}
+
+	if g.functionNeedsReturnValue(funcName, originalReturnType) {
+		g.output.WriteString("  return __omni_return_value;\n")
+	} else {
+		g.output.WriteString("  return;\n")
+	}
+}
+
 // generateFunction generates C code for a single function
 func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	// Skip functions that are provided by the runtime
@@ -1677,6 +1816,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	g.promisesToFree = make(map[mir.ValueID]bool)
 	g.tempStringsToFree = []string{}
 	g.returnedValueID = mir.InvalidValue
+	g.returnedValueIDs = make(map[mir.ValueID]bool)
 	g.declaredVariables = make(map[mir.ValueID]bool)
 	// mapVars tracks names that were bound to map literals in the *current*
 	// function; don't let it leak across functions (e.g. if one function
@@ -1690,6 +1830,10 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	g.valueTypes = make(map[mir.ValueID]string)
 	g.arrayLengths = make(map[mir.ValueID]int)
 	g.arrayLengthExprs = make(map[mir.ValueID]string)
+
+	if g.functionNeedsReturnValue(funcName, fn.ReturnType) {
+		g.output.WriteString(fmt.Sprintf("  %s;\n", g.returnSlotDeclaration(funcName, fn.ReturnType)))
+	}
 
 	// Map parameter SSA values to their names and types so downstream codegen
 	// (e.g. string concat) can pick the right conversion helper instead of
@@ -1852,6 +1996,14 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				// Special case for async function calls - they return Promise
 				if inst.Op == "call" && strings.HasPrefix(inst.Type, "Promise<") {
 					varType = "omni_promise_t*"
+				}
+				// File handles are FILE* pointers carried as intptr_t in C.
+				// The Omni surface type remains int, but int32_t truncates
+				// handles on 64-bit platforms.
+				if inst.Op == "call" && len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandLiteral {
+					if g.mapFunctionName(inst.Operands[0].Literal) == "omni_file_open" {
+						varType = "intptr_t"
+					}
 				}
 				// Some runtime intrinsics return int but lose their type during MIR
 				// lowering (reported as void). When we see one with a consumed
@@ -2083,6 +2235,8 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 					if strings.Contains(varType, "(*") && strings.Contains(varType, ")(") && strings.Contains(varType, varName) {
 						// Function pointer type already includes variable name, just output type with semicolon
 						g.output.WriteString(fmt.Sprintf("  %s;\n", varType))
+					} else if strings.HasSuffix(strings.TrimSpace(varType), "*") {
+						g.output.WriteString(fmt.Sprintf("  %s %s = NULL;\n", varType, varName))
 					} else {
 						g.output.WriteString(fmt.Sprintf("  %s %s;\n", varType, varName))
 					}
@@ -2131,47 +2285,7 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 		}
 	}
 
-	// Generate cleanup code for heap-allocated strings and promises
-	// Free all tracked strings (in reverse order to handle dependencies)
-	// Note: We iterate in reverse to free strings that might depend on others
-	// Exclude the returned value from cleanup (caller owns it)
-	if len(g.stringsToFree) > 0 {
-		g.output.WriteString("  // Cleanup: free heap-allocated strings\n")
-		// Collect all string IDs and sort them in reverse order
-		var stringIDs []mir.ValueID
-		for id := range g.stringsToFree {
-			// Skip the returned value - caller owns it
-			if id == g.returnedValueID {
-				continue
-			}
-			stringIDs = append(stringIDs, id)
-		}
-		// Sort in reverse order (free later variables first)
-		for i := len(stringIDs) - 1; i >= 0; i-- {
-			id := stringIDs[i]
-			varName := g.getVariableName(id)
-			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { free((void*)%s); %s = NULL; }\n", varName, varName, varName))
-		}
-	}
-
-	// Free temporary string variables created in convertOperandToString
-	if len(g.tempStringsToFree) > 0 {
-		g.output.WriteString("  // Cleanup: free temporary string conversion variables\n")
-		// Free in reverse order (last created first)
-		for i := len(g.tempStringsToFree) - 1; i >= 0; i-- {
-			tempVar := g.tempStringsToFree[i]
-			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { free((void*)%s); %s = NULL; }\n", tempVar, tempVar, tempVar))
-		}
-	}
-
-	// Free all tracked promises
-	if len(g.promisesToFree) > 0 {
-		g.output.WriteString("  // Cleanup: free promises\n")
-		for id := range g.promisesToFree {
-			varName := g.getVariableName(id)
-			g.output.WriteString(fmt.Sprintf("  if (%s != NULL) { omni_promise_free(%s); %s = NULL; }\n", varName, varName, varName))
-		}
-	}
+	g.emitFunctionEpilogue(funcName, fn.ReturnType)
 
 	g.output.WriteString("}\n\n")
 	return nil
@@ -2307,9 +2421,9 @@ func tailCallIndex(block *mir.BasicBlock) (bool, int) {
 }
 
 // emitTailCall writes the C tail-call form for a tail-position `call`
-// instruction. Self-recursion becomes parameter reassignment + goto entry;
-// cross-function calls become `return callee(args);` so clang's sibling-call
-// optimization can take a swing.
+// instruction. Self-recursion becomes parameter reassignment + goto entry.
+// Cross-function calls still flow through the shared epilogue so normal
+// cleanup runs before returning to the caller.
 func (g *CGenerator) emitTailCall(inst mir.Instruction, fn *mir.Function) {
 	callee := inst.Operands[0].Literal
 	argOps := inst.Operands[1:]
@@ -2339,8 +2453,8 @@ func (g *CGenerator) emitTailCall(inst mir.Instruction, fn *mir.Function) {
 		return
 	}
 
-	// Cross-function: emit `return callee(args);` directly. Clang at -O2+
-	// with -foptimize-sibling-calls turns this into a jump.
+	// Cross-function: stage the result and let the function epilogue handle
+	// cleanup before returning to the caller.
 	calleeC := g.mapFunctionName(callee)
 	arrayParamSet := map[int]bool{}
 	if idxs, ok := g.userFuncArrayParams[callee]; ok {
@@ -2355,7 +2469,11 @@ func (g *CGenerator) emitTailCall(inst mir.Instruction, fn *mir.Function) {
 			argExprs = append(argExprs, g.getOperandLengthExpr(op))
 		}
 	}
-	g.output.WriteString(fmt.Sprintf("  return %s(%s);\n", calleeC, strings.Join(argExprs, ", ")))
+	currentFuncName := g.mapFunctionName(fn.Name)
+	if fn.Name == "main" {
+		currentFuncName = "omni_main"
+	}
+	g.emitReturnThroughEpilogue(fmt.Sprintf("%s(%s)", calleeC, strings.Join(argExprs, ", ")), currentFuncName, fn.ReturnType)
 }
 
 // formatParamRef returns the C identifier the function body uses to read
@@ -3809,8 +3927,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 								cFuncName == "omni_context_header" || funcName == "std.web.context_header" ||
 								cFuncName == "omni_context_get_cookie" || funcName == "std.web.context_get_cookie"
 							isWebContextSingleArgStringFunc := cFuncName == "omni_context_body" || funcName == "std.web.context_body"
-			isWebContextFilesFunc := cFuncName == "omni_context_body_form" || funcName == "std.web.context_body_form" ||
-				cFuncName == "omni_context_files" || funcName == "std.web.context_files"
+							isWebContextFilesFunc := cFuncName == "omni_context_body_form" || funcName == "std.web.context_body_form" ||
+								cFuncName == "omni_context_files" || funcName == "std.web.context_files"
 							isWebContextBodyFunc := cFuncName == "omni_context_body_json" || funcName == "std.web.context_body_json"
 							isServerCreateFunc := cFuncName == "omni_server_create" || funcName == "std.web.server_create"
 
@@ -5226,7 +5344,7 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 			filename := g.getOperandValue(inst.Operands[0])
 			mode := g.getOperandValue(inst.Operands[1])
 			varName := g.getVariableName(inst.ID)
-			g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_file_open(%s, %s);\n",
+			g.output.WriteString(fmt.Sprintf("  intptr_t %s = omni_file_open(%s, %s);\n",
 				varName, filename, mode))
 		}
 	case "file.close":
@@ -5623,69 +5741,17 @@ func (g *CGenerator) generateTerminator(term *mir.Terminator, funcName string, o
 			// Track the returned value ID to exclude it from cleanup
 			if term.Operands[0].Kind == mir.OperandValue {
 				g.returnedValueID = term.Operands[0].Value
+				g.returnedValueIDs[term.Operands[0].Value] = true
 			}
 			value := g.getOperandValue(term.Operands[0])
-			// Special case: async main returns int32_t directly (no promise wrapping)
-			// The value is already the unwrapped type (int), not a promise
-			if funcName == "omni_main" && strings.HasPrefix(originalReturnType, "Promise<") {
-				// For async main, don't create a promise - just return the value as int32_t
-				innerType := originalReturnType[8 : len(originalReturnType)-1] // Extract inner type
-				switch innerType {
-				case "int":
-					g.output.WriteString(fmt.Sprintf("  return %s;\n", value))
-				case "string":
-					g.output.WriteString(fmt.Sprintf("  // String return from main not supported, return 0\n"))
-					g.output.WriteString("  return 0;\n")
-				case "float", "double":
-					g.output.WriteString(fmt.Sprintf("  return (int32_t)%s;\n", value))
-				case "bool":
-					g.output.WriteString(fmt.Sprintf("  return %s ? 0 : 1;\n", value))
-				default:
-					g.output.WriteString(fmt.Sprintf("  return %s; // Fallback\n", value))
+			if originalReturnType == "string" || originalReturnType == "const char*" || originalReturnType == "char*" {
+				if term.Operands[0].Kind == mir.OperandValue {
+					delete(g.stringsToFree, term.Operands[0].Value)
 				}
-			} else if strings.HasPrefix(originalReturnType, "Promise<") {
-				// For async functions (Promise<T>), wrap the return value in a promise
-				innerType := originalReturnType[8 : len(originalReturnType)-1] // Extract inner type from Promise<T>
-				// Determine the promise creation function based on inner type
-				var promiseFunc string
-				switch innerType {
-				case "int":
-					promiseFunc = "omni_promise_create_int"
-				case "string":
-					promiseFunc = "omni_promise_create_string"
-					// If returning a string, track the promise for cleanup (not the string itself)
-					// The promise will be freed, but the string inside it is owned by the promise
-				case "float", "double":
-					promiseFunc = "omni_promise_create_float"
-				case "bool":
-					promiseFunc = "omni_promise_create_bool"
-				default:
-					// For user-defined types, we can't create promises yet
-					// This should be caught earlier, but fail loudly here
-					g.errors = append(g.errors, fmt.Sprintf("cannot create promise for user-defined type: %s", innerType))
-					promiseFunc = "omni_promise_create_int" // Fallback to prevent compilation error
-				}
-				// Create promise and return it
-				g.output.WriteString(fmt.Sprintf("  return %s(%s);\n", promiseFunc, value))
-			} else {
-				// For string return types, exclude the returned value from cleanup
-				if originalReturnType == "string" || originalReturnType == "const char*" || originalReturnType == "char*" {
-					// The returned string is owned by the caller, don't free it
-					if term.Operands[0].Kind == mir.OperandValue {
-						delete(g.stringsToFree, term.Operands[0].Value)
-					}
-				}
-				g.output.WriteString(fmt.Sprintf("  return %s;\n", value))
 			}
+			g.emitReturnThroughEpilogue(value, funcName, originalReturnType)
 		} else {
-			// For main function (omni_main), return 0 instead of void return
-			// Check if this is actually omni_main (mapped from main)
-			if funcName == "omni_main" {
-				g.output.WriteString("  return 0;\n")
-			} else {
-				// For void functions, use void return
-				g.output.WriteString("  return;\n")
-			}
+			g.emitReturnDefaultThroughEpilogue(funcName, originalReturnType)
 		}
 	case "jmp":
 		// Handle unconditional jump
@@ -7056,37 +7122,37 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"io.read_line":     "omni_read_line",
 
 		// String functions
-		"std.string.length":        "omni_strlen",
-		"std.string.concat":        "omni_strcat",
-		"std.string.substring":     "omni_substring",
-		"std.string.char_at":       "omni_char_at",
-		"std.string.starts_with":   "omni_starts_with",
-		"std.string.ends_with":     "omni_ends_with",
-		"std.string.contains":      "omni_contains",
-		"std.string.index_of":      "omni_index_of",
-		"std.string.last_index_of": "omni_last_index_of",
-		"std.string.trim":          "omni_trim",
-		"std.string.trim_left":     "omni_trim_left",
-		"std.string.trim_right":    "omni_trim_right",
-		"std.string.trim_all":      "omni_trim_all",
-		"std.string.to_upper":      "omni_to_upper",
-		"std.string.to_lower":      "omni_to_lower",
-		"std.string.to_title":      "omni_to_title",
-		"std.string.capitalize":    "omni_capitalize",
-		"std.string.reverse":       "omni_string_reverse",
-		"std.string.equals":        "omni_string_equals",
-		"std.string.compare":       "omni_string_compare",
-		"std.string.equals_ignore_case":  "omni_string_equals_ignore_case",
-		"std.string.compare_ignore_case": "omni_string_compare_ignore_case",
-		"std.string.count_occurrences":   "omni_count_occurrences",
-		"std.string.count_lines":         "omni_count_lines",
-		"std.string.count_words":         "omni_count_words",
-		"std.string.is_empty":            "omni_string_is_empty",
-		"std.string.join":                "omni_string_join",
-		"std.string.replace":             "omni_string_replace_all",
-		"std.string.replace_all":         "omni_string_replace_all",
-		"std.string.replace_first":       "omni_string_replace_first",
-		"std.string.replace_last":        "omni_string_replace_last",
+		"std.string.length":                   "omni_strlen",
+		"std.string.concat":                   "omni_strcat",
+		"std.string.substring":                "omni_substring",
+		"std.string.char_at":                  "omni_char_at",
+		"std.string.starts_with":              "omni_starts_with",
+		"std.string.ends_with":                "omni_ends_with",
+		"std.string.contains":                 "omni_contains",
+		"std.string.index_of":                 "omni_index_of",
+		"std.string.last_index_of":            "omni_last_index_of",
+		"std.string.trim":                     "omni_trim",
+		"std.string.trim_left":                "omni_trim_left",
+		"std.string.trim_right":               "omni_trim_right",
+		"std.string.trim_all":                 "omni_trim_all",
+		"std.string.to_upper":                 "omni_to_upper",
+		"std.string.to_lower":                 "omni_to_lower",
+		"std.string.to_title":                 "omni_to_title",
+		"std.string.capitalize":               "omni_capitalize",
+		"std.string.reverse":                  "omni_string_reverse",
+		"std.string.equals":                   "omni_string_equals",
+		"std.string.compare":                  "omni_string_compare",
+		"std.string.equals_ignore_case":       "omni_string_equals_ignore_case",
+		"std.string.compare_ignore_case":      "omni_string_compare_ignore_case",
+		"std.string.count_occurrences":        "omni_count_occurrences",
+		"std.string.count_lines":              "omni_count_lines",
+		"std.string.count_words":              "omni_count_words",
+		"std.string.is_empty":                 "omni_string_is_empty",
+		"std.string.join":                     "omni_string_join",
+		"std.string.replace":                  "omni_string_replace_all",
+		"std.string.replace_all":              "omni_string_replace_all",
+		"std.string.replace_first":            "omni_string_replace_first",
+		"std.string.replace_last":             "omni_string_replace_last",
 		"std.algorithms.euclidean_distance":   "omni_euclidean_distance",
 		"std.algorithms.manhattan_distance":   "omni_manhattan_distance",
 		"std.algorithms.levenshtein_distance": "omni_levenshtein_distance",
@@ -7102,20 +7168,20 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.algorithms.rotate":               "omni_array_rotate",
 		"std.math.random_seed":                "omni_random_seed",
 		"std.math.random_int":                 "omni_random_int",
-		"string.length":            "omni_strlen",
-		"string.concat":            "omni_strcat",
-		"string.substring":         "omni_substring",
-		"string.char_at":           "omni_char_at",
-		"string.starts_with":       "omni_starts_with",
-		"string.ends_with":         "omni_ends_with",
-		"string.contains":          "omni_contains",
-		"string.index_of":          "omni_index_of",
-		"string.last_index_of":     "omni_last_index_of",
-		"string.trim":              "omni_trim",
-		"string.to_upper":          "omni_to_upper",
-		"string.to_lower":          "omni_to_lower",
-		"string.equals":            "omni_string_equals",
-		"string.compare":           "omni_string_compare",
+		"string.length":                       "omni_strlen",
+		"string.concat":                       "omni_strcat",
+		"string.substring":                    "omni_substring",
+		"string.char_at":                      "omni_char_at",
+		"string.starts_with":                  "omni_starts_with",
+		"string.ends_with":                    "omni_ends_with",
+		"string.contains":                     "omni_contains",
+		"string.index_of":                     "omni_index_of",
+		"string.last_index_of":                "omni_last_index_of",
+		"string.trim":                         "omni_trim",
+		"string.to_upper":                     "omni_to_upper",
+		"string.to_lower":                     "omni_to_lower",
+		"string.equals":                       "omni_string_equals",
+		"string.compare":                      "omni_string_compare",
 
 		// Array functions
 		"std.array.length": "omni_array_length",
@@ -7565,45 +7631,45 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 	// 1. Have actual runtime implementations (checked by hasRuntimeImplementation)
 	// 2. Should skip body generation (intrinsics)
 	runtimeFunctions := map[string]bool{
-		"std.io.print":             true,
-		"std.io.println":           true,
-		"io.print":                 true,
-		"io.println":               true,
-		"std.string.length":        true,
-		"std.string.concat":        true,
-		"std.string.substring":     true,
-		"std.string.char_at":       true,
-		"std.string.starts_with":   true,
-		"std.string.ends_with":     true,
-		"std.string.contains":      true,
-		"std.string.index_of":      true,
-		"std.string.last_index_of": true,
-		"std.string.trim":          true,
-		"std.string.trim_left":     true,
-		"std.string.trim_right":    true,
-		"std.string.trim_all":      true,
-		"std.string.to_upper":      true,
-		"std.string.to_lower":      true,
-		"std.string.to_title":      true,
-		"std.string.capitalize":    true,
-		"std.string.reverse":       true,
-		"std.string.equals":        true,
-		"std.string.compare":       true,
-		"std.string.equals_ignore_case":  true,
-		"std.string.compare_ignore_case": true,
-		"std.string.count_occurrences":   true,
-		"std.string.count_lines":         true,
-		"std.string.count_words":         true,
-		"std.string.is_empty":            true,
-		"std.string.join":                true,
-		"std.string.replace":             true,
-		"std.string.replace_all":         true,
-		"std.string.replace_first":       true,
-		"std.string.replace_last":        true,
-		"std.string.split":               true,
-		"std.string.split_lines":         true,
-		"std.string.split_words":         true,
-		"std.string.find_all":            true,
+		"std.io.print":                        true,
+		"std.io.println":                      true,
+		"io.print":                            true,
+		"io.println":                          true,
+		"std.string.length":                   true,
+		"std.string.concat":                   true,
+		"std.string.substring":                true,
+		"std.string.char_at":                  true,
+		"std.string.starts_with":              true,
+		"std.string.ends_with":                true,
+		"std.string.contains":                 true,
+		"std.string.index_of":                 true,
+		"std.string.last_index_of":            true,
+		"std.string.trim":                     true,
+		"std.string.trim_left":                true,
+		"std.string.trim_right":               true,
+		"std.string.trim_all":                 true,
+		"std.string.to_upper":                 true,
+		"std.string.to_lower":                 true,
+		"std.string.to_title":                 true,
+		"std.string.capitalize":               true,
+		"std.string.reverse":                  true,
+		"std.string.equals":                   true,
+		"std.string.compare":                  true,
+		"std.string.equals_ignore_case":       true,
+		"std.string.compare_ignore_case":      true,
+		"std.string.count_occurrences":        true,
+		"std.string.count_lines":              true,
+		"std.string.count_words":              true,
+		"std.string.is_empty":                 true,
+		"std.string.join":                     true,
+		"std.string.replace":                  true,
+		"std.string.replace_all":              true,
+		"std.string.replace_first":            true,
+		"std.string.replace_last":             true,
+		"std.string.split":                    true,
+		"std.string.split_lines":              true,
+		"std.string.split_words":              true,
+		"std.string.find_all":                 true,
 		"std.algorithms.euclidean_distance":   true,
 		"std.algorithms.manhattan_distance":   true,
 		"std.algorithms.levenshtein_distance": true,
@@ -7619,51 +7685,59 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.algorithms.rotate":               true,
 		"std.math.random_seed":                true,
 		"std.math.random_int":                 true,
-		"string.length":            true,
-		"string.concat":            true,
-		"string.substring":         true,
-		"string.char_at":           true,
-		"string.starts_with":       true,
-		"string.ends_with":         true,
-		"string.contains":          true,
-		"string.index_of":          true,
-		"string.last_index_of":     true,
-		"string.trim":              true,
-		"string.to_upper":          true,
-		"string.to_lower":          true,
-		"string.equals":            true,
-		"string.compare":           true,
-		"std.math.abs":             true,
-		"std.math.max":             true,
-		"std.math.min":             true,
-		"std.math.pow":             true,
-		"std.math.sqrt":            true,
-		"std.math.floor":           true,
-		"std.math.ceil":            true,
-		"std.math.round":           true,
-		"std.math.gcd":             true,
-		"std.math.lcm":             true,
-		"std.math.factorial":       true,
-		"math.abs":                 true,
-		"math.max":                 true,
-		"math.min":                 true,
-		"math.pow":                 true,
-		"math.sqrt":                true,
-		"math.floor":               true,
-		"math.ceil":                true,
-		"math.round":               true,
-		"math.gcd":                 true,
-		"math.lcm":                 true,
-		"math.factorial":           true,
-		"std.os.exit":              true,
-		"os.exit":                  true,
-		"std.os.read_file":         true,
-		"std.os.write_file":        true,
-		"std.os.append_file":       true,
-		"os.read_file":             true,
-		"os.write_file":            true,
-		"os.append_file":           true,
+		"string.length":                       true,
+		"string.concat":                       true,
+		"string.substring":                    true,
+		"string.char_at":                      true,
+		"string.starts_with":                  true,
+		"string.ends_with":                    true,
+		"string.contains":                     true,
+		"string.index_of":                     true,
+		"string.last_index_of":                true,
+		"string.trim":                         true,
+		"string.to_upper":                     true,
+		"string.to_lower":                     true,
+		"string.equals":                       true,
+		"string.compare":                      true,
+		"std.math.abs":                        true,
+		"std.math.max":                        true,
+		"std.math.min":                        true,
+		"std.math.pow":                        true,
+		"std.math.sqrt":                       true,
+		"std.math.floor":                      true,
+		"std.math.ceil":                       true,
+		"std.math.round":                      true,
+		"std.math.gcd":                        true,
+		"std.math.lcm":                        true,
+		"std.math.factorial":                  true,
+		"math.abs":                            true,
+		"math.max":                            true,
+		"math.min":                            true,
+		"math.pow":                            true,
+		"math.sqrt":                           true,
+		"math.floor":                          true,
+		"math.ceil":                           true,
+		"math.round":                          true,
+		"math.gcd":                            true,
+		"math.lcm":                            true,
+		"math.factorial":                      true,
+		"std.os.exit":                         true,
+		"os.exit":                             true,
+		"std.os.read_file":                    true,
+		"std.os.write_file":                   true,
+		"std.os.append_file":                  true,
+		"os.read_file":                        true,
+		"os.write_file":                       true,
+		"os.append_file":                      true,
 		// File operations
+		"std.file.open":            true,
+		"std.file.close":           true,
+		"std.file.read":            true,
+		"std.file.write":           true,
+		"std.file.seek":            true,
+		"std.file.tell":            true,
+		"std.file.exists":          true,
+		"std.file.size":            true,
 		"file.open":                true,
 		"file.close":               true,
 		"file.read":                true,
@@ -7879,10 +7953,10 @@ func (g *CGenerator) isStdFunction(funcName string) bool {
 // that needs to be freed by the caller
 func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 	stringReturningFunctions := map[string]bool{
-		"std.io.read_line":     true,
-		"io.read_line":         true,
-		"std.string.concat":    true,
-		"std.string.substring": true,
+		"std.io.read_line":         true,
+		"io.read_line":             true,
+		"std.string.concat":        true,
+		"std.string.substring":     true,
 		"std.string.trim":          true,
 		"std.string.trim_left":     true,
 		"std.string.trim_right":    true,
@@ -7897,24 +7971,24 @@ func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 		"std.string.replace_all":   true,
 		"std.string.replace_first": true,
 		"std.string.replace_last":  true,
-		"std.int_to_string":     true,
-		"std.float_to_string":  true,
-		"std.bool_to_string":   true,
-		"std.os.read_file":     true,
-		"os.read_file":         true,
-		"std.char_to_string":   true,
-		"omni_char_to_string":  true,
-		"omni_read_line":       true,
-		"omni_strcat":          true,
-		"omni_substring":       true,
-		"omni_trim":            true,
-		"omni_to_upper":        true,
-		"omni_to_lower":        true,
-		"omni_int_to_string":   true,
-		"omni_float_to_string": true,
-		"omni_bool_to_string":  true,
-		"omni_read_file":       true,
-		"omni_await_string":    true,
+		"std.int_to_string":        true,
+		"std.float_to_string":      true,
+		"std.bool_to_string":       true,
+		"std.os.read_file":         true,
+		"os.read_file":             true,
+		"std.char_to_string":       true,
+		"omni_char_to_string":      true,
+		"omni_read_line":           true,
+		"omni_strcat":              true,
+		"omni_substring":           true,
+		"omni_trim":                true,
+		"omni_to_upper":            true,
+		"omni_to_lower":            true,
+		"omni_int_to_string":       true,
+		"omni_float_to_string":     true,
+		"omni_bool_to_string":      true,
+		"omni_read_file":           true,
+		"omni_await_string":        true,
 	}
 	return stringReturningFunctions[funcName]
 }

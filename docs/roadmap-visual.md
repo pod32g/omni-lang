@@ -1,6 +1,6 @@
 # OmniLang Roadmap Visual
 
-## Current Snapshot (v0.5.1)
+## Current Snapshot (v0.5.2-dev, April 2026)
 ```
 OmniLang – compiler toolchain status (experimental)
 
@@ -74,4 +74,4 @@ Incremental build speedup: target 2x over full rebuild
 - ↻ In progress
 - Planned / exploratory
 
-*For detailed context and history, see [ROADMAP.md](docs/ROADMAP.md) and [ADR-002](docs/adr/ADR-002-detailed-roadmap.md).*
+*For detailed context and history, see [ROADMAP.md](ROADMAP.md) and [ADR-002](adr/ADR-002-detailed-roadmap.md).*

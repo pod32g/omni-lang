@@ -1733,12 +1733,20 @@ int32_t omni_file_close(intptr_t file_handle) {
     return fclose(file) == 0 ? 0 : -1;
 }
 
-int32_t omni_file_read(intptr_t file_handle, char* buffer, int32_t size) {
+int32_t omni_file_read(intptr_t file_handle, const char* buffer, int32_t size) {
     if (file_handle == (intptr_t)-1 || buffer == NULL || size <= 0) {
         return -1; // Error: invalid parameters
     }
     FILE* file = (FILE*)file_handle;
-    size_t bytes_read = fread(buffer, 1, (size_t)size, file);
+    // Omni strings are immutable at the language level, so the buffer argument
+    // is only an API placeholder today. Read into a temporary C buffer and
+    // return the byte count, matching the VM behavior.
+    char* temp = (char*)malloc((size_t)size);
+    if (temp == NULL) {
+        return -1;
+    }
+    size_t bytes_read = fread(temp, 1, (size_t)size, file);
+    free(temp);
     return (int32_t)bytes_read;
 }
 

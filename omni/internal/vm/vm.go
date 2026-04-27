@@ -816,7 +816,15 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.array.insert",
 		"std.array.remove",
 		"std.array.concat",
-		"std.array.slice":
+		"std.array.slice",
+		"std.file.open",
+		"std.file.close",
+		"std.file.read",
+		"std.file.write",
+		"std.file.seek",
+		"std.file.tell",
+		"std.file.exists",
+		"std.file.size":
 		return true
 	}
 	return false

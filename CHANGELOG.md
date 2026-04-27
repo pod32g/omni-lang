@@ -77,6 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **std.os.positional_arg** respects POSIX `--` end-of-flags and
   treats `-N` (digit-prefixed) and bare `-` (stdin sentinel) as
   positional, so `caesar_cipher -3 ...` and similar invocations work.
+- **std.file handle operations** are now covered end-to-end on both
+  backends. The C backend stores `open` results in pointer-sized
+  slots so native `FILE*` handles are not truncated on 64-bit
+  platforms.
 - **std.math.random_seed / random_int**: shared xorshift32 PRNG
   across both backends so the same seed produces the same first
   output. Used by `std.algorithms.shuffle`.
@@ -102,8 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated `docs/api/stdlib/string.md` to cover the trim / case / count
   / split / join / replace / find_all / is_empty additions.
 - Added `docs/api/stdlib/algorithms.md`, `docs/api/stdlib/array.md`,
-  and `docs/api/stdlib/collections.md` covering the newly-real
-  modules.
+  `docs/api/stdlib/collections.md`, and `docs/api/stdlib/file.md`
+  covering the newly-real modules.
 - Added a "What's new" section to `docs/spec/language-tour.md`
   pointing at the recently-landed language features.
 - `omni/std/IMPLEMENTATION_STATUS.md` now matches reality: every

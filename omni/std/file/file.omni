@@ -12,7 +12,10 @@ func close(file_handle:int):int {
     return 0
 }
 
-// read reads bytes from a file into a buffer
+// read reads up to size bytes and returns the number of bytes read.
+// The buffer parameter is currently a placeholder; Omni strings are
+// immutable, so this function reports the byte count but does not
+// mutate the provided buffer.
 // Returns the number of bytes read, or -1 on error
 func read(file_handle:int, buffer:string, size:int):int {
     return 0
@@ -47,4 +50,3 @@ func exists(filename:string):int {
 func size(filename:string):int {
     return 0
 }
-

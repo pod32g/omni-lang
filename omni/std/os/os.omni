@@ -3,7 +3,8 @@
 // IMPLEMENTATION STATUS:
 // [IMPLEMENTED] (Runtime): exit, read_file, write_file, append_file, getenv, setenv,
 //    unsetenv, getcwd, chdir, mkdir, rmdir, remove, rename, copy, exists, is_file, is_dir
-// [STUB] (No implementation): args, args_count, has_flag, get_flag, positional_arg
+// [IMPLEMENTED] (Runtime): args, args_count, has_flag, get_flag, positional_arg,
+//    getpid, and getppid.
 //
 // Functions marked as "intrinsic" are wired to runtime functions during compilation.
 // Functions with stub bodies (returning default values) are NOT implemented and will

@@ -1,6 +1,10 @@
 # OmniLang Compiler Roadmap
 
-## Current Status (v0.5.0)
+## Current Status (v0.5.2-dev, April 2026)
+
+For the current actionable backlog, use `omni/docs/PENDING.md`. This
+roadmap is broader planning material and intentionally includes future
+or aspirational work.
 
 ### **Completed Features**
 - **Frontend**: Complete lexer, parser, AST, type checker
@@ -38,13 +42,13 @@
 - [ ] RAII (Resource Acquisition Is Initialization)
 
 ### 1.2 Advanced Type System (1.5 weeks)
-- [ ] Generic type support (`func max<T>(a:T, b:T):T`)
-- [ ] Union types (`int | string | bool`)
-- [ ] Optional types (`T?`)
-- [ ] Type aliases (`type UserID = int`)
+- [ ] Generic type support (`func max<T>(a:T, b:T):T`) — parser/type infrastructure exists; proper monomorphization remains.
+- [x] Union types (`int | string | bool`)
+- [x] Optional types (`T?`)
+- [x] Type aliases (`type UserID = int`)
 
 ### 1.3 Control Flow & Error Handling (1 week)
-- [ ] Exception handling (`try`/`catch`/`finally`)
+- [ ] Exception handling (`try`/`catch`/`finally`) — syntax/plumbing exists; panic/recover semantics and stack traces remain.
 - [ ] Error handling (`Result<T, E>`, `?` operator)
 - [ ] Pattern matching (`match` expressions)
 

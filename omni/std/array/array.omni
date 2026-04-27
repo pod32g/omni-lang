@@ -1,13 +1,15 @@
 // std.array - Array manipulation functions for OmniLang
 //
 // IMPLEMENTATION STATUS:
-// [LIMITATION] Arrays in OmniLang are fixed-size (like C arrays).
-//    Functions like append, prepend, insert, remove, slice, concat are NOT supported
-//    because they would require dynamic memory allocation.
-// [STUB] All array manipulation functions are stubs that return default values.
+// [IMPLEMENTED] array<int> and array<string> contain/index_of plus append,
+//    prepend, insert, remove, concat, and slice are wired to runtime helpers.
+//    Returned arrays are fresh copies and carry runtime length metadata.
+// [STUB] Other element types still fall through to generic fallback bodies.
+// [STUB] fill(), copy(), length(), get(), and set() remain compatibility shims;
+//    prefer len(arr), arr[i], and arr[i] = value for core language operations.
 //
 // NOTE: Use the built-in `len()` function for array length, and direct indexing
-// for array access. Dynamic array operations are not available.
+// for array access.
 
 // length returns the length of an array
 // [NOTE] Use the built-in `len()` function instead. This function is a stub.

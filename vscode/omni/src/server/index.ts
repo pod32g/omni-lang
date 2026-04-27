@@ -175,7 +175,7 @@ connection.onDefinition((params) => {
   if (!document) return null;
   
   const symbols = symbolTables.get(params.textDocument.uri) || new SymbolTable();
-  return handleDefinition(params, document, symbols);
+  return handleDefinition(params, document, symbols, documents, symbolTables);
 });
 
 connection.onReferences((params) => {
@@ -183,7 +183,7 @@ connection.onReferences((params) => {
   if (!document) return null;
   
   const symbols = symbolTables.get(params.textDocument.uri) || new SymbolTable();
-  return handleReferences(params, document, symbols, documents);
+  return handleReferences(params, document, symbols, documents, symbolTables);
 });
 
 connection.onDocumentSymbol((params) => {
@@ -217,4 +217,3 @@ documents.listen(connection);
 
 // Listen on the connection
 connection.listen();
-

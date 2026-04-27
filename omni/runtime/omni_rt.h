@@ -687,7 +687,7 @@ double omni_trunc(double x);
 // Use intptr_t for file handles to safely store FILE* pointers on 64-bit platforms
 intptr_t omni_file_open(const char* filename, const char* mode);
 int32_t omni_file_close(intptr_t file_handle);
-int32_t omni_file_read(intptr_t file_handle, char* buffer, int32_t size);
+int32_t omni_file_read(intptr_t file_handle, const char* buffer, int32_t size);
 int32_t omni_file_write(intptr_t file_handle, const char* buffer, int32_t size);
 int32_t omni_file_seek(intptr_t file_handle, int32_t offset, int32_t whence);
 int32_t omni_file_tell(intptr_t file_handle);

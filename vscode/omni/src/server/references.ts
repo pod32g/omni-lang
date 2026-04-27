@@ -10,65 +10,49 @@ export function handleReferences(
   params: ReferenceParams,
   document: TextDocument,
   symbols: SymbolTable,
-  documents: TextDocumentsType<TextDocument>
+  documents: TextDocumentsType<TextDocument>,
+  symbolTables: Map<string, SymbolTable>
 ): Location[] {
-  const position = params.position;
-  
-  // Get word at position manually
-  const line = document.getText({
-    start: { line: position.line, character: 0 },
-    end: { line: position.line, character: 1000 },
-  });
-  
-  // Find word at cursor position
-  let word = '';
-  let start = position.character;
-  let end = position.character;
-  
-  // Find start of word
-  while (start > 0 && /[\w]/.test(line[start - 1])) {
-    start--;
-  }
-  
-  // Find end of word
-  while (end < line.length && /[\w]/.test(line[end])) {
-    end++;
-  }
-  
-  if (start < end) {
-    word = line.substring(start, end);
-  }
-  
+  const word = getWordAtPosition(document, params.position.line, params.position.character);
   if (!word) {
     return [];
   }
+
   const references: Location[] = [];
 
-  // Search in current document
+  for (const candidate of documents.all()) {
+    const candidateSymbols =
+      symbolTables.get(candidate.uri) ||
+      (candidate.uri === document.uri ? symbols : new SymbolTable());
+    collectDocumentReferences(
+      candidate,
+      candidateSymbols,
+      word,
+      params.context.includeDeclaration,
+      references
+    );
+  }
+
+  return references;
+}
+
+function collectDocumentReferences(
+  document: TextDocument,
+  symbols: SymbolTable,
+  word: string,
+  includeDeclaration: boolean,
+  references: Location[]
+): void {
   const text = document.getText();
   const lines = text.split('\n');
-  
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const regex = new RegExp(`\\b${word}\\b`, 'g');
-    let match;
-    
+    const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, 'g');
+    let match: RegExpExecArray | null;
+
     while ((match = regex.exec(line)) !== null) {
-      // Skip if it's the definition itself
-      const func = symbols.functions.get(word);
-      const variable = symbols.variables.get(word);
-      const struct = symbols.structs.get(word);
-      const enumSymbol = symbols.enums.get(word);
-      const typeSymbol = symbols.types.get(word);
-      
-      const isDefinition = 
-        (func && i === func.line && match.index === func.column) ||
-        (variable && i === variable.line && match.index === variable.column) ||
-        (struct && i === struct.line && match.index === struct.column) ||
-        (enumSymbol && i === enumSymbol.line && match.index === enumSymbol.column) ||
-        (typeSymbol && i === typeSymbol.line && match.index === typeSymbol.column);
-      
-      if (!isDefinition || params.context.includeDeclaration) {
+      if (includeDeclaration || !isDefinition(symbols, word, i, match.index)) {
         references.push(
           Location.create(
             document.uri,
@@ -81,10 +65,53 @@ export function handleReferences(
       }
     }
   }
-
-  // TODO: Search in other documents in workspace
-  // For now, only search in current document
-
-  return references;
 }
 
+function getWordAtPosition(
+  document: TextDocument,
+  lineNumber: number,
+  character: number
+): string {
+  const line = document.getText({
+    start: { line: lineNumber, character: 0 },
+    end: { line: lineNumber, character: 1000 },
+  });
+
+  let start = character;
+  let end = character;
+
+  while (start > 0 && /\w/.test(line[start - 1])) {
+    start--;
+  }
+
+  while (end < line.length && /\w/.test(line[end])) {
+    end++;
+  }
+
+  return start < end ? line.substring(start, end) : '';
+}
+
+function isDefinition(
+  symbols: SymbolTable,
+  word: string,
+  line: number,
+  column: number
+): boolean {
+  const func = symbols.functions.get(word);
+  const variable = symbols.variables.get(word);
+  const struct = symbols.structs.get(word);
+  const enumSymbol = symbols.enums.get(word);
+  const typeSymbol = symbols.types.get(word);
+
+  return Boolean(
+    (func && line === func.line && column === func.column) ||
+      (variable && line === variable.line && column === variable.column) ||
+      (struct && line === struct.line && column === struct.column) ||
+      (enumSymbol && line === enumSymbol.line && column === enumSymbol.column) ||
+      (typeSymbol && line === typeSymbol.line && column === typeSymbol.column)
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

@@ -1,10 +1,14 @@
 // std.collections - Advanced data structures for OmniLang.
 //
 // IMPLEMENTATION STATUS:
-// [PARTIAL] Basic map operations (size, get, set, has, remove, clear) work for
-//    map<string, int> and map<int, int> via runtime functions.
-// [STUB] All other collection types (queues, stacks, sets, priority queues) are
-//    not implemented and return default values.
+// [IMPLEMENTED] Basic map operations (size, get, set, has, remove, clear),
+//    plus copy/merge, are wired to runtime functions for supported key/value
+//    shapes.
+// [IMPLEMENTED] Queue, stack, set, priority queue, linked list, and binary
+//    tree carriers are wired through the runtime on the C backend; the VM has
+//    matching support for the currently tested integer-backed shapes.
+// [PARTIAL] keys, values, and collection_to_array still have placeholder
+//    Omni bodies in fallback paths. Keep the runtime intrinsic path preferred.
 //
 // Functions marked as "intrinsic" are wired to runtime functions during compilation.
 // Functions with stub bodies (returning default values) are NOT implemented and will

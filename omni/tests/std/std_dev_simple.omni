@@ -1,0 +1,28 @@
+import std
+
+func main():int {
+    let missing = std.dev.snapshot("__omni_dev_missing_file__")
+    if missing.exists {
+        return 1
+    }
+    if missing.size != -1 {
+        return 2
+    }
+
+    let current = std.dev.snapshot("std_dev_simple.omni")
+    if !current.exists {
+        return 3
+    }
+    if current.size <= 0 {
+        return 4
+    }
+
+    if std.dev.changed(missing, missing) {
+        return 5
+    }
+    if !std.dev.changed(current, missing) {
+        return 6
+    }
+
+    return 0
+}

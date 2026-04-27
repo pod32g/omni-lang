@@ -2988,8 +2988,8 @@ func TestCGenerator(t *testing.T) {
 		}
 
 		result := generator.output.String()
-		if !strings.Contains(result, "return;") {
-			t.Error("Expected void return statement")
+		if !strings.Contains(result, "goto __omni_epilogue;") {
+			t.Error("Expected void return to jump to cleanup epilogue")
 		}
 	})
 
@@ -3008,8 +3008,8 @@ func TestCGenerator(t *testing.T) {
 		}
 
 		result := generator.output.String()
-		if !strings.Contains(result, "return 0;") {
-			t.Error("Expected return 0 for omni_main")
+		if !strings.Contains(result, "__omni_return_value = 0;") || !strings.Contains(result, "goto __omni_epilogue;") {
+			t.Error("Expected omni_main void return to stage 0 and jump to cleanup epilogue")
 		}
 	})
 

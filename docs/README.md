@@ -1,8 +1,8 @@
 <div align="center">
   <img src="assets/logo.png" alt="OmniLang Logo" width="150"/>
-  
+
   # OmniLang Documentation
-  
+
   Welcome to the OmniLang documentation! This directory contains comprehensive documentation for the OmniLang programming language and compiler.
 </div>
 
@@ -26,82 +26,86 @@ If you're new to OmniLang, start here:
 
 ## Current Status
 
-**Version:** v0.5.1 (October 2025)  
-**Status:** Active Development - Advanced Type System & Enhanced Language Features
+**Version:** v0.5.2-dev (April 2026)
+**Status:** Active development - Go-foundations complete, backend/tooling hardening in progress
+
+For the short actionable backlog, use [`../omni/docs/PENDING.md`](../omni/docs/PENDING.md). The roadmap documents are broader planning material and may include aspirational phases.
 
 ###  Implemented Features
 
 - **Core Language:**
   - Variables (`let`, `var`)
   - Functions with type inference
-  - Control flow (`if`, `for`, `while`)
+  - Control flow (`if`, `for`, `while`, `defer`, `select`)
   - Basic types (`int`, `float`, `string`, `bool`)
-  - **Arrays** (`[]int`, `[]string`) with indexing and iteration
+  - Arrays, slices, maps, structs, and C-style enums
   - String concatenation with automatic type conversion
-  - **String interpolation** with `${expression}` syntax
+  - String interpolation with `${expression}` syntax
   - Unary operators (`-`, `!`)
+  - Methods and structural interfaces
+  - Channels and spawn-style concurrency
 
 - **Advanced Features:**
-  - **Exception handling** with try-catch-finally blocks
-  - **Type aliases** (`type UserID = int`)
-  - **Union types** (`string | int | bool`)
-  - **Optional types** (`int?`, `string?`)
-  - **Advanced type system** with full type checking
+  - Exception syntax with try-catch-finally plumbing
+  - Type aliases (`type UserID = int`)
+  - Union and optional type syntax
+  - Early generic function/type-parameter infrastructure
+  - Tail-call optimization coverage for tested VM and C backend paths
 
 - **Import System:**
-  - Standard library imports (`import std.io as io`)
+  - Standard library imports (`import std`, `import std.io as io`)
   - Local file imports (`import math_utils`)
   - Alias support
 
 - **Standard Library:**
   - `std.io` - Input/output functions
   - `std.math` - Mathematical utilities
-  - `std.string` - String manipulation helpers
-  - `std.log` - Structured logging backed by `simple-logger`
+  - `std.string` - String manipulation, regex, encoding, and escaping helpers
+  - `std.array`, `std.collections`, and `std.algorithms` - Tested collection helpers for supported element shapes
+  - `std.os` and `std.file` - CLI args, environment, process IDs, and file helpers
+  - `std.network` and `std.web` - Experimental network/web helpers with documented partial areas
+  - `std.testing` / `std.test` - Assertions and test harness helpers
 
 - **Compiler:**
   - Lexer with detailed error reporting
   - Parser with error recovery
   - Type checker with helpful error messages
-  - MIR (Mid-level IR) generation with assignment instructions
-  - VM backend for execution
-  - C backend for native compilation
+  - SSA MIR generation with PHI nodes
+  - VM backend and C backend for the main development workflow
+  - Experimental Cranelift bridge
   - Debug symbol generation and source mapping
   - Package creation and distribution tools
+  - JSON diagnostics endpoints for editor/tooling integration
 
-###  Recent Bug Fixes (v0.3.1)
+###  Recent Focus
 
-- **Critical Infinite Loop Fixes**: Resolved infinite loops in nested for loops and range loops
-- **Assignment Instruction Generation**: Fixed MIR builder to generate proper assignment instructions
-- **Variable Mutability**: Corrected variable assignment handling for mutable variables
-- **Loop Variable Updates**: Fixed increment statements (i++, j++) to generate proper assignments
-- **Test Framework**: Resolved e2e test framework timeout issues and environment setup
-- **Performance Tests**: Fixed performance benchmark code generation
+- Go-like language foundations across VM and C backend: methods, interfaces, defer, slices, concurrency, TCO, and select.
+- Standard library runtime wiring for strings, arrays, collections, algorithms, network, web, OS, file, and testing helpers.
+- More release automation: manifests, Docker packaging, diagnostics JSON, and CLI smoke coverage.
 
 ###  Current Limitations
 
-- **Parser:**
-  - No semicolons required (but not supported)
-  - Limited control flow constructs
+- **Language/runtime:**
+  - Real global mutable storage is not implemented; top-level `var` is rejected.
+  - Panic/recover semantics and stack traces are not wired.
+  - Proper generic monomorphization is incomplete.
+  - Pattern matching, tagged enums, visibility rules, `const`, and `iota` remain future work.
 
-- **Type System:**
-  - No generics (planned)
-  - No structs or enums
-  - No maps
+- **Backends and tooling:**
+  - Cranelift is still experimental; macOS object output is placeholder-only.
+  - Cross-compilation and static/shared-library linking are not production-ready.
+  - VS Code support is preview quality; formatter, full LSP, debugger, and workspace-wide references are pending.
+
+- **Standard library:**
+  - Some helpers are intentionally partial or stubbed; see [`../omni/std/IMPLEMENTATION_STATUS.md`](../omni/std/IMPLEMENTATION_STATUS.md).
   - No function overloading
-  - Arrays work with C backend only (VM support pending)
-
-- **Standard Library:**
-  - ~~Limited function set~~  **RESOLVED** - Comprehensive standard library with 100+ functions
-  - ~~No file I/O~~  **RESOLVED** - Complete file I/O operations
-  - ~~No OS interface~~  **RESOLVED** - Full OS interface with process, file, and system operations
 
 ###  In Development
 
-- Enhanced error messages and diagnostics
-- Improved testing infrastructure
-- Performance optimizations
-- Extended standard library
+- Cranelift backend completion and cross-platform object generation
+- Documentation/status consolidation around v0.5.2-dev
+- VS Code diagnostics and command integration
+- More compiler optimization passes and benchmark baselines
 
 ## Documentation Structure
 
@@ -172,7 +176,10 @@ To contribute to the documentation:
 
 ## Version History
 
-- **v0.2.0** (Current) - Enhanced error messages, improved testing, expanded stdlib
+- **v0.5.2-dev** (Current) - Go-foundations complete; backend, tooling, and docs hardening
+- **v0.5.1** - Advanced type-system and language feature pass
+- **v0.5.0** - Standard library and integration-test expansion
+- **v0.2.0** - Enhanced error messages, improved testing, expanded stdlib
 - **v0.1.0** - Initial release with basic language features
 
 ## License
@@ -181,4 +188,4 @@ This documentation is part of the OmniLang project and is licensed under the MIT
 
 ---
 
-**Happy coding with OmniLang!** 
+**Happy coding with OmniLang!**

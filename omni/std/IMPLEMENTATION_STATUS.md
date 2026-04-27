@@ -120,7 +120,7 @@ This document tracks which standard library functions are actually implemented v
 ### std.file / file
 - [IMPLEMENTED] `open(filename, mode)` - Wired to `omni_file_open`
 - [IMPLEMENTED] `close(handle)` - Wired to `omni_file_close`
-- [IMPLEMENTED] `read(handle, buffer, size)` - Wired to `omni_file_read`
+- [IMPLEMENTED] `read(handle, buffer, size)` - Wired to `omni_file_read`; returns byte count, buffer mutation awaits a mutable byte-buffer ABI
 - [IMPLEMENTED] `write(handle, buffer, size)` - Wired to `omni_file_write`
 - [IMPLEMENTED] `seek(handle, offset, whence)` - Wired to `omni_file_seek`
 - [IMPLEMENTED] `tell(handle)` - Wired to `omni_file_tell`
@@ -355,8 +355,10 @@ This document tracks which standard library functions are actually implemented v
   "Implemented" section above)
 
 ### std.dev
-- [STUB] All dev functions - Not implemented
-- [STUB] `snapshot()`, `wait_for_change()`, `changed()`, `watch_loop()` - Not implemented
+- [IMPLEMENTED] `snapshot(path)` - Implemented in OmniLang using `std.os.exists` and `std.file.size`
+- [IMPLEMENTED] `changed(current, baseline)` - Implemented in OmniLang
+- [IMPLEMENTED] `wait_for_change(path, poll_milliseconds)` - Implemented in OmniLang polling with `std.time.sleep_milliseconds`
+- [IMPLEMENTED] `watch_loop(path, poll_milliseconds, iterations)` - Implemented in OmniLang
 
 ### std.algorithms
 - [IMPLEMENTED] `euclidean_distance(x1, y1, x2, y2)` - Wired to `omni_euclidean_distance`

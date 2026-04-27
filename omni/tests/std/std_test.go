@@ -346,6 +346,16 @@ func TestAllStdModules(t *testing.T) {
 		t.Logf("Type checking passed (C compilation errors expected)")
 	})
 
+	t.Run("std.dev", func(t *testing.T) {
+		result, err := runVM("std_dev_simple.omni")
+		if err != nil {
+			t.Fatalf("VM execution failed: %v", err)
+		}
+		if result != "0" {
+			t.Fatalf("expected std.dev smoke test to return 0, got %s", result)
+		}
+	})
+
 	t.Run("std.testing", func(t *testing.T) {
 		exitCode, err := runVMTestHarness("std_testing_suite.omni")
 		if err != nil {

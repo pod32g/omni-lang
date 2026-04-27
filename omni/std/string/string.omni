@@ -2,11 +2,12 @@
 //
 // IMPLEMENTATION STATUS:
 // [IMPLEMENTED] (Runtime): length, concat, substring, char_at, starts_with, ends_with,
-//    contains, index_of, last_index_of, trim, to_upper, to_lower, equals, compare
-// [IMPLEMENTED] (OmniLang): find_all, replace, replace_all, replace_first, replace_last,
-//    split, split_lines, split_words, join, join_lines
-// [STUB] (No implementation): matches, find_match, find_all_matches, replace_regex,
-//    and other advanced operations (regex, padding, etc.)
+//    contains, index_of, last_index_of, trim variants, case conversion, equals,
+//    compare, split/join, replace variants, regex helpers, encoders, and escapes.
+// [IMPLEMENTED] (OmniLang): padding, blank/classification checks, formatting,
+//    repeat/truncate, interpolate, template, and VM fallbacks for selected helpers.
+// [PARTIAL] format/template support is intentionally simple and does not provide
+//    full printf-style formatting or reflection-backed templating.
 //
 // Functions marked as "intrinsic" are wired to runtime functions during compilation.
 // Functions with stub bodies (returning default values) are NOT implemented and will

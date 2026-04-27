@@ -1,0 +1,62 @@
+import std
+
+func main():int {
+    let path:string = "std_file_ops_tmp.txt"
+    let expected:int = std.string.length("hello")
+
+    let handle:int = std.file.open(path, "w+")
+    if handle < 0 {
+        return 1
+    }
+
+    let written:int = std.file.write(handle, "hello", expected)
+    if written != expected {
+        std.file.close(handle)
+        std.os.remove(path)
+        return 2
+    }
+
+    if std.file.seek(handle, 0, 0) != 0 {
+        std.file.close(handle)
+        std.os.remove(path)
+        return 3
+    }
+
+    let read:int = std.file.read(handle, "ignored", expected)
+    if read != expected {
+        std.file.close(handle)
+        std.os.remove(path)
+        return 4
+    }
+
+    if std.file.tell(handle) != expected {
+        std.file.close(handle)
+        std.os.remove(path)
+        return 5
+    }
+
+    if std.file.close(handle) != 0 {
+        std.os.remove(path)
+        return 6
+    }
+
+    if std.file.exists(path) != 1 {
+        std.os.remove(path)
+        return 7
+    }
+
+    if std.file.size(path) != expected {
+        std.os.remove(path)
+        return 8
+    }
+
+    if !std.os.remove(path) {
+        return 9
+    }
+
+    if std.file.exists(path) != 0 {
+        return 10
+    }
+
+    return 0
+}

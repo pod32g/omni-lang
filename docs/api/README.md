@@ -16,6 +16,7 @@ This directory contains comprehensive API documentation for the OmniLang program
   - [std.algorithms](stdlib/algorithms.md) - Sorts, searches, aggregates, transforms, distance metrics
   - [std.collections](stdlib/collections.md) - Maps and other compound types
   - [std.os](stdlib/os.md) - Process arguments, environment, working directory, file I/O
+  - [std.file](stdlib/file.md) - Low-level file handles, seek/tell, and metadata
   - [std.log](stdlib/log.md) - Structured logging functions and configuration
 - [Compiler API](compiler-api.md) - Compiler internals and extension points
 - [VM API](vm-api.md) - Virtual Machine internals

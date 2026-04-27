@@ -7,7 +7,7 @@ defer, slices, concurrency including TCO and `select`) is complete
 end-to-end through both the VM (`omnir`) and the C backend (`omnic`);
 this document catalogs what comes after.
 
-Last updated: 2026-04-26. The most recent commit on `dev` is the
+Last updated: 2026-04-27. The most recent commit on `dev` is the
 authoritative source — when in doubt, check `git log` first.
 
 ---
@@ -49,6 +49,13 @@ exercises them in a shape the rework didn't cover, they'll surface
 as `-Wreturn-stack-address` again. Keep `-Wreturn-stack-address` on
 in the C compile flags; revisit when a real stdlib `collections`
 implementation lands.
+
+### `std.file.read` is count-only
+`std.file.read(handle, buffer, size)` now works end-to-end on both
+backends as a byte-count/readability operation, but it cannot expose
+the bytes it reads because Omni strings are immutable and there is no
+mutable byte-buffer type yet. Whole-file reads should use
+`std.os.read_file(path)` until a buffer ABI exists.
 
 ---
 

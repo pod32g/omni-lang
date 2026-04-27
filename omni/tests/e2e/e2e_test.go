@@ -635,6 +635,30 @@ func TestStdCollectionsMap(t *testing.T) {
 	}
 }
 
+// TestStdFileOps pins std.file handle operations on both backends.
+// The C backend keeps native FILE* handles in intptr_t slots while the
+// source-level API exposes them as int handles.
+func TestStdFileOps(t *testing.T) {
+	testFile := "std_file_ops.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdRandomShuffleUnique pins the std.math PRNG (random_seed,
 // random_int) and the algorithms it powers — std.algorithms.shuffle
 // (length-preserving) and std.algorithms.unique (variable output
