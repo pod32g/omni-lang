@@ -1909,13 +1909,15 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 			var isArrayInit bool
 			// Use the instruction map for O(1) lookup instead of scanning all instructions
 			if inst, found := instructionMap[id]; found {
-				// Special case for read_line() - always returns string
+				// Special case for read_line()/read_all() - always return string
 				if inst.Op == "call" || inst.Op == "call.string" {
 					if len(inst.Operands) > 0 && inst.Operands[0].Kind == mir.OperandLiteral {
 						funcName := inst.Operands[0].Literal
-						if funcName == "std.io.read_line" || funcName == "io.read_line" {
+						switch funcName {
+						case "std.io.read_line", "io.read_line",
+							"std.io.read_all", "io.read_all":
 							varType = "const char*"
-						} else if funcName == "std.string.char_at" || funcName == "string.char_at" {
+						case "std.string.char_at", "string.char_at":
 							varType = "char"
 						}
 					}
@@ -2920,6 +2922,22 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 				return nil
 			}
+			if (funcName == "std.io.eprint" || funcName == "io.eprint") && len(inst.Operands) >= 2 {
+				g.emitPrintTo(inst.Operands[1], false, true)
+				return nil
+			}
+			if funcName == "std.io.eprintln" || funcName == "io.eprintln" {
+				if len(inst.Operands) >= 2 {
+					g.emitPrintTo(inst.Operands[1], true, true)
+				} else {
+					g.output.WriteString("  omni_eprintln_string(\"\");\n")
+				}
+				return nil
+			}
+			if funcName == "std.io.flush" || funcName == "io.flush" {
+				g.output.WriteString("  omni_io_flush();\n")
+				return nil
+			}
 
 			// Special-case std.io.read_line to ensure result is assigned
 			if funcName == "std.io.read_line" || funcName == "io.read_line" {
@@ -2934,6 +2952,17 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				} else {
 					// If no ID, just call it (shouldn't happen, but handle gracefully)
 					g.output.WriteString("  omni_read_line();\n")
+				}
+				return nil
+			}
+			if funcName == "std.io.read_all" || funcName == "io.read_all" {
+				if inst.ID != mir.InvalidValue {
+					varName := g.getVariableName(inst.ID)
+					g.output.WriteString(fmt.Sprintf("  %s = omni_read_all();\n", varName))
+					g.valueTypes[inst.ID] = "string"
+					g.stringsToFree[inst.ID] = true
+				} else {
+					g.output.WriteString("  omni_read_all();\n")
 				}
 				return nil
 			}
@@ -5581,6 +5610,18 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 		} else {
 			g.output.WriteString("  omni_println_string(\"\");\n")
 		}
+	case "std.io.eprint":
+		if len(inst.Operands) >= 1 {
+			g.emitPrintTo(inst.Operands[0], false, true)
+		}
+	case "std.io.eprintln":
+		if len(inst.Operands) >= 1 {
+			g.emitPrintTo(inst.Operands[0], true, true)
+		} else {
+			g.output.WriteString("  omni_eprintln_string(\"\");\n")
+		}
+	case "std.io.flush":
+		g.output.WriteString("  omni_io_flush();\n")
 	case "std.log.debug":
 		// Handle debug log statement
 		if len(inst.Operands) >= 1 {
@@ -5951,9 +5992,21 @@ func (g *CGenerator) convertOperandToString(op mir.Operand) string {
 
 // emitPrint handles std.io.print/println for primitive and convertible types.
 func (g *CGenerator) emitPrint(op mir.Operand, newline bool) {
-	funcName := "omni_print_string"
-	if newline {
+	g.emitPrintTo(op, newline, false)
+}
+
+// emitPrintTo is the stderr-aware version of emitPrint.
+func (g *CGenerator) emitPrintTo(op mir.Operand, newline, stderr bool) {
+	var funcName string
+	switch {
+	case stderr && newline:
+		funcName = "omni_eprintln_string"
+	case stderr:
+		funcName = "omni_eprint_string"
+	case newline:
 		funcName = "omni_println_string"
+	default:
+		funcName = "omni_print_string"
 	}
 
 	var arg string
@@ -6767,8 +6820,16 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_print_string"
 	case "std.io.println":
 		return "omni_println_string"
+	case "std.io.eprint":
+		return "omni_eprint_string"
+	case "std.io.eprintln":
+		return "omni_eprintln_string"
+	case "std.io.flush":
+		return "omni_io_flush"
 	case "std.io.read_line":
 		return "omni_read_line"
+	case "std.io.read_all":
+		return "omni_read_all"
 
 	// Logging functions
 	case "std.log.debug":
@@ -7171,8 +7232,16 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.io.println":   "omni_println_string",
 		"io.print":         "omni_print_string",
 		"io.println":       "omni_println_string",
+		"std.io.eprint":    "omni_eprint_string",
+		"std.io.eprintln":  "omni_eprintln_string",
+		"io.eprint":        "omni_eprint_string",
+		"io.eprintln":      "omni_eprintln_string",
+		"std.io.flush":     "omni_io_flush",
+		"io.flush":         "omni_io_flush",
 		"std.io.read_line": "omni_read_line",
 		"io.read_line":     "omni_read_line",
+		"std.io.read_all":  "omni_read_all",
+		"io.read_all":      "omni_read_all",
 
 		// String functions
 		"std.string.length":                   "omni_strlen",
@@ -8035,6 +8104,8 @@ func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 	stringReturningFunctions := map[string]bool{
 		"std.io.read_line":         true,
 		"io.read_line":             true,
+		"std.io.read_all":          true,
+		"io.read_all":              true,
 		"std.string.concat":        true,
 		"std.string.substring":     true,
 		"std.string.trim":          true,

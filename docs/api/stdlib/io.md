@@ -47,11 +47,39 @@ func main():int {
 }
 ```
 
+### eprint(value), eprintln(value)
+
+Same as `print` / `println` but write to standard error instead of standard output. Use these for diagnostics, prompts, and progress messages so the program's "real" output stays on stdout for piping.
+
+```omni
+import std.io as io
+
+func main():int {
+    io.eprintln("warning: input file is empty")
+    return 1
+}
+```
+
+### flush(): void
+
+Forces buffered standard output to be written immediately. Useful after a `print()` that ends without a newline (e.g. an interactive prompt) when the next operation reads input or sleeps.
+
+```omni
+import std.io as io
+
+func main():int {
+    io.print("Name? ")
+    io.flush()
+    let name:string = io.read_line()
+    io.println("hello, " + name)
+    return 0
+}
+```
+
 ### read_line(): string
 
 Reads one line from standard input and returns it without the trailing newline characters. If no data is available (EOF), an empty string is returned.
 
-**Example:**
 ```omni
 import std.io as io
 
@@ -59,6 +87,21 @@ func main():int {
     io.print("Enter value: ")
     let line = io.read_line()
     io.println("You typed: " + line)
+    return 0
+}
+```
+
+### read_all(): string
+
+Reads stdin until EOF and returns the contents as a single string. Useful for pipe-style scripts that consume their entire input.
+
+```omni
+import std.io as io
+import std.string as str
+
+func main():int {
+    let body:string = io.read_all()
+    io.println(str.length(body))
     return 0
 }
 ```
@@ -131,7 +174,12 @@ func main():int {
 
 ## Notes
 
-- All output functions write to standard output (stdout)
-- The `print` functions do not add a newline, while `println` functions do
+- `print` / `println` write to stdout; `eprint` / `eprintln` write to stderr
+- `print` / `eprint` do not add a newline, the `*ln` variants do
+- Use `flush()` when you write a prompt without a newline and want it visible before the next read or sleep
 - String concatenation with the `+` operator automatically converts numbers to strings
-- The module is automatically available when imported as `std.io` or with an alias
+- The module is available when imported as `std.io` or with an alias
+
+## Backend status
+
+`std.io` is fully implemented on both `omnir` (VM) and `omnic` (C). Pinned by `TestStdIoBasic` and `TestStdIoRead` in `omni/tests/e2e/`.

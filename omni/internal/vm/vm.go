@@ -179,6 +179,14 @@ func readLineFromStdin() (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
+func readAllFromStdin() (string, error) {
+	data, err := io.ReadAll(stdinReader)
+	if err != nil {
+		return string(data), err
+	}
+	return string(data), nil
+}
+
 // newPromise creates a new promise and returns its ID
 func newPromise() int {
 	promiseMu.Lock()
@@ -2389,12 +2397,36 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			fmt.Println()
 			return Result{Type: "void", Value: nil}, true
 		}
+	case "std.io.eprint":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Fprint(os.Stderr, arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.eprintln":
+		if len(operands) == 1 {
+			arg := operandValue(fr, operands[0])
+			fmt.Fprintln(os.Stderr, arg.Value)
+			return Result{Type: "void", Value: nil}, true
+		} else if len(operands) == 0 {
+			fmt.Fprintln(os.Stderr)
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.io.flush":
+		os.Stdout.Sync()
+		return Result{Type: "void", Value: nil}, true
 	case "std.io.read_line":
 		line, err := readLineFromStdin()
 		if err != nil && !errors.Is(err, io.EOF) {
 			return Result{Type: "string", Value: ""}, true
 		}
 		return Result{Type: "string", Value: line}, true
+	case "std.io.read_all":
+		data, err := readAllFromStdin()
+		if err != nil && !errors.Is(err, io.EOF) {
+			return Result{Type: "string", Value: ""}, true
+		}
+		return Result{Type: "string", Value: data}, true
 	case "std.io.read_line_async":
 		// Async version - execute in goroutine and return Promise
 		promiseID := newPromise()

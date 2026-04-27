@@ -1,7 +1,8 @@
 // std.io - Input/Output functions for OmniLang
 //
 // IMPLEMENTATION STATUS:
-// [IMPLEMENTED] (Runtime): print, println, read_line
+// [IMPLEMENTED] (Runtime): print, println, eprint, eprintln, flush,
+//    read_line, read_all
 // [PARTIAL] read_line_async (returns Promise but is synchronous)
 
 // print outputs a printable value to stdout without a newline
@@ -17,10 +18,36 @@ func println(value:string | int | float | double | bool) {
     // during compilation. The actual implementation is in the backend.
 }
 
+// eprint outputs a printable value to stderr without a newline
+// [IMPLEMENTED] Wired to omni_eprint_string runtime function
+func eprint(value:string | int | float | double | bool) {
+    // INTRINSIC.
+}
+
+// eprintln outputs a printable value to stderr with a newline
+// [IMPLEMENTED] Wired to omni_eprintln_string runtime function
+func eprintln(value:string | int | float | double | bool) {
+    // INTRINSIC.
+}
+
+// flush forces buffered stdout to be written. Useful after print() when
+// the next operation reads input or sleeps and the prompt should appear
+// before the read.
+func flush() {
+    // INTRINSIC: wired to omni_io_flush.
+}
+
 // read_line reads a line from standard input (without trailing newline)
 func read_line():string {
     // This is an intrinsic function that will be wired to the runtime
     // during compilation. The actual implementation is in the backend.
+    return ""
+}
+
+// read_all reads stdin until EOF and returns the contents as a string.
+// Useful for pipe-style scripts that consume their entire input.
+func read_all():string {
+    // INTRINSIC: wired to omni_read_all.
     return ""
 }
 

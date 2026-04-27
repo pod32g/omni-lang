@@ -1,0 +1,13 @@
+// Smoke test for std.io non-stdin helpers: print, println, eprint,
+// eprintln, flush. Each writes a known short token; the test runner
+// checks the program returns 0 (and observes stdout via e2e_test.go).
+import std
+
+func main():int {
+    std.io.print("a")
+    std.io.println("b")
+    std.io.eprint("c")
+    std.io.eprintln("d")
+    std.io.flush()
+    return 0
+}

@@ -1,0 +1,23 @@
+// Stdin-driven smoke test for std.io.read_line and std.io.read_all.
+// e2e_test.go pipes "first line\nrest 1\nrest 2\n" into stdin.
+// read_line strips the newline; read_all returns the rest verbatim
+// (including the trailing newline from the last line).
+import std
+
+func main():int {
+    let line:string = std.io.read_line()
+    if std.string.length(line) != 10 {
+        return 1
+    }
+    if !std.string.starts_with(line, "first") {
+        return 2
+    }
+    let rest:string = std.io.read_all()
+    if std.string.length(rest) != 14 {
+        return 3
+    }
+    if !std.string.starts_with(rest, "rest 1") {
+        return 4
+    }
+    return 0
+}

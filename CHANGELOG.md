@@ -85,6 +85,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **std.io expansion + audit** pinned by `TestStdIoBasic` and
+  `TestStdIoRead`. Added `eprint(value)`, `eprintln(value)` (stderr
+  variants of print/println), `flush()` (force stdout flush), and
+  `read_all()` (slurp stdin to EOF). All wired through both backends:
+  C runtime gains `omni_eprint_string`, `omni_eprintln_string`,
+  `omni_io_flush`, `omni_read_all`; the VM has matching intrinsic
+  cases. The pre-existing `std.io.read_line` already returned a
+  heap string; `read_all` joins it in `stringsToFree` and gets the
+  same `const char*` declaration treatment.
 - **Returning `array<T>` from a user-defined function** now works on
   both backends. On the C backend the call result lost its length
   companion (the parameter ABI's `__omni_len_<name>` doesn't apply to

@@ -172,6 +172,18 @@ void omni_println_string(const char* str) {
     printf("%s\n", str);
 }
 
+void omni_eprint_string(const char* str) {
+    fprintf(stderr, "%s", str ? str : "");
+}
+
+void omni_eprintln_string(const char* str) {
+    fprintf(stderr, "%s\n", str ? str : "");
+}
+
+void omni_io_flush(void) {
+    fflush(stdout);
+}
+
 // NOTE: Returns a newly allocated string - caller must free it using free()
 // This function allocates memory that must be freed by the caller to avoid leaks.
 char* omni_read_line(void) {
@@ -211,6 +223,33 @@ char* omni_read_line(void) {
         return buffer;
     }
 
+    buffer[length] = '\0';
+    return buffer;
+}
+
+// Read entire stdin to EOF. Returns "" on empty stdin or allocation failure
+// (never NULL — callers chain into string ops).
+// Caller must free the returned buffer.
+char* omni_read_all(void) {
+    size_t capacity = 1024;
+    size_t length = 0;
+    char* buffer = malloc(capacity);
+    if (!buffer) {
+        return strdup("");
+    }
+    int c;
+    while ((c = fgetc(stdin)) != EOF) {
+        if (length + 1 >= capacity) {
+            capacity *= 2;
+            char* new_buffer = realloc(buffer, capacity);
+            if (!new_buffer) {
+                free(buffer);
+                return strdup("");
+            }
+            buffer = new_buffer;
+        }
+        buffer[length++] = (char)c;
+    }
     buffer[length] = '\0';
     return buffer;
 }

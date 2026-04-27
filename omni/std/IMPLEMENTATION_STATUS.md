@@ -7,7 +7,14 @@ This document tracks which standard library functions are actually implemented v
 ### std.io
 - [IMPLEMENTED] `print(value)` - Wired to `omni_print_string`
 - [IMPLEMENTED] `println(value)` - Wired to `omni_println_string`
+- [IMPLEMENTED] `eprint(value)` - Wired to `omni_eprint_string` (stderr)
+- [IMPLEMENTED] `eprintln(value)` - Wired to `omni_eprintln_string` (stderr)
+- [IMPLEMENTED] `flush()` - Wired to `omni_io_flush`
 - [IMPLEMENTED] `read_line()` - Wired to `omni_read_line`
+- [IMPLEMENTED] `read_all()` - Wired to `omni_read_all`
+
+VM and C backend parity pinned by `tests/e2e/std_io_basic.omni` /
+`std_io_read.omni` (`TestStdIoBasic`, `TestStdIoRead`).
 
 ### std.string
 - [IMPLEMENTED] `length(s)` - Wired to `omni_strlen`
