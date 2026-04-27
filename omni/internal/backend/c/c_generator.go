@@ -3333,17 +3333,12 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				varName := g.getVariableName(inst.ID)
 				arr := g.getOperandValue(inst.Operands[1])
 				idx := g.getOperandValue(inst.Operands[2])
-				length := -1
-				if inst.Operands[1].Kind == mir.OperandValue {
-					if l, ok := g.arrayLengths[inst.Operands[1].Value]; ok {
-						length = l
-					}
-				}
+				lengthExpr := g.getOperandLengthExpr(inst.Operands[1])
 				if !g.declaredVariables[inst.ID] {
-					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_array_get_int(%s, %s, %d);\n", varName, arr, idx, length))
+					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_array_get_int(%s, %s, %s);\n", varName, arr, idx, lengthExpr))
 					g.declaredVariables[inst.ID] = true
 				} else {
-					g.output.WriteString(fmt.Sprintf("  %s = omni_array_get_int(%s, %s, %d);\n", varName, arr, idx, length))
+					g.output.WriteString(fmt.Sprintf("  %s = omni_array_get_int(%s, %s, %s);\n", varName, arr, idx, lengthExpr))
 				}
 				g.valueTypes[inst.ID] = "int"
 				return nil
@@ -3351,13 +3346,8 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				arr := g.getOperandValue(inst.Operands[1])
 				idx := g.getOperandValue(inst.Operands[2])
 				val := g.getOperandValue(inst.Operands[3])
-				length := -1
-				if inst.Operands[1].Kind == mir.OperandValue {
-					if l, ok := g.arrayLengths[inst.Operands[1].Value]; ok {
-						length = l
-					}
-				}
-				g.output.WriteString(fmt.Sprintf("  omni_array_set_int(%s, %s, %s, %d);\n", arr, idx, val, length))
+				lengthExpr := g.getOperandLengthExpr(inst.Operands[1])
+				g.output.WriteString(fmt.Sprintf("  omni_array_set_int(%s, %s, %s, %s);\n", arr, idx, val, lengthExpr))
 				return nil
 			} else if isServerGroupFunc && inst.ID != mir.InvalidValue && len(inst.Operands) >= 3 {
 				varName := g.getVariableName(inst.ID)
@@ -4127,6 +4117,17 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 										g.arrayLengthExprs[inst.ID] = expr
 									}
 								}
+								// User-defined (and other) functions returning
+								// array<T> don't carry a length companion through
+								// the C return ABI. Read the length back from the
+								// slice header that omni_slice_make wrote. Safe
+								// because omni_slice_len_real returns 0 when the
+								// pointer lacks a header (NULL-safe too).
+								if _, already := g.arrayLengthExprs[inst.ID]; !already {
+									if isArrayParamType(inst.Type) {
+										g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(int32_t)omni_slice_len_real((void*)%s)", varName)
+									}
+								}
 							}
 							// Track strings that need freeing if this function returns a heap-allocated string
 							if g.isStringReturningFunction(funcName) && inst.Type == "string" {
@@ -4229,16 +4230,21 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				} else if elementType == "int" || elementType == "int32" {
 					// For int arrays, use runtime function with bounds checking if length is known
 					arrayLength := -1
+					lengthExpr := ""
 					if inst.Operands[0].Kind == mir.OperandValue {
 						arrayOperandID := inst.Operands[0].Value
 						if length, ok := g.arrayLengths[arrayOperandID]; ok {
 							arrayLength = length
+						} else if expr, ok := g.arrayLengthExprs[arrayOperandID]; ok {
+							lengthExpr = expr
 						}
 					}
 					if arrayLength >= 0 {
-						// Use runtime function with bounds checking
 						g.output.WriteString(fmt.Sprintf("  %s = omni_array_get_int(%s, %s, %d);\n",
 							varName, target, index, arrayLength))
+					} else if lengthExpr != "" {
+						g.output.WriteString(fmt.Sprintf("  %s = omni_array_get_int(%s, %s, %s);\n",
+							varName, target, index, lengthExpr))
 					} else {
 						// Length unknown (might be parameter) - still use runtime function but with -1
 						// This will cause a runtime error rather than silent memory corruption

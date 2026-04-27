@@ -19,12 +19,11 @@ func length<T>(arr:array<T>):int {
     return 0
 }
 
-// get returns the element at the given index
+// get returns the element at the given index. The C backend rewrites
+// this to omni_array_get_int with bounds checking; the VM body-loads
+// this stub, so it must do the right thing on the VM too.
 func get<T>(arr:array<T>, index:int):T {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    // Note: This will need to be implemented as a generic function
-    return arr[0]
+    return arr[index]
 }
 
 // set sets the element at the given index

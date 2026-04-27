@@ -1,0 +1,32 @@
+// Regression: returning array<T> from a function used to lose its
+// length on the C backend. omni_array_get_int(v0, idx, length) was
+// emitted with length=-1 because g.arrayLengths only tracked
+// compile-time constants and the call result wasn't registered there.
+// std.array.get then aborted with "index=0, length=-1".
+//
+// Fix: register a runtime length expression
+// (int32_t)omni_slice_len_real((void*)v0) for call results of array
+// return type, and have std.array.get/set + index lowering consult
+// arrayLengthExprs as well as arrayLengths.
+import std
+
+func pair():array<int> {
+    let x:array<int> = [1, 2]
+    return x
+}
+
+func main():int {
+    let result:array<int> = pair()
+    let first:int = std.array.get(result, 0)
+    let second:int = std.array.get(result, 1)
+    if first != 1 {
+        return 11
+    }
+    if second != 2 {
+        return 12
+    }
+    if len(result) != 2 {
+        return 13
+    }
+    return 0
+}

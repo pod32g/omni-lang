@@ -85,6 +85,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for UTC Unix/RFC3339 conversions, duration formatting, sleep, and
   timezone helpers. The audit also records the remaining C-backend gap
   for pure Omni helper bodies such as duration arithmetic.
+- **Returning `array<T>` from a user-defined function** now works on
+  both backends. On the C backend the call result lost its length
+  companion (the parameter ABI's `__omni_len_<name>` doesn't apply to
+  return values), so `std.array.get` and indexed reads aborted with
+  `length=-1`. The codegen now registers
+  `(int32_t)omni_slice_len_real((void*)v)` as a runtime length
+  expression for array-typed call results, and the bounds-checked
+  ops (`omni_array_get_int`/`omni_array_set_int`, plus the int-array
+  index lowering) consult `arrayLengthExprs` in addition to the
+  compile-time `arrayLengths` map. On the VM, `std.array.get`'s stub
+  body unconditionally returned `arr[0]` regardless of the requested
+  index — replaced with `arr[index]`. Pinned by `TestArrayReturnLength`.
 - **std.os audit** pinned by `TestStdOsOps`: mkdir/rmdir, write/read/
   append, copy/rename/remove, exists/is_file/is_dir, set/get/unsetenv,
   getcwd, and getpid all verified on both backends. `omni_getenv` and

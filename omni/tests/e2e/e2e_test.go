@@ -683,6 +683,32 @@ func TestStdTimeOps(t *testing.T) {
 	}
 }
 
+// TestArrayReturnLength pins the C-backend fix for arrays returned by
+// user-defined functions: the result was losing its length companion,
+// so std.array.get / index lowering aborted with length=-1. Now the
+// codegen registers (int32_t)omni_slice_len_real((void*)v) for array
+// return values and the bounds-checked ops consult it.
+func TestArrayReturnLength(t *testing.T) {
+	testFile := "array_return_length.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStdOsOps pins std.os filesystem, env, cwd, and pid operations
 // on both backends. The audit caught omni_getenv / omni_getcwd
 // returning NULL when the var was missing or getcwd failed; the C
