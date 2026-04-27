@@ -769,6 +769,21 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.algorithms.euclidean_distance",
 		"std.math.random_seed",
 		"std.math.random_int",
+		"std.string.split",
+		"std.string.split_lines",
+		"std.string.split_words",
+		"std.string.join",
+		"std.string.replace",
+		"std.string.replace_all",
+		"std.string.replace_first",
+		"std.string.replace_last",
+		"std.string.find_all",
+		"std.collections.size",
+		"std.collections.get",
+		"std.collections.set",
+		"std.collections.has",
+		"std.collections.remove",
+		"std.collections.clear",
 		"std.algorithms.manhattan_distance",
 		"std.algorithms.levenshtein_distance",
 		"std.array.contains",
@@ -2991,6 +3006,156 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				}
 				return Result{Type: "array<int>", Value: out}, true
 			}
+		}
+	case "std.collections.size":
+		if len(operands) == 1 {
+			m := operandValue(fr, operands[0])
+			if mp, ok := m.Value.(map[interface{}]interface{}); ok {
+				return Result{Type: "int", Value: len(mp)}, true
+			}
+		}
+	case "std.collections.has":
+		if len(operands) == 2 {
+			m := operandValue(fr, operands[0])
+			k := operandValue(fr, operands[1])
+			if mp, ok := m.Value.(map[interface{}]interface{}); ok {
+				_, present := mp[k.Value]
+				return Result{Type: "bool", Value: present}, true
+			}
+		}
+	case "std.collections.get":
+		if len(operands) == 2 {
+			m := operandValue(fr, operands[0])
+			k := operandValue(fr, operands[1])
+			if mp, ok := m.Value.(map[interface{}]interface{}); ok {
+				if v, present := mp[k.Value]; present {
+					switch x := v.(type) {
+					case int:
+						return Result{Type: "int", Value: x}, true
+					case int32:
+						return Result{Type: "int", Value: int(x)}, true
+					case string:
+						return Result{Type: "string", Value: x}, true
+					default:
+						return Result{Type: "int", Value: v}, true
+					}
+				}
+			}
+			return Result{Type: "int", Value: 0}, true
+		}
+	case "std.collections.set":
+		if len(operands) == 3 {
+			m := operandValue(fr, operands[0])
+			k := operandValue(fr, operands[1])
+			v := operandValue(fr, operands[2])
+			if mp, ok := m.Value.(map[interface{}]interface{}); ok {
+				mp[k.Value] = v.Value
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.collections.remove":
+		if len(operands) == 2 {
+			m := operandValue(fr, operands[0])
+			k := operandValue(fr, operands[1])
+			if mp, ok := m.Value.(map[interface{}]interface{}); ok {
+				_, present := mp[k.Value]
+				delete(mp, k.Value)
+				return Result{Type: "bool", Value: present}, true
+			}
+			return Result{Type: "bool", Value: false}, true
+		}
+	case "std.collections.clear":
+		if len(operands) == 1 {
+			m := operandValue(fr, operands[0])
+			if mp, ok := m.Value.(map[interface{}]interface{}); ok {
+				for k := range mp {
+					delete(mp, k)
+				}
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.string.split":
+		if len(operands) == 2 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			d, _ := toString(operandValue(fr, operands[1]))
+			var parts []string
+			if d == "" {
+				for _, r := range s {
+					parts = append(parts, string(r))
+				}
+			} else {
+				parts = strings.Split(s, d)
+			}
+			return Result{Type: "array<string>", Value: parts}, true
+		}
+	case "std.string.split_lines":
+		if len(operands) == 1 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			parts := strings.Split(s, "\n")
+			return Result{Type: "array<string>", Value: parts}, true
+		}
+	case "std.string.split_words":
+		if len(operands) == 1 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			parts := strings.Fields(s)
+			return Result{Type: "array<string>", Value: parts}, true
+		}
+	case "std.string.join":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			sep, _ := toString(operandValue(fr, operands[1]))
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				return Result{Type: "string", Value: strings.Join(ss, sep)}, true
+			}
+		}
+	case "std.string.replace", "std.string.replace_all":
+		if len(operands) == 3 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			old, _ := toString(operandValue(fr, operands[1]))
+			repl, _ := toString(operandValue(fr, operands[2]))
+			if old == "" {
+				return Result{Type: "string", Value: s}, true
+			}
+			return Result{Type: "string", Value: strings.ReplaceAll(s, old, repl)}, true
+		}
+	case "std.string.replace_first":
+		if len(operands) == 3 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			old, _ := toString(operandValue(fr, operands[1]))
+			repl, _ := toString(operandValue(fr, operands[2]))
+			return Result{Type: "string", Value: strings.Replace(s, old, repl, 1)}, true
+		}
+	case "std.string.replace_last":
+		if len(operands) == 3 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			old, _ := toString(operandValue(fr, operands[1]))
+			repl, _ := toString(operandValue(fr, operands[2]))
+			if old == "" {
+				return Result{Type: "string", Value: s}, true
+			}
+			idx := strings.LastIndex(s, old)
+			if idx < 0 {
+				return Result{Type: "string", Value: s}, true
+			}
+			return Result{Type: "string", Value: s[:idx] + repl + s[idx+len(old):]}, true
+		}
+	case "std.string.find_all":
+		if len(operands) == 2 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			sub, _ := toString(operandValue(fr, operands[1]))
+			var hits []int
+			if sub != "" {
+				start := 0
+				for {
+					idx := strings.Index(s[start:], sub)
+					if idx < 0 {
+						break
+					}
+					hits = append(hits, start+idx)
+					start = start + idx + len(sub)
+				}
+			}
+			return Result{Type: "array<int>", Value: hits}, true
 		}
 	case "std.math.random_seed":
 		if len(operands) == 1 {

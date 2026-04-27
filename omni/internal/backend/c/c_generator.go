@@ -2912,6 +2912,15 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				funcName == "std.algorithms.shuffle" || funcName == "std.algorithms.unique"
 			isArrayContainsFunc := funcName == "std.array.contains"
 			isArrayIndexOfFunc := funcName == "std.array.index_of"
+			// Variable-length-result string ops: the runtime writes the
+			// element count to a stack-allocated companion. Routed
+			// through a dedicated emitter to keep the standard call path
+			// clean of out-pointer plumbing.
+			isStringVarLenArrayFunc := funcName == "std.string.split" ||
+				funcName == "std.string.split_lines" ||
+				funcName == "std.string.split_words" ||
+				funcName == "std.string.find_all"
+			isStringJoinFunc := funcName == "std.string.join"
 			isWebBoolIntrinsic := cFuncName == "omni_validate_string" || cFuncName == "omni_validate_int" ||
 				cFuncName == "omni_validate_email" || cFuncName == "omni_validate_url" ||
 				funcName == "std.web.validate_string" || funcName == "std.web.validate_int" ||
@@ -3109,6 +3118,64 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.output.WriteString(fmt.Sprintf("  int32_t %s = -1;\n", varName))
 					g.declaredVariables[inst.ID] = true
 				}
+				return nil
+			} else if isStringVarLenArrayFunc && inst.ID != mir.InvalidValue && len(inst.Operands) >= 2 {
+				// Variable-length string-array result. Allocate the
+				// companion length variable, pass its address to the
+				// runtime, register it as the result's runtime length.
+				varName := g.getVariableName(inst.ID)
+				lenVar := fmt.Sprintf("__omni_strarr_len_%d", inst.ID)
+				g.output.WriteString(fmt.Sprintf("  int32_t %s = 0;\n", lenVar))
+				resultC := "const char**"
+				resultType := "array<string>"
+				if funcName == "std.string.find_all" {
+					resultC = "int32_t*"
+					resultType = "array<int>"
+				}
+				cFn := ""
+				switch funcName {
+				case "std.string.split":
+					cFn = "omni_string_split"
+				case "std.string.split_lines":
+					cFn = "omni_string_split_lines"
+				case "std.string.split_words":
+					cFn = "omni_string_split_words"
+				case "std.string.find_all":
+					cFn = "omni_string_find_all"
+				}
+				// Emit args: first the input string, optionally the
+				// delimiter / substring, then &lenVar.
+				var args []string
+				for _, op := range inst.Operands[1:] {
+					args = append(args, g.getOperandValue(op))
+				}
+				args = append(args, "&"+lenVar)
+				expr := fmt.Sprintf("%s(%s)", cFn, strings.Join(args, ", "))
+				if g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  %s = %s;\n", varName, expr))
+				} else {
+					g.output.WriteString(fmt.Sprintf("  %s %s = %s;\n", resultC, varName, expr))
+					g.declaredVariables[inst.ID] = true
+				}
+				g.arrayLengthExprs[inst.ID] = lenVar
+				g.valueTypes[inst.ID] = resultType
+				return nil
+			} else if isStringJoinFunc && inst.ID != mir.InvalidValue && len(inst.Operands) >= 3 {
+				// std.string.join(parts, sep): pass parts' runtime length
+				// alongside it (matches the array-param ABI).
+				varName := g.getVariableName(inst.ID)
+				parts := g.getOperandValue(inst.Operands[1])
+				partsLen := g.getOperandLengthExpr(inst.Operands[1])
+				sep := g.getOperandValue(inst.Operands[2])
+				expr := fmt.Sprintf("omni_string_join(%s, %s, %s)", parts, partsLen, sep)
+				if g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  %s = %s;\n", varName, expr))
+				} else {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = %s;\n", varName, expr))
+					g.declaredVariables[inst.ID] = true
+				}
+				g.valueTypes[inst.ID] = "string"
+				g.stringsToFree[inst.ID] = true
 				return nil
 			} else if isAssertEqCall && len(inst.Operands) >= 4 {
 				// Dispatch to type-specific omni_assert_eq_{int,string,float}.
@@ -6218,9 +6285,22 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 	case "std.math.fibonacci":
 		return "std_math_fibonacci" // Will use OmniLang implementation
 
-	// Collections keys/values/copy/merge are generic wrappers whose runtime
-	// intrinsics need additional (buffer, size) arguments; leave them as
-	// regular stdlib calls so the loaded wrapper body is used.
+	// std.collections — basic map operations on map<string, int> /
+	// map<int, int>. Keys/values/copy/merge are generic wrappers whose
+	// runtime intrinsics need additional (buffer, size) arguments;
+	// they remain on the loaded-body path.
+	case "std.collections.size":
+		return "omni_map_size"
+	case "std.collections.get":
+		return "omni_map_get_string_int"
+	case "std.collections.set":
+		return "omni_map_put_string_int"
+	case "std.collections.has":
+		return "omni_map_has_string"
+	case "std.collections.remove":
+		return "omni_map_remove_string"
+	case "std.collections.clear":
+		return "omni_map_clear"
 	case "std.collections.copy":
 		return "omni_map_copy_string_int"
 	case "std.collections.merge":
@@ -6638,6 +6718,14 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_count_words"
 	case "std.string.is_empty":
 		return "omni_string_is_empty"
+	case "std.string.join":
+		return "omni_string_join"
+	case "std.string.replace", "std.string.replace_all":
+		return "omni_string_replace_all"
+	case "std.string.replace_first":
+		return "omni_string_replace_first"
+	case "std.string.replace_last":
+		return "omni_string_replace_last"
 	case "std.algorithms.euclidean_distance":
 		return "omni_euclidean_distance"
 	case "std.algorithms.manhattan_distance":
@@ -6972,6 +7060,11 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.string.count_lines":         "omni_count_lines",
 		"std.string.count_words":         "omni_count_words",
 		"std.string.is_empty":            "omni_string_is_empty",
+		"std.string.join":                "omni_string_join",
+		"std.string.replace":             "omni_string_replace_all",
+		"std.string.replace_all":         "omni_string_replace_all",
+		"std.string.replace_first":       "omni_string_replace_first",
+		"std.string.replace_last":        "omni_string_replace_last",
 		"std.algorithms.euclidean_distance":   "omni_euclidean_distance",
 		"std.algorithms.manhattan_distance":   "omni_manhattan_distance",
 		"std.algorithms.levenshtein_distance": "omni_levenshtein_distance",
@@ -7233,6 +7326,12 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"os.getppid":     "omni_getppid",
 
 		// Collections functions
+		"std.collections.size":   "omni_map_size",
+		"std.collections.get":    "omni_map_get_string_int",
+		"std.collections.set":    "omni_map_put_string_int",
+		"std.collections.has":    "omni_map_has_string",
+		"std.collections.remove": "omni_map_remove_string",
+		"std.collections.clear":  "omni_map_clear",
 		"std.collections.copy":   "omni_map_copy_string_int",
 		"std.collections.merge":  "omni_map_merge_string_int",
 		// Set functions
@@ -7474,6 +7573,15 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.string.count_lines":         true,
 		"std.string.count_words":         true,
 		"std.string.is_empty":            true,
+		"std.string.join":                true,
+		"std.string.replace":             true,
+		"std.string.replace_all":         true,
+		"std.string.replace_first":       true,
+		"std.string.replace_last":        true,
+		"std.string.split":               true,
+		"std.string.split_lines":         true,
+		"std.string.split_words":         true,
+		"std.string.find_all":            true,
 		"std.algorithms.euclidean_distance":   true,
 		"std.algorithms.manhattan_distance":   true,
 		"std.algorithms.levenshtein_distance": true,
@@ -7563,6 +7671,12 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"test.start":               true,
 		"test.end":                 true,
 		// Collections functions
+		"std.collections.size":                       true,
+		"std.collections.get":                        true,
+		"std.collections.set":                        true,
+		"std.collections.has":                        true,
+		"std.collections.remove":                     true,
+		"std.collections.clear":                      true,
 		"std.collections.copy":                       true,
 		"std.collections.merge":                      true,
 		"std.collections.set_create":                 true,
@@ -7747,15 +7861,20 @@ func (g *CGenerator) isStringReturningFunction(funcName string) bool {
 		"io.read_line":         true,
 		"std.string.concat":    true,
 		"std.string.substring": true,
-		"std.string.trim":       true,
-		"std.string.trim_left":  true,
-		"std.string.trim_right": true,
-		"std.string.trim_all":   true,
-		"std.string.to_upper":   true,
-		"std.string.to_lower":   true,
-		"std.string.to_title":   true,
-		"std.string.capitalize": true,
-		"std.string.reverse":    true,
+		"std.string.trim":          true,
+		"std.string.trim_left":     true,
+		"std.string.trim_right":    true,
+		"std.string.trim_all":      true,
+		"std.string.to_upper":      true,
+		"std.string.to_lower":      true,
+		"std.string.to_title":      true,
+		"std.string.capitalize":    true,
+		"std.string.reverse":       true,
+		"std.string.join":          true,
+		"std.string.replace":       true,
+		"std.string.replace_all":   true,
+		"std.string.replace_first": true,
+		"std.string.replace_last":  true,
 		"std.int_to_string":     true,
 		"std.float_to_string":  true,
 		"std.bool_to_string":   true,

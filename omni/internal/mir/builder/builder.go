@@ -2357,6 +2357,20 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			// Order matters: equals_ignore_case must beat equals, and the
 			// count_* / compare_* shapes must beat their substring matches.
 			switch {
+			case strings.HasSuffix(calleeName, ".split"),
+				strings.HasSuffix(calleeName, ".split_lines"),
+				strings.HasSuffix(calleeName, ".split_words"):
+				resultType = "array<string>"
+			case strings.HasSuffix(calleeName, ".find_all"):
+				resultType = "array<int>"
+			case strings.HasSuffix(calleeName, ".join"),
+				strings.HasSuffix(calleeName, ".join_lines"):
+				resultType = "string"
+			case strings.HasSuffix(calleeName, ".replace"),
+				strings.HasSuffix(calleeName, ".replace_all"),
+				strings.HasSuffix(calleeName, ".replace_first"),
+				strings.HasSuffix(calleeName, ".replace_last"):
+				resultType = "string"
 			case strings.HasSuffix(calleeName, ".equals_ignore_case"):
 				resultType = "bool"
 			case strings.HasSuffix(calleeName, ".compare_ignore_case"):

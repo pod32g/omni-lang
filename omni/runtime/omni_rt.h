@@ -66,6 +66,21 @@ int32_t omni_count_lines(const char* str);
 int32_t omni_count_words(const char* str);
 int32_t omni_string_is_empty(const char* str);
 
+// String split / join. split returns a freshly allocated `const char**`
+// and writes the count to `*out_len`; each element is a freshly
+// allocated copy the caller owns (the existing string-array helpers
+// only manage the pointer table, so deep ownership lives here).
+const char** omni_string_split(const char* s, const char* delim, int32_t* out_len);
+const char** omni_string_split_lines(const char* s, int32_t* out_len);
+const char** omni_string_split_words(const char* s, int32_t* out_len);
+char* omni_string_join(const char** parts, int32_t n, const char* sep);
+char* omni_string_replace_all(const char* s, const char* old, const char* repl);
+char* omni_string_replace_first(const char* s, const char* old, const char* repl);
+char* omni_string_replace_last(const char* s, const char* old, const char* repl);
+// find_all returns a freshly allocated int array with the byte offset
+// of every non-overlapping occurrence; *out_len gets the count.
+int32_t* omni_string_find_all(const char* s, const char* sub, int32_t* out_len);
+
 // Random number generation. The runtime keeps a single global xorshift
 // state seeded once on first use; std.math.random_seed lets a caller
 // pin it for deterministic tests.
@@ -281,6 +296,10 @@ int32_t omni_map_get_int_bool(omni_map_t* map, int32_t key);
 int32_t omni_map_contains_string(omni_map_t* map, const char* key);
 int32_t omni_map_contains_int(omni_map_t* map, int32_t key);
 int32_t omni_map_size(omni_map_t* map);
+int32_t omni_map_has_string(omni_map_t* map, const char* key);
+int32_t omni_map_has_int(omni_map_t* map, int32_t key);
+int32_t omni_map_remove_string(omni_map_t* map, const char* key);
+void omni_map_clear(omni_map_t* map);
 void omni_map_delete_string(omni_map_t* map, const char* key);
 void omni_map_delete_int(omni_map_t* map, int32_t key);
 

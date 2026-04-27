@@ -560,6 +560,57 @@ func TestStdAlgorithmsDistance(t *testing.T) {
 	}
 }
 
+// TestStdStringSplitReplace pins the new runtime intrinsics for the
+// "implemented in OmniLang" string helpers that never actually
+// compiled cleanly (split, split_words, join, replace*, find_all).
+// Variable-length results thread their length through a runtime
+// out-pointer the codegen registers as the array's runtime length.
+func TestStdStringSplitReplace(t *testing.T) {
+	testFile := "std_string_split_replace.omni"
+	expected := "35"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+// TestStdCollectionsMap pins the basic map operations
+// (size/get/set/has/remove/clear). Previously these were declared as
+// "implemented" but the C side had no wiring and the VM ran the
+// stub bodies that returned defaults.
+func TestStdCollectionsMap(t *testing.T) {
+	testFile := "std_collections_map.omni"
+	expected := "19"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdRandomShuffleUnique pins the std.math PRNG (random_seed,
 // random_int) and the algorithms it powers — std.algorithms.shuffle
 // (length-preserving) and std.algorithms.unique (variable output

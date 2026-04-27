@@ -24,16 +24,16 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `to_lower(s)` - Wired to `omni_to_lower`
 - [IMPLEMENTED] `equals(a, b)` - Wired to `omni_string_equals`
 - [IMPLEMENTED] `compare(a, b)` - Wired to `omni_string_compare`
-- [IMPLEMENTED] `find_all(s, substr)` - Implemented in OmniLang
-- [IMPLEMENTED] `replace(s, old, new)` - Implemented in OmniLang
-- [IMPLEMENTED] `replace_all(s, old, new)` - Implemented in OmniLang
-- [IMPLEMENTED] `replace_first(s, old, new)` - Implemented in OmniLang
-- [IMPLEMENTED] `replace_last(s, old, new)` - Implemented in OmniLang
-- [IMPLEMENTED] `split(s, delimiter)` - Implemented in OmniLang
-- [IMPLEMENTED] `split_lines(s)` - Implemented in OmniLang
-- [IMPLEMENTED] `split_words(s)` - Implemented in OmniLang
-- [IMPLEMENTED] `join(strings, delimiter)` - Implemented in OmniLang
-- [IMPLEMENTED] `join_lines(strings)` - Implemented in OmniLang
+- [IMPLEMENTED] `find_all(s, substr)` - Wired to `omni_string_find_all`; returns array<int> with offsets via out-pointer length forwarding
+- [IMPLEMENTED] `replace(s, old, new)` - Wired to `omni_string_replace_all` (alias)
+- [IMPLEMENTED] `replace_all(s, old, new)` - Wired to `omni_string_replace_all`
+- [IMPLEMENTED] `replace_first(s, old, new)` - Wired to `omni_string_replace_first`
+- [IMPLEMENTED] `replace_last(s, old, new)` - Wired to `omni_string_replace_last`
+- [IMPLEMENTED] `split(s, delimiter)` - Wired to `omni_string_split`; out-pointer length forwarded
+- [IMPLEMENTED] `split_lines(s)` - Wired to `omni_string_split_lines`
+- [IMPLEMENTED] `split_words(s)` - Wired to `omni_string_split_words` (whitespace runs)
+- [IMPLEMENTED] `join(strings, delimiter)` - Wired to `omni_string_join`; receives array length companion
+- [IMPLEMENTED] `join_lines(strings)` - OmniLang body delegates to `join` (still works via VM body-load)
 - [IMPLEMENTED] `pad_left(s, length, pad_char)` - Implemented in OmniLang
 - [IMPLEMENTED] `pad_right(s, length, pad_char)` - Implemented in OmniLang
 - [IMPLEMENTED] `pad_center(s, length, pad_char)` - Implemented in OmniLang
@@ -178,6 +178,12 @@ This document tracks which standard library functions are actually implemented v
 - [PARTIAL] `time_parse(time_str, layout)` - Basic RFC3339 parsing available via `time_from_string`, custom layouts pending
 
 ### std.collections
+- [IMPLEMENTED] `size(m)` - Wired to `omni_map_size`
+- [IMPLEMENTED] `get(m, key)` - Wired to `omni_map_get_string_int` (map<string, int>)
+- [IMPLEMENTED] `set(m, key, value)` - Wired to `omni_map_put_string_int`
+- [IMPLEMENTED] `has(m, key)` - Wired to `omni_map_has_string`
+- [IMPLEMENTED] `remove(m, key)` - Wired to `omni_map_remove_string` (returns bool whether the key existed)
+- [IMPLEMENTED] `clear(m)` - Wired to `omni_map_clear`
 - [IMPLEMENTED] `keys(m)` - Wired to `omni_map_keys_string_int`
 - [IMPLEMENTED] `values(m)` - Wired to `omni_map_values_string_int`
 - [IMPLEMENTED] `copy(m)` - Wired to `omni_map_copy_string_int`

@@ -643,6 +643,274 @@ int32_t omni_string_is_empty(const char* str) {
     return (!str || *str == '\0') ? 1 : 0;
 }
 
+// dup_n copies `n` bytes of `src` into a freshly malloc'd null-
+// terminated string. Internal helper used by the split family below.
+static char* omni_dup_n(const char* src, size_t n) {
+    char* out = (char*)malloc(n + 1);
+    if (!out) return NULL;
+    if (n > 0) memcpy(out, src, n);
+    out[n] = '\0';
+    return out;
+}
+
+const char** omni_string_split(const char* s, const char* delim, int32_t* out_len) {
+    if (out_len) *out_len = 0;
+    if (!s) {
+        const char** empty = (const char**)malloc(sizeof(const char*));
+        return empty;
+    }
+    size_t s_len = strlen(s);
+    // Empty delimiter: split into individual characters (matches
+    // std.string.split's documented behavior).
+    if (!delim || *delim == '\0') {
+        if (s_len == 0) {
+            const char** empty = (const char**)malloc(sizeof(const char*));
+            return empty;
+        }
+        const char** out = (const char**)malloc(s_len * sizeof(const char*));
+        if (!out) return NULL;
+        for (size_t i = 0; i < s_len; i++) {
+            out[i] = omni_dup_n(s + i, 1);
+        }
+        if (out_len) *out_len = (int32_t)s_len;
+        return out;
+    }
+    size_t d_len = strlen(delim);
+    // Pre-count to size the result table exactly. One delimiter
+    // occurrence yields two parts; n yields n+1.
+    int32_t count = 1;
+    const char* p = s;
+    while ((p = strstr(p, delim)) != NULL) {
+        count++;
+        p += d_len;
+    }
+    const char** out = (const char**)malloc((size_t)count * sizeof(const char*));
+    if (!out) return NULL;
+    int32_t k = 0;
+    const char* start = s;
+    while (1) {
+        const char* hit = strstr(start, delim);
+        if (!hit) {
+            out[k++] = omni_dup_n(start, strlen(start));
+            break;
+        }
+        out[k++] = omni_dup_n(start, (size_t)(hit - start));
+        start = hit + d_len;
+    }
+    if (out_len) *out_len = k;
+    return out;
+}
+
+const char** omni_string_split_lines(const char* s, int32_t* out_len) {
+    return omni_string_split(s, "\n", out_len);
+}
+
+const char** omni_string_split_words(const char* s, int32_t* out_len) {
+    if (out_len) *out_len = 0;
+    if (!s) {
+        const char** empty = (const char**)malloc(sizeof(const char*));
+        return empty;
+    }
+    // Words are runs of non-whitespace separated by any whitespace —
+    // matching split_words' usual semantics, not a literal-space split.
+    size_t cap = 8;
+    const char** out = (const char**)malloc(cap * sizeof(const char*));
+    if (!out) return NULL;
+    int32_t k = 0;
+    const char* p = s;
+    while (*p) {
+        while (*p && is_ws(*p)) p++;
+        if (!*p) break;
+        const char* start = p;
+        while (*p && !is_ws(*p)) p++;
+        if ((size_t)k >= cap) {
+            cap *= 2;
+            const char** grown = (const char**)realloc(out, cap * sizeof(const char*));
+            if (!grown) {
+                free(out);
+                return NULL;
+            }
+            out = grown;
+        }
+        out[k++] = omni_dup_n(start, (size_t)(p - start));
+    }
+    if (out_len) *out_len = k;
+    return out;
+}
+
+char* omni_string_join(const char** parts, int32_t n, const char* sep) {
+    if (n <= 0 || !parts) {
+        char* empty = (char*)malloc(1);
+        if (empty) empty[0] = '\0';
+        return empty;
+    }
+    size_t sep_len = sep ? strlen(sep) : 0;
+    size_t total = 0;
+    for (int32_t i = 0; i < n; i++) {
+        total += parts[i] ? strlen(parts[i]) : 0;
+    }
+    if (n > 1) total += sep_len * (size_t)(n - 1);
+    char* out = (char*)malloc(total + 1);
+    if (!out) return NULL;
+    char* dst = out;
+    for (int32_t i = 0; i < n; i++) {
+        if (i > 0 && sep_len > 0) {
+            memcpy(dst, sep, sep_len);
+            dst += sep_len;
+        }
+        if (parts[i]) {
+            size_t pl = strlen(parts[i]);
+            memcpy(dst, parts[i], pl);
+            dst += pl;
+        }
+    }
+    *dst = '\0';
+    return out;
+}
+
+char* omni_string_replace_all(const char* s, const char* old, const char* repl) {
+    if (!s) {
+        char* empty = (char*)malloc(1);
+        if (empty) empty[0] = '\0';
+        return empty;
+    }
+    size_t s_len = strlen(s);
+    if (!old || *old == '\0') {
+        char* copy = (char*)malloc(s_len + 1);
+        if (copy) memcpy(copy, s, s_len + 1);
+        return copy;
+    }
+    size_t old_len = strlen(old);
+    size_t repl_len = repl ? strlen(repl) : 0;
+    // Count occurrences to size the output exactly.
+    size_t count = 0;
+    const char* p = s;
+    while ((p = strstr(p, old)) != NULL) {
+        count++;
+        p += old_len;
+    }
+    size_t out_len = s_len + count * (repl_len > old_len ? (repl_len - old_len) : 0);
+    if (repl_len < old_len) {
+        out_len = s_len - count * (old_len - repl_len);
+    }
+    char* out = (char*)malloc(out_len + 1);
+    if (!out) return NULL;
+    char* dst = out;
+    const char* start = s;
+    while (1) {
+        const char* hit = strstr(start, old);
+        if (!hit) {
+            size_t rem = strlen(start);
+            memcpy(dst, start, rem);
+            dst += rem;
+            break;
+        }
+        size_t before = (size_t)(hit - start);
+        memcpy(dst, start, before);
+        dst += before;
+        if (repl_len > 0) {
+            memcpy(dst, repl, repl_len);
+            dst += repl_len;
+        }
+        start = hit + old_len;
+    }
+    *dst = '\0';
+    return out;
+}
+
+char* omni_string_replace_first(const char* s, const char* old, const char* repl) {
+    if (!s) {
+        char* empty = (char*)malloc(1);
+        if (empty) empty[0] = '\0';
+        return empty;
+    }
+    size_t s_len = strlen(s);
+    if (!old || *old == '\0') {
+        char* copy = (char*)malloc(s_len + 1);
+        if (copy) memcpy(copy, s, s_len + 1);
+        return copy;
+    }
+    const char* hit = strstr(s, old);
+    if (!hit) {
+        char* copy = (char*)malloc(s_len + 1);
+        if (copy) memcpy(copy, s, s_len + 1);
+        return copy;
+    }
+    size_t before = (size_t)(hit - s);
+    size_t old_len = strlen(old);
+    size_t repl_len = repl ? strlen(repl) : 0;
+    size_t after = s_len - before - old_len;
+    char* out = (char*)malloc(before + repl_len + after + 1);
+    if (!out) return NULL;
+    memcpy(out, s, before);
+    if (repl_len > 0) memcpy(out + before, repl, repl_len);
+    memcpy(out + before + repl_len, hit + old_len, after);
+    out[before + repl_len + after] = '\0';
+    return out;
+}
+
+char* omni_string_replace_last(const char* s, const char* old, const char* repl) {
+    if (!s) {
+        char* empty = (char*)malloc(1);
+        if (empty) empty[0] = '\0';
+        return empty;
+    }
+    size_t s_len = strlen(s);
+    if (!old || *old == '\0') {
+        char* copy = (char*)malloc(s_len + 1);
+        if (copy) memcpy(copy, s, s_len + 1);
+        return copy;
+    }
+    size_t old_len = strlen(old);
+    const char* last = NULL;
+    const char* p = s;
+    while ((p = strstr(p, old)) != NULL) {
+        last = p;
+        p += old_len;
+    }
+    if (!last) {
+        char* copy = (char*)malloc(s_len + 1);
+        if (copy) memcpy(copy, s, s_len + 1);
+        return copy;
+    }
+    size_t before = (size_t)(last - s);
+    size_t repl_len = repl ? strlen(repl) : 0;
+    size_t after = s_len - before - old_len;
+    char* out = (char*)malloc(before + repl_len + after + 1);
+    if (!out) return NULL;
+    memcpy(out, s, before);
+    if (repl_len > 0) memcpy(out + before, repl, repl_len);
+    memcpy(out + before + repl_len, last + old_len, after);
+    out[before + repl_len + after] = '\0';
+    return out;
+}
+
+int32_t* omni_string_find_all(const char* s, const char* sub, int32_t* out_len) {
+    if (out_len) *out_len = 0;
+    if (!s || !sub || *sub == '\0') {
+        int32_t* empty = (int32_t*)malloc(sizeof(int32_t));
+        return empty;
+    }
+    size_t sub_len = strlen(sub);
+    // Two-pass: count, allocate, refill.
+    int32_t count = 0;
+    const char* p = s;
+    while ((p = strstr(p, sub)) != NULL) {
+        count++;
+        p += sub_len;
+    }
+    int32_t* out = (int32_t*)malloc((size_t)(count > 0 ? count : 1) * sizeof(int32_t));
+    if (!out) return NULL;
+    int32_t k = 0;
+    p = s;
+    while ((p = strstr(p, sub)) != NULL) {
+        out[k++] = (int32_t)(p - s);
+        p += sub_len;
+    }
+    if (out_len) *out_len = k;
+    return out;
+}
+
 // std.algorithms — distance metrics. The integer / array-mutating
 // algorithms (sorts, searches, reverse) still live as OmniLang stubs
 // because they need real array-with-length passing, which isn't wired
@@ -2800,6 +3068,60 @@ int32_t omni_map_contains_int(omni_map_t* map, int32_t key) {
 
 int32_t omni_map_size(omni_map_t* map) {
     return map ? map->size : 0;
+}
+
+// omni_map_remove_string is a bool-returning wrapper around the
+// existing void-returning omni_map_delete_string: returns 1 when the
+// key existed, 0 otherwise. std.collections.remove's OmniLang
+// signature returns bool.
+int32_t omni_map_remove_string(omni_map_t* map, const char* key) {
+    if (!omni_map_has_string(map, key)) return 0;
+    omni_map_delete_string(map, key);
+    return 1;
+}
+
+// omni_map_has_string returns 1 when `key` is present in `map`,
+// regardless of value type. Mirrors omni_map_get_*'s key compare.
+int32_t omni_map_has_string(omni_map_t* map, const char* key) {
+    if (!map || !key) return 0;
+    uint32_t hash = hash_string(key);
+    int32_t bucket = hash % map->bucket_count;
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (strcmp((char*)entry->key, key) == 0) return 1;
+        entry = entry->next;
+    }
+    return 0;
+}
+
+int32_t omni_map_has_int(omni_map_t* map, int32_t key) {
+    if (!map) return 0;
+    uint32_t hash = (uint32_t)key * 2654435761u;
+    int32_t bucket = hash % map->bucket_count;
+    omni_map_entry_t* entry = map->buckets[bucket];
+    while (entry) {
+        if (*(int32_t*)entry->key == key) return 1;
+        entry = entry->next;
+    }
+    return 0;
+}
+
+// Walks every bucket and frees the entries. The map struct itself is
+// reused, so callers can keep adding after a clear.
+void omni_map_clear(omni_map_t* map) {
+    if (!map || !map->buckets) return;
+    for (int32_t i = 0; i < map->bucket_count; i++) {
+        omni_map_entry_t* entry = map->buckets[i];
+        while (entry) {
+            omni_map_entry_t* next = entry->next;
+            free(entry->key);
+            free(entry->value);
+            free(entry);
+            entry = next;
+        }
+        map->buckets[i] = NULL;
+    }
+    map->size = 0;
 }
 
 // Additional map put operations

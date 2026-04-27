@@ -1,0 +1,41 @@
+// Regression: std.string.split / split_lines / split_words / join /
+// replace / replace_first / replace_last / find_all all have real
+// runtime implementations. Variable-length-result calls (split,
+// split_*, find_all) thread their length through a runtime
+// out-pointer the codegen registers as the array's runtime length;
+// downstream len() / index works.
+//
+// Sequence:
+//   split("a,b,c,d", ",")                = ["a","b","c","d"], len 4
+//   split_words("  one two   three ")    = ["one","two","three"], len 3
+//   join(words, "-")                     = "one-two-three", length 13
+//   replace_all("a-a-a", "a", "BB")      = "BB-BB-BB", length 8
+//   replace_first("a-a-a", "a", "B")     = "B-a-a", length 5
+//   find_all("xxabxxabx", "ab")          = [2, 6], len 2
+//
+// Total: 4 + 3 + 13 + 8 + 5 + 2 = 35
+import std
+
+func main():int {
+    var sum:int = 0
+
+    let parts:array<string> = std.string.split("a,b,c,d", ",")
+    sum = sum + len(parts)
+
+    let words:array<string> = std.string.split_words("  one two   three ")
+    sum = sum + len(words)
+
+    let joined:string = std.string.join(words, "-")
+    sum = sum + std.string.length(joined)  // "one-two-three" = 13? no, words = [one, two, three] join -> "one-two-three" = 13
+
+    let big:string = std.string.replace_all("a-a-a", "a", "BB")
+    sum = sum + std.string.length(big)  // "BB-BB-BB" = 8
+
+    let small:string = std.string.replace_first("a-a-a", "a", "B")
+    sum = sum + std.string.length(small)  // "B-a-a" = 5
+
+    let hits:array<int> = std.string.find_all("xxabxxabx", "ab")
+    sum = sum + len(hits)  // 2
+
+    return sum
+}
