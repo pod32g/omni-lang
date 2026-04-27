@@ -520,8 +520,12 @@ func pad_center(s:string, length:int, pad_char:char):string {
 // ============================================================================
 
 // is_empty checks if a string is empty
+// is_empty checks if a string is empty.
+// [IMPLEMENTED] Delegates to std.string.length so the call survives
+// VM body-loading; the bare `length` would resolve only inside the
+// std.string module.
 func is_empty(s:string):bool {
-    return length(s) == 0
+    return std.string.length(s) == 0
 }
 
 // is_blank checks if a string is blank (empty or only whitespace)

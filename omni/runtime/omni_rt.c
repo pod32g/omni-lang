@@ -639,6 +639,10 @@ int32_t omni_count_words(const char* str) {
     return count;
 }
 
+int32_t omni_string_is_empty(const char* str) {
+    return (!str || *str == '\0') ? 1 : 0;
+}
+
 // std.algorithms — distance metrics. The integer / array-mutating
 // algorithms (sorts, searches, reverse) still live as OmniLang stubs
 // because they need real array-with-length passing, which isn't wired
@@ -786,6 +790,23 @@ int32_t* omni_array_reverse(int32_t* arr, int32_t n) {
     return a;
 }
 
+// omni_array_rotate rotates `arr` by `k` positions to the right
+// (negative k rotates left). Result is a freshly allocated array of
+// the same length.
+int32_t* omni_array_rotate(int32_t* arr, int32_t n, int32_t k) {
+    int32_t* out = omni_array_clone_int(arr, n);
+    if (!out || n <= 1) return out;
+    // Normalize k into [0, n) so a 7-element rotation by 9 lands the
+    // same as rotation by 2.
+    int32_t shift = k % n;
+    if (shift < 0) shift += n;
+    if (shift == 0) return out;
+    for (int32_t i = 0; i < n; i++) {
+        out[(i + shift) % n] = arr[i];
+    }
+    return out;
+}
+
 // std.array — int32_t-specialized list operations. Each one returns a
 // freshly heap-allocated array; callers manage lifetimes the same way
 // they do for runtime-allocated strings.
@@ -870,6 +891,105 @@ int32_t* omni_array_int_slice(int32_t* arr, int32_t n, int32_t start, int32_t en
     int32_t* out = (int32_t*)malloc((size_t)(span > 0 ? span : 1) * sizeof(int32_t));
     if (!out) return NULL;
     if (arr && span > 0) memcpy(out, arr + start, (size_t)span * sizeof(int32_t));
+    return out;
+}
+
+// std.array — string-specialized siblings of the int functions
+// above. The payload pointers are aliased into the result, not deep-
+// copied; only the pointer table is freshly allocated.
+
+static const char** omni_array_clone_str(const char** arr, int32_t n) {
+    if (n <= 0 || !arr) {
+        const char** empty = (const char**)malloc(sizeof(const char*));
+        return empty;
+    }
+    const char** copy = (const char**)malloc((size_t)n * sizeof(const char*));
+    if (!copy) return NULL;
+    memcpy(copy, arr, (size_t)n * sizeof(const char*));
+    return copy;
+}
+
+static int omni_str_eq(const char* a, const char* b) {
+    if (a == b) return 1;
+    if (!a || !b) return 0;
+    return strcmp(a, b) == 0;
+}
+
+int32_t omni_array_str_contains(const char** arr, int32_t n, const char* value) {
+    if (!arr) return 0;
+    for (int32_t i = 0; i < n; i++) {
+        if (omni_str_eq(arr[i], value)) return 1;
+    }
+    return 0;
+}
+
+int32_t omni_array_str_index_of(const char** arr, int32_t n, const char* value) {
+    if (!arr) return -1;
+    for (int32_t i = 0; i < n; i++) {
+        if (omni_str_eq(arr[i], value)) return i;
+    }
+    return -1;
+}
+
+const char** omni_array_str_append(const char** arr, int32_t n, const char* value) {
+    int32_t new_n = n + 1;
+    const char** out = (const char**)malloc((size_t)new_n * sizeof(const char*));
+    if (!out) return NULL;
+    if (arr && n > 0) memcpy(out, arr, (size_t)n * sizeof(const char*));
+    out[n] = value;
+    return out;
+}
+
+const char** omni_array_str_prepend(const char** arr, int32_t n, const char* value) {
+    int32_t new_n = n + 1;
+    const char** out = (const char**)malloc((size_t)new_n * sizeof(const char*));
+    if (!out) return NULL;
+    out[0] = value;
+    if (arr && n > 0) memcpy(out + 1, arr, (size_t)n * sizeof(const char*));
+    return out;
+}
+
+const char** omni_array_str_insert(const char** arr, int32_t n, int32_t index, const char* value) {
+    if (index < 0) index = 0;
+    if (index > n) index = n;
+    int32_t new_n = n + 1;
+    const char** out = (const char**)malloc((size_t)new_n * sizeof(const char*));
+    if (!out) return NULL;
+    if (index > 0) memcpy(out, arr, (size_t)index * sizeof(const char*));
+    out[index] = value;
+    if (n - index > 0) memcpy(out + index + 1, arr + index, (size_t)(n - index) * sizeof(const char*));
+    return out;
+}
+
+const char** omni_array_str_remove(const char** arr, int32_t n, int32_t index) {
+    if (n <= 0 || index < 0 || index >= n) {
+        return omni_array_clone_str(arr, n);
+    }
+    int32_t new_n = n - 1;
+    const char** out = (const char**)malloc((size_t)(new_n > 0 ? new_n : 1) * sizeof(const char*));
+    if (!out) return NULL;
+    if (index > 0) memcpy(out, arr, (size_t)index * sizeof(const char*));
+    if (n - index - 1 > 0) memcpy(out + index, arr + index + 1, (size_t)(n - index - 1) * sizeof(const char*));
+    return out;
+}
+
+const char** omni_array_str_concat(const char** a, int32_t alen, const char** b, int32_t blen) {
+    int32_t total = alen + blen;
+    const char** out = (const char**)malloc((size_t)(total > 0 ? total : 1) * sizeof(const char*));
+    if (!out) return NULL;
+    if (a && alen > 0) memcpy(out, a, (size_t)alen * sizeof(const char*));
+    if (b && blen > 0) memcpy(out + alen, b, (size_t)blen * sizeof(const char*));
+    return out;
+}
+
+const char** omni_array_str_slice(const char** arr, int32_t n, int32_t start, int32_t end) {
+    if (start < 0) start = 0;
+    if (end > n) end = n;
+    if (end < start) end = start;
+    int32_t span = end - start;
+    const char** out = (const char**)malloc((size_t)(span > 0 ? span : 1) * sizeof(const char*));
+    if (!out) return NULL;
+    if (arr && span > 0) memcpy(out, arr + start, (size_t)span * sizeof(const char*));
     return out;
 }
 

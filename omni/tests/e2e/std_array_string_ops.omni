@@ -1,0 +1,48 @@
+// Regression: std.array list operations also work on string arrays.
+// The C codegen routes array<string> calls to omni_array_str_* runtime
+// siblings of the int versions; the VM's intrinsics dispatch on the
+// array carrier ([]string vs []int) at runtime.
+//
+// Returns the number of "match" results from a sequence of queries:
+//   contains(["a", "b", "c"], "b") = true                +1
+//   index_of(["a", "b", "c"], "c") = 2                   +2 (added directly)
+//   append(["x"], "y")[1] == "y"                         +1
+//   prepend(["x"], "z")[0] == "z"                        +1
+//   remove(["a", "b", "c"], 1)[1] == "c"                 +1
+//   insert(["a", "b"], 1, "Z")[1] == "Z"                 +1
+//   concat(["a"], ["b"])[1] == "b"                       +1
+//   slice(["a", "b", "c"], 1, 3)[1] == "c"               +1
+// Total: 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 = 9
+import std
+
+func main():int {
+    var score:int = 0
+
+    let names:array<string> = ["a", "b", "c"]
+    if std.array.contains(names, "b") { score = score + 1 }
+    score = score + std.array.index_of(names, "c")  // = 2
+
+    let xs:array<string> = ["x"]
+    let appended:array<string> = std.array.append(xs, "y")
+    if std.string.equals(appended[1], "y") { score = score + 1 }
+
+    let prepended:array<string> = std.array.prepend(xs, "z")
+    if std.string.equals(prepended[0], "z") { score = score + 1 }
+
+    let removed:array<string> = std.array.remove(names, 1)
+    if std.string.equals(removed[1], "c") { score = score + 1 }
+
+    let pair:array<string> = ["a", "b"]
+    let inserted:array<string> = std.array.insert(pair, 1, "Z")
+    if std.string.equals(inserted[1], "Z") { score = score + 1 }
+
+    let aa:array<string> = ["a"]
+    let bb:array<string> = ["b"]
+    let combined:array<string> = std.array.concat(aa, bb)
+    if std.string.equals(combined[1], "b") { score = score + 1 }
+
+    let middle:array<string> = std.array.slice(names, 1, 3)
+    if std.string.equals(middle[1], "c") { score = score + 1 }
+
+    return score
+}

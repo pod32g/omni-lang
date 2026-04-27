@@ -560,6 +560,53 @@ func TestStdAlgorithmsDistance(t *testing.T) {
 	}
 }
 
+// TestStdMiscExtras pins two small finishers: std.string.is_empty
+// and std.algorithms.rotate. Catches both backends.
+func TestStdMiscExtras(t *testing.T) {
+	testFile := "std_misc_extras.omni"
+	expected := "6"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
+// TestStdArrayStringOps pins std.array.* on string arrays. Same shape
+// as TestStdArrayIntOps but with string-element runtime siblings on
+// the C side and dual-typed dispatch on the VM side.
+func TestStdArrayStringOps(t *testing.T) {
+	testFile := "std_array_string_ops.omni"
+	expected := "9"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdArrayIntOps pins the std.array list operations on int arrays:
 // contains, index_of, append, prepend, insert, remove, concat, slice.
 // Length-changing ops forward the output length so a downstream index

@@ -217,6 +217,7 @@ func (g *CGenerator) generate() (string, error) {
 		"std.algorithms.find_min",
 		"std.algorithms.count_occurrences",
 		"std.algorithms.reverse",
+		"std.algorithms.rotate",
 	} {
 		g.userFuncArrayParams[name] = []int{0}
 	}
@@ -6631,6 +6632,8 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_count_lines"
 	case "std.string.count_words":
 		return "omni_count_words"
+	case "std.string.is_empty":
+		return "omni_string_is_empty"
 	case "std.algorithms.euclidean_distance":
 		return "omni_euclidean_distance"
 	case "std.algorithms.manhattan_distance":
@@ -6655,6 +6658,8 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_array_count_occurrences"
 	case "std.algorithms.reverse":
 		return "omni_array_reverse"
+	case "std.algorithms.rotate":
+		return "omni_array_rotate"
 
 	// OS functions
 	case "std.os.exit":
@@ -6958,6 +6963,7 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.string.count_occurrences":   "omni_count_occurrences",
 		"std.string.count_lines":         "omni_count_lines",
 		"std.string.count_words":         "omni_count_words",
+		"std.string.is_empty":            "omni_string_is_empty",
 		"std.algorithms.euclidean_distance":   "omni_euclidean_distance",
 		"std.algorithms.manhattan_distance":   "omni_manhattan_distance",
 		"std.algorithms.levenshtein_distance": "omni_levenshtein_distance",
@@ -6970,6 +6976,7 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.algorithms.find_min":             "omni_array_find_min",
 		"std.algorithms.count_occurrences":    "omni_array_count_occurrences",
 		"std.algorithms.reverse":              "omni_array_reverse",
+		"std.algorithms.rotate":               "omni_array_rotate",
 		"string.length":            "omni_strlen",
 		"string.concat":            "omni_strcat",
 		"string.substring":         "omni_substring",
@@ -7456,6 +7463,7 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.string.count_occurrences":   true,
 		"std.string.count_lines":         true,
 		"std.string.count_words":         true,
+		"std.string.is_empty":            true,
 		"std.algorithms.euclidean_distance":   true,
 		"std.algorithms.manhattan_distance":   true,
 		"std.algorithms.levenshtein_distance": true,
@@ -7468,6 +7476,7 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.algorithms.find_min":             true,
 		"std.algorithms.count_occurrences":    true,
 		"std.algorithms.reverse":              true,
+		"std.algorithms.rotate":               true,
 		"string.length":            true,
 		"string.concat":            true,
 		"string.substring":         true,
@@ -7815,10 +7824,10 @@ func arrayLenParamName(name string) string {
 	return "__omni_len_" + name
 }
 
-// emitStdArrayIntOp lowers a std.array.* call on an int-typed array
-// to its specialized runtime intrinsic. Returns true when the call
-// was handled; the caller falls back to the legacy placeholder
-// branches for non-int element types we haven't specialized yet.
+// emitStdArrayIntOp lowers a std.array.* call on a known-element-type
+// array to its specialized runtime intrinsic. Currently routes int and
+// string element types; other types fall through and the caller drops
+// back to the legacy placeholder branches.
 func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) bool {
 	if inst.ID == mir.InvalidValue || len(inst.Operands) < 2 {
 		return false
@@ -7827,7 +7836,6 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 	if arrOp.Kind != mir.OperandValue {
 		return false
 	}
-	// Only specialize when we know the element type is int.
 	elemType := ""
 	if t, ok := g.valueTypes[arrOp.Value]; ok && t != "" {
 		if strings.HasPrefix(t, "array<") && strings.HasSuffix(t, ">") {
@@ -7836,7 +7844,21 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 			elemType = strings.TrimSpace(t[3 : len(t)-1])
 		}
 	}
-	if elemType != "int" && elemType != "" && elemType != "<infer>" && elemType != inferTypePlaceholder {
+	// Pick the runtime suffix and the C carrier type for the result.
+	// Treat unknown / inferred element types as int — that's what the
+	// call sites have historically defaulted to and most arrays in
+	// practice are int32_t-sized.
+	var rtSuffix, ptrCType, retArrType string
+	switch elemType {
+	case "string":
+		rtSuffix = "str"
+		ptrCType = "const char**"
+		retArrType = "array<string>"
+	case "int", "", "<infer>":
+		rtSuffix = "int"
+		ptrCType = "int32_t*"
+		retArrType = "array<int>"
+	default:
 		return false
 	}
 
@@ -7859,7 +7881,7 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 			return false
 		}
 		val := g.getOperandValue(inst.Operands[2])
-		declOrAssign("int32_t", fmt.Sprintf("omni_array_int_contains(%s, %s, %s)", arr, arrLen, val))
+		declOrAssign("int32_t", fmt.Sprintf("omni_array_%s_contains(%s, %s, %s)", rtSuffix, arr, arrLen, val))
 		g.valueTypes[inst.ID] = "bool"
 		return true
 	case "std.array.index_of":
@@ -7867,7 +7889,7 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 			return false
 		}
 		val := g.getOperandValue(inst.Operands[2])
-		declOrAssign("int32_t", fmt.Sprintf("omni_array_int_index_of(%s, %s, %s)", arr, arrLen, val))
+		declOrAssign("int32_t", fmt.Sprintf("omni_array_%s_index_of(%s, %s, %s)", rtSuffix, arr, arrLen, val))
 		g.valueTypes[inst.ID] = "int"
 		return true
 	case "std.array.append":
@@ -7875,18 +7897,18 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 			return false
 		}
 		val := g.getOperandValue(inst.Operands[2])
-		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_append(%s, %s, %s)", arr, arrLen, val))
+		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_append(%s, %s, %s)", rtSuffix, arr, arrLen, val))
 		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) + 1", arrLen)
-		g.valueTypes[inst.ID] = "array<int>"
+		g.valueTypes[inst.ID] = retArrType
 		return true
 	case "std.array.prepend":
 		if len(inst.Operands) < 3 {
 			return false
 		}
 		val := g.getOperandValue(inst.Operands[2])
-		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_prepend(%s, %s, %s)", arr, arrLen, val))
+		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_prepend(%s, %s, %s)", rtSuffix, arr, arrLen, val))
 		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) + 1", arrLen)
-		g.valueTypes[inst.ID] = "array<int>"
+		g.valueTypes[inst.ID] = retArrType
 		return true
 	case "std.array.insert":
 		if len(inst.Operands) < 4 {
@@ -7894,18 +7916,18 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 		}
 		idx := g.getOperandValue(inst.Operands[2])
 		val := g.getOperandValue(inst.Operands[3])
-		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_insert(%s, %s, %s, %s)", arr, arrLen, idx, val))
+		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_insert(%s, %s, %s, %s)", rtSuffix, arr, arrLen, idx, val))
 		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) + 1", arrLen)
-		g.valueTypes[inst.ID] = "array<int>"
+		g.valueTypes[inst.ID] = retArrType
 		return true
 	case "std.array.remove":
 		if len(inst.Operands) < 3 {
 			return false
 		}
 		idx := g.getOperandValue(inst.Operands[2])
-		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_remove(%s, %s, %s)", arr, arrLen, idx))
+		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_remove(%s, %s, %s)", rtSuffix, arr, arrLen, idx))
 		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) - 1", arrLen)
-		g.valueTypes[inst.ID] = "array<int>"
+		g.valueTypes[inst.ID] = retArrType
 		return true
 	case "std.array.concat":
 		if len(inst.Operands) < 3 {
@@ -7914,9 +7936,9 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 		bOp := inst.Operands[2]
 		bArr := g.getOperandValue(bOp)
 		bLen := g.getOperandLengthExpr(bOp)
-		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_concat(%s, %s, %s, %s)", arr, arrLen, bArr, bLen))
+		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_concat(%s, %s, %s, %s)", rtSuffix, arr, arrLen, bArr, bLen))
 		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) + (%s)", arrLen, bLen)
-		g.valueTypes[inst.ID] = "array<int>"
+		g.valueTypes[inst.ID] = retArrType
 		return true
 	case "std.array.slice":
 		if len(inst.Operands) < 4 {
@@ -7924,9 +7946,9 @@ func (g *CGenerator) emitStdArrayIntOp(inst *mir.Instruction, funcName string) b
 		}
 		start := g.getOperandValue(inst.Operands[2])
 		end := g.getOperandValue(inst.Operands[3])
-		declOrAssign("int32_t*", fmt.Sprintf("omni_array_int_slice(%s, %s, %s, %s)", arr, arrLen, start, end))
+		declOrAssign(ptrCType, fmt.Sprintf("omni_array_%s_slice(%s, %s, %s, %s)", rtSuffix, arr, arrLen, start, end))
 		g.arrayLengthExprs[inst.ID] = fmt.Sprintf("(%s) - (%s)", end, start)
-		g.valueTypes[inst.ID] = "array<int>"
+		g.valueTypes[inst.ID] = retArrType
 		return true
 	}
 	return false
@@ -7942,7 +7964,8 @@ func isLengthPreservingArrayIntrinsic(name string) bool {
 	case "std.algorithms.bubble_sort",
 		"std.algorithms.selection_sort",
 		"std.algorithms.insertion_sort",
-		"std.algorithms.reverse":
+		"std.algorithms.reverse",
+		"std.algorithms.rotate":
 		return true
 	}
 	return false

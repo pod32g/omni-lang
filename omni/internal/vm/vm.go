@@ -763,6 +763,7 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.algorithms.find_min",
 		"std.algorithms.count_occurrences",
 		"std.algorithms.reverse",
+		"std.algorithms.rotate",
 		"std.algorithms.euclidean_distance",
 		"std.algorithms.manhattan_distance",
 		"std.algorithms.levenshtein_distance",
@@ -2671,11 +2672,22 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	case "std.array.contains":
 		if len(operands) == 2 {
 			arr := operandValue(fr, operands[0])
-			target, _ := toInt(operandValue(fr, operands[1]))
+			target := operandValue(fr, operands[1])
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				if t, ok := target.Value.(string); ok {
+					for _, v := range ss {
+						if v == t {
+							return Result{Type: "bool", Value: true}, true
+						}
+					}
+					return Result{Type: "bool", Value: false}, true
+				}
+			}
 			xs := vmArrayAsInts(arr.Value)
 			if xs != nil {
+				ti, _ := toInt(target)
 				for _, v := range xs {
-					if v == target {
+					if v == ti {
 						return Result{Type: "bool", Value: true}, true
 					}
 				}
@@ -2685,11 +2697,22 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	case "std.array.index_of":
 		if len(operands) == 2 {
 			arr := operandValue(fr, operands[0])
-			target, _ := toInt(operandValue(fr, operands[1]))
+			target := operandValue(fr, operands[1])
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				if t, ok := target.Value.(string); ok {
+					for i, v := range ss {
+						if v == t {
+							return Result{Type: "int", Value: i}, true
+						}
+					}
+					return Result{Type: "int", Value: -1}, true
+				}
+			}
 			xs := vmArrayAsInts(arr.Value)
 			if xs != nil {
+				ti, _ := toInt(target)
 				for i, v := range xs {
-					if v == target {
+					if v == ti {
 						return Result{Type: "int", Value: i}, true
 					}
 				}
@@ -2699,23 +2722,41 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 	case "std.array.append":
 		if len(operands) == 2 {
 			arr := operandValue(fr, operands[0])
-			val, _ := toInt(operandValue(fr, operands[1]))
+			val := operandValue(fr, operands[1])
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				if s, ok := val.Value.(string); ok {
+					out := make([]string, len(ss)+1)
+					copy(out, ss)
+					out[len(ss)] = s
+					return Result{Type: "array<string>", Value: out}, true
+				}
+			}
 			xs := vmArrayAsInts(arr.Value)
 			if xs != nil {
+				vi, _ := toInt(val)
 				out := make([]int, len(xs)+1)
 				copy(out, xs)
-				out[len(xs)] = val
+				out[len(xs)] = vi
 				return Result{Type: "array<int>", Value: out}, true
 			}
 		}
 	case "std.array.prepend":
 		if len(operands) == 2 {
 			arr := operandValue(fr, operands[0])
-			val, _ := toInt(operandValue(fr, operands[1]))
+			val := operandValue(fr, operands[1])
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				if s, ok := val.Value.(string); ok {
+					out := make([]string, len(ss)+1)
+					out[0] = s
+					copy(out[1:], ss)
+					return Result{Type: "array<string>", Value: out}, true
+				}
+			}
 			xs := vmArrayAsInts(arr.Value)
 			if xs != nil {
+				vi, _ := toInt(val)
 				out := make([]int, len(xs)+1)
-				out[0] = val
+				out[0] = vi
 				copy(out[1:], xs)
 				return Result{Type: "array<int>", Value: out}, true
 			}
@@ -2724,9 +2765,25 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 		if len(operands) == 3 {
 			arr := operandValue(fr, operands[0])
 			idx, _ := toInt(operandValue(fr, operands[1]))
-			val, _ := toInt(operandValue(fr, operands[2]))
+			val := operandValue(fr, operands[2])
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				if s, ok := val.Value.(string); ok {
+					if idx < 0 {
+						idx = 0
+					}
+					if idx > len(ss) {
+						idx = len(ss)
+					}
+					out := make([]string, len(ss)+1)
+					copy(out, ss[:idx])
+					out[idx] = s
+					copy(out[idx+1:], ss[idx:])
+					return Result{Type: "array<string>", Value: out}, true
+				}
+			}
 			xs := vmArrayAsInts(arr.Value)
 			if xs != nil {
+				vi, _ := toInt(val)
 				if idx < 0 {
 					idx = 0
 				}
@@ -2735,7 +2792,7 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				}
 				out := make([]int, len(xs)+1)
 				copy(out, xs[:idx])
-				out[idx] = val
+				out[idx] = vi
 				copy(out[idx+1:], xs[idx:])
 				return Result{Type: "array<int>", Value: out}, true
 			}
@@ -2744,6 +2801,17 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 		if len(operands) == 2 {
 			arr := operandValue(fr, operands[0])
 			idx, _ := toInt(operandValue(fr, operands[1]))
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				if idx < 0 || idx >= len(ss) {
+					out := make([]string, len(ss))
+					copy(out, ss)
+					return Result{Type: "array<string>", Value: out}, true
+				}
+				out := make([]string, 0, len(ss)-1)
+				out = append(out, ss[:idx]...)
+				out = append(out, ss[idx+1:]...)
+				return Result{Type: "array<string>", Value: out}, true
+			}
 			xs := vmArrayAsInts(arr.Value)
 			if xs != nil {
 				if idx < 0 || idx >= len(xs) {
@@ -2761,6 +2829,14 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 		if len(operands) == 2 {
 			a := operandValue(fr, operands[0])
 			b := operandValue(fr, operands[1])
+			if as := vmArrayAsStrings(a.Value); as != nil {
+				if bs := vmArrayAsStrings(b.Value); bs != nil {
+					out := make([]string, 0, len(as)+len(bs))
+					out = append(out, as...)
+					out = append(out, bs...)
+					return Result{Type: "array<string>", Value: out}, true
+				}
+			}
 			as := vmArrayAsInts(a.Value)
 			bs := vmArrayAsInts(b.Value)
 			if as != nil && bs != nil {
@@ -2775,6 +2851,20 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			arr := operandValue(fr, operands[0])
 			lo, _ := toInt(operandValue(fr, operands[1]))
 			hi, _ := toInt(operandValue(fr, operands[2]))
+			if ss := vmArrayAsStrings(arr.Value); ss != nil {
+				if lo < 0 {
+					lo = 0
+				}
+				if hi > len(ss) {
+					hi = len(ss)
+				}
+				if hi < lo {
+					hi = lo
+				}
+				out := make([]string, hi-lo)
+				copy(out, ss[lo:hi])
+				return Result{Type: "array<string>", Value: out}, true
+			}
 			xs := vmArrayAsInts(arr.Value)
 			if xs != nil {
 				if lo < 0 {
@@ -2894,6 +2984,28 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				out := make([]int, len(xs))
 				for i, v := range xs {
 					out[len(xs)-1-i] = v
+				}
+				return Result{Type: "array<int>", Value: out}, true
+			}
+		}
+	case "std.algorithms.rotate":
+		if len(operands) == 2 {
+			arr := operandValue(fr, operands[0])
+			k, _ := toInt(operandValue(fr, operands[1]))
+			xs := vmArrayAsInts(arr.Value)
+			if xs != nil {
+				n := len(xs)
+				out := make([]int, n)
+				if n <= 1 {
+					copy(out, xs)
+					return Result{Type: "array<int>", Value: out}, true
+				}
+				shift := k % n
+				if shift < 0 {
+					shift += n
+				}
+				for i, v := range xs {
+					out[(i+shift)%n] = v
 				}
 				return Result{Type: "array<int>", Value: out}, true
 			}
@@ -4005,6 +4117,27 @@ func convertLiteralToDecimal(literal string) string {
 	}
 	// Return as-is for regular decimal literals
 	return literal
+}
+
+// vmArrayAsStrings coerces a VM array carrier into `[]string`. Same
+// shape as vmArrayAsInts: returns nil when the value isn't array-
+// shaped or contains a non-string element.
+func vmArrayAsStrings(v interface{}) []string {
+	switch xs := v.(type) {
+	case []string:
+		return xs
+	case []interface{}:
+		out := make([]string, 0, len(xs))
+		for _, e := range xs {
+			s, ok := e.(string)
+			if !ok {
+				return nil
+			}
+			out = append(out, s)
+		}
+		return out
+	}
+	return nil
 }
 
 // vmArrayAsInts coerces a VM array carrier (Go `[]int` for typed

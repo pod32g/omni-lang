@@ -64,6 +64,7 @@ int32_t omni_string_compare_ignore_case(const char* a, const char* b);
 int32_t omni_count_occurrences(const char* str, const char* substr);
 int32_t omni_count_lines(const char* str);
 int32_t omni_count_words(const char* str);
+int32_t omni_string_is_empty(const char* str);
 
 // Algorithms — distance metrics
 double omni_euclidean_distance(double x1, double y1, double x2, double y2);
@@ -84,6 +85,7 @@ int32_t omni_array_find_max(int32_t* arr, int32_t n);
 int32_t omni_array_find_min(int32_t* arr, int32_t n);
 int32_t omni_array_count_occurrences(int32_t* arr, int32_t n, int32_t value);
 int32_t* omni_array_reverse(int32_t* arr, int32_t n);
+int32_t* omni_array_rotate(int32_t* arr, int32_t n, int32_t k);
 
 // std.array — int32_t-specialized implementations of the generic
 // list operations. The C backend recognizes std.array.<op> on
@@ -97,6 +99,18 @@ int32_t* omni_array_int_insert(int32_t* arr, int32_t n, int32_t index, int32_t v
 int32_t* omni_array_int_remove(int32_t* arr, int32_t n, int32_t index);
 int32_t* omni_array_int_concat(int32_t* a, int32_t alen, int32_t* b, int32_t blen);
 int32_t* omni_array_int_slice(int32_t* arr, int32_t n, int32_t start, int32_t end);
+
+// std.array — string-specialized siblings. Element compares use
+// strcmp; output arrays alias the input strings (no deep copy of the
+// payloads, only of the pointer table).
+int32_t omni_array_str_contains(const char** arr, int32_t n, const char* value);
+int32_t omni_array_str_index_of(const char** arr, int32_t n, const char* value);
+const char** omni_array_str_append(const char** arr, int32_t n, const char* value);
+const char** omni_array_str_prepend(const char** arr, int32_t n, const char* value);
+const char** omni_array_str_insert(const char** arr, int32_t n, int32_t index, const char* value);
+const char** omni_array_str_remove(const char** arr, int32_t n, int32_t index);
+const char** omni_array_str_concat(const char** a, int32_t alen, const char** b, int32_t blen);
+const char** omni_array_str_slice(const char** arr, int32_t n, int32_t start, int32_t end);
 
 // Promise/Async support (simplified synchronous implementation)
 typedef struct {

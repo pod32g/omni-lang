@@ -75,6 +75,7 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `count_occurrences(s, substr)` - Wired to `omni_count_occurrences` (C); OmniLang body for VM
 - [IMPLEMENTED] `count_lines(s)` - Wired to `omni_count_lines` (C); OmniLang body for VM
 - [IMPLEMENTED] `count_words(s)` - Wired to `omni_count_words` (C); OmniLang body for VM
+- [IMPLEMENTED] `is_empty(s)` - Wired to `omni_string_is_empty` (C); OmniLang body delegates to `std.string.length` for VM
 
 ### std.math
 - [IMPLEMENTED] `abs(x)` - Wired to `omni_abs` (also implemented in OmniLang)
@@ -332,7 +333,8 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] (int arrays) `remove(arr, index)` - Wired to `omni_array_int_remove`; output length = input - 1
 - [IMPLEMENTED] (int arrays) `concat(a, b)` - Wired to `omni_array_int_concat`; output length = a + b
 - [IMPLEMENTED] (int arrays) `slice(arr, start, end)` - Wired to `omni_array_int_slice`; output length = end - start
-- [STUB] (non-int arrays) all of the above pass through to the input array unchanged; specialize per element type when needed
+- [IMPLEMENTED] (string arrays) `contains`, `index_of`, `append`, `prepend`, `insert`, `remove`, `concat`, `slice` - Wired to `omni_array_str_*`; same shape as the int variants but element compares use strcmp and the pointer table is freshly allocated (payload strings are aliased)
+- [STUB] (other element types) above ops still pass through to the input array unchanged; specialize per element type when needed
 - [STUB] `fill()`, `copy()` - Not implemented (in-place mutation through parameter; needs a different ABI)
 - [STUB] `reverse()` - Use `std.algorithms.reverse(arr)` instead (same shape, real implementation)
 - [STUB] `length()`, `get()`, `set()` - Use the built-in `len(arr)` / `arr[i]` / `arr[i] = v` instead
@@ -355,7 +357,8 @@ This document tracks which standard library functions are actually implemented v
 - [IMPLEMENTED] `find_max(arr)`, `find_min(arr)` - Wired to `omni_array_find_max` / `_min`
 - [IMPLEMENTED] `count_occurrences(arr, value)` - Wired to `omni_array_count_occurrences`
 - [IMPLEMENTED] `reverse(arr)` - Wired to `omni_array_reverse`; returns a freshly allocated reversed copy
-- [STUB] `rotate(arr, k)`, `shuffle(arr)` - Not implemented (rotate is a small follow-up; shuffle needs a runtime PRNG)
+- [IMPLEMENTED] `rotate(arr, k)` - Wired to `omni_array_rotate`; freshly allocated, normalizes k mod n
+- [STUB] `shuffle(arr)` - Not implemented (needs a runtime PRNG abstraction)
 - [STUB] `unique(arr)` - Not implemented (output length differs from input; needs the variable-length-return story)
 - [STUB] `is_connected()` - Not implemented (needs a graph representation)
 

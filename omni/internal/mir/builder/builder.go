@@ -2357,6 +2357,15 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 				resultType = "bool"
 			case strings.HasSuffix(calleeName, ".compare_ignore_case"):
 				resultType = "int"
+			case strings.HasSuffix(calleeName, ".is_empty"),
+				strings.HasSuffix(calleeName, ".is_blank"),
+				strings.HasSuffix(calleeName, ".is_alpha"),
+				strings.HasSuffix(calleeName, ".is_digit"),
+				strings.HasSuffix(calleeName, ".is_alnum"),
+				strings.HasSuffix(calleeName, ".is_ascii"),
+				strings.HasSuffix(calleeName, ".is_upper"),
+				strings.HasSuffix(calleeName, ".is_lower"):
+				resultType = "bool"
 			case strings.HasSuffix(calleeName, ".count_occurrences"),
 				strings.HasSuffix(calleeName, ".count_lines"),
 				strings.HasSuffix(calleeName, ".count_words"),
@@ -2421,7 +2430,8 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			case strings.HasSuffix(calleeName, ".bubble_sort"),
 				strings.HasSuffix(calleeName, ".selection_sort"),
 				strings.HasSuffix(calleeName, ".insertion_sort"),
-				strings.HasSuffix(calleeName, ".reverse"):
+				strings.HasSuffix(calleeName, ".reverse"),
+				strings.HasSuffix(calleeName, ".rotate"):
 				resultType = "array<int>"
 			default:
 				resultType = "int"

@@ -1,0 +1,18 @@
+// Regression for two small finishers: std.string.is_empty and
+// std.algorithms.rotate. is_empty distinguishes "" from "x"; rotate
+// shifts [1..5] right by 2 to [4, 5, 1, 2, 3], so r2[0] == 4.
+//
+// Sum: 1 (is_empty true) + 1 (!is_empty(x)) + 4 (rotate result) = 6
+import std
+
+func main():int {
+    var score:int = 0
+    if std.string.is_empty("") { score = score + 1 }
+    if !std.string.is_empty("x") { score = score + 1 }
+
+    let arr:array<int> = [1, 2, 3, 4, 5]
+    let rot:array<int> = std.algorithms.rotate(arr, 2)
+    score = score + rot[0]  // = 4
+
+    return score
+}
