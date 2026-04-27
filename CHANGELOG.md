@@ -8,12 +8,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Documented `std.log` structured logging module, including examples and configuration guidance.
-- Added logging quick-start examples and references across the documentation set.
+- **Go-foundations slice complete**: methods on user types, structural
+  interfaces with method dispatch, `defer` statements (including
+  lambda- and interface-typed deferred calls), `append` builtin and
+  `s[lo:hi]` slicing on heap-allocated arrays, `spawn` for goroutines
+  + buffered channels with `select`, multi-return functions, channel
+  ok-form receive (`v, ok := <-ch`), `close(ch)`, and tail-call
+  optimization (self-recursion turns into `goto entry`, cross-function
+  tail calls become `return f(...)` for clang's sibling-call
+  optimization). Both `omnir` (VM) and `omnic` (C backend) are kept in
+  lockstep across all of these.
+- **Char ↔ int interop**: `std.char_code(c) -> int`,
+  `std.char_from_code(i) -> char`, and `std.char_to_string(c) -> string`
+  expose a char's code point. Char now maps to `int32_t` in the C
+  backend (was `omni_struct_t*`), so chars can be compared, arithmetic
+  results survive across function calls, and char literals emit
+  correctly.
+- **Top-level `let` declarations**: module-scope constants
+  (`let LOWER:string = "abc..."`) are visible to every function in
+  the module. Implemented via lazy materialization into each
+  referencing function's entry block — keeps unrelated functions
+  (notably std.* stub bodies) free of unused materialized constants.
+  Top-level `var` is rejected with a clear error (no global storage
+  yet).
+- **Array length through function parameters**: every `array<T>`
+  parameter now gets a synthetic `int32_t __omni_len_<name>`
+  companion at the C ABI level. `len(arr)` works on parameters, sorts
+  and reverses forward the input length onto the result, and
+  std.algorithms / std.array operations can compute over the
+  caller's array directly.
+- **std.string completions**:
+  - `trim_left`, `trim_right`, `trim_all`
+  - `to_title`, `capitalize`, `reverse`
+  - `equals_ignore_case`, `compare_ignore_case`
+  - `count_occurrences`, `count_lines`, `count_words`
+  - `is_empty`
+  - Real implementations for the previously-aspirational `split`,
+    `split_lines`, `split_words`, `join`, `replace` / `replace_all`
+    / `replace_first` / `replace_last`, and `find_all` (the OmniLang
+    bodies referenced `array<T> + []<T>` which the type checker
+    rejects, so they never actually compiled).
+- **std.algorithms completions**:
+  - Distance metrics: `euclidean_distance`, `manhattan_distance`,
+    `levenshtein_distance` (two-row DP, O(min(m,n)) memory)
+  - Sorts: `bubble_sort`, `selection_sort`, `insertion_sort`
+    (return a freshly allocated sorted copy)
+  - Searches: `linear_search`, `binary_search`
+  - Aggregates: `find_max`, `find_min`, `count_occurrences`
+  - Transforms: `reverse`, `rotate(arr, k)`, `shuffle(arr)`,
+    `unique(arr)` (the last via a runtime out-pointer for the
+    runtime-determined result length)
+- **std.array list operations** for `array<int>` and `array<string>`:
+  `contains`, `index_of`, `append`, `prepend`, `insert`, `remove`,
+  `concat`, `slice`. Each returns a freshly allocated array; the
+  C codegen forwards the output length so a downstream `len()` /
+  index keeps working.
+- **std.collections map basics**: `size`, `get`, `set`, `has`,
+  `remove`, `clear` are now real on both backends (previously the
+  C side had no wiring and the VM ran stub bodies that returned
+  defaults). `omni_map_has_string`, `omni_map_remove_string`
+  (bool-returning wrapper around the void delete), and
+  `omni_map_clear` are new runtime helpers.
+- **std.os.* string-returning calls** (`positional_arg`, `getenv`,
+  `read_file`, `getcwd`, ...) now return `string` correctly when
+  bound with `let s:string = ...`. Previously the MIR builder typed
+  the call as `void` and the C backend dropped the return value into
+  a `<unknown>` placeholder.
+- **std.os.positional_arg** respects POSIX `--` end-of-flags and
+  treats `-N` (digit-prefixed) and bare `-` (stdin sentinel) as
+  positional, so `caesar_cipher -3 ...` and similar invocations work.
+- **std.math.random_seed / random_int**: shared xorshift32 PRNG
+  across both backends so the same seed produces the same first
+  output. Used by `std.algorithms.shuffle`.
+- **MIR builder: signature-first call typing**. When `fb.sigs` knows
+  a function's return type the builder prefers it over the
+  name-based heuristic, eliminating an entire class of "stdlib call
+  silently does nothing" bugs.
+- **VM `var`-merge fix**: a `var` reassigned in both arms of an `if`
+  inside a loop now reads the same storage slot across iterations.
+  The MIR builder used to drift `env[var]` to each assign's result
+  id; now it stays pinned to the original SSA slot, which both
+  backends already mutate in place.
+- **VM tail-call detector** skips rebinding into single-const stub
+  bodies and into known intrinsic overrides (`std.algorithms.*`,
+  `std.array.*`, `std.string.split` family, `std.collections.*`).
+  Calls to those go through `execIntrinsic` instead of falling back
+  to the OmniLang stub body.
+- **Bundled examples**: `examples/caesar_cipher.omni` is a worked
+  example covering the new char-int intrinsics, top-level `let`,
+  `std.os.positional_arg`, and `std.io.read_line`.
+
+### Documentation
+- Updated `docs/api/stdlib/string.md` to cover the trim / case / count
+  / split / join / replace / find_all / is_empty additions.
+- Added `docs/api/stdlib/algorithms.md`, `docs/api/stdlib/array.md`,
+  and `docs/api/stdlib/collections.md` covering the newly-real
+  modules.
+- Added a "What's new" section to `docs/spec/language-tour.md`
+  pointing at the recently-landed language features.
+- `omni/std/IMPLEMENTATION_STATUS.md` now matches reality: every
+  function listed as `[IMPLEMENTED]` actually runs end-to-end on
+  both backends and is exercised by an e2e regression.
+- `omni/docs/PENDING.md` continues as the running ledger of
+  filed bugs, known quirks, and out-of-scope phases.
 
 ### Changed
-- Updated top-level and API documentation to reflect `simple-logger` as the default runtime logger.
-- Refreshed examples repository to include logging usage patterns.
+- The C backend's array-with-length call ABI changed: every
+  function whose signature includes one or more `array<T>`
+  parameters now also takes synthetic `int32_t` length companions
+  after each. Recompile dependents — old-ABI calls from older
+  builds will fail to link.
+- The C backend now treats `char` as a primitive (maps to
+  `int32_t`). Any user code that relied on `char` being a struct
+  type will need to update.
+
+### Documented
+- Documented `std.log` structured logging module, including examples and configuration guidance.
+- Added logging quick-start examples and references across the documentation set.
 
 ### Planned
 - Advanced type system with generics and union types

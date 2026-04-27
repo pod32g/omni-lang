@@ -10,8 +10,12 @@ This directory contains comprehensive API documentation for the OmniLang program
 - [Exception Handling](exception-handling.md) - Try-catch-finally exception handling
 - [Standard Library](stdlib/) - Complete standard library documentation
   - [std.io](stdlib/io.md) - Input/output helpers
-  - [std.math](stdlib/math.md) - Numerical utilities
-  - [std.string](stdlib/string.md) - String manipulation
+  - [std.math](stdlib/math.md) - Numerical utilities (incl. xorshift32 PRNG)
+  - [std.string](stdlib/string.md) - String manipulation, splitting, replace, search, casing
+  - [std.array](stdlib/array.md) - List operations on `array<int>` / `array<string>`
+  - [std.algorithms](stdlib/algorithms.md) - Sorts, searches, aggregates, transforms, distance metrics
+  - [std.collections](stdlib/collections.md) - Maps and other compound types
+  - [std.os](stdlib/os.md) - Process arguments, environment, working directory, file I/O
   - [std.log](stdlib/log.md) - Structured logging functions and configuration
 - [Compiler API](compiler-api.md) - Compiler internals and extension points
 - [VM API](vm-api.md) - Virtual Machine internals
@@ -27,7 +31,14 @@ For specific API details, browse the sections above or use the search functional
 
 ## Version Information
 
-This documentation corresponds to OmniLang v0.5.1 (October 2025). Logging coverage reflects the integration of `simple-logger` v0.6.0 as the default runtime logger.
+This documentation corresponds to OmniLang v0.5.2-dev (April 2026).
+The Go-foundations slice (methods, structural interfaces, defer,
+slices, `spawn` / channels / `select`, multi-return, TCO) is
+complete on both backends. The standard library has been overhauled
+to match: every function listed as `[IMPLEMENTED]` in
+`omni/std/IMPLEMENTATION_STATUS.md` actually runs end-to-end with
+e2e regression coverage. See [CHANGELOG.md](../../CHANGELOG.md) for
+the full list.
 
 ## Contributing
 

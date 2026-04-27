@@ -291,6 +291,37 @@ func main():int {
 }
 ```
 
+## Random number generation
+
+A shared xorshift32 PRNG underlies both backends; the same seed
+produces the same first output on `omnir` and `omnic`-compiled
+binaries.
+
+### random_seed(seed: int)
+
+Sets the PRNG state. Useful for reproducible output in tests.
+
+### random_int(bound: int): int
+
+Returns a non-negative `int` strictly less than `bound`. `bound <= 0`
+returns 0.
+
+```omni
+import std
+
+func main(): int {
+    std.math.random_seed(42)
+    let a: int = std.math.random_int(100)  // 32
+    let b: int = std.math.random_int(100)  // 48
+    let c: int = std.math.random_int(100)  // 59
+    return a + b + c                       // 139
+}
+```
+
+`std.algorithms.shuffle` and any user code that wants randomness
+shares this single state. Seed once at the start of `main` if you
+care about reproducibility.
+
 ## Notes
 
 - All integer functions work with `int` type
@@ -298,3 +329,6 @@ func main():int {
 - The `toString` function is essential for converting numbers to strings for output
 - Prime checking is efficient for small to medium numbers
 - Square root returns integer results (truncated)
+- The PRNG is xorshift32 with a single global state shared between
+  the runtime and any algorithm helpers — adequate for tests and
+  toy programs, not cryptographically strong.

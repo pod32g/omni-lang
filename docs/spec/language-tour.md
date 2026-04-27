@@ -2,11 +2,15 @@
 
 This document provides a comprehensive tour of the OmniLang programming language, covering all major features and syntax.
 
-**Version:** v0.5.1 (October 2025)  
-**Status:** Complete standard library with comprehensive testing and advanced type system
+**Version:** v0.5.2-dev (April 2026)
+**Status:** Go-foundations slice complete on both `omnir` (VM) and
+`omnic` (C backend); standard library covers strings, math, I/O, OS,
+file, time, network, web, algorithms, array list ops, and the basic
+collections / sets / queues / stacks.
 
 ## Table of Contents
 
+0. [What's new since v0.5.1](#whats-new-since-v051)
 1. [Getting Started](#getting-started)
 2. [Basic Syntax](#basic-syntax)
 3. [Types](#types)
@@ -18,6 +22,78 @@ This document provides a comprehensive tour of the OmniLang programming language
 9. [Standard Library](#standard-library)
 10. [Advanced Features](#advanced-features)
 11. [Examples](#examples)
+
+## What's new since v0.5.1
+
+If you're returning to OmniLang after v0.5.1 (October 2025), the
+biggest changes are:
+
+### Language
+
+- **Methods on user types**, **structural interfaces** with method
+  dispatch, and **defer statements** (including lambda- and
+  interface-typed deferred calls).
+- **`append` builtin** and **`s[lo:hi]` slicing** on heap-allocated
+  arrays.
+- **Concurrency**: `spawn fn(args)` for goroutines, buffered
+  `chan` channels with `send` / `recv`, **multi-return functions**
+  (`return q, r`), the **ok-form receive** (`v, ok := <-ch`),
+  **`close(ch)`**, and the **`select` statement**.
+- **Tail-call optimization**: self-recursion lowers to
+  `goto entry`; cross-function tail calls become `return f(...)`
+  for clang's sibling-call pass.
+- **Char ↔ int interop**: `std.char_code`, `std.char_from_code`,
+  `std.char_to_string`. `char` now maps to `int32_t` in the C
+  backend so arithmetic results survive across calls.
+- **Top-level `let`**: module-scope constants are visible to every
+  function in the module. Top-level `var` is rejected with a clear
+  error for now (no global storage yet).
+- **Array length flows through function parameters**: `len(arr)`
+  works on a parameter (the C ABI carries an implicit
+  `__omni_len_<name>` companion alongside every `array<T>` param).
+  This is what unlocked the std.algorithms / std.array
+  implementations.
+- **`var` in branches** now works correctly: a `var` reassigned in
+  both arms of an `if` inside a loop reads the same storage slot
+  across iterations on both backends.
+
+### Standard library
+
+- **`std.string`**: trim_left / trim_right / trim_all, to_title,
+  capitalize, reverse, equals_ignore_case, compare_ignore_case,
+  count_occurrences / count_lines / count_words, is_empty, plus
+  real implementations of split / split_lines / split_words / join
+  / replace family / find_all (these were previously stub bodies
+  that didn't actually compile).
+- **`std.algorithms`**: distance metrics (euclidean / manhattan /
+  levenshtein), sorts (bubble / selection / insertion), searches
+  (linear / binary), aggregates (find_max / find_min /
+  count_occurrences), transforms (reverse / rotate / shuffle /
+  unique).
+- **`std.array`**: contains / index_of / append / prepend / insert /
+  remove / concat / slice on `array<int>` and `array<string>`.
+- **`std.collections`**: real wiring for the basic map operations
+  (size / get / set / has / remove / clear).
+- **`std.math`**: random_seed / random_int (xorshift32 PRNG with a
+  single shared state across both backends).
+- **`std.os.*` string-returning calls** (positional_arg, getenv,
+  read_file, getcwd, ...) now produce real strings when bound with
+  `let s:string = ...`.
+
+### Tooling and ergonomics
+
+- The `std.os.positional_arg` parser now accepts `--` (POSIX
+  end-of-flags), bare `-` (stdin sentinel), and `-N` (digit-prefixed
+  values), so `caesar_cipher -3 input.txt` works.
+- A new MIR-builder rule prefers real signatures over the
+  name-based heuristic when typing call results, eliminating an
+  entire class of "stdlib call silently returns void" bugs.
+- The `examples/` directory gained `caesar_cipher.omni` as a
+  worked example covering most of the new language and stdlib
+  features.
+
+For the full list including bug-fix detail, see [CHANGELOG.md](../../CHANGELOG.md).
+
 
 ## Getting Started
 

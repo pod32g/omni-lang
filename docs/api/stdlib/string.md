@@ -384,10 +384,181 @@ func main():int {
 }
 ```
 
+## Trim variants
+
+### trim_left(s: string): string
+
+Returns `s` with leading ASCII whitespace removed (space, tab,
+newline, carriage return, vertical tab, form feed).
+
+### trim_right(s: string): string
+
+Returns `s` with trailing whitespace removed.
+
+### trim_all(s: string): string
+
+Returns `s` with **every** whitespace character removed, including
+internal ones. `"a b c"` becomes `"abc"`.
+
+`trim` (without a suffix) removes leading and trailing whitespace
+only, leaving internal spacing alone.
+
+## Case manipulation
+
+### to_title(s: string): string
+
+Returns `s` with the first letter of each whitespace-separated word
+uppercased and the rest lowercased.
+
+```omni
+std.string.to_title("hello world from omni")
+// "Hello World From Omni"
+```
+
+### capitalize(s: string): string
+
+Uppercases the first character; the rest of the string is left
+untouched. (Compare with `to_title`, which lowercases the tail.)
+
+### reverse(s: string): string
+
+Returns `s` with its characters in reverse order.
+
+## Case-insensitive comparison
+
+### equals_ignore_case(a: string, b: string): bool
+
+Returns `true` if the strings are equal under case-insensitive ASCII
+comparison.
+
+### compare_ignore_case(a: string, b: string): int
+
+Returns -1, 0, or 1 — like `compare`, but case-insensitive.
+
+## Splitting and joining
+
+### split(s: string, delimiter: string): array<string>
+
+Splits `s` on every occurrence of `delimiter`. An empty delimiter
+splits into individual characters.
+
+```omni
+let parts: array<string> = std.string.split("a,b,c,d", ",")
+// ["a", "b", "c", "d"]
+```
+
+### split_lines(s: string): array<string>
+
+Equivalent to `split(s, "\n")`.
+
+### split_words(s: string): array<string>
+
+Splits on runs of whitespace, collapsing consecutive whitespace and
+ignoring leading/trailing whitespace. Different from
+`split(s, " ")`, which would produce empty strings for runs.
+
+```omni
+std.string.split_words("  one   two three ")
+// ["one", "two", "three"]
+```
+
+### join(parts: array<string>, separator: string): string
+
+Concatenates `parts` with `separator` between each element.
+
+```omni
+std.string.join(["x", "y", "z"], "-")
+// "x-y-z"
+```
+
+### join_lines(parts: array<string>): string
+
+Equivalent to `join(parts, "\n")`.
+
+## Replacement
+
+### replace_all(s: string, old: string, new: string): string
+
+Replaces every occurrence of `old` in `s` with `new`. An empty `old`
+returns `s` unchanged.
+
+### replace(s: string, old: string, new: string): string
+
+Alias for `replace_all`.
+
+### replace_first(s: string, old: string, new: string): string
+
+Replaces only the first occurrence.
+
+### replace_last(s: string, old: string, new: string): string
+
+Replaces only the last occurrence.
+
+## Searching
+
+### find_all(s: string, sub: string): array<int>
+
+Returns the byte offset of every non-overlapping occurrence of `sub`
+in `s`. Returns an empty array if `sub` is empty or not found.
+
+```omni
+let offsets: array<int> = std.string.find_all("ababcabcabc", "abc")
+// [2, 5, 8]
+```
+
+## Counting
+
+### is_empty(s: string): bool
+
+Returns `true` if `s` has zero characters.
+
+### count_occurrences(s: string, sub: string): int
+
+Returns the number of non-overlapping occurrences of `sub` in `s`.
+
+### count_lines(s: string): int
+
+Returns the number of lines in `s`. A trailing newline is **not**
+counted as an extra empty line: `"a\nb"` and `"a\nb\n"` both return 2.
+An empty string returns 0.
+
+### count_words(s: string): int
+
+Returns the number of whitespace-separated word runs.
+
+### count_chars(s: string): int
+
+Equivalent to `length(s)`.
+
+## Char ↔ int
+
+These live at the top of `std` (not `std.string`) but are essential
+for any character-level work:
+
+### std.char_code(c: char): int
+
+Returns the Unicode code point of `c`.
+
+### std.char_from_code(code: int): char
+
+Returns the char with the given code point.
+
+### std.char_to_string(c: char): string
+
+Returns a single-character string holding `c`.
+
+```omni
+let c: char = 'A'
+let code: int = std.char_code(c)               // 65
+let next: char = std.char_from_code(code + 1)  // 'B'
+let s: string = std.char_to_string(next)       // "B"
+```
+
 ## Notes
 
 - All string functions work with UTF-8 encoded strings
 - String indices are 0-based
 - The `length` function returns the number of characters, not bytes
-- String comparison is case-sensitive
+- String comparison is case-sensitive (use `equals_ignore_case` /
+  `compare_ignore_case` for the alternative)
 - All functions return new strings rather than modifying the original
