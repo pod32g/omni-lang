@@ -6492,6 +6492,12 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_count_lines"
 	case "std.string.count_words":
 		return "omni_count_words"
+	case "std.algorithms.euclidean_distance":
+		return "omni_euclidean_distance"
+	case "std.algorithms.manhattan_distance":
+		return "omni_manhattan_distance"
+	case "std.algorithms.levenshtein_distance":
+		return "omni_levenshtein_distance"
 
 	// OS functions
 	case "std.os.exit":
@@ -6795,6 +6801,9 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.string.count_occurrences":   "omni_count_occurrences",
 		"std.string.count_lines":         "omni_count_lines",
 		"std.string.count_words":         "omni_count_words",
+		"std.algorithms.euclidean_distance":   "omni_euclidean_distance",
+		"std.algorithms.manhattan_distance":   "omni_manhattan_distance",
+		"std.algorithms.levenshtein_distance": "omni_levenshtein_distance",
 		"string.length":            "omni_strlen",
 		"string.concat":            "omni_strcat",
 		"string.substring":         "omni_substring",
@@ -7281,6 +7290,9 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.string.count_occurrences":   true,
 		"std.string.count_lines":         true,
 		"std.string.count_words":         true,
+		"std.algorithms.euclidean_distance":   true,
+		"std.algorithms.manhattan_distance":   true,
+		"std.algorithms.levenshtein_distance": true,
 		"string.length":            true,
 		"string.concat":            true,
 		"string.substring":         true,

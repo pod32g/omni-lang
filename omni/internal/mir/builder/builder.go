@@ -2406,6 +2406,18 @@ func (fb *functionBuilder) emitCall(expr *ast.CallExpr) (mirValue, error) {
 			resultType = "char"
 		} else if strings.HasSuffix(calleeName, ".char_to_string") {
 			resultType = "string"
+		} else if strings.Contains(calleeName, "algorithms.") {
+			switch {
+			case strings.HasSuffix(calleeName, ".euclidean_distance"),
+				strings.HasSuffix(calleeName, ".manhattan_distance"):
+				resultType = "float"
+			case strings.HasSuffix(calleeName, ".levenshtein_distance"):
+				resultType = "int"
+			default:
+				// Sorts/searches/etc. still ride the heuristic-fallback
+				// since they're not yet runtime-implemented.
+				resultType = "int"
+			}
 		} else if strings.Contains(calleeName, "array.") {
 			// Array operations
 			switch {

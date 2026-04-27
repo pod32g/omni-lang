@@ -65,6 +65,11 @@ int32_t omni_count_occurrences(const char* str, const char* substr);
 int32_t omni_count_lines(const char* str);
 int32_t omni_count_words(const char* str);
 
+// Algorithms
+double omni_euclidean_distance(double x1, double y1, double x2, double y2);
+double omni_manhattan_distance(double x1, double y1, double x2, double y2);
+int32_t omni_levenshtein_distance(const char* s1, const char* s2);
+
 // Promise/Async support (simplified synchronous implementation)
 typedef struct {
     void* value;

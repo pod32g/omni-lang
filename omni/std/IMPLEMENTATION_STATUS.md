@@ -338,13 +338,14 @@ This document tracks which standard library functions are actually implemented v
 - [STUB] `snapshot()`, `wait_for_change()`, `changed()`, `watch_loop()` - Not implemented
 
 ### std.algorithms
-- [STUB] All algorithm functions - Not implemented
-- [STUB] `bubble_sort()`, `selection_sort()`, `insertion_sort()` - Not implemented
-- [STUB] `linear_search()`, `binary_search()` - Not implemented
-- [STUB] `reverse()`, `rotate()`, `shuffle()` - Not implemented
-- [STUB] `euclidean_distance()`, `manhattan_distance()`, `levenshtein_distance()` - Not implemented
-- [STUB] `find_max()`, `find_min()`, `count_occurrences()`, `unique()` - Not implemented
-- [STUB] `is_connected()` - Not implemented
+- [IMPLEMENTED] `euclidean_distance(x1, y1, x2, y2)` - Wired to `omni_euclidean_distance`
+- [IMPLEMENTED] `manhattan_distance(x1, y1, x2, y2)` - Wired to `omni_manhattan_distance`
+- [IMPLEMENTED] `levenshtein_distance(s1, s2)` - Wired to `omni_levenshtein_distance` (two-row DP, O(n) memory)
+- [STUB] `bubble_sort()`, `selection_sort()`, `insertion_sort()` - blocked on array-length tracking through function params
+- [STUB] `linear_search()`, `binary_search()` - blocked on array-length tracking through function params
+- [STUB] `reverse()`, `rotate()`, `shuffle()` - blocked on array mutation through function params
+- [STUB] `find_max()`, `find_min()`, `count_occurrences()`, `unique()` - blocked on array-length tracking
+- [STUB] `is_connected()` - blocked on graph representation
 
 ## Warnings
 

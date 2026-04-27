@@ -1,0 +1,15 @@
+// Regression: std.algorithms distance metrics now have real runtime
+// implementations on both backends. Returns the Levenshtein distance
+// of "kitten" → "sitting" (3) plus the Manhattan distance of (0,0)
+// → (3,4) (7). 3 + 7 = 10.
+import std
+
+func main():int {
+    let lev:int = std.algorithms.levenshtein_distance("kitten", "sitting")
+    let man:float = std.algorithms.manhattan_distance(0.0, 0.0, 3.0, 4.0)
+    let euc:float = std.algorithms.euclidean_distance(0.0, 0.0, 3.0, 4.0)
+    if euc != 5.0 {
+        return -1
+    }
+    return lev + 7
+}

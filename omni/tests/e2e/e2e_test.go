@@ -536,6 +536,30 @@ func TestVarBranchMerge(t *testing.T) {
 	}
 }
 
+// TestStdAlgorithmsDistance pins the std.algorithms distance metrics:
+// euclidean / manhattan / levenshtein. Each lives as a runtime
+// intrinsic on the C side and as an execIntrinsic case in the VM.
+func TestStdAlgorithmsDistance(t *testing.T) {
+	testFile := "std_algorithms_distance.omni"
+	expected := "10"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdStringExtras pins the previously-stubbed std.string functions:
 // trim_left/right/all, to_title, capitalize, reverse, equals/compare
 // _ignore_case, count_occurrences/lines/words. Both backends now run

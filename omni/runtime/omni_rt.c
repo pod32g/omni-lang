@@ -639,6 +639,62 @@ int32_t omni_count_words(const char* str) {
     return count;
 }
 
+// std.algorithms — distance metrics. The integer / array-mutating
+// algorithms (sorts, searches, reverse) still live as OmniLang stubs
+// because they need real array-with-length passing, which isn't wired
+// through the C backend yet.
+double omni_euclidean_distance(double x1, double y1, double x2, double y2) {
+    double dx = x2 - x1;
+    double dy = y2 - y1;
+    return sqrt(dx * dx + dy * dy);
+}
+
+double omni_manhattan_distance(double x1, double y1, double x2, double y2) {
+    double dx = x2 - x1;
+    double dy = y2 - y1;
+    if (dx < 0) dx = -dx;
+    if (dy < 0) dy = -dy;
+    return dx + dy;
+}
+
+int32_t omni_levenshtein_distance(const char* s1, const char* s2) {
+    if (!s1) s1 = "";
+    if (!s2) s2 = "";
+    size_t m = strlen(s1);
+    size_t n = strlen(s2);
+    if (m == 0) return (int32_t)n;
+    if (n == 0) return (int32_t)m;
+    // Two-row dynamic programming table to keep memory at O(n).
+    int32_t* prev = (int32_t*)malloc((n + 1) * sizeof(int32_t));
+    int32_t* curr = (int32_t*)malloc((n + 1) * sizeof(int32_t));
+    if (!prev || !curr) {
+        free(prev);
+        free(curr);
+        return -1;
+    }
+    for (size_t j = 0; j <= n; j++) {
+        prev[j] = (int32_t)j;
+    }
+    for (size_t i = 1; i <= m; i++) {
+        curr[0] = (int32_t)i;
+        for (size_t j = 1; j <= n; j++) {
+            int32_t cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+            int32_t del = prev[j] + 1;
+            int32_t ins = curr[j - 1] + 1;
+            int32_t sub = prev[j - 1] + cost;
+            int32_t m1 = del < ins ? del : ins;
+            curr[j] = m1 < sub ? m1 : sub;
+        }
+        int32_t* tmp = prev;
+        prev = curr;
+        curr = tmp;
+    }
+    int32_t result = prev[n];
+    free(prev);
+    free(curr);
+    return result;
+}
+
 int32_t omni_string_equals(const char* a, const char* b) {
     if (!a || !b) {
         return (a == b) ? 1 : 0;

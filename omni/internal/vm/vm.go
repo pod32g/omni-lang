@@ -2618,6 +2618,66 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				return Result{Type: "string", Value: string(rune(v))}, true
 			}
 		}
+	case "std.algorithms.euclidean_distance":
+		if len(operands) == 4 {
+			x1, _ := toFloat(operandValue(fr, operands[0]))
+			y1, _ := toFloat(operandValue(fr, operands[1]))
+			x2, _ := toFloat(operandValue(fr, operands[2]))
+			y2, _ := toFloat(operandValue(fr, operands[3]))
+			dx := x2 - x1
+			dy := y2 - y1
+			return Result{Type: "float", Value: math.Sqrt(dx*dx + dy*dy)}, true
+		}
+	case "std.algorithms.manhattan_distance":
+		if len(operands) == 4 {
+			x1, _ := toFloat(operandValue(fr, operands[0]))
+			y1, _ := toFloat(operandValue(fr, operands[1]))
+			x2, _ := toFloat(operandValue(fr, operands[2]))
+			y2, _ := toFloat(operandValue(fr, operands[3]))
+			return Result{Type: "float", Value: math.Abs(x2-x1) + math.Abs(y2-y1)}, true
+		}
+	case "std.algorithms.levenshtein_distance":
+		if len(operands) == 2 {
+			a, _ := toString(operandValue(fr, operands[0]))
+			b, _ := toString(operandValue(fr, operands[1]))
+			ar := []rune(a)
+			br := []rune(b)
+			m := len(ar)
+			n := len(br)
+			if m == 0 {
+				return Result{Type: "int", Value: n}, true
+			}
+			if n == 0 {
+				return Result{Type: "int", Value: m}, true
+			}
+			prev := make([]int, n+1)
+			curr := make([]int, n+1)
+			for j := 0; j <= n; j++ {
+				prev[j] = j
+			}
+			for i := 1; i <= m; i++ {
+				curr[0] = i
+				for j := 1; j <= n; j++ {
+					cost := 0
+					if ar[i-1] != br[j-1] {
+						cost = 1
+					}
+					del := prev[j] + 1
+					ins := curr[j-1] + 1
+					sub := prev[j-1] + cost
+					min1 := del
+					if ins < min1 {
+						min1 = ins
+					}
+					if sub < min1 {
+						min1 = sub
+					}
+					curr[j] = min1
+				}
+				prev, curr = curr, prev
+			}
+			return Result{Type: "int", Value: prev[n]}, true
+		}
 	// File operations
 	case "std.file.exists":
 		if len(operands) == 1 {
