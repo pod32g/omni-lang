@@ -239,11 +239,26 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 				// std submodules whose bodies (not just intrinsic signatures) need
 				// to be compiled into the output. Pure-intrinsic modules like
 				// std.math or std.io can stay on the "handled as intrinsic" path.
+				// std submodules whose body-or-signature needs to be cloned
+				// into the user module so the type checker can resolve
+				// member access on the return values. For runtime-provided
+				// functions (e.g. http_response_create) the C backend's
+				// generateFunction skips emitting the body — only the
+				// signature drives type info — but the cloning has to
+				// happen first or member access falls back to void.
+				//
+				// std.network is included so the type checker sees
+				// HTTPResponse / HTTPRequest return types on the
+				// runtime-wired helpers (create/is_success/etc.).
+				// The function bodies that *do* get cloned have to be
+				// either pure-OmniLang (e.g. url_to_string) or marked
+				// runtime-provided so the C backend skips their body.
 				needsBodyLoad := qualified == "std.web" ||
 					qualified == "std" ||
 					qualified == "std.testing" ||
 					qualified == "std.math" ||
-					qualified == "std.collections"
+					qualified == "std.collections" ||
+					qualified == "std.network"
 				if needsBodyLoad {
 					// Load std or std.web module to include its functions (many are not intrinsics)
 					if debugModules {
@@ -267,7 +282,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 						if err != nil {
 							webImported = nil
 						}
-						for _, name := range []string{"testing", "math", "collections"} {
+						for _, name := range []string{"testing", "math", "collections", "network"} {
 							sub, err := loader.LoadModule([]string{"std", name})
 							if err == nil && sub != nil {
 								extraSubmodules = append(extraSubmodules, struct {

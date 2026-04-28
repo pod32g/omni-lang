@@ -1742,3 +1742,54 @@ func TestStdNetworkSocketSmoke(t *testing.T) {
 		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
 	}
 }
+
+// TestStdNetworkHttpResponse pins the offline HTTPResponse surface on
+// both backends: http_response_create (the new constructor that lets
+// programs build a response without a real HTTP request), the three
+// status-class helpers, and get/set_header round-trips.
+func TestStdNetworkHttpResponse(t *testing.T) {
+	testFile := "std_network_http_response.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
+// TestStdNetworkHttpRequest pins the offline HTTPRequest surface on
+// both backends: http_request_create, set_header, set_body, get_header.
+// The chained-builder shape (`req = set_header(req, k, v)`) is the
+// stress point — it requires the runtime helpers to return the request
+// pointer rather than void so std.network's chained API lowers cleanly.
+func TestStdNetworkHttpRequest(t *testing.T) {
+	testFile := "std_network_http_request.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}

@@ -1,0 +1,39 @@
+// std.network: HTTPRequest pure-data surface — create, set/get headers,
+// set body. No real network involved; pinning these on the C backend
+// means user code can build a request and inspect it in CI.
+import std
+
+func main():int {
+    let req:std.network.HTTPRequest =
+        std.network.http_request_create("POST", "http://example.com/api")
+
+    // Initial fields. Method/url come from runtime char-array slots,
+    // body starts as NULL inside omni_http_request_t and we lower it
+    // to "" at the field-access site.
+    if !std.string.equals(req.method, "POST") { return 1 }
+    if !std.string.equals(req.url, "http://example.com/api") { return 2 }
+    if !std.string.equals(req.body, "") { return 3 }
+
+    // Set + get a header. Setters return the same pointer so the
+    // chained-builder shape lowers without copying.
+    let req2:std.network.HTTPRequest =
+        std.network.http_request_set_header(req, "Content-Type", "application/json")
+    let ct:string = std.network.http_request_get_header(req2, "Content-Type")
+    if !std.string.equals(ct, "application/json") { return 4 }
+
+    // Set + get a second header (round-trips through the same map).
+    let req3:std.network.HTTPRequest =
+        std.network.http_request_set_header(req2, "X-Trace-Id", "abc123")
+    let trace:string = std.network.http_request_get_header(req3, "X-Trace-Id")
+    if !std.string.equals(trace, "abc123") { return 5 }
+    // Original header still present after a second set.
+    let ct2:string = std.network.http_request_get_header(req3, "Content-Type")
+    if !std.string.equals(ct2, "application/json") { return 6 }
+
+    // Set body.
+    let req4:std.network.HTTPRequest =
+        std.network.http_request_set_body(req3, "{\"x\":1}")
+    if !std.string.equals(req4.body, "{\"x\":1}") { return 7 }
+
+    return 0
+}

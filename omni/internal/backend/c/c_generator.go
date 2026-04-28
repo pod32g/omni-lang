@@ -2096,9 +2096,17 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 							varType = "omni_ip_address_t*"
 						}
 					case "omni_http_get", "omni_http_post", "omni_http_put",
-						"omni_http_delete", "omni_http_request":
+						"omni_http_delete", "omni_http_request",
+						"omni_http_response_create",
+						"omni_http_response_set_header":
 						if inst.Type == "HTTPResponse" || strings.HasSuffix(inst.Type, ".HTTPResponse") {
 							varType = "omni_http_response_t*"
+						}
+					case "omni_http_request_create",
+						"omni_http_request_set_header",
+						"omni_http_request_set_body":
+						if inst.Type == "HTTPRequest" || strings.HasSuffix(inst.Type, ".HTTPRequest") {
+							varType = "omni_http_request_t*"
 						}
 					}
 				}
@@ -2144,11 +2152,16 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				// Special case for member access - infer type from field name for known structs
 				if inst.Op == "member" && len(inst.Operands) >= 2 {
 					fieldName := inst.Operands[1].Literal
-					// Special handling for known HTTPResponse fields
+					// Special handling for known HTTPResponse / HTTPRequest fields
 					if fieldName == "body" || fieldName == "status_text" {
 						varType = "const char*"
 					} else if fieldName == "status_code" {
 						varType = "int32_t"
+					} else if fieldName == "method" || fieldName == "url" {
+						// HTTPRequest fields. Both surface as const char* —
+						// method/url are inline char arrays in
+						// omni_http_request_t that decay to const char*.
+						varType = "const char*"
 					} else if inst.Type != "" && inst.Type != inferTypePlaceholder {
 						// Use inst.Type if available
 						varType = g.mapType(inst.Type)
@@ -4049,6 +4062,120 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_request(%s);\n", varName, req))
 							g.valueTypes[inst.ID] = inst.Type
 						}
+					} else if funcName == "std.network.http_response_is_success" || cFuncName == "omni_http_response_is_success" ||
+						funcName == "std.network.http_response_is_client_error" || cFuncName == "omni_http_response_is_client_error" ||
+						funcName == "std.network.http_response_is_server_error" || cFuncName == "omni_http_response_is_server_error" {
+						// Status-class helpers: single omni_http_response_t* arg, returns int32_t (bool).
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 2 {
+							resp := g.getOperandValue(inst.Operands[1])
+							if g.declaredVariables[inst.ID] {
+								g.output.WriteString(fmt.Sprintf("  %s = %s(%s);\n", varName, cFuncName, resp))
+							} else {
+								g.output.WriteString(fmt.Sprintf("  int32_t %s = %s(%s);\n", varName, cFuncName, resp))
+								g.declaredVariables[inst.ID] = true
+							}
+							g.valueTypes[inst.ID] = "bool"
+						}
+					} else if funcName == "std.network.http_response_get_header" || cFuncName == "omni_http_response_get_header" {
+						// Returns a heap-allocated string (strdup'd from the headers map).
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							resp := g.getOperandValue(inst.Operands[1])
+							name := g.getOperandValue(inst.Operands[2])
+							if g.declaredVariables[inst.ID] {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_http_response_get_header(%s, %s);\n", varName, resp, name))
+							} else {
+								g.output.WriteString(fmt.Sprintf("  const char* %s = omni_http_response_get_header(%s, %s);\n", varName, resp, name))
+								g.declaredVariables[inst.ID] = true
+							}
+							g.stringsToFree[inst.ID] = true
+						}
+					} else if funcName == "std.network.http_response_set_header" || cFuncName == "omni_http_response_set_header" {
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 4 {
+							resp := g.getOperandValue(inst.Operands[1])
+							name := g.getOperandValue(inst.Operands[2])
+							value := g.getOperandValue(inst.Operands[3])
+							if g.declaredVariables[inst.ID] {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_http_response_set_header(%s, %s, %s);\n", varName, resp, name, value))
+							} else {
+								g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_response_set_header(%s, %s, %s);\n", varName, resp, name, value))
+								g.declaredVariables[inst.ID] = true
+							}
+							g.valueTypes[inst.ID] = "std.network.HTTPResponse"
+						}
+					} else if funcName == "std.network.http_request_create" || cFuncName == "omni_http_request_create" {
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							method := g.getOperandValue(inst.Operands[1])
+							url := g.getOperandValue(inst.Operands[2])
+							if g.declaredVariables[inst.ID] {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_http_request_create(%s, %s);\n", varName, method, url))
+							} else {
+								g.output.WriteString(fmt.Sprintf("  omni_http_request_t* %s = omni_http_request_create(%s, %s);\n", varName, method, url))
+								g.declaredVariables[inst.ID] = true
+							}
+							g.valueTypes[inst.ID] = "std.network.HTTPRequest"
+						}
+					} else if funcName == "std.network.http_request_set_header" || cFuncName == "omni_http_request_set_header" {
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 4 {
+							req := g.getOperandValue(inst.Operands[1])
+							name := g.getOperandValue(inst.Operands[2])
+							value := g.getOperandValue(inst.Operands[3])
+							if g.declaredVariables[inst.ID] {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_http_request_set_header(%s, %s, %s);\n", varName, req, name, value))
+							} else {
+								g.output.WriteString(fmt.Sprintf("  omni_http_request_t* %s = omni_http_request_set_header(%s, %s, %s);\n", varName, req, name, value))
+								g.declaredVariables[inst.ID] = true
+							}
+							g.valueTypes[inst.ID] = "std.network.HTTPRequest"
+						}
+					} else if funcName == "std.network.http_request_set_body" || cFuncName == "omni_http_request_set_body" {
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							req := g.getOperandValue(inst.Operands[1])
+							body := g.getOperandValue(inst.Operands[2])
+							if g.declaredVariables[inst.ID] {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_http_request_set_body(%s, %s);\n", varName, req, body))
+							} else {
+								g.output.WriteString(fmt.Sprintf("  omni_http_request_t* %s = omni_http_request_set_body(%s, %s);\n", varName, req, body))
+								g.declaredVariables[inst.ID] = true
+							}
+							g.valueTypes[inst.ID] = "std.network.HTTPRequest"
+						}
+					} else if funcName == "std.network.http_request_get_header" || cFuncName == "omni_http_request_get_header" {
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 3 {
+							req := g.getOperandValue(inst.Operands[1])
+							name := g.getOperandValue(inst.Operands[2])
+							if g.declaredVariables[inst.ID] {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_http_request_get_header(%s, %s);\n", varName, req, name))
+							} else {
+								g.output.WriteString(fmt.Sprintf("  const char* %s = omni_http_request_get_header(%s, %s);\n", varName, req, name))
+								g.declaredVariables[inst.ID] = true
+							}
+							g.stringsToFree[inst.ID] = true
+						}
+					} else if funcName == "std.network.http_response_create" || cFuncName == "omni_http_response_create" {
+						// Offline HTTPResponse constructor — produces a real
+						// omni_http_response_t* the rest of the std.network
+						// surface (status-class helpers, get_header, body
+						// access) can read directly.
+						varName := g.getVariableName(inst.ID)
+						if len(inst.Operands) >= 4 {
+							code := g.getOperandValue(inst.Operands[1])
+							statusText := g.getOperandValue(inst.Operands[2])
+							body := g.getOperandValue(inst.Operands[3])
+							if g.declaredVariables[inst.ID] {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_http_response_create(%s, %s, %s);\n", varName, code, statusText, body))
+							} else {
+								g.output.WriteString(fmt.Sprintf("  omni_http_response_t* %s = omni_http_response_create(%s, %s, %s);\n", varName, code, statusText, body))
+								g.declaredVariables[inst.ID] = true
+							}
+							g.valueTypes[inst.ID] = "std.network.HTTPResponse"
+						}
 					} else if funcName == "omni_ip_to_string" && inst.Type == "string" {
 						// IP to string conversion
 						varName := g.getVariableName(inst.ID)
@@ -5512,6 +5639,44 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				}
 			}
 
+			// HTTPRequest is a concrete struct (omni_http_request_t)
+			// returned by http_request_create / set_header / set_body —
+			// use direct field access. Method/url are inline char arrays
+			// so they decay to const char*; body is char* and may be NULL
+			// before set_body so we lower it to "" defensively.
+			isHTTPRequest := strings.Contains(structType, "HTTPRequest")
+			if !isHTTPRequest && inst.Operands[0].Type != "" && strings.Contains(inst.Operands[0].Type, "HTTPRequest") {
+				isHTTPRequest = true
+			}
+			if isHTTPRequest {
+				switch fieldName {
+				case "method", "url":
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->%s;\n", varName, structVar, fieldName))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  const char* %s = %s->%s;\n", varName, structVar, fieldName))
+					}
+					g.valueTypes[inst.ID] = "string"
+					return nil
+				case "body":
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = (%s->body != NULL) ? %s->body : \"\";\n", varName, structVar, structVar))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  const char* %s = (%s->body != NULL) ? %s->body : \"\";\n", varName, structVar, structVar))
+					}
+					g.valueTypes[inst.ID] = "string"
+					return nil
+				case "headers":
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->headers;\n", varName, structVar))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  omni_map_t* %s = %s->headers;\n", varName, structVar))
+					}
+					g.valueTypes[inst.ID] = "map<string,string>"
+					return nil
+				}
+			}
+
 			if isHTTPResponse {
 				// HTTPResponse is a concrete struct - use direct field access
 				if fieldName == "status_code" {
@@ -5523,9 +5688,9 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.valueTypes[inst.ID] = "int"
 				} else if fieldName == "body" {
 					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
-						g.output.WriteString(fmt.Sprintf("  %s = %s->body;\n", varName, structVar))
+						g.output.WriteString(fmt.Sprintf("  %s = (%s->body != NULL) ? %s->body : \"\";\n", varName, structVar, structVar))
 					} else {
-						g.output.WriteString(fmt.Sprintf("  const char* %s = %s->body;\n", varName, structVar))
+						g.output.WriteString(fmt.Sprintf("  const char* %s = (%s->body != NULL) ? %s->body : \"\";\n", varName, structVar, structVar))
 					}
 					g.valueTypes[inst.ID] = "string"
 				} else if fieldName == "status_text" {
@@ -5535,6 +5700,17 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 						g.output.WriteString(fmt.Sprintf("  const char* %s = %s->status_text;\n", varName, structVar))
 					}
 					g.valueTypes[inst.ID] = "string"
+				} else if fieldName == "headers" {
+					// Direct access to the headers map. Used by
+					// std.network.http_response_get_header /
+					// http_response_set_header to plumb resp->headers
+					// into the std.collections map helpers.
+					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
+						g.output.WriteString(fmt.Sprintf("  %s = %s->headers;\n", varName, structVar))
+					} else {
+						g.output.WriteString(fmt.Sprintf("  omni_map_t* %s = %s->headers;\n", varName, structVar))
+					}
+					g.valueTypes[inst.ID] = "map<string,string>"
 				} else {
 					// Unknown field - fall back to generic accessor (shouldn't happen)
 					if _, alreadyDeclared := g.declaredVariables[inst.ID]; alreadyDeclared {
@@ -6644,6 +6820,21 @@ func (g *CGenerator) mapType(omniType string) string {
 		return "void*"
 	}
 
+	// std.network struct types map to their concrete runtime structs so
+	// member access can use direct field reads (resp->status_code etc.)
+	// instead of the omni_struct_get_*_field reflection helpers, which
+	// don't know the layout of omni_http_response_t.
+	switch omniType {
+	case "HTTPResponse", "std.network.HTTPResponse":
+		return "omni_http_response_t*"
+	case "HTTPRequest", "std.network.HTTPRequest":
+		return "omni_http_request_t*"
+	case "URL", "std.network.URL":
+		return "omni_url_t*"
+	case "IPAddress", "std.network.IPAddress":
+		return "omni_ip_address_t*"
+	}
+
 	// Handle named struct types (like Point, User, etc.)
 	// For now, assume any unknown type that's not a primitive is a struct
 	if !g.isPrimitiveType(omniType) && !strings.Contains(omniType, "(") && !strings.Contains(omniType, "<") {
@@ -7111,6 +7302,26 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_http_delete"
 	case "std.network.http_request":
 		return "omni_http_request"
+	case "std.network.http_response_create":
+		return "omni_http_response_create"
+	case "std.network.http_response_is_success":
+		return "omni_http_response_is_success"
+	case "std.network.http_response_is_client_error":
+		return "omni_http_response_is_client_error"
+	case "std.network.http_response_is_server_error":
+		return "omni_http_response_is_server_error"
+	case "std.network.http_response_get_header":
+		return "omni_http_response_get_header"
+	case "std.network.http_response_set_header":
+		return "omni_http_response_set_header"
+	case "std.network.http_request_create":
+		return "omni_http_request_create"
+	case "std.network.http_request_set_header":
+		return "omni_http_request_set_header"
+	case "std.network.http_request_set_body":
+		return "omni_http_request_set_body"
+	case "std.network.http_request_get_header":
+		return "omni_http_request_get_header"
 	case "std.network.socket_create":
 		return "omni_socket_create"
 	case "std.network.socket_connect":
@@ -8259,6 +8470,16 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.network.http_put":             "omni_http_put",
 		"std.network.http_delete":          "omni_http_delete",
 		"std.network.http_request":         "omni_http_request",
+		"std.network.http_response_create":       "omni_http_response_create",
+		"std.network.http_response_is_success":   "omni_http_response_is_success",
+		"std.network.http_response_is_client_error": "omni_http_response_is_client_error",
+		"std.network.http_response_is_server_error": "omni_http_response_is_server_error",
+		"std.network.http_response_get_header":      "omni_http_response_get_header",
+		"std.network.http_response_set_header":      "omni_http_response_set_header",
+		"std.network.http_request_create":           "omni_http_request_create",
+		"std.network.http_request_set_header":       "omni_http_request_set_header",
+		"std.network.http_request_set_body":         "omni_http_request_set_body",
+		"std.network.http_request_get_header":       "omni_http_request_get_header",
 		"std.network.socket_create":        "omni_socket_create",
 		"std.network.socket_connect":       "omni_socket_connect",
 		"std.network.socket_bind":          "omni_socket_bind",
@@ -8633,6 +8854,16 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.network.http_put":             true,
 		"std.network.http_delete":          true,
 		"std.network.http_request":         true,
+		"std.network.http_response_create":          true,
+		"std.network.http_response_is_success":      true,
+		"std.network.http_response_is_client_error": true,
+		"std.network.http_response_is_server_error": true,
+		"std.network.http_response_get_header":      true,
+		"std.network.http_response_set_header":      true,
+		"std.network.http_request_create":           true,
+		"std.network.http_request_set_header":       true,
+		"std.network.http_request_set_body":         true,
+		"std.network.http_request_get_header":       true,
 		"std.network.socket_create":        true,
 		"std.network.socket_connect":       true,
 		"std.network.socket_bind":          true,

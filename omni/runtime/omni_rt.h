@@ -462,6 +462,12 @@ int32_t omni_url_is_valid(const char* url_str);
 omni_ip_address_t** omni_dns_lookup(const char* hostname, int32_t* count);
 char* omni_dns_reverse_lookup(omni_ip_address_t* ip);
 
+// HTTP response constructor — lets OmniLang programs build a response
+// offline (for tests, mock servers, etc.) without going through a real
+// HTTP request. Pairs with the runtime field accessors used by
+// http_response_is_success / get_header etc.
+omni_http_response_t* omni_http_response_create(int32_t status_code, const char* status_text, const char* body);
+
 // HTTP client functions
 omni_http_response_t* omni_http_get(const char* url);
 omni_http_response_t* omni_http_post(const char* url, const char* body);
@@ -473,9 +479,13 @@ int32_t omni_http_response_is_success(omni_http_response_t* resp);
 int32_t omni_http_response_is_client_error(omni_http_response_t* resp);
 int32_t omni_http_response_is_server_error(omni_http_response_t* resp);
 char* omni_http_response_get_header(omni_http_response_t* resp, const char* name);
+// Returns resp so it can be chained from std.network.http_response_set_header.
+omni_http_response_t* omni_http_response_set_header(omni_http_response_t* resp, const char* name, const char* value);
 omni_http_request_t* omni_http_request_create(const char* method, const char* url);
-void omni_http_request_set_header(omni_http_request_t* req, const char* name, const char* value);
-void omni_http_request_set_body(omni_http_request_t* req, const char* body);
+// Both setters return req unchanged so callers can chain in std.network's
+// `req = http_request_set_header(req, k, v)` shape.
+omni_http_request_t* omni_http_request_set_header(omni_http_request_t* req, const char* name, const char* value);
+omni_http_request_t* omni_http_request_set_body(omni_http_request_t* req, const char* body);
 char* omni_http_request_get_header(omni_http_request_t* req, const char* name);
 void omni_http_request_destroy(omni_http_request_t* req);
 

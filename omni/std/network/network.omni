@@ -228,6 +228,24 @@ func http_request(req:HTTPRequest):HTTPResponse {
 // HTTP Response Functions
 // ============================================================================
 
+// http_response_create constructs an HTTPResponse with the given status,
+// status text, and body. Use it to build a response offline (tests,
+// mocks, fixtures) without going through http_get/post/etc. The headers
+// map starts empty; populate it via http_response_set_header.
+//
+// [IMPLEMENTED] Wired to omni_http_response_create runtime function.
+func http_response_create(status_code:int, status_text:string, body:string):HTTPResponse {
+    // INTRINSIC. The body below is unused; the C backend rewrites the
+    // call into omni_http_response_create. The placeholder return only
+    // exists so the type checker has a HTTPResponse value to bind.
+    return HTTPResponse{
+        status_code: status_code,
+        status_text: status_text,
+        headers: {},
+        body: body
+    }
+}
+
 // http_response_is_success checks if an HTTP response indicates success
 func http_response_is_success(resp:HTTPResponse):bool {
     return resp.status_code >= 200 && resp.status_code < 300

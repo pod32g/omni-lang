@@ -6543,6 +6543,25 @@ static omni_http_response_t* omni_http_via_socket(const char* method, const char
     return resp;
 }
 
+// Build an omni_http_response_t* from raw fields. Caller-owned (the
+// existing HTTP path also returns caller-owned responses); the headers
+// map is created empty and can be populated via the existing
+// http_response_set_header path. NULL strings are normalized to "".
+omni_http_response_t* omni_http_response_create(int32_t status_code, const char* status_text, const char* body) {
+    omni_http_response_t* resp = (omni_http_response_t*)malloc(sizeof(omni_http_response_t));
+    if (!resp) return NULL;
+    resp->status_code = status_code;
+    if (status_text) {
+        strncpy(resp->status_text, status_text, sizeof(resp->status_text) - 1);
+        resp->status_text[sizeof(resp->status_text) - 1] = '\0';
+    } else {
+        resp->status_text[0] = '\0';
+    }
+    resp->headers = omni_map_create();
+    resp->body = body ? strdup(body) : strdup("");
+    return resp;
+}
+
 // HTTP client functions
 omni_http_response_t* omni_http_get(const char* url) {
     if (!url) return NULL;
@@ -8574,6 +8593,14 @@ char* omni_http_response_get_header(omni_http_response_t* resp, const char* name
     return value ? strdup(value) : NULL;
 }
 
+// Pairs with omni_http_response_get_header; returns resp so std.network's
+// `resp = http_response_set_header(resp, k, v)` chaining lowers cleanly.
+omni_http_response_t* omni_http_response_set_header(omni_http_response_t* resp, const char* name, const char* value) {
+    if (!resp || !resp->headers || !name || !value) return resp;
+    omni_map_put_string_string(resp->headers, name, value);
+    return resp;
+}
+
 omni_http_request_t* omni_http_request_create(const char* method, const char* url) {
     if (!method || !url) return NULL;
     omni_http_request_t* req = (omni_http_request_t*)malloc(sizeof(omni_http_request_t));
@@ -8585,15 +8612,17 @@ omni_http_request_t* omni_http_request_create(const char* method, const char* ur
     return req;
 }
 
-void omni_http_request_set_header(omni_http_request_t* req, const char* name, const char* value) {
-    if (!req || !req->headers || !name || !value) return;
+omni_http_request_t* omni_http_request_set_header(omni_http_request_t* req, const char* name, const char* value) {
+    if (!req || !req->headers || !name || !value) return req;
     omni_map_put_string_string(req->headers, name, value);
+    return req;
 }
 
-void omni_http_request_set_body(omni_http_request_t* req, const char* body) {
-    if (!req) return;
+omni_http_request_t* omni_http_request_set_body(omni_http_request_t* req, const char* body) {
+    if (!req) return req;
     if (req->body) free(req->body);
     req->body = body ? strdup(body) : NULL;
+    return req;
 }
 
 char* omni_http_request_get_header(omni_http_request_t* req, const char* name) {

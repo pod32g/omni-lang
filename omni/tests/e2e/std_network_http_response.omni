@@ -1,0 +1,39 @@
+// std.network: HTTPResponse pure-data surface — http_response_create
+// (offline constructor) plus the three status-class helpers and
+// get/set_header. No real network involved; pinning these on the C
+// backend means user code can build and inspect responses in CI.
+import std
+
+func main():int {
+    // Construct a 2xx response.
+    let ok:std.network.HTTPResponse =
+        std.network.http_response_create(204, "No Content", "")
+    if ok.status_code != 204 { return 1 }
+    if !std.network.http_response_is_success(ok) { return 2 }
+    if std.network.http_response_is_client_error(ok) { return 3 }
+    if std.network.http_response_is_server_error(ok) { return 4 }
+
+    // 4xx
+    let nf:std.network.HTTPResponse =
+        std.network.http_response_create(404, "Not Found", "missing")
+    if std.network.http_response_is_success(nf) { return 5 }
+    if !std.network.http_response_is_client_error(nf) { return 6 }
+    if std.network.http_response_is_server_error(nf) { return 7 }
+    if !std.string.equals(nf.body, "missing") { return 8 }
+
+    // 5xx
+    let oops:std.network.HTTPResponse =
+        std.network.http_response_create(503, "Service Unavailable", "down")
+    if std.network.http_response_is_success(oops) { return 9 }
+    if std.network.http_response_is_client_error(oops) { return 10 }
+    if !std.network.http_response_is_server_error(oops) { return 11 }
+
+    // Header set/get round-trip.
+    let with_header:std.network.HTTPResponse =
+        std.network.http_response_set_header(ok, "X-Trace-Id", "abc123")
+    let trace:string =
+        std.network.http_response_get_header(with_header, "X-Trace-Id")
+    if !std.string.equals(trace, "abc123") { return 12 }
+
+    return 0
+}
