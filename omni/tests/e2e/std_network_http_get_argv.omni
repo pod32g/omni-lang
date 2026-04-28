@@ -1,0 +1,13 @@
+// Networked test driver: takes a URL from argv[1], GETs it, returns
+// the response status code as the program exit. Driven from a Go test
+// that spins up an httptest.Server and passes its URL in.
+import std
+
+func main():int {
+    let url:string = std.os.positional_arg(0, "")
+    if std.string.equals(url, "") {
+        return 1
+    }
+    let resp:std.network.HTTPResponse = std.network.http_get(url)
+    return resp.status_code
+}

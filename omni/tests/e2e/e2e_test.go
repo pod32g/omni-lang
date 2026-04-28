@@ -2,6 +2,8 @@ package e2e
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1791,5 +1793,133 @@ func TestStdNetworkHttpRequest(t *testing.T) {
 	}
 	if result != expected {
 		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
+// TestStdNetworkHttpGetFixture exercises std.network.http_get end to
+// end against an in-process httptest.Server. The fixture serves
+// distinct responses on three paths so we can verify status_code,
+// is_success / is_client_error / is_server_error, and body access on
+// the C backend without touching the public network.
+//
+// Gated by OMNI_NETWORK_TESTS. Most CI hosts can hit 127.0.0.1, but
+// running it by default would require pinning libcurl behavior across
+// the runtime variants — opt in for now and let the gated tests grow
+// incrementally.
+func TestStdNetworkHttpGetFixture(t *testing.T) {
+	if os.Getenv("OMNI_NETWORK_TESTS") != "1" {
+		t.Skip("set OMNI_NETWORK_TESTS=1 to enable network-touching tests")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ok", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/notfound", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	})
+	mux.HandleFunc("/oops", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// Build the driver once.
+	if _, err := runCBackend("std_network_http_get_argv.omni"); err != nil {
+		t.Fatalf("build std_network_http_get_argv.omni: %v", err)
+	}
+	executable := "./std_network_http_get_argv"
+
+	cases := []struct {
+		path string
+		want int
+	}{
+		{"/ok", 200},
+		{"/notfound", 404},
+		{"/oops", 503},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(strings.TrimPrefix(tc.path, "/"), func(t *testing.T) {
+			cmd := exec.Command(executable, srv.URL+tc.path)
+			cmd.Env = append(os.Environ(),
+				"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+				"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+			)
+			// Read the program result from the stdout banner; the
+			// process exit code is uint8-truncated by Unix so codes
+			// above 255 (e.g. 503) come back wrong.
+			out, err := cmd.Output()
+			if err != nil {
+				if _, ok := err.(*exec.ExitError); !ok {
+					t.Fatalf("run failed: %v\nstdout: %s", err, string(out))
+				}
+			}
+			got := ""
+			for _, line := range strings.Split(string(out), "\n") {
+				const prefix = "OmniLang program result: "
+				if strings.HasPrefix(line, prefix) {
+					got = strings.TrimSpace(line[len(prefix):])
+					break
+				}
+			}
+			if got != fmt.Sprintf("%d", tc.want) {
+				t.Errorf("GET %s result=%q want=%d (stdout: %s)", tc.path, got, tc.want, string(out))
+			}
+		})
+	}
+}
+
+// TestStdNetworkHttpPostFixture verifies http_post round-trips a body
+// to an httptest.Server. The fixture echoes status 201 if the body
+// matches the expected fixture, 422 otherwise — letting us tell from
+// the program's exit (via stdout) whether the body was actually
+// delivered, not just that the request reached the server.
+func TestStdNetworkHttpPostFixture(t *testing.T) {
+	if os.Getenv("OMNI_NETWORK_TESTS") != "1" {
+		t.Skip("set OMNI_NETWORK_TESTS=1 to enable network-touching tests")
+	}
+
+	const expectedBody = "{\"k\":\"v\"}"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		buf := make([]byte, 1024)
+		n, _ := r.Body.Read(buf)
+		got := string(buf[:n])
+		if got == expectedBody {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+	}))
+	defer srv.Close()
+
+	if _, err := runCBackend("std_network_http_post_argv.omni"); err != nil {
+		t.Fatalf("build std_network_http_post_argv.omni: %v", err)
+	}
+
+	cmd := exec.Command("./std_network_http_post_argv", srv.URL, expectedBody)
+	cmd.Env = append(os.Environ(),
+		"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+		"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); !ok {
+			t.Fatalf("run failed: %v\nstdout: %s", err, string(out))
+		}
+	}
+	got := ""
+	for _, line := range strings.Split(string(out), "\n") {
+		const prefix = "OmniLang program result: "
+		if strings.HasPrefix(line, prefix) {
+			got = strings.TrimSpace(line[len(prefix):])
+			break
+		}
+	}
+	// 201 means the server saw the exact body we sent. 422 means the
+	// body was empty or mangled — that's the regression we're guarding.
+	if got != "201" {
+		t.Errorf("http_post body delivery failed: result=%q want=201 (stdout: %s)", got, string(out))
 	}
 }

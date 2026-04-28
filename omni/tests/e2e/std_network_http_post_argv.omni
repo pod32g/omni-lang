@@ -1,0 +1,14 @@
+// Networked test driver: POST argv[2] to argv[1], return the response
+// status_code. Used by the gated TestStdNetworkHttpPostFixture in
+// e2e_test.go to verify body delivery against an httptest.Server.
+import std
+
+func main():int {
+    let url:string = std.os.positional_arg(0, "")
+    let body:string = std.os.positional_arg(1, "")
+    if std.string.equals(url, "") {
+        return 1
+    }
+    let resp:std.network.HTTPResponse = std.network.http_post(url, body)
+    return resp.status_code
+}
