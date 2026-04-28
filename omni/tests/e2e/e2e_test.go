@@ -1725,3 +1725,20 @@ func TestStdNetworkUrlRoundTrip(t *testing.T) {
 		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
 	}
 }
+
+// TestStdNetworkSocketSmoke pins the socket lifecycle (create / bind to
+// 127.0.0.1:0 / listen / close) on the C backend. Sockets aren't wired
+// on the VM (omnir's socket_create stub returns -1), so this is C-only;
+// when sockets land on the VM, add a runVM check here too.
+func TestStdNetworkSocketSmoke(t *testing.T) {
+	testFile := "std_network_socket_smoke.omni"
+	expected := "0"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}

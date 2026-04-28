@@ -1,0 +1,32 @@
+// std.network: smoke test for the socket lifecycle that doesn't require
+// a peer — create, bind to 127.0.0.1:<ephemeral port>, listen, close.
+// Pinning these on both backends catches regressions in the runtime
+// socket helpers (and the C-backend dispatch into them) without needing
+// a fixture server.
+//
+// We deliberately don't accept/connect here: that needs threads or a
+// second process and belongs in a gated networked-test, not in CI.
+import std
+
+func main():int {
+    let s:int = std.network.socket_create()
+    if s < 0 { return 1 }
+
+    // Port 0 asks the OS for an ephemeral port; loopback only.
+    let bind_ok:bool = std.network.socket_bind(s, "127.0.0.1", 0)
+    if !bind_ok {
+        let _:bool = std.network.socket_close(s)
+        return 2
+    }
+
+    let listen_ok:bool = std.network.socket_listen(s, 1)
+    if !listen_ok {
+        let _:bool = std.network.socket_close(s)
+        return 3
+    }
+
+    let close_ok:bool = std.network.socket_close(s)
+    if !close_ok { return 4 }
+
+    return 0
+}
