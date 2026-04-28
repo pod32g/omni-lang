@@ -1,0 +1,47 @@
+// std.network: url_to_string(url_parse(s)) round-trip.
+//
+// Default-port normalization (80 for http, 443 for https) is *not* a
+// round-trip — the port disappears on output — so each pair is tested
+// against the exact string we expect after one normalize-pass.
+import std
+
+func roundtrip(input:string, expected:string):bool {
+    let u:std.network.URL = std.network.url_parse(input)
+    let out:string = std.network.url_to_string(u)
+    return std.string.equals(out, expected)
+}
+
+func main():int {
+    // Explicit non-default port survives.
+    if !roundtrip("https://example.com:8080/path?q=1#frag",
+                  "https://example.com:8080/path?q=1#frag") {
+        return 1
+    }
+    // http on port 80 drops the port.
+    if !roundtrip("http://example.com:80/", "http://example.com/") {
+        return 2
+    }
+    // https on port 443 drops the port.
+    if !roundtrip("https://example.com:443/", "https://example.com/") {
+        return 3
+    }
+    // Bare host on http stays bare.
+    if !roundtrip("http://example.com/", "http://example.com/") {
+        return 4
+    }
+    // Query-only is preserved.
+    if !roundtrip("http://example.com/?a=1&b=2",
+                  "http://example.com/?a=1&b=2") {
+        return 5
+    }
+    // Fragment-only is preserved.
+    if !roundtrip("http://example.com/#top", "http://example.com/#top") {
+        return 6
+    }
+    // Path with query and fragment.
+    if !roundtrip("http://example.com/api/v1?x=y#z",
+                  "http://example.com/api/v1?x=y#z") {
+        return 7
+    }
+    return 0
+}

@@ -1698,3 +1698,30 @@ func TestStringVarConditionalReturn(t *testing.T) {
 		t.Errorf("C backend: expected %s, got %s", expected, result)
 	}
 }
+
+// TestStdNetworkUrlRoundTrip verifies url_to_string(url_parse(s)) is
+// stable on both backends, including default-port normalization
+// (port 80 dropped for http, 443 dropped for https). The VM previously
+// re-emitted explicit ":80"/":443" through Go's net/url.URL.String()
+// while the C backend (running the OmniLang source of url_to_string)
+// dropped them.
+func TestStdNetworkUrlRoundTrip(t *testing.T) {
+	testFile := "std_network_url_round_trip.omni"
+	expected := "0"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("runVM(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runVM(%q) = %s, want %s", testFile, result, expected)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}

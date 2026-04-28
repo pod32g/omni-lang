@@ -6456,7 +6456,16 @@ func urlFromStruct(val Result) (string, bool) {
 		RawQuery: strings.TrimPrefix(query, "?"),
 		Fragment: strings.TrimPrefix(fragment, "#"),
 	}
-	if port > 0 {
+	// Default-port normalization mirrors the OmniLang `url_to_string`
+	// implementation in std/network/network.omni: a port equal to the
+	// scheme's default is dropped on output so that round-trips of
+	// "http://h/" and "https://h/" stay stable. Without this the VM
+	// re-emits an explicit ":80" / ":443" the C backend wouldn't.
+	emitPort := port > 0
+	if emitPort && ((scheme == "http" && port == 80) || (scheme == "https" && port == 443)) {
+		emitPort = false
+	}
+	if emitPort {
 		assembled.Host = fmt.Sprintf("%s:%d", host, port)
 	} else {
 		assembled.Host = host
