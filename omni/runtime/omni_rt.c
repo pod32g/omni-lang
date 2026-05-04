@@ -5859,12 +5859,15 @@ int32_t omni_ip_is_valid(const char* ip_str) {
                 seen_dot = 1;
                 // back up: rescan the last group as the start of an IPv4 dotted-quad
                 const char* dot_start = p - hex_len;
-                int seg = 0, seg_digits = 0, dots = 0, val = 0;
+                // `dots` already tracks the segment count; the local `seg`
+                // counter that used to live here was dead and tripped
+                // -Wunused-but-set-variable.
+                int seg_digits = 0, dots = 0, val = 0;
                 for (const char* q = dot_start; *q && *q != ':'; q++) {
                     if (*q == '.') {
                         if (seg_digits == 0) return 0;
                         if (val > 255) return 0;
-                        dots++; seg++; seg_digits = 0; val = 0;
+                        dots++; seg_digits = 0; val = 0;
                     } else if (*q >= '0' && *q <= '9') {
                         val = val * 10 + (*q - '0');
                         seg_digits++;
