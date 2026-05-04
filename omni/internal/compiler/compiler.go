@@ -138,6 +138,102 @@ func Compile(cfg Config) error {
 	}
 }
 
+// collectModuleTypeNames returns the set of struct, enum, and type-alias names
+// declared in mod. Used to decide which references in cloned signatures should
+// be qualified with the module prefix.
+func collectModuleTypeNames(mod *ast.Module) map[string]bool {
+	out := make(map[string]bool)
+	if mod == nil {
+		return out
+	}
+	for _, d := range mod.Decls {
+		switch decl := d.(type) {
+		case *ast.StructDecl:
+			out[decl.Name] = true
+		case *ast.EnumDecl:
+			out[decl.Name] = true
+		case *ast.TypeAliasDecl:
+			out[decl.Name] = true
+		}
+	}
+	return out
+}
+
+// qualifyTypeRefs walks t recursively and returns a new TypeExpr where every
+// reference to a name in `types` is rewritten as prefix+"."+name. The original
+// TypeExpr is not mutated. Returns nil for a nil input.
+func qualifyTypeRefs(t *ast.TypeExpr, types map[string]bool, prefix string) *ast.TypeExpr {
+	if t == nil {
+		return nil
+	}
+	out := *t
+	if types[out.Name] {
+		out.Name = prefix + "." + out.Name
+	}
+	if len(t.Args) > 0 {
+		out.Args = make([]*ast.TypeExpr, len(t.Args))
+		for i, a := range t.Args {
+			out.Args[i] = qualifyTypeRefs(a, types, prefix)
+		}
+	}
+	if len(t.Members) > 0 {
+		out.Members = make([]*ast.TypeExpr, len(t.Members))
+		for i, m := range t.Members {
+			out.Members[i] = qualifyTypeRefs(m, types, prefix)
+		}
+	}
+	if len(t.ParamTypes) > 0 {
+		out.ParamTypes = make([]*ast.TypeExpr, len(t.ParamTypes))
+		for i, p := range t.ParamTypes {
+			out.ParamTypes[i] = qualifyTypeRefs(p, types, prefix)
+		}
+	}
+	if t.ReturnType != nil {
+		out.ReturnType = qualifyTypeRefs(t.ReturnType, types, prefix)
+	}
+	if t.OptionalType != nil {
+		out.OptionalType = qualifyTypeRefs(t.OptionalType, types, prefix)
+	}
+	return &out
+}
+
+// qualifyFuncDeclTypes rewrites parameter, receiver, and return type references
+// in cloned (in-place). Body is not touched — the type checker skips body-check
+// on namespaced functions, and rewriting body would require deep AST cloning.
+func qualifyFuncDeclTypes(cloned *ast.FuncDecl, types map[string]bool, prefix string) {
+	if cloned.Receiver != nil && cloned.Receiver.Type != nil {
+		cloned.Receiver = &ast.Param{Name: cloned.Receiver.Name, Type: qualifyTypeRefs(cloned.Receiver.Type, types, prefix), Span: cloned.Receiver.Span}
+	}
+	if len(cloned.Params) > 0 {
+		newParams := make([]ast.Param, len(cloned.Params))
+		for i, p := range cloned.Params {
+			newParams[i] = p
+			if p.Type != nil {
+				newParams[i].Type = qualifyTypeRefs(p.Type, types, prefix)
+			}
+		}
+		cloned.Params = newParams
+	}
+	if cloned.Return != nil {
+		cloned.Return = qualifyTypeRefs(cloned.Return, types, prefix)
+	}
+}
+
+// qualifyStructDeclTypes rewrites field type references in a cloned struct.
+func qualifyStructDeclTypes(cloned *ast.StructDecl, types map[string]bool, prefix string) {
+	if len(cloned.Fields) == 0 {
+		return
+	}
+	newFields := make([]ast.StructField, len(cloned.Fields))
+	for i, f := range cloned.Fields {
+		newFields[i] = f
+		if f.Type != nil {
+			newFields[i].Type = qualifyTypeRefs(f.Type, types, prefix)
+		}
+	}
+	cloned.Fields = newFields
+}
+
 // MergeImportedModules loads imported local modules and appends their function declarations
 // into the root module with namespaced names (aliasOrSegment.funcName) so that calls like
 // `math_utils.add` resolve at runtime. std imports are ignored for C backend (handled as intrinsics)
@@ -316,7 +412,11 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 						aliases = append(aliases, "web")
 					}
 
-					// Append cloned declarations with namespaced names for each alias
+					// Append cloned declarations with namespaced names for each alias.
+					// Type references in signatures get qualified with `qualified`
+					// (the canonical module name) regardless of the alias used at
+					// the call site, matching how the type checker resolves them.
+					importedTypes := collectModuleTypeNames(imported)
 					for _, ns := range aliases {
 						for _, d := range imported.Decls {
 							switch decl := d.(type) {
@@ -327,10 +427,12 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 								}
 								cloned := *decl
 								cloned.Name = qname
+								qualifyFuncDeclTypes(&cloned, importedTypes, qualified)
 								mod.Decls = append(mod.Decls, &cloned)
 							case *ast.StructDecl:
 								cloned := *decl
 								cloned.Name = ns + "." + decl.Name
+								qualifyStructDeclTypes(&cloned, importedTypes, qualified)
 								mod.Decls = append(mod.Decls, &cloned)
 							case *ast.EnumDecl:
 								cloned := *decl
@@ -344,51 +446,22 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 						}
 					}
 
-					// If we loaded std.web, also add its declarations with std.web prefix
+					// If we loaded std.web, also add its declarations with std.web prefix.
+					// Type references in signatures (including nested generic args
+					// like array<Request>) are qualified to "std.web.<name>".
 					if webImported != nil {
-						// Collect web module types for qualification (both structs and type aliases)
-						webTypes := make(map[string]bool)
-						for _, d := range webImported.Decls {
-							if structDecl, ok := d.(*ast.StructDecl); ok {
-								webTypes[structDecl.Name] = true
-							}
-							if typeAlias, ok := d.(*ast.TypeAliasDecl); ok {
-								webTypes[typeAlias.Name] = true
-							}
-						}
-						
+						webTypes := collectModuleTypeNames(webImported)
 						for _, d := range webImported.Decls {
 							switch decl := d.(type) {
 							case *ast.FuncDecl:
 								cloned := *decl
 								cloned.Name = "std.web." + decl.Name
-								// Update parameter types - qualify any web module types
-								for i := range cloned.Params {
-									if cloned.Params[i].Type != nil {
-										typeName := cloned.Params[i].Type.Name
-										// Check if this is a web module type (struct or type alias)
-										if webTypes[typeName] {
-											// Create a new TypeExpr with qualified name
-											newType := *cloned.Params[i].Type
-											newType.Name = "std.web." + typeName
-											cloned.Params[i].Type = &newType
-										}
-									}
-								}
-								// Update return type - qualify any web module types
-								if cloned.Return != nil {
-									returnTypeName := cloned.Return.Name
-									if webTypes[returnTypeName] {
-										// Create a new TypeExpr with qualified name
-										newReturn := *cloned.Return
-										newReturn.Name = "std.web." + returnTypeName
-										cloned.Return = &newReturn
-									}
-								}
+								qualifyFuncDeclTypes(&cloned, webTypes, "std.web")
 								mod.Decls = append(mod.Decls, &cloned)
 							case *ast.StructDecl:
 								cloned := *decl
 								cloned.Name = "std.web." + decl.Name
+								qualifyStructDeclTypes(&cloned, webTypes, "std.web")
 								mod.Decls = append(mod.Decls, &cloned)
 							case *ast.EnumDecl:
 								cloned := *decl
@@ -407,6 +480,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 					// symbol errors at link time.
 					for _, sub := range extraSubmodules {
 						prefix := sub.prefix
+						subTypes := collectModuleTypeNames(sub.module)
 						for _, d := range sub.module.Decls {
 							switch decl := d.(type) {
 							case *ast.FuncDecl:
@@ -416,10 +490,12 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 								}
 								cloned := *decl
 								cloned.Name = qname
+								qualifyFuncDeclTypes(&cloned, subTypes, prefix)
 								mod.Decls = append(mod.Decls, &cloned)
 							case *ast.StructDecl:
 								cloned := *decl
 								cloned.Name = prefix + "." + decl.Name
+								qualifyStructDeclTypes(&cloned, subTypes, prefix)
 								mod.Decls = append(mod.Decls, &cloned)
 							case *ast.EnumDecl:
 								cloned := *decl
@@ -455,15 +531,18 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 			local = imp.Path[len(imp.Path)-1]
 		}
 		// Append cloned declarations with namespaced names (mirror std module behavior)
+		importedTypes := collectModuleTypeNames(imported)
 		for _, d := range imported.Decls {
 			switch decl := d.(type) {
 			case *ast.FuncDecl:
 				cloned := *decl
 				cloned.Name = local + "." + decl.Name
+				qualifyFuncDeclTypes(&cloned, importedTypes, local)
 				mod.Decls = append(mod.Decls, &cloned)
 			case *ast.StructDecl:
 				cloned := *decl
 				cloned.Name = local + "." + decl.Name
+				qualifyStructDeclTypes(&cloned, importedTypes, local)
 				mod.Decls = append(mod.Decls, &cloned)
 			case *ast.EnumDecl:
 				cloned := *decl
@@ -532,16 +611,19 @@ func mergeNestedImports(module *ast.Module, loader *ModuleLoader, targetMod *ast
 				aliases = append(aliases, qualified)
 			}
 
+			importedTypes := collectModuleTypeNames(imported)
 			for _, ns := range aliases {
 				for _, d := range imported.Decls {
 					switch decl := d.(type) {
 					case *ast.FuncDecl:
 						cloned := *decl
 						cloned.Name = ns + "." + decl.Name
+						qualifyFuncDeclTypes(&cloned, importedTypes, qualified)
 						targetMod.Decls = append(targetMod.Decls, &cloned)
 					case *ast.StructDecl:
 						cloned := *decl
 						cloned.Name = ns + "." + decl.Name
+						qualifyStructDeclTypes(&cloned, importedTypes, qualified)
 						targetMod.Decls = append(targetMod.Decls, &cloned)
 					case *ast.EnumDecl:
 						cloned := *decl
