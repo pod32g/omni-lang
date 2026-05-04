@@ -2121,16 +2121,24 @@ func TestStdNetworkLocalIp(t *testing.T) {
 	}
 }
 
-// TestStdJson pins std.json on the C backend: parse + stringify round-trip
+// TestStdJson pins std.json on both backends: parse + stringify round-trip
 // for primitives, nested objects, arrays, and the full kind/accessor
-// surface plus the constructor-based build path. The VM doesn't have
-// JSON intrinsics yet (tracked in project_network_todo memory), so this
-// is C-only — when the VM lands them, add a runVM check here.
+// surface plus the constructor-based build path. The VM dispatch is
+// backed by encoding/json (pointer-boxed jsonNode handles), so mutation
+// through array_push / object_set propagates across handles.
 func TestStdJson(t *testing.T) {
 	testFile := "std_json.omni"
 	expected := "0"
 
-	result, err := runCBackend(testFile)
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
 	if err != nil {
 		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
 	}

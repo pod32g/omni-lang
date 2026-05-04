@@ -1002,7 +1002,38 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.time.time_to_unix",
 		"std.time.time_to_string",
 		"std.time.time_to_unix_nano",
-		"std.time.duration_to_string":
+		"std.time.duration_to_string",
+		"std.json.parse",
+		"std.json.stringify",
+		"std.json.stringify_pretty",
+		"std.json.free",
+		"std.json.kind",
+		"std.json.is_null",
+		"std.json.is_bool",
+		"std.json.is_int",
+		"std.json.is_float",
+		"std.json.is_string",
+		"std.json.is_array",
+		"std.json.is_object",
+		"std.json.as_bool",
+		"std.json.as_int",
+		"std.json.as_float",
+		"std.json.as_string",
+		"std.json.object_get",
+		"std.json.object_has",
+		"std.json.object_size",
+		"std.json.object_key_at",
+		"std.json.array_get",
+		"std.json.array_len",
+		"std.json.new_null",
+		"std.json.new_bool",
+		"std.json.new_int",
+		"std.json.new_float",
+		"std.json.new_string",
+		"std.json.new_array",
+		"std.json.new_object",
+		"std.json.array_push",
+		"std.json.object_set":
 		return true
 	}
 	return false
@@ -3842,6 +3873,173 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			if mp, ok := m.Value.(map[interface{}]interface{}); ok {
 				for k := range mp {
 					delete(mp, k)
+				}
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	// std.json — read-path implementation backed by encoding/json.
+	// Mutation builders (new_array/object/array_push/object_set) are
+	// stubbed for now: they return placeholder nodes so existing code
+	// that calls them won't crash, but they don't actually compose a
+	// tree. The C runtime is the canonical builder; the VM will gain
+	// it when there's a regression test demanding it.
+	case "std.json.parse":
+		if len(operands) == 1 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			return Result{Type: "json", Value: jsonParse(s)}, true
+		}
+	case "std.json.stringify":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "string", Value: jsonStringify(n)}, true
+		}
+	case "std.json.stringify_pretty":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "string", Value: jsonStringifyPretty(n)}, true
+		}
+	case "std.json.free":
+		// No-op: GC owns the tree.
+		return Result{Type: "void", Value: nil}, true
+	case "std.json.kind":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "int", Value: jsonKind(n)}, true
+		}
+	case "std.json.is_null":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "bool", Value: jsonKind(n) == jsonKindNull}, true
+		}
+	case "std.json.is_bool":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "bool", Value: jsonKind(n) == jsonKindBool}, true
+		}
+	case "std.json.is_int":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "bool", Value: jsonKind(n) == jsonKindInt}, true
+		}
+	case "std.json.is_float":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "bool", Value: jsonKind(n) == jsonKindFloat}, true
+		}
+	case "std.json.is_string":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "bool", Value: jsonKind(n) == jsonKindString}, true
+		}
+	case "std.json.is_array":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "bool", Value: jsonKind(n) == jsonKindArray}, true
+		}
+	case "std.json.is_object":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "bool", Value: jsonKind(n) == jsonKindObject}, true
+		}
+	case "std.json.as_bool":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "bool", Value: jsonAsBool(n)}, true
+		}
+	case "std.json.as_int":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "int", Value: jsonAsInt(n)}, true
+		}
+	case "std.json.as_float":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "float", Value: jsonAsFloat(n)}, true
+		}
+	case "std.json.as_string":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "string", Value: jsonAsString(n)}, true
+		}
+	case "std.json.object_get":
+		if len(operands) == 2 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			k, _ := toString(operandValue(fr, operands[1]))
+			return Result{Type: "json", Value: jsonObjectGet(n, k)}, true
+		}
+	case "std.json.object_has":
+		if len(operands) == 2 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			k, _ := toString(operandValue(fr, operands[1]))
+			return Result{Type: "bool", Value: jsonObjectHas(n, k)}, true
+		}
+	case "std.json.object_size":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "int", Value: jsonObjectSize(n)}, true
+		}
+	case "std.json.object_key_at":
+		if len(operands) == 2 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			i, _ := toInt(operandValue(fr, operands[1]))
+			return Result{Type: "string", Value: jsonObjectKeyAt(n, i)}, true
+		}
+	case "std.json.array_get":
+		if len(operands) == 2 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			i, _ := toInt(operandValue(fr, operands[1]))
+			return Result{Type: "json", Value: jsonArrayGet(n, i)}, true
+		}
+	case "std.json.array_len":
+		if len(operands) == 1 {
+			n, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			return Result{Type: "int", Value: jsonArrayLen(n)}, true
+		}
+	case "std.json.new_null":
+		return Result{Type: "json", Value: newJsonNode(nil)}, true
+	case "std.json.new_bool":
+		if len(operands) == 1 {
+			b, _ := toBool(operandValue(fr, operands[0]))
+			return Result{Type: "json", Value: newJsonNode(b)}, true
+		}
+	case "std.json.new_int":
+		if len(operands) == 1 {
+			i, _ := toInt(operandValue(fr, operands[0]))
+			return Result{Type: "json", Value: newJsonNode(json.Number(strconv.Itoa(i)))}, true
+		}
+	case "std.json.new_float":
+		if len(operands) == 1 {
+			f, _ := toFloat(operandValue(fr, operands[0]))
+			return Result{Type: "json", Value: newJsonNode(f)}, true
+		}
+	case "std.json.new_string":
+		if len(operands) == 1 {
+			s, _ := toString(operandValue(fr, operands[0]))
+			return Result{Type: "json", Value: newJsonNode(s)}, true
+		}
+	case "std.json.new_array":
+		return Result{Type: "json", Value: newJsonNode([]interface{}{})}, true
+	case "std.json.new_object":
+		return Result{Type: "json", Value: newJsonNode(map[string]interface{}{})}, true
+	case "std.json.array_push":
+		if len(operands) == 2 {
+			arr, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			child, _ := operandValue(fr, operands[1]).Value.(jsonNode)
+			if arr.box != nil {
+				if a, ok := (*arr.box).([]interface{}); ok {
+					*arr.box = append(a, child.value())
+				}
+			}
+			return Result{Type: "void", Value: nil}, true
+		}
+	case "std.json.object_set":
+		if len(operands) == 3 {
+			obj, _ := operandValue(fr, operands[0]).Value.(jsonNode)
+			k, _ := toString(operandValue(fr, operands[1]))
+			child, _ := operandValue(fr, operands[2]).Value.(jsonNode)
+			if obj.box != nil {
+				if m, ok := (*obj.box).(map[string]interface{}); ok {
+					m[k] = child.value()
 				}
 			}
 			return Result{Type: "void", Value: nil}, true
