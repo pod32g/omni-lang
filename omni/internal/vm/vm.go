@@ -1155,6 +1155,32 @@ func execStructInit(funcs map[string]*mir.Function, fr *frame, inst mir.Instruct
 	return Result{Type: inst.Type, Value: structValue}, nil
 }
 
+// inferMapType picks a map<K,V> type string from runtime contents.
+// Used when the declared field type isn't carried (struct field access)
+// — sample one entry to choose K/V, falling back to map<string,any>.
+func inferMapType(m map[interface{}]interface{}) string {
+	for k, v := range m {
+		return "map<" + goValueTypeName(k) + "," + goValueTypeName(v) + ">"
+	}
+	return "map<string,any>"
+}
+
+// goValueTypeName maps a runtime Go value to its OmniLang type name.
+func goValueTypeName(v interface{}) string {
+	switch v.(type) {
+	case int, int32, int64:
+		return "int"
+	case string:
+		return "string"
+	case float64, float32:
+		return "float"
+	case bool:
+		return "bool"
+	default:
+		return "any"
+	}
+}
+
 // execMember handles struct field access
 func execMember(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) (Result, error) {
 	if len(inst.Operands) != 2 {
@@ -1173,9 +1199,14 @@ func execMember(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction)
 	// Handle struct field access
 	if structValue, ok := target.Value.(map[string]interface{}); ok {
 		if fieldValue, exists := structValue[fieldName]; exists {
-			// Determine the field type based on the value
+			// Determine the field type based on the value. The struct
+			// decl's declared types aren't carried here, so fall back
+			// to introspecting the runtime Go type. Map / slice values
+			// must produce a Type that the index dispatch recognizes,
+			// otherwise cfg.headers["k"] would mis-route to array
+			// indexing and reject the string key.
 			var fieldType string
-			switch fieldValue.(type) {
+			switch v := fieldValue.(type) {
 			case int:
 				fieldType = "int"
 			case string:
@@ -1184,6 +1215,18 @@ func execMember(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction)
 				fieldType = "float"
 			case bool:
 				fieldType = "bool"
+			case map[interface{}]interface{}:
+				fieldType = inferMapType(v)
+			case []int:
+				fieldType = "array<int>"
+			case []string:
+				fieldType = "array<string>"
+			case []float64:
+				fieldType = "array<float>"
+			case []bool:
+				fieldType = "array<bool>"
+			case []interface{}:
+				fieldType = "array<any>"
 			default:
 				fieldType = "int" // Default fallback
 			}
@@ -1797,24 +1840,36 @@ func execIndex(funcs map[string]*mir.Function, fr *frame, inst mir.Instruction) 
 	target := operandValue(fr, inst.Operands[0])
 	index := operandValue(fr, inst.Operands[1])
 
-	// Handle map indexing first (no need to convert index to int)
-	if strings.HasPrefix(target.Type, "map<") {
-		mapValue, ok := target.Value.(map[interface{}]interface{})
-		if !ok {
+	// Handle map indexing first (no need to convert index to int).
+	// Accept either a declared map<...> type or any value whose runtime
+	// representation is a map — struct fields and other paths sometimes
+	// drop the declared type, but the underlying map is still indexable.
+	mapValue, isMapValue := target.Value.(map[interface{}]interface{})
+	if strings.HasPrefix(target.Type, "map<") || isMapValue {
+		if !isMapValue {
 			return Result{}, fmt.Errorf("index: target is not a map")
 		}
 
-		// Get the value type from the map type
-		_, valueType, err := parseMapTypes(target.Type)
-		if err != nil {
-			return Result{}, fmt.Errorf("index: invalid map type %s: %v", target.Type, err)
+		// Get the value type from the map type. If the declared type
+		// wasn't propagated (e.g. struct-field access on older paths),
+		// infer it from the stored value at lookup time.
+		var valueType string
+		if strings.HasPrefix(target.Type, "map<") {
+			_, vt, err := parseMapTypes(target.Type)
+			if err != nil {
+				return Result{}, fmt.Errorf("index: invalid map type %s: %v", target.Type, err)
+			}
+			valueType = vt
 		}
 
 		// Look up the key in the map
 		keyValue := index.Value
 		if foundValue, exists := mapValue[keyValue]; exists {
-			// Ensure the found value has the correct type
-			return Result{Type: valueType, Value: foundValue}, nil
+			vt := valueType
+			if vt == "" {
+				vt = goValueTypeName(foundValue)
+			}
+			return Result{Type: vt, Value: foundValue}, nil
 		}
 
 		// Key not found - return zero value for the value type

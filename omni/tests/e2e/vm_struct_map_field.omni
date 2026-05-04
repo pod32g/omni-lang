@@ -1,0 +1,29 @@
+// Regression: indexing a map field on a user struct works on the VM.
+// Before this fix, execMember inferred unknown field types as "int",
+// so cfg.headers["k"] hit the array-indexing path on omnir and
+// errored with "index: index must be int, got string". The C side
+// already had omni_struct_get_map_field; this brings the VM in line.
+import std.collections
+
+struct Config {
+    headers : map<string, string>
+    counts  : map<string, int>
+}
+
+func main():int {
+    var h:map<string, string> = {}
+    std.collections.set_string(h, "name", "alice")
+
+    var c:map<string, int> = {}
+    std.collections.set(c, "n", 42)
+
+    let cfg:Config = Config{ headers: h, counts: c }
+
+    let name_v:string = cfg.headers["name"]
+    let count_v:int = cfg.counts["n"]
+
+    var score:int = 0
+    if name_v == "alice" { score = score + 1 }
+    if count_v == 42 { score = score + 2 }
+    return score
+}

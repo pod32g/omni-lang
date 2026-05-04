@@ -637,6 +637,31 @@ func TestStdCollectionsMap(t *testing.T) {
 	}
 }
 
+// TestVMStructMapField pins indexing a map field on a user struct.
+// Before this fix, execMember inferred unknown field types as int, so
+// cfg.headers["k"] errored "index: index must be int, got string" on
+// the VM. Both backends should produce 3 (1 + 2).
+func TestVMStructMapField(t *testing.T) {
+	testFile := "vm_struct_map_field.omni"
+	expected := "3"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdCollectionsStringMap pins the parallel string-valued map
 // surface (get_string/set_string/has_string/remove_string). Before
 // this surface existed, std.collections.set on map<string, string>
