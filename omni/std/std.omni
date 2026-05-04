@@ -31,6 +31,9 @@ import std.time
 // Re-export network functions
 import std.network
 
+// Re-export JSON encode/decode
+import std.json
+
 // Re-export web framework
 import std.web
 

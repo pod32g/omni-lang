@@ -258,7 +258,8 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 					qualified == "std.testing" ||
 					qualified == "std.math" ||
 					qualified == "std.collections" ||
-					qualified == "std.network"
+					qualified == "std.network" ||
+					qualified == "std.json"
 				if needsBodyLoad {
 					// Load std or std.web module to include its functions (many are not intrinsics)
 					if debugModules {
@@ -282,7 +283,7 @@ func MergeImportedModules(mod *ast.Module, baseDir string, debugModules bool, ba
 						if err != nil {
 							webImported = nil
 						}
-						for _, name := range []string{"testing", "math", "collections", "network"} {
+						for _, name := range []string{"testing", "math", "collections", "network", "json"} {
 							sub, err := loader.LoadModule([]string{"std", name})
 							if err == nil && sub != nil {
 								extraSubmodules = append(extraSubmodules, struct {

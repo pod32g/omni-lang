@@ -1,0 +1,151 @@
+// std.json — JSON parsing and serialization.
+//
+// `JsonValue` is the OmniLang surface for the runtime's tagged-union
+// `omni_json_t` node. Construct one via the `new_*` helpers or
+// `parse(s)`, navigate it with `object_get` / `array_get` / kind
+// predicates, and pull primitive values out with `as_*`. Hand the
+// result back to `stringify` (or `stringify_pretty` for indented
+// output) when you're ready to send it back over the wire.
+//
+// Lifetime: the root node returned by `parse` / `new_*` owns its
+// children. Free it with `free` exactly once. Children handed back
+// from `object_get` / `array_get` are aliases — do not free them
+// individually.
+//
+// Kinds:
+//   0 = null, 1 = bool, 2 = int, 3 = float,
+//   4 = string, 5 = array, 6 = object.
+
+// Opaque handle for a JSON node. The runtime uses `omni_json_t*` for
+// the actual storage; the OmniLang struct just gives the type checker
+// a name to bind.
+struct JsonValue {
+    _: int
+}
+
+// ============================================================================
+// Parsing & serialization
+// ============================================================================
+
+// parse decodes a JSON string. Returns null on malformed input.
+// [IMPLEMENTED] Wired to omni_json_parse.
+func parse(s:string):JsonValue {
+    return JsonValue{_: 0}
+}
+
+// stringify encodes a JsonValue as a compact JSON string.
+// [IMPLEMENTED] Wired to omni_json_stringify.
+func stringify(v:JsonValue):string {
+    return ""
+}
+
+// stringify_pretty encodes with two-space indentation.
+// [IMPLEMENTED] Wired to omni_json_stringify_pretty.
+func stringify_pretty(v:JsonValue):string {
+    return ""
+}
+
+// free releases the tree rooted at v. Pass each parse/new_* result
+// here exactly once when done.
+// [IMPLEMENTED] Wired to omni_json_free.
+func free(v:JsonValue):void {
+}
+
+// ============================================================================
+// Kind predicates
+// ============================================================================
+
+// kind returns the kind discriminator (0..6 — see top-of-file legend).
+// [IMPLEMENTED] Wired to omni_json_kind.
+func kind(v:JsonValue):int {
+    return 0
+}
+
+// [IMPLEMENTED] Wired to omni_json_is_null.
+func is_null(v:JsonValue):bool { return false }
+// [IMPLEMENTED] Wired to omni_json_is_bool.
+func is_bool(v:JsonValue):bool { return false }
+// [IMPLEMENTED] Wired to omni_json_is_int.
+func is_int(v:JsonValue):bool { return false }
+// [IMPLEMENTED] Wired to omni_json_is_float.
+func is_float(v:JsonValue):bool { return false }
+// [IMPLEMENTED] Wired to omni_json_is_string.
+func is_string(v:JsonValue):bool { return false }
+// [IMPLEMENTED] Wired to omni_json_is_array.
+func is_array(v:JsonValue):bool { return false }
+// [IMPLEMENTED] Wired to omni_json_is_object.
+func is_object(v:JsonValue):bool { return false }
+
+// ============================================================================
+// Primitive accessors. Each returns a sensible default on kind mismatch
+// so callers can write tolerant lookup code without chained checks.
+// ============================================================================
+
+// [IMPLEMENTED] Wired to omni_json_as_bool.
+func as_bool(v:JsonValue):bool { return false }
+// [IMPLEMENTED] Wired to omni_json_as_int.
+func as_int(v:JsonValue):int { return 0 }
+// [IMPLEMENTED] Wired to omni_json_as_float.
+func as_float(v:JsonValue):float { return 0.0 }
+// [IMPLEMENTED] Wired to omni_json_as_string.
+func as_string(v:JsonValue):string { return "" }
+
+// ============================================================================
+// Object navigation
+// ============================================================================
+
+// object_get returns the value for the given key, or null if absent.
+// [IMPLEMENTED] Wired to omni_json_object_get.
+func object_get(v:JsonValue, key:string):JsonValue {
+    return JsonValue{_: 0}
+}
+
+// [IMPLEMENTED] Wired to omni_json_object_has.
+func object_has(v:JsonValue, key:string):bool { return false }
+// [IMPLEMENTED] Wired to omni_json_object_size.
+func object_size(v:JsonValue):int { return 0 }
+// object_key_at returns the i-th key in insertion order, or "" if out
+// of range.
+// [IMPLEMENTED] Wired to omni_json_object_key_at.
+func object_key_at(v:JsonValue, i:int):string { return "" }
+
+// ============================================================================
+// Array navigation
+// ============================================================================
+
+// array_get returns the i-th element, or null if out of range.
+// [IMPLEMENTED] Wired to omni_json_array_get.
+func array_get(v:JsonValue, i:int):JsonValue {
+    return JsonValue{_: 0}
+}
+
+// [IMPLEMENTED] Wired to omni_json_array_len.
+func array_len(v:JsonValue):int { return 0 }
+
+// ============================================================================
+// Constructors
+// ============================================================================
+
+// [IMPLEMENTED] Wired to omni_json_new_null.
+func new_null():JsonValue { return JsonValue{_: 0} }
+// [IMPLEMENTED] Wired to omni_json_new_bool.
+func new_bool(b:bool):JsonValue { return JsonValue{_: 0} }
+// [IMPLEMENTED] Wired to omni_json_new_int.
+func new_int(i:int):JsonValue { return JsonValue{_: 0} }
+// [IMPLEMENTED] Wired to omni_json_new_float.
+func new_float(f:float):JsonValue { return JsonValue{_: 0} }
+// [IMPLEMENTED] Wired to omni_json_new_string.
+func new_string(s:string):JsonValue { return JsonValue{_: 0} }
+// [IMPLEMENTED] Wired to omni_json_new_array.
+func new_array():JsonValue { return JsonValue{_: 0} }
+// [IMPLEMENTED] Wired to omni_json_new_object.
+func new_object():JsonValue { return JsonValue{_: 0} }
+
+// ============================================================================
+// Mutation. Both helpers take ownership of `child`.
+// ============================================================================
+
+// [IMPLEMENTED] Wired to omni_json_array_push.
+func array_push(arr:JsonValue, child:JsonValue):void {}
+// [IMPLEMENTED] Wired to omni_json_object_set.
+func object_set(obj:JsonValue, key:string, child:JsonValue):void {}

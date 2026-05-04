@@ -256,6 +256,7 @@ func suggestStdImport(importPath []string) string {
 		"algorithms",
 		"time",
 		"network",
+		"json",
 		"log",
 		"testing",
 		"dev",

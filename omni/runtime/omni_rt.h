@@ -578,9 +578,92 @@ void* omni_malloc(size_t size);
 void omni_free(void* ptr);
 void* omni_realloc(void* ptr, size_t new_size);
 
-// JSON functions
-void* omni_json_parse(const char* json_str);
-char* omni_json_stringify(void* value, int32_t value_type, int32_t pretty);
+// JSON functions — tagged-union value model.
+//
+// `omni_json_t*` is a dynamically-typed JSON value: each node carries a
+// `kind` discriminator and the appropriate payload. Arrays and objects
+// hold child `omni_json_t*` pointers, so nested structures round-trip
+// through parse/stringify without losing type information.
+//
+// Lifetime: every constructor + parse + object/array_get returns a
+// node owned by the caller's enclosing root. Pass the root to
+// `omni_json_free` exactly once when done; it walks the tree.
+typedef enum {
+    OMNI_JSON_NULL = 0,
+    OMNI_JSON_BOOL,
+    OMNI_JSON_INT,
+    OMNI_JSON_FLOAT,
+    OMNI_JSON_STRING,
+    OMNI_JSON_ARRAY,
+    OMNI_JSON_OBJECT,
+} omni_json_kind_t;
+
+typedef struct omni_json omni_json_t;
+struct omni_json {
+    omni_json_kind_t kind;
+    union {
+        int32_t b;       // bool: 0 or 1
+        int64_t i;       // int (widened so JSON ints up to 2^53 round-trip)
+        double  f;       // float
+        char*   s;       // string (NUL-terminated, owned)
+        struct {
+            omni_json_t** items;
+            int32_t count;
+            int32_t cap;
+        } arr;
+        struct {
+            char**        keys;   // owned strings
+            omni_json_t** values; // owned children
+            int32_t       count;
+            int32_t       cap;
+        } obj;
+    } v;
+};
+
+// Parsing / serialization
+omni_json_t* omni_json_parse(const char* json_str);
+char* omni_json_stringify(omni_json_t* v);
+char* omni_json_stringify_pretty(omni_json_t* v);
+void omni_json_free(omni_json_t* v);
+
+// Kind predicates (return 1/0)
+int32_t omni_json_kind(omni_json_t* v);
+int32_t omni_json_is_null(omni_json_t* v);
+int32_t omni_json_is_bool(omni_json_t* v);
+int32_t omni_json_is_int(omni_json_t* v);
+int32_t omni_json_is_float(omni_json_t* v);
+int32_t omni_json_is_string(omni_json_t* v);
+int32_t omni_json_is_array(omni_json_t* v);
+int32_t omni_json_is_object(omni_json_t* v);
+
+// Accessors. `as_*` return defaults (0 / 0.0 / "") on kind mismatch so
+// callers can write tolerant code without checking kind first.
+int32_t  omni_json_as_bool(omni_json_t* v);
+int32_t  omni_json_as_int(omni_json_t* v);
+double   omni_json_as_float(omni_json_t* v);
+const char* omni_json_as_string(omni_json_t* v);
+
+// Object/array navigation. Returned children are still owned by the
+// root, do not free them individually.
+omni_json_t* omni_json_object_get(omni_json_t* v, const char* key);
+int32_t      omni_json_object_has(omni_json_t* v, const char* key);
+int32_t      omni_json_object_size(omni_json_t* v);
+const char*  omni_json_object_key_at(omni_json_t* v, int32_t i);
+omni_json_t* omni_json_array_get(omni_json_t* v, int32_t i);
+int32_t      omni_json_array_len(omni_json_t* v);
+
+// Constructors. Use these when building a JSON tree to stringify.
+omni_json_t* omni_json_new_null(void);
+omni_json_t* omni_json_new_bool(int32_t b);
+omni_json_t* omni_json_new_int(int32_t i);
+omni_json_t* omni_json_new_float(double f);
+omni_json_t* omni_json_new_string(const char* s);
+omni_json_t* omni_json_new_array(void);
+omni_json_t* omni_json_new_object(void);
+
+// Mutation. Both helpers take ownership of the child node.
+void omni_json_array_push(omni_json_t* arr, omni_json_t* child);
+void omni_json_object_set(omni_json_t* obj, const char* key, omni_json_t* child);
 
 // Form data and file upload functions
 void omni_http_parse_form_urlencoded(const char* body, omni_map_t* params);

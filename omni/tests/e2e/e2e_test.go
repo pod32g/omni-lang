@@ -1923,3 +1923,21 @@ func TestStdNetworkHttpPostFixture(t *testing.T) {
 		t.Errorf("http_post body delivery failed: result=%q want=201 (stdout: %s)", got, string(out))
 	}
 }
+
+// TestStdJson pins std.json on the C backend: parse + stringify round-trip
+// for primitives, nested objects, arrays, and the full kind/accessor
+// surface plus the constructor-based build path. The VM doesn't have
+// JSON intrinsics yet (tracked in project_network_todo memory), so this
+// is C-only — when the VM lands them, add a runVM check here.
+func TestStdJson(t *testing.T) {
+	testFile := "std_json.omni"
+	expected := "0"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}

@@ -2108,6 +2108,34 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						if inst.Type == "HTTPRequest" || strings.HasSuffix(inst.Type, ".HTTPRequest") {
 							varType = "omni_http_request_t*"
 						}
+					case "omni_json_parse",
+						"omni_json_object_get", "omni_json_array_get",
+						"omni_json_new_null", "omni_json_new_bool",
+						"omni_json_new_int", "omni_json_new_float",
+						"omni_json_new_string", "omni_json_new_array",
+						"omni_json_new_object":
+						// All of these produce omni_json_t*. The cloned
+						// std.json signatures say JsonValue, which our
+						// mapType translates the same way; the explicit
+						// case here covers calls where inst.Type comes
+						// back inferred/empty.
+						varType = "omni_json_t*"
+					case "omni_json_as_string",
+						"omni_json_object_key_at":
+						varType = "const char*"
+					case "omni_json_as_float":
+						varType = "double"
+					case "omni_json_kind",
+						"omni_json_is_null", "omni_json_is_bool",
+						"omni_json_is_int", "omni_json_is_float",
+						"omni_json_is_string", "omni_json_is_array",
+						"omni_json_is_object",
+						"omni_json_as_bool", "omni_json_as_int",
+						"omni_json_object_has", "omni_json_object_size",
+						"omni_json_array_len":
+						varType = "int32_t"
+					case "omni_json_stringify", "omni_json_stringify_pretty":
+						varType = "const char*"
 					}
 				}
 				// User-defined function calls that return a struct type often get
@@ -6884,6 +6912,11 @@ func (g *CGenerator) mapType(omniType string) string {
 		return "omni_url_t*"
 	case "IPAddress", "std.network.IPAddress":
 		return "omni_ip_address_t*"
+	case "JsonValue", "std.json.JsonValue":
+		// std.json wraps a pointer-only handle in an OmniLang struct so
+		// the type checker has a name to bind. The actual storage is
+		// the runtime's omni_json_t*.
+		return "omni_json_t*"
 	}
 
 	// Handle named struct types (like Point, User, etc.)
@@ -7353,6 +7386,69 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_http_delete"
 	case "std.network.http_request":
 		return "omni_http_request"
+	// std.json — tagged-union JSON value runtime
+	case "std.json.parse":
+		return "omni_json_parse"
+	case "std.json.stringify":
+		return "omni_json_stringify"
+	case "std.json.stringify_pretty":
+		return "omni_json_stringify_pretty"
+	case "std.json.kind":
+		return "omni_json_kind"
+	case "std.json.is_null":
+		return "omni_json_is_null"
+	case "std.json.is_bool":
+		return "omni_json_is_bool"
+	case "std.json.is_int":
+		return "omni_json_is_int"
+	case "std.json.is_float":
+		return "omni_json_is_float"
+	case "std.json.is_string":
+		return "omni_json_is_string"
+	case "std.json.is_array":
+		return "omni_json_is_array"
+	case "std.json.is_object":
+		return "omni_json_is_object"
+	case "std.json.as_bool":
+		return "omni_json_as_bool"
+	case "std.json.as_int":
+		return "omni_json_as_int"
+	case "std.json.as_float":
+		return "omni_json_as_float"
+	case "std.json.as_string":
+		return "omni_json_as_string"
+	case "std.json.object_get":
+		return "omni_json_object_get"
+	case "std.json.object_has":
+		return "omni_json_object_has"
+	case "std.json.object_size":
+		return "omni_json_object_size"
+	case "std.json.object_key_at":
+		return "omni_json_object_key_at"
+	case "std.json.array_get":
+		return "omni_json_array_get"
+	case "std.json.array_len":
+		return "omni_json_array_len"
+	case "std.json.new_null":
+		return "omni_json_new_null"
+	case "std.json.new_bool":
+		return "omni_json_new_bool"
+	case "std.json.new_int":
+		return "omni_json_new_int"
+	case "std.json.new_float":
+		return "omni_json_new_float"
+	case "std.json.new_string":
+		return "omni_json_new_string"
+	case "std.json.new_array":
+		return "omni_json_new_array"
+	case "std.json.new_object":
+		return "omni_json_new_object"
+	case "std.json.array_push":
+		return "omni_json_array_push"
+	case "std.json.object_set":
+		return "omni_json_object_set"
+	case "std.json.free":
+		return "omni_json_free"
 	case "std.network.http_response_create":
 		return "omni_http_response_create"
 	case "std.network.http_response_is_success":
@@ -8521,6 +8617,37 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.network.http_put":             "omni_http_put",
 		"std.network.http_delete":          "omni_http_delete",
 		"std.network.http_request":         "omni_http_request",
+		"std.json.parse":                         "omni_json_parse",
+		"std.json.stringify":                     "omni_json_stringify",
+		"std.json.stringify_pretty":              "omni_json_stringify_pretty",
+		"std.json.kind":                          "omni_json_kind",
+		"std.json.is_null":                       "omni_json_is_null",
+		"std.json.is_bool":                       "omni_json_is_bool",
+		"std.json.is_int":                        "omni_json_is_int",
+		"std.json.is_float":                      "omni_json_is_float",
+		"std.json.is_string":                     "omni_json_is_string",
+		"std.json.is_array":                      "omni_json_is_array",
+		"std.json.is_object":                     "omni_json_is_object",
+		"std.json.as_bool":                       "omni_json_as_bool",
+		"std.json.as_int":                        "omni_json_as_int",
+		"std.json.as_float":                      "omni_json_as_float",
+		"std.json.as_string":                     "omni_json_as_string",
+		"std.json.object_get":                    "omni_json_object_get",
+		"std.json.object_has":                    "omni_json_object_has",
+		"std.json.object_size":                   "omni_json_object_size",
+		"std.json.object_key_at":                 "omni_json_object_key_at",
+		"std.json.array_get":                     "omni_json_array_get",
+		"std.json.array_len":                     "omni_json_array_len",
+		"std.json.new_null":                      "omni_json_new_null",
+		"std.json.new_bool":                      "omni_json_new_bool",
+		"std.json.new_int":                       "omni_json_new_int",
+		"std.json.new_float":                     "omni_json_new_float",
+		"std.json.new_string":                    "omni_json_new_string",
+		"std.json.new_array":                     "omni_json_new_array",
+		"std.json.new_object":                    "omni_json_new_object",
+		"std.json.array_push":                    "omni_json_array_push",
+		"std.json.object_set":                    "omni_json_object_set",
+		"std.json.free":                          "omni_json_free",
 		"std.network.http_response_create":       "omni_http_response_create",
 		"std.network.http_response_is_success":   "omni_http_response_is_success",
 		"std.network.http_response_is_client_error": "omni_http_response_is_client_error",
@@ -8915,6 +9042,37 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.network.http_request_set_header":       true,
 		"std.network.http_request_set_body":         true,
 		"std.network.http_request_get_header":       true,
+		"std.json.parse":            true,
+		"std.json.stringify":        true,
+		"std.json.stringify_pretty": true,
+		"std.json.kind":             true,
+		"std.json.is_null":          true,
+		"std.json.is_bool":          true,
+		"std.json.is_int":           true,
+		"std.json.is_float":         true,
+		"std.json.is_string":        true,
+		"std.json.is_array":         true,
+		"std.json.is_object":        true,
+		"std.json.as_bool":          true,
+		"std.json.as_int":           true,
+		"std.json.as_float":         true,
+		"std.json.as_string":        true,
+		"std.json.object_get":       true,
+		"std.json.object_has":       true,
+		"std.json.object_size":      true,
+		"std.json.object_key_at":    true,
+		"std.json.array_get":        true,
+		"std.json.array_len":        true,
+		"std.json.new_null":         true,
+		"std.json.new_bool":         true,
+		"std.json.new_int":          true,
+		"std.json.new_float":        true,
+		"std.json.new_string":       true,
+		"std.json.new_array":        true,
+		"std.json.new_object":       true,
+		"std.json.array_push":       true,
+		"std.json.object_set":       true,
+		"std.json.free":             true,
 		"std.network.socket_create":        true,
 		"std.network.socket_connect":       true,
 		"std.network.socket_bind":          true,

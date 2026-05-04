@@ -6871,11 +6871,14 @@ const char* omni_context_param(omni_struct_t* ctx, const char* name) {
     return "";
 }
 
+// Returns omni_json_t* under the hood; declared as void* in the header
+// because the surrounding context API predates the typed JSON model.
+// Callers should treat it as opaque and cast through std.json helpers.
 void* omni_context_body_json(omni_struct_t* ctx) {
     if (!ctx) return NULL;
     const char* body = omni_struct_get_string_field(ctx, "body");
     if (!body || !*body) return NULL;
-    return omni_json_parse(body);
+    return (void*)omni_json_parse(body);
 }
 
 omni_struct_t* omni_context_text(omni_struct_t* ctx, const char* text) {
@@ -6887,7 +6890,8 @@ omni_struct_t* omni_context_text(omni_struct_t* ctx, const char* text) {
 
 omni_struct_t* omni_context_json(omni_struct_t* ctx, void* data) {
     if (!ctx) return ctx;
-    char* json_str = omni_json_stringify(data, 0, 0);
+    // `data` is an opaque omni_json_t* (see omni_context_body_json).
+    char* json_str = omni_json_stringify((omni_json_t*)data);
     if (json_str) free(json_str);
     return ctx;
 }
@@ -7157,328 +7161,518 @@ void omni_panic(const char* message) {
 
 // Note: omni_malloc, omni_free, and omni_realloc are already defined earlier in this file
 
-// JSON parser helper structure
+// =====================================================================
+// JSON: tagged-union value model with recursive parser + stringifier.
+//
+// Replaces the earlier `void*`-based code that lost type information at
+// every object/array boundary. The shape and ownership rules are
+// documented next to omni_json_t in omni_rt.h.
+// =====================================================================
+
+// ----- constructors ---------------------------------------------------
+
+static omni_json_t* json_alloc(omni_json_kind_t kind) {
+    omni_json_t* v = (omni_json_t*)calloc(1, sizeof(omni_json_t));
+    if (!v) return NULL;
+    v->kind = kind;
+    return v;
+}
+
+omni_json_t* omni_json_new_null(void)        { return json_alloc(OMNI_JSON_NULL); }
+omni_json_t* omni_json_new_bool(int32_t b)   { omni_json_t* v = json_alloc(OMNI_JSON_BOOL); if (v) v->v.b = b ? 1 : 0; return v; }
+omni_json_t* omni_json_new_int(int32_t i)    { omni_json_t* v = json_alloc(OMNI_JSON_INT); if (v) v->v.i = (int64_t)i; return v; }
+omni_json_t* omni_json_new_float(double f)   { omni_json_t* v = json_alloc(OMNI_JSON_FLOAT); if (v) v->v.f = f; return v; }
+omni_json_t* omni_json_new_string(const char* s) {
+    omni_json_t* v = json_alloc(OMNI_JSON_STRING);
+    if (!v) return NULL;
+    v->v.s = strdup(s ? s : "");
+    if (!v->v.s) { free(v); return NULL; }
+    return v;
+}
+omni_json_t* omni_json_new_array(void)  { return json_alloc(OMNI_JSON_ARRAY); }
+omni_json_t* omni_json_new_object(void) { return json_alloc(OMNI_JSON_OBJECT); }
+
+static int json_arr_grow(omni_json_t* arr) {
+    int32_t cap = arr->v.arr.cap == 0 ? 4 : arr->v.arr.cap * 2;
+    omni_json_t** items = (omni_json_t**)realloc(arr->v.arr.items, sizeof(omni_json_t*) * cap);
+    if (!items) return 0;
+    arr->v.arr.items = items;
+    arr->v.arr.cap = cap;
+    return 1;
+}
+void omni_json_array_push(omni_json_t* arr, omni_json_t* child) {
+    if (!arr || arr->kind != OMNI_JSON_ARRAY) { omni_json_free(child); return; }
+    if (arr->v.arr.count >= arr->v.arr.cap && !json_arr_grow(arr)) { omni_json_free(child); return; }
+    arr->v.arr.items[arr->v.arr.count++] = child;
+}
+
+static int json_obj_grow(omni_json_t* obj) {
+    int32_t cap = obj->v.obj.cap == 0 ? 4 : obj->v.obj.cap * 2;
+    char** keys = (char**)realloc(obj->v.obj.keys, sizeof(char*) * cap);
+    omni_json_t** values = (omni_json_t**)realloc(obj->v.obj.values, sizeof(omni_json_t*) * cap);
+    if (!keys || !values) {
+        // Restore whichever realloc succeeded; caller treats as OOM.
+        if (keys) obj->v.obj.keys = keys;
+        if (values) obj->v.obj.values = values;
+        return 0;
+    }
+    obj->v.obj.keys = keys;
+    obj->v.obj.values = values;
+    obj->v.obj.cap = cap;
+    return 1;
+}
+void omni_json_object_set(omni_json_t* obj, const char* key, omni_json_t* child) {
+    if (!obj || obj->kind != OMNI_JSON_OBJECT || !key) { omni_json_free(child); return; }
+    // Replace if key already exists (last-write-wins; preserves insertion order).
+    for (int32_t i = 0; i < obj->v.obj.count; i++) {
+        if (strcmp(obj->v.obj.keys[i], key) == 0) {
+            omni_json_free(obj->v.obj.values[i]);
+            obj->v.obj.values[i] = child;
+            return;
+        }
+    }
+    if (obj->v.obj.count >= obj->v.obj.cap && !json_obj_grow(obj)) { omni_json_free(child); return; }
+    obj->v.obj.keys[obj->v.obj.count] = strdup(key);
+    obj->v.obj.values[obj->v.obj.count] = child;
+    obj->v.obj.count++;
+}
+
+// ----- free -----------------------------------------------------------
+
+void omni_json_free(omni_json_t* v) {
+    if (!v) return;
+    switch (v->kind) {
+        case OMNI_JSON_STRING:
+            free(v->v.s);
+            break;
+        case OMNI_JSON_ARRAY:
+            for (int32_t i = 0; i < v->v.arr.count; i++) omni_json_free(v->v.arr.items[i]);
+            free(v->v.arr.items);
+            break;
+        case OMNI_JSON_OBJECT:
+            for (int32_t i = 0; i < v->v.obj.count; i++) {
+                free(v->v.obj.keys[i]);
+                omni_json_free(v->v.obj.values[i]);
+            }
+            free(v->v.obj.keys);
+            free(v->v.obj.values);
+            break;
+        default:
+            break;
+    }
+    free(v);
+}
+
+// ----- predicates / accessors ----------------------------------------
+
+int32_t omni_json_kind(omni_json_t* v)      { return v ? (int32_t)v->kind : (int32_t)OMNI_JSON_NULL; }
+int32_t omni_json_is_null(omni_json_t* v)   { return !v || v->kind == OMNI_JSON_NULL; }
+int32_t omni_json_is_bool(omni_json_t* v)   { return v && v->kind == OMNI_JSON_BOOL; }
+int32_t omni_json_is_int(omni_json_t* v)    { return v && v->kind == OMNI_JSON_INT; }
+int32_t omni_json_is_float(omni_json_t* v)  { return v && v->kind == OMNI_JSON_FLOAT; }
+int32_t omni_json_is_string(omni_json_t* v) { return v && v->kind == OMNI_JSON_STRING; }
+int32_t omni_json_is_array(omni_json_t* v)  { return v && v->kind == OMNI_JSON_ARRAY; }
+int32_t omni_json_is_object(omni_json_t* v) { return v && v->kind == OMNI_JSON_OBJECT; }
+
+int32_t omni_json_as_bool(omni_json_t* v) {
+    if (!v) return 0;
+    switch (v->kind) {
+        case OMNI_JSON_BOOL:   return v->v.b;
+        case OMNI_JSON_INT:    return v->v.i != 0;
+        case OMNI_JSON_FLOAT:  return v->v.f != 0.0;
+        case OMNI_JSON_STRING: return v->v.s && v->v.s[0] != '\0';
+        default:               return 0;
+    }
+}
+int32_t omni_json_as_int(omni_json_t* v) {
+    if (!v) return 0;
+    switch (v->kind) {
+        case OMNI_JSON_INT:   return (int32_t)v->v.i;
+        case OMNI_JSON_FLOAT: return (int32_t)v->v.f;
+        case OMNI_JSON_BOOL:  return v->v.b;
+        default:              return 0;
+    }
+}
+double omni_json_as_float(omni_json_t* v) {
+    if (!v) return 0.0;
+    switch (v->kind) {
+        case OMNI_JSON_FLOAT: return v->v.f;
+        case OMNI_JSON_INT:   return (double)v->v.i;
+        case OMNI_JSON_BOOL:  return (double)v->v.b;
+        default:              return 0.0;
+    }
+}
+const char* omni_json_as_string(omni_json_t* v) {
+    if (v && v->kind == OMNI_JSON_STRING && v->v.s) return v->v.s;
+    return "";
+}
+
+omni_json_t* omni_json_object_get(omni_json_t* v, const char* key) {
+    if (!v || v->kind != OMNI_JSON_OBJECT || !key) return NULL;
+    for (int32_t i = 0; i < v->v.obj.count; i++) {
+        if (strcmp(v->v.obj.keys[i], key) == 0) return v->v.obj.values[i];
+    }
+    return NULL;
+}
+int32_t omni_json_object_has(omni_json_t* v, const char* key) {
+    return omni_json_object_get(v, key) != NULL;
+}
+int32_t omni_json_object_size(omni_json_t* v) {
+    return (v && v->kind == OMNI_JSON_OBJECT) ? v->v.obj.count : 0;
+}
+const char* omni_json_object_key_at(omni_json_t* v, int32_t i) {
+    if (!v || v->kind != OMNI_JSON_OBJECT || i < 0 || i >= v->v.obj.count) return "";
+    return v->v.obj.keys[i];
+}
+omni_json_t* omni_json_array_get(omni_json_t* v, int32_t i) {
+    if (!v || v->kind != OMNI_JSON_ARRAY || i < 0 || i >= v->v.arr.count) return NULL;
+    return v->v.arr.items[i];
+}
+int32_t omni_json_array_len(omni_json_t* v) {
+    return (v && v->kind == OMNI_JSON_ARRAY) ? v->v.arr.count : 0;
+}
+
+// ----- parser ---------------------------------------------------------
+
 typedef struct {
     const char* json;
     size_t pos;
     size_t len;
-} json_parser_t;
+} omni_json_parser_t;
 
-static void json_skip_whitespace(json_parser_t* parser) {
-    while (parser->pos < parser->len && 
-           (parser->json[parser->pos] == ' ' || 
-            parser->json[parser->pos] == '\t' || 
-            parser->json[parser->pos] == '\n' || 
-            parser->json[parser->pos] == '\r')) {
-        parser->pos++;
+static void json_skip_ws(omni_json_parser_t* p) {
+    while (p->pos < p->len) {
+        char c = p->json[p->pos];
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') p->pos++;
+        else break;
     }
 }
 
-static void* json_parse_value(json_parser_t* parser);
+static omni_json_t* json_parse_node(omni_json_parser_t* p);
 
-static void* json_parse_string(json_parser_t* parser) {
-    if (parser->json[parser->pos] != '"') return NULL;
-    parser->pos++;
-    
-    size_t start = parser->pos;
-    while (parser->pos < parser->len && parser->json[parser->pos] != '"') {
-        if (parser->json[parser->pos] == '\\' && parser->pos + 1 < parser->len) {
-            parser->pos += 2; // Skip escape sequence
-        } else {
-            parser->pos++;
-        }
-    }
-    
-    if (parser->pos >= parser->len) return NULL;
-    
-    size_t len = parser->pos - start;
-    char* str = (char*)malloc(len + 1);
-    if (!str) return NULL;
-    
-    // Copy and unescape
-    size_t j = 0;
-    for (size_t i = start; i < parser->pos; i++) {
-        if (parser->json[i] == '\\' && i + 1 < parser->pos) {
-            i++;
-            switch (parser->json[i]) {
-                case 'n': str[j++] = '\n'; break;
-                case 't': str[j++] = '\t'; break;
-                case 'r': str[j++] = '\r'; break;
-                case '\\': str[j++] = '\\'; break;
-                case '"': str[j++] = '"'; break;
-                default: str[j++] = parser->json[i]; break;
+static int json_peek(omni_json_parser_t* p, char c) {
+    return p->pos < p->len && p->json[p->pos] == c;
+}
+
+// Parse a quoted JSON string into a malloc'd C string. Returns NULL on
+// malformed input. Handles the standard escapes plus \uXXXX (BMP only —
+// pairs aren't combined; the codepoint is emitted as UTF-8).
+static char* json_parse_string_raw(omni_json_parser_t* p) {
+    if (!json_peek(p, '"')) return NULL;
+    p->pos++;
+    // Two-pass would be safer; one pass with a growable buffer is fine.
+    size_t cap = 16, len = 0;
+    char* buf = (char*)malloc(cap);
+    if (!buf) return NULL;
+    while (p->pos < p->len && p->json[p->pos] != '"') {
+        char c = p->json[p->pos];
+        char emit[4];
+        int emit_len = 0;
+        if (c == '\\') {
+            if (p->pos + 1 >= p->len) { free(buf); return NULL; }
+            char esc = p->json[p->pos + 1];
+            p->pos += 2;
+            switch (esc) {
+                case '"':  emit[emit_len++] = '"';  break;
+                case '\\': emit[emit_len++] = '\\'; break;
+                case '/':  emit[emit_len++] = '/';  break;
+                case 'b':  emit[emit_len++] = '\b'; break;
+                case 'f':  emit[emit_len++] = '\f'; break;
+                case 'n':  emit[emit_len++] = '\n'; break;
+                case 'r':  emit[emit_len++] = '\r'; break;
+                case 't':  emit[emit_len++] = '\t'; break;
+                case 'u': {
+                    if (p->pos + 4 > p->len) { free(buf); return NULL; }
+                    unsigned cp = 0;
+                    for (int k = 0; k < 4; k++) {
+                        char h = p->json[p->pos + k];
+                        unsigned d;
+                        if (h >= '0' && h <= '9') d = h - '0';
+                        else if (h >= 'a' && h <= 'f') d = 10 + (h - 'a');
+                        else if (h >= 'A' && h <= 'F') d = 10 + (h - 'A');
+                        else { free(buf); return NULL; }
+                        cp = (cp << 4) | d;
+                    }
+                    p->pos += 4;
+                    // UTF-8 encode (no surrogate pair joining).
+                    if (cp < 0x80) {
+                        emit[emit_len++] = (char)cp;
+                    } else if (cp < 0x800) {
+                        emit[emit_len++] = (char)(0xC0 | (cp >> 6));
+                        emit[emit_len++] = (char)(0x80 | (cp & 0x3F));
+                    } else {
+                        emit[emit_len++] = (char)(0xE0 | (cp >> 12));
+                        emit[emit_len++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                        emit[emit_len++] = (char)(0x80 | (cp & 0x3F));
+                    }
+                    break;
+                }
+                default:
+                    free(buf); return NULL;
             }
         } else {
-            str[j++] = parser->json[i];
+            emit[emit_len++] = c;
+            p->pos++;
         }
+        // Append emit to buf, growing as needed.
+        if (len + emit_len + 1 > cap) {
+            while (len + emit_len + 1 > cap) cap *= 2;
+            char* nb = (char*)realloc(buf, cap);
+            if (!nb) { free(buf); return NULL; }
+            buf = nb;
+        }
+        for (int k = 0; k < emit_len; k++) buf[len++] = emit[k];
     }
-    str[j] = '\0';
-    
-    parser->pos++; // Skip closing quote
-    return str;
+    if (p->pos >= p->len) { free(buf); return NULL; }
+    p->pos++; // skip closing "
+    buf[len] = '\0';
+    return buf;
 }
 
-static void* json_parse_number(json_parser_t* parser) {
-    size_t start = parser->pos;
+static omni_json_t* json_parse_string_node(omni_json_parser_t* p) {
+    char* s = json_parse_string_raw(p);
+    if (!s) return NULL;
+    omni_json_t* v = json_alloc(OMNI_JSON_STRING);
+    if (!v) { free(s); return NULL; }
+    v->v.s = s;
+    return v;
+}
+
+static omni_json_t* json_parse_number_node(omni_json_parser_t* p) {
+    size_t start = p->pos;
     int is_float = 0;
-    
-    if (parser->json[parser->pos] == '-') parser->pos++;
-    while (parser->pos < parser->len && 
-           (parser->json[parser->pos] >= '0' && parser->json[parser->pos] <= '9')) {
-        parser->pos++;
-    }
-    if (parser->pos < parser->len && parser->json[parser->pos] == '.') {
+    if (json_peek(p, '-')) p->pos++;
+    while (p->pos < p->len && p->json[p->pos] >= '0' && p->json[p->pos] <= '9') p->pos++;
+    if (json_peek(p, '.')) {
         is_float = 1;
-        parser->pos++;
-        while (parser->pos < parser->len && 
-               (parser->json[parser->pos] >= '0' && parser->json[parser->pos] <= '9')) {
-            parser->pos++;
-        }
+        p->pos++;
+        while (p->pos < p->len && p->json[p->pos] >= '0' && p->json[p->pos] <= '9') p->pos++;
     }
-    
-    size_t len = parser->pos - start;
-    char* num_str = (char*)malloc(len + 1);
-    if (!num_str) return NULL;
-    strncpy(num_str, parser->json + start, len);
-    num_str[len] = '\0';
-    
+    if (p->pos < p->len && (p->json[p->pos] == 'e' || p->json[p->pos] == 'E')) {
+        is_float = 1;
+        p->pos++;
+        if (p->pos < p->len && (p->json[p->pos] == '+' || p->json[p->pos] == '-')) p->pos++;
+        while (p->pos < p->len && p->json[p->pos] >= '0' && p->json[p->pos] <= '9') p->pos++;
+    }
+    if (start == p->pos) return NULL;
+    char buf[64];
+    size_t n = p->pos - start;
+    if (n >= sizeof(buf)) n = sizeof(buf) - 1;
+    memcpy(buf, p->json + start, n);
+    buf[n] = '\0';
     if (is_float) {
-        double* d = (double*)malloc(sizeof(double));
-        if (d) *d = atof(num_str);
-        free(num_str);
-        return d;
-    } else {
-        int32_t* i = (int32_t*)malloc(sizeof(int32_t));
-        if (i) *i = atoi(num_str);
-        free(num_str);
-        return i;
+        omni_json_t* v = json_alloc(OMNI_JSON_FLOAT);
+        if (v) v->v.f = atof(buf);
+        return v;
     }
+    omni_json_t* v = json_alloc(OMNI_JSON_INT);
+    if (v) v->v.i = (int64_t)atoll(buf);
+    return v;
 }
 
-static void* json_parse_object(json_parser_t* parser) {
-    if (parser->json[parser->pos] != '{') return NULL;
-    parser->pos++;
-    
-    omni_map_t* map = omni_map_create();
-    if (!map) return NULL;
-    
-    json_skip_whitespace(parser);
-    
-    if (parser->json[parser->pos] == '}') {
-        parser->pos++;
-        return map;
-    }
-    
-    while (parser->pos < parser->len) {
-        json_skip_whitespace(parser);
-        
-        // Parse key
-        void* key_ptr = json_parse_string(parser);
-        if (!key_ptr) {
-            omni_map_destroy(map);
-            return NULL;
-        }
-        char* key = (char*)key_ptr;
-        
-        json_skip_whitespace(parser);
-        if (parser->json[parser->pos] != ':') {
-            free(key);
-            omni_map_destroy(map);
-            return NULL;
-        }
-        parser->pos++;
-        
-        json_skip_whitespace(parser);
-        
-        // Parse value
-        void* value = json_parse_value(parser);
-        if (!value) {
-            free(key);
-            omni_map_destroy(map);
-            return NULL;
-        }
-        
-        // Store in map (simplified - assumes string values for now)
-        if (value) {
-            char* value_str = (char*)value;
-            omni_map_put_string_string(map, key, value_str);
-            free(value_str);
-        }
-        free(key);
-        
-        json_skip_whitespace(parser);
-        if (parser->json[parser->pos] == '}') {
-            parser->pos++;
-            break;
-        }
-        if (parser->json[parser->pos] != ',') {
-            omni_map_destroy(map);
-            return NULL;
-        }
-        parser->pos++;
-    }
-    
-    return map;
-}
-
-static void* json_parse_array(json_parser_t* parser) {
-    if (parser->json[parser->pos] != '[') return NULL;
-    parser->pos++;
-    
-    omni_array_t* arr = omni_array_create();
+static omni_json_t* json_parse_array_node(omni_json_parser_t* p) {
+    if (!json_peek(p, '[')) return NULL;
+    p->pos++;
+    omni_json_t* arr = omni_json_new_array();
     if (!arr) return NULL;
-    
-    json_skip_whitespace(parser);
-    
-    if (parser->json[parser->pos] == ']') {
-        parser->pos++;
-        return arr;
+    json_skip_ws(p);
+    if (json_peek(p, ']')) { p->pos++; return arr; }
+    for (;;) {
+        omni_json_t* child = json_parse_node(p);
+        if (!child) { omni_json_free(arr); return NULL; }
+        omni_json_array_push(arr, child);
+        json_skip_ws(p);
+        if (json_peek(p, ',')) { p->pos++; json_skip_ws(p); continue; }
+        if (json_peek(p, ']')) { p->pos++; return arr; }
+        omni_json_free(arr);
+        return NULL;
     }
-    
-    while (parser->pos < parser->len) {
-        json_skip_whitespace(parser);
-        
-        void* value = json_parse_value(parser);
-        if (!value) {
-            omni_array_destroy(arr);
-            return NULL;
-        }
-        
-        // Add to array (value is already a pointer)
-        if (value) {
-            omni_array_append(arr, value);
-        }
-        
-        json_skip_whitespace(parser);
-        if (parser->json[parser->pos] == ']') {
-            parser->pos++;
-            break;
-        }
-        if (parser->json[parser->pos] != ',') {
-            omni_array_destroy(arr);
-            return NULL;
-        }
-        parser->pos++;
-    }
-    
-    return arr;
 }
 
-static void* json_parse_value(json_parser_t* parser) {
-    json_skip_whitespace(parser);
-    
-    if (parser->pos >= parser->len) return NULL;
-    
-    char c = parser->json[parser->pos];
-    
-    if (c == '"') {
-        return json_parse_string(parser);
-    } else if (c == '{') {
-        return json_parse_object(parser);
-    } else if (c == '[') {
-        return json_parse_array(parser);
-    } else if (c == '-' || (c >= '0' && c <= '9')) {
-        return json_parse_number(parser);
-    } else if (c == 't' && parser->pos + 3 < parser->len && 
-               strncmp(parser->json + parser->pos, "true", 4) == 0) {
-        parser->pos += 4;
-        int32_t* b = (int32_t*)malloc(sizeof(int32_t));
-        if (b) *b = 1;
-        return b;
-    } else if (c == 'f' && parser->pos + 4 < parser->len && 
-               strncmp(parser->json + parser->pos, "false", 5) == 0) {
-        parser->pos += 5;
-        int32_t* b = (int32_t*)malloc(sizeof(int32_t));
-        if (b) *b = 0;
-        return b;
-    } else if (c == 'n' && parser->pos + 3 < parser->len && 
-               strncmp(parser->json + parser->pos, "null", 4) == 0) {
-        parser->pos += 4;
-        return NULL; // NULL value
+static omni_json_t* json_parse_object_node(omni_json_parser_t* p) {
+    if (!json_peek(p, '{')) return NULL;
+    p->pos++;
+    omni_json_t* obj = omni_json_new_object();
+    if (!obj) return NULL;
+    json_skip_ws(p);
+    if (json_peek(p, '}')) { p->pos++; return obj; }
+    for (;;) {
+        json_skip_ws(p);
+        char* key = json_parse_string_raw(p);
+        if (!key) { omni_json_free(obj); return NULL; }
+        json_skip_ws(p);
+        if (!json_peek(p, ':')) { free(key); omni_json_free(obj); return NULL; }
+        p->pos++;
+        json_skip_ws(p);
+        omni_json_t* child = json_parse_node(p);
+        if (!child) { free(key); omni_json_free(obj); return NULL; }
+        omni_json_object_set(obj, key, child);
+        free(key);
+        json_skip_ws(p);
+        if (json_peek(p, ',')) { p->pos++; continue; }
+        if (json_peek(p, '}')) { p->pos++; return obj; }
+        omni_json_free(obj);
+        return NULL;
     }
-    
+}
+
+static omni_json_t* json_parse_node(omni_json_parser_t* p) {
+    json_skip_ws(p);
+    if (p->pos >= p->len) return NULL;
+    char c = p->json[p->pos];
+    if (c == '"') return json_parse_string_node(p);
+    if (c == '{') return json_parse_object_node(p);
+    if (c == '[') return json_parse_array_node(p);
+    if (c == '-' || (c >= '0' && c <= '9')) return json_parse_number_node(p);
+    if (c == 't' && p->pos + 4 <= p->len && strncmp(p->json + p->pos, "true", 4) == 0) {
+        p->pos += 4; return omni_json_new_bool(1);
+    }
+    if (c == 'f' && p->pos + 5 <= p->len && strncmp(p->json + p->pos, "false", 5) == 0) {
+        p->pos += 5; return omni_json_new_bool(0);
+    }
+    if (c == 'n' && p->pos + 4 <= p->len && strncmp(p->json + p->pos, "null", 4) == 0) {
+        p->pos += 4; return omni_json_new_null();
+    }
     return NULL;
 }
 
-void* omni_json_parse(const char* json_str) {
+omni_json_t* omni_json_parse(const char* json_str) {
     if (!json_str) return NULL;
-    
-    json_parser_t parser;
-    parser.json = json_str;
-    parser.pos = 0;
-    parser.len = strlen(json_str);
-    
-    return json_parse_value(&parser);
+    omni_json_parser_t p = { json_str, 0, strlen(json_str) };
+    omni_json_t* v = json_parse_node(&p);
+    json_skip_ws(&p);
+    // Trailing junk → reject (matches encoders that stringify a single
+    // root). Callers that want streaming behavior can chunk themselves.
+    if (v && p.pos != p.len) { omni_json_free(v); return NULL; }
+    return v;
 }
 
-// JSON stringifier
-static void json_stringify_value(char* buffer, size_t* pos, size_t size, void* value, int32_t value_type, int32_t pretty, int32_t indent) {
-    (void)pretty;  // Unused for now
-    (void)indent;  // Unused for now
-    if (!value) {
-        *pos += snprintf(buffer + *pos, size - *pos, "null");
-        return;
+// ----- stringifier ----------------------------------------------------
+
+typedef struct {
+    char*  data;
+    size_t len;
+    size_t cap;
+} json_buf_t;
+
+static int json_buf_reserve(json_buf_t* b, size_t add) {
+    if (b->len + add + 1 <= b->cap) return 1;
+    size_t cap = b->cap == 0 ? 64 : b->cap * 2;
+    while (b->len + add + 1 > cap) cap *= 2;
+    char* nd = (char*)realloc(b->data, cap);
+    if (!nd) return 0;
+    b->data = nd;
+    b->cap = cap;
+    return 1;
+}
+static void json_buf_putc(json_buf_t* b, char c) {
+    if (json_buf_reserve(b, 1)) b->data[b->len++] = c;
+}
+static void json_buf_puts(json_buf_t* b, const char* s) {
+    size_t n = strlen(s);
+    if (json_buf_reserve(b, n)) { memcpy(b->data + b->len, s, n); b->len += n; }
+}
+
+static void json_emit_string(json_buf_t* b, const char* s) {
+    json_buf_putc(b, '"');
+    for (const unsigned char* p = (const unsigned char*)(s ? s : ""); *p; p++) {
+        switch (*p) {
+            case '"':  json_buf_puts(b, "\\\""); break;
+            case '\\': json_buf_puts(b, "\\\\"); break;
+            case '\b': json_buf_puts(b, "\\b"); break;
+            case '\f': json_buf_puts(b, "\\f"); break;
+            case '\n': json_buf_puts(b, "\\n"); break;
+            case '\r': json_buf_puts(b, "\\r"); break;
+            case '\t': json_buf_puts(b, "\\t"); break;
+            default:
+                if (*p < 0x20) {
+                    char tmp[8];
+                    snprintf(tmp, sizeof(tmp), "\\u%04x", *p);
+                    json_buf_puts(b, tmp);
+                } else {
+                    json_buf_putc(b, (char)*p);
+                }
+        }
     }
-    
-    switch (value_type) {
-        case 0: { // int
-            int32_t* i = (int32_t*)value;
-            *pos += snprintf(buffer + *pos, size - *pos, "%d", *i);
+    json_buf_putc(b, '"');
+}
+
+static void json_emit_indent(json_buf_t* b, int pretty, int depth) {
+    if (!pretty) return;
+    json_buf_putc(b, '\n');
+    for (int i = 0; i < depth; i++) json_buf_puts(b, "  ");
+}
+
+static void json_emit(json_buf_t* b, omni_json_t* v, int pretty, int depth) {
+    if (!v) { json_buf_puts(b, "null"); return; }
+    char tmp[64];
+    switch (v->kind) {
+        case OMNI_JSON_NULL:
+            json_buf_puts(b, "null");
+            break;
+        case OMNI_JSON_BOOL:
+            json_buf_puts(b, v->v.b ? "true" : "false");
+            break;
+        case OMNI_JSON_INT:
+            snprintf(tmp, sizeof(tmp), "%lld", (long long)v->v.i);
+            json_buf_puts(b, tmp);
+            break;
+        case OMNI_JSON_FLOAT: {
+            // %g picks compact representation; force a trailing .0 if
+            // the result looks like an integer so the round-trip stays
+            // typed as float instead of getting reparsed as int.
+            snprintf(tmp, sizeof(tmp), "%.17g", v->v.f);
+            const char* dot = strchr(tmp, '.');
+            const char* exp = strchr(tmp, 'e');
+            json_buf_puts(b, tmp);
+            if (!dot && !exp) json_buf_puts(b, ".0");
             break;
         }
-        case 1: { // string
-            char* str = (char*)value;
-            *pos += snprintf(buffer + *pos, size - *pos, "\"%s\"", str);
+        case OMNI_JSON_STRING:
+            json_emit_string(b, v->v.s);
             break;
-        }
-        case 2: { // float
-            double* d = (double*)value;
-            *pos += snprintf(buffer + *pos, size - *pos, "%.6f", *d);
+        case OMNI_JSON_ARRAY:
+            json_buf_putc(b, '[');
+            for (int32_t i = 0; i < v->v.arr.count; i++) {
+                if (i > 0) json_buf_putc(b, ',');
+                json_emit_indent(b, pretty, depth + 1);
+                json_emit(b, v->v.arr.items[i], pretty, depth + 1);
+            }
+            if (v->v.arr.count > 0) json_emit_indent(b, pretty, depth);
+            json_buf_putc(b, ']');
             break;
-        }
-        case 3: { // bool
-            int32_t* b = (int32_t*)value;
-            *pos += snprintf(buffer + *pos, size - *pos, *b ? "true" : "false");
-            break;
-        }
-        case 4: { // map
-            (void)value; // Map handling not yet implemented
-            // omni_map_t* map = (omni_map_t*)value;
-            *pos += snprintf(buffer + *pos, size - *pos, "{");
-            // Simplified - would iterate map
-            *pos += snprintf(buffer + *pos, size - *pos, "}");
-            break;
-        }
-        case 5: { // array
-            (void)value; // Array handling not yet implemented
-            // omni_array_t* arr = (omni_array_t*)value;
-            *pos += snprintf(buffer + *pos, size - *pos, "[");
-            // Simplified - would iterate array
-            *pos += snprintf(buffer + *pos, size - *pos, "]");
-            break;
-        }
-        default:
-            *pos += snprintf(buffer + *pos, size - *pos, "null");
+        case OMNI_JSON_OBJECT:
+            json_buf_putc(b, '{');
+            for (int32_t i = 0; i < v->v.obj.count; i++) {
+                if (i > 0) json_buf_putc(b, ',');
+                json_emit_indent(b, pretty, depth + 1);
+                json_emit_string(b, v->v.obj.keys[i]);
+                json_buf_putc(b, ':');
+                if (pretty) json_buf_putc(b, ' ');
+                json_emit(b, v->v.obj.values[i], pretty, depth + 1);
+            }
+            if (v->v.obj.count > 0) json_emit_indent(b, pretty, depth);
+            json_buf_putc(b, '}');
             break;
     }
 }
 
-char* omni_json_stringify(void* value, int32_t value_type, int32_t pretty) {
-    if (!value && value_type != 0) {
-        char* result = (char*)malloc(5);
-        if (result) strcpy(result, "null");
-        return result;
-    }
-    
-    size_t size = 1024;
-    char* buffer = (char*)malloc(size);
-    if (!buffer) return NULL;
-    
-    size_t pos = 0;
-    json_stringify_value(buffer, &pos, size, value, value_type, pretty, 0);
-    buffer[pos] = '\0';
-    
-    return buffer;
+static char* json_finish(json_buf_t* b) {
+    if (!json_buf_reserve(b, 0)) return NULL;
+    b->data[b->len] = '\0';
+    // Hand back a buffer the caller owns; we don't shrink it.
+    return b->data;
+}
+
+char* omni_json_stringify(omni_json_t* v) {
+    json_buf_t b = {0};
+    json_emit(&b, v, 0, 0);
+    return json_finish(&b);
+}
+char* omni_json_stringify_pretty(omni_json_t* v) {
+    json_buf_t b = {0};
+    json_emit(&b, v, 1, 0);
+    return json_finish(&b);
 }
 
 // Form data parsing

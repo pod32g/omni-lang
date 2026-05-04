@@ -328,11 +328,30 @@ Offline parts (`ip_is_valid`, `ip_parse`, `ip_is_loopback`, `ip_is_private`,
 `TestStdNetworkBasic` on both backends. The audit caught `omni_ip_is_valid`
 accepting out-of-range IPv4 segments and `omni_url_is_valid` returning true
 for any string containing `://`; both runtime helpers now do real
-validation. Network-touching functions (HTTP, DNS, sockets,
-`network_ping`/`is_connected`/`get_local_ip`) are wired but not exercised
-in CI. C-backend struct-field access for `omni_url_t*` and undeclared
-`http_response_is_*` user helpers are pre-existing gaps tracked
-separately.
+validation. Networked HTTP (`http_get`/`http_post`) is now exercised
+end-to-end against an in-process httptest fixture under
+`OMNI_NETWORK_TESTS=1`. The HTTPRequest/HTTPResponse pure-data surface
+(constructors, status-class predicates, get/set_header) is pinned in
+default CI by `TestStdNetworkHttpResponse` / `TestStdNetworkHttpRequest`.
+
+### std.json
+- [IMPLEMENTED] `parse(s)` - Wired to `omni_json_parse` (recursive descent over a tagged-union `omni_json_t*`)
+- [IMPLEMENTED] `stringify(v)` / `stringify_pretty(v)` - Wired to `omni_json_stringify` / `omni_json_stringify_pretty`; pretty form uses two-space indent
+- [IMPLEMENTED] `kind(v)` - Returns `0..6` (null/bool/int/float/string/array/object)
+- [IMPLEMENTED] `is_null` / `is_bool` / `is_int` / `is_float` / `is_string` / `is_array` / `is_object`
+- [IMPLEMENTED] `as_bool(v)` / `as_int(v)` / `as_float(v)` / `as_string(v)` - Tolerant accessors that return defaults on kind mismatch
+- [IMPLEMENTED] `object_get(v, key)` / `object_has` / `object_size` / `object_key_at(v, i)`
+- [IMPLEMENTED] `array_get(v, i)` / `array_len(v)`
+- [IMPLEMENTED] Constructors: `new_null` / `new_bool` / `new_int` / `new_float` / `new_string` / `new_array` / `new_object`
+- [IMPLEMENTED] Mutation: `array_push(arr, child)` / `object_set(obj, key, child)` (both take ownership)
+- [IMPLEMENTED] `free(v)` - Recursively frees the tree
+
+C-only for now; the VM doesn't yet have JSON intrinsics. Pinned by
+`TestStdJson` in `omni/tests/e2e/`. The previous `void*`-based
+`omni_json_parse` / `omni_json_stringify` shim was incomplete (string-
+only object values, stubbed map/array stringify) and has been
+replaced. Existing callers (`std.web.context_body_json` /
+`context_json`) now route through the new tagged-union API.
 
 ### std.web
 - [IMPLEMENTED] `server_create(port, options)` - Wired to `omni_server_create`

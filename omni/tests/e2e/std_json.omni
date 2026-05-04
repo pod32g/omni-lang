@@ -1,0 +1,90 @@
+// std.json: round-trip parse + stringify on primitives, nested objects,
+// arrays, and the kind/accessor predicates. Pinning these on the C
+// backend means user code can read JSON request/response bodies and
+// build JSON responses without rolling its own parser.
+//
+// The VM doesn't have JSON intrinsics yet — see project_network_todo
+// memory — so this test runs on C only. When VM lands, add a runVM
+// check next to the existing runCBackend in e2e_test.go.
+import std
+
+func main():int {
+    // -- Primitive parse/stringify round-trip ----------------------------
+
+    let n:std.json.JsonValue = std.json.parse("null")
+    if !std.json.is_null(n) { return 1 }
+    if !std.string.equals(std.json.stringify(n), "null") { return 2 }
+
+    let b:std.json.JsonValue = std.json.parse("true")
+    if !std.json.is_bool(b) { return 3 }
+    if !std.json.as_bool(b) { return 4 }
+    if !std.string.equals(std.json.stringify(b), "true") { return 5 }
+
+    let i:std.json.JsonValue = std.json.parse("-42")
+    if !std.json.is_int(i) { return 6 }
+    if std.json.as_int(i) != -42 { return 7 }
+
+    let s:std.json.JsonValue = std.json.parse("\"hello\\nworld\"")
+    if !std.json.is_string(s) { return 8 }
+    // Escapes decoded on parse: the parsed string holds a real newline.
+    let s_out:string = std.json.as_string(s)
+    if std.string.length(s_out) != 11 { return 9 }
+    // Re-stringify re-encodes the newline as \n.
+    if !std.string.equals(std.json.stringify(s),
+                          "\"hello\\nworld\"") { return 10 }
+
+    // -- Object navigation ----------------------------------------------
+
+    let obj:std.json.JsonValue =
+        std.json.parse("{\"name\":\"alice\",\"age\":30,\"active\":true}")
+    if !std.json.is_object(obj) { return 11 }
+    if std.json.object_size(obj) != 3 { return 12 }
+    if !std.json.object_has(obj, "name") { return 13 }
+    if std.json.object_has(obj, "missing") { return 14 }
+
+    let name:std.json.JsonValue = std.json.object_get(obj, "name")
+    if !std.string.equals(std.json.as_string(name), "alice") { return 15 }
+    let age:std.json.JsonValue = std.json.object_get(obj, "age")
+    if std.json.as_int(age) != 30 { return 16 }
+    let active:std.json.JsonValue = std.json.object_get(obj, "active")
+    if !std.json.as_bool(active) { return 17 }
+
+    // -- Array navigation -----------------------------------------------
+
+    let arr:std.json.JsonValue = std.json.parse("[10,20,30,40]")
+    if !std.json.is_array(arr) { return 18 }
+    if std.json.array_len(arr) != 4 { return 19 }
+    if std.json.as_int(std.json.array_get(arr, 0)) != 10 { return 20 }
+    if std.json.as_int(std.json.array_get(arr, 3)) != 40 { return 21 }
+
+    // -- Nested ---------------------------------------------------------
+
+    let nested:std.json.JsonValue =
+        std.json.parse("{\"users\":[{\"id\":1},{\"id\":2}]}")
+    let users:std.json.JsonValue = std.json.object_get(nested, "users")
+    if std.json.array_len(users) != 2 { return 22 }
+    let u0:std.json.JsonValue = std.json.array_get(users, 0)
+    if std.json.as_int(std.json.object_get(u0, "id")) != 1 { return 23 }
+    let u1:std.json.JsonValue = std.json.array_get(users, 1)
+    if std.json.as_int(std.json.object_get(u1, "id")) != 2 { return 24 }
+
+    // -- Build via constructors + stringify -----------------------------
+
+    let out:std.json.JsonValue = std.json.new_object()
+    std.json.object_set(out, "ok", std.json.new_bool(true))
+    std.json.object_set(out, "count", std.json.new_int(7))
+    let items:std.json.JsonValue = std.json.new_array()
+    std.json.array_push(items, std.json.new_string("a"))
+    std.json.array_push(items, std.json.new_string("b"))
+    std.json.object_set(out, "items", items)
+    let encoded:string = std.json.stringify(out)
+    // Round-trip back: every field should still be readable.
+    let decoded:std.json.JsonValue = std.json.parse(encoded)
+    if !std.json.as_bool(std.json.object_get(decoded, "ok")) { return 25 }
+    if std.json.as_int(std.json.object_get(decoded, "count")) != 7 { return 26 }
+    let items2:std.json.JsonValue = std.json.object_get(decoded, "items")
+    if std.json.array_len(items2) != 2 { return 27 }
+    if !std.string.equals(std.json.as_string(std.json.array_get(items2, 0)), "a") { return 28 }
+
+    return 0
+}
