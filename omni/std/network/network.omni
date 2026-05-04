@@ -229,10 +229,8 @@ func http_delete(url:string):HTTPResponse {
 }
 
 // http_request performs a custom HTTP request from a built HTTPRequest.
-// [INTRINSIC-C] Wired to omni_http_request on C; the VM has no
-// network stack, so the body fails loud rather than pretending to
-// succeed. (Differs from http_get/post/put/delete which the VM has
-// dedicated intrinsics for.)
+// [INTRINSIC] Wired to omni_http_request on C; VM intrinsic backed by
+// net/http via vm_http.go (handles method/url/headers/body together).
 func http_request(req:HTTPRequest):HTTPResponse {
     _intrinsic_not_wired("http_request")
     return HTTPResponse{status_code: 0, status_text: "", headers: {}, body: ""}

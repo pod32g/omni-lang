@@ -1974,6 +1974,69 @@ func TestStdNetworkDnsLookup(t *testing.T) {
 	}
 }
 
+// TestStdNetworkHttpVMFixture exercises the new VM-side http_get /
+// http_post / http_request implementations against a single httptest
+// server. Gated by OMNI_NETWORK_TESTS so default CI doesn't hit the
+// loopback HTTP stack. The VM dispatch is backed by net/http via
+// vm_http.go; this proves the round-trip works without going through
+// the C compile + runtime path.
+func TestStdNetworkHttpVMFixture(t *testing.T) {
+	if os.Getenv("OMNI_NETWORK_TESTS") != "1" {
+		t.Skip("set OMNI_NETWORK_TESTS=1 to enable network-touching tests")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ok", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
+		buf := make([]byte, 1024)
+		n, _ := r.Body.Read(buf)
+		if string(buf[:n]) == "hello" {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+	})
+	mux.HandleFunc("/headers", func(w http.ResponseWriter, r *http.Request) {
+		// std_network_http_request_argv.omni hard-codes X-Omni: chained.
+		if r.Header.Get("X-Omni") == "chained" && r.Method == "PUT" {
+			w.WriteHeader(http.StatusAccepted)
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	// http_get → 200
+	got, err := runVMWithArgs("std_network_http_get_argv.omni", srv.URL+"/ok")
+	if err != nil {
+		t.Fatalf("http_get VM: %v", err)
+	}
+	if got != "200" {
+		t.Errorf("http_get VM: got %q want 200", got)
+	}
+
+	// http_post with matching body → 201
+	got, err = runVMWithArgs("std_network_http_post_argv.omni", srv.URL+"/echo", "hello")
+	if err != nil {
+		t.Fatalf("http_post VM: %v", err)
+	}
+	if got != "201" {
+		t.Errorf("http_post VM: got %q want 201", got)
+	}
+
+	// http_request chained builder with PUT + custom header → 202
+	got, err = runVMWithArgs("std_network_http_request_argv.omni", "PUT", srv.URL+"/headers", "")
+	if err != nil {
+		t.Fatalf("http_request VM: %v", err)
+	}
+	if got != "202" {
+		t.Errorf("http_request VM: got %q want 202", got)
+	}
+}
+
 // TestStdNetworkHttpGetFixture exercises std.network.http_get end to
 // end against an in-process httptest.Server. The fixture serves
 // distinct responses on three paths so we can verify status_code,

@@ -1041,7 +1041,12 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.network.socket_connect",
 		"std.network.socket_send",
 		"std.network.socket_receive",
-		"std.network.socket_close":
+		"std.network.socket_close",
+		"std.network.http_get",
+		"std.network.http_post",
+		"std.network.http_put",
+		"std.network.http_delete",
+		"std.network.http_request":
 		return true
 	}
 	return false
@@ -4101,6 +4106,38 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			id, _ := toInt(operandValue(fr, operands[0]))
 			return Result{Type: "bool", Value: vmSocketClose(id)}, true
 		}
+	// std.network HTTP intrinsics — backed by net/http via vm_http.go.
+	// Each returns the HTTPResponse map shape that matches what the
+	// std.network struct construction would produce on the C backend, so
+	// downstream resp.status_code / resp.body / resp.headers["X"] resolve
+	// the same way through execMember and execIndex.
+	case "std.network.http_get":
+		if len(operands) == 1 {
+			url, _ := toString(operandValue(fr, operands[0]))
+			return Result{Type: "std.network.HTTPResponse", Value: vmHTTPDo("GET", url, nil, "")}, true
+		}
+	case "std.network.http_post":
+		if len(operands) == 2 {
+			url, _ := toString(operandValue(fr, operands[0]))
+			body, _ := toString(operandValue(fr, operands[1]))
+			return Result{Type: "std.network.HTTPResponse", Value: vmHTTPDo("POST", url, nil, body)}, true
+		}
+	case "std.network.http_put":
+		if len(operands) == 2 {
+			url, _ := toString(operandValue(fr, operands[0]))
+			body, _ := toString(operandValue(fr, operands[1]))
+			return Result{Type: "std.network.HTTPResponse", Value: vmHTTPDo("PUT", url, nil, body)}, true
+		}
+	case "std.network.http_delete":
+		if len(operands) == 1 {
+			url, _ := toString(operandValue(fr, operands[0]))
+			return Result{Type: "std.network.HTTPResponse", Value: vmHTTPDo("DELETE", url, nil, "")}, true
+		}
+	case "std.network.http_request":
+		if len(operands) == 1 {
+			method, url, headers, body := vmHTTPRequestExtract(operandValue(fr, operands[0]).Value)
+			return Result{Type: "std.network.HTTPResponse", Value: vmHTTPDo(method, url, headers, body)}, true
+		}
 	case "std.string.split":
 		if len(operands) == 2 {
 			s, _ := toString(operandValue(fr, operands[0]))
@@ -5316,14 +5353,6 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 		return Result{Type: "array<std.network.IPAddress>", Value: []map[string]interface{}{}}, true
 	case "std.network.dns_reverse_lookup":
 		return Result{Type: "string", Value: ""}, true
-	case "std.network.http_get":
-		return Result{Type: "std.network.HTTPResponse", Value: buildHTTPPlaceholderResponse()}, true
-	case "std.network.http_post":
-		return Result{Type: "std.network.HTTPResponse", Value: buildHTTPPlaceholderResponse()}, true
-	case "std.network.http_put":
-		return Result{Type: "std.network.HTTPResponse", Value: buildHTTPPlaceholderResponse()}, true
-	case "std.network.http_delete":
-		return Result{Type: "std.network.HTTPResponse", Value: buildHTTPPlaceholderResponse()}, true
 	}
 
 	return Result{}, false
@@ -6792,15 +6821,6 @@ func urlFromStruct(val Result) (string, bool) {
 		assembled.Host = host
 	}
 	return assembled.String(), true
-}
-
-func buildHTTPPlaceholderResponse() map[string]interface{} {
-	return map[string]interface{}{
-		"status_code": 501,
-		"status_text": "Not Implemented",
-		"headers":     map[string]string{},
-		"body":        "",
-	}
 }
 
 func ipValueToString(val Result) (string, bool) {
