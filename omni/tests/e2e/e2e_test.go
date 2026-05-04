@@ -1996,6 +1996,131 @@ func TestStdNetworkHttpPostFixture(t *testing.T) {
 	}
 }
 
+// runArgvDriver builds (if needed) and runs a single-binary argv-driven
+// network fixture under DYLD/LD_LIBRARY_PATH for the runtime stubs.
+// Returns the integer parsed from "OmniLang program result: <n>".
+func runArgvDriver(t *testing.T, fixture string, executable string, args ...string) (string, []byte) {
+	t.Helper()
+	if _, err := runCBackend(fixture); err != nil {
+		t.Fatalf("build %s: %v", fixture, err)
+	}
+	cmd := exec.Command(executable, args...)
+	cmd.Env = append(os.Environ(),
+		"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+		"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); !ok {
+			t.Fatalf("run failed: %v\nstdout: %s", err, string(out))
+		}
+	}
+	got := ""
+	for _, line := range strings.Split(string(out), "\n") {
+		const prefix = "OmniLang program result: "
+		if strings.HasPrefix(line, prefix) {
+			got = strings.TrimSpace(line[len(prefix):])
+			break
+		}
+	}
+	return got, out
+}
+
+// TestStdNetworkHttpPutFixture verifies http_put delivers the body and
+// returns the server's status. Server replies 200 if the body matches,
+// 422 otherwise — distinguishing dropped bodies from successful sends.
+func TestStdNetworkHttpPutFixture(t *testing.T) {
+	if os.Getenv("OMNI_NETWORK_TESTS") != "1" {
+		t.Skip("set OMNI_NETWORK_TESTS=1 to enable network-touching tests")
+	}
+	const expectedBody = "PUT-payload"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		buf := make([]byte, 1024)
+		n, _ := r.Body.Read(buf)
+		if string(buf[:n]) == expectedBody {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+	}))
+	defer srv.Close()
+	got, out := runArgvDriver(t, "std_network_http_put_argv.omni", "./std_network_http_put_argv", srv.URL, expectedBody)
+	if got != "200" {
+		t.Errorf("http_put body delivery failed: result=%q want=200 (stdout: %s)", got, string(out))
+	}
+}
+
+// TestStdNetworkHttpDeleteFixture verifies http_delete reaches the
+// server with the right method and returns the status it serves.
+func TestStdNetworkHttpDeleteFixture(t *testing.T) {
+	if os.Getenv("OMNI_NETWORK_TESTS") != "1" {
+		t.Skip("set OMNI_NETWORK_TESTS=1 to enable network-touching tests")
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	got, out := runArgvDriver(t, "std_network_http_delete_argv.omni", "./std_network_http_delete_argv", srv.URL)
+	if got != "204" {
+		t.Errorf("http_delete: result=%q want=204 (stdout: %s)", got, string(out))
+	}
+}
+
+// TestStdNetworkHttpRequestFixture exercises the chained-builder path
+// (http_request_create + set_header + set_body + http_request). The
+// server checks that the X-Omni header round-trips and the body matches,
+// proving that header chaining and body delivery both work.
+func TestStdNetworkHttpRequestFixture(t *testing.T) {
+	if os.Getenv("OMNI_NETWORK_TESTS") != "1" {
+		t.Skip("set OMNI_NETWORK_TESTS=1 to enable network-touching tests")
+	}
+	const expectedBody = "chained-body"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Omni") != "chained" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		buf := make([]byte, 1024)
+		n, _ := r.Body.Read(buf)
+		if string(buf[:n]) != expectedBody {
+			w.WriteHeader(http.StatusUnprocessableEntity)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+	got, out := runArgvDriver(t, "std_network_http_request_argv.omni", "./std_network_http_request_argv", "POST", srv.URL, expectedBody)
+	if got != "202" {
+		t.Errorf("http_request chained builder: result=%q want=202 (stdout: %s)", got, string(out))
+	}
+}
+
+// TestStdNetworkLocalIp pins network_get_local_ip → ip_to_string → non-empty.
+// Gated because some sandboxed environments don't expose a usable
+// non-loopback address.
+func TestStdNetworkLocalIp(t *testing.T) {
+	if os.Getenv("OMNI_NETWORK_TESTS") != "1" {
+		t.Skip("set OMNI_NETWORK_TESTS=1 to enable network-touching tests")
+	}
+	testFile := "std_network_local_ip.omni"
+	expected := "0"
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStdJson pins std.json on the C backend: parse + stringify round-trip
 // for primitives, nested objects, arrays, and the full kind/accessor
 // surface plus the constructor-based build path. The VM doesn't have

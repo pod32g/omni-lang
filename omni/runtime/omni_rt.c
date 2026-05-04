@@ -6299,12 +6299,25 @@ static omni_http_response_t* omni_http_via_libcurl(const char* method, const cha
         curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
     }
     
-    // Add custom headers
+    // Add custom headers — iterate the string-string map and emit one
+    // "Name: value" entry per key. Bodies of POST/PUT requests need at
+    // minimum a Content-Length, but libcurl synthesizes that from
+    // CURLOPT_POSTFIELDS, so we only forward user-supplied headers here.
     struct curl_slist* header_list = NULL;
     if (headers) {
-        // Iterate through headers map and add to curl
-        // Note: This is simplified - full implementation would iterate map
-        // For now, we'll set common headers manually if needed
+        for (int32_t b = 0; b < headers->bucket_count; b++) {
+            for (omni_map_entry_t* e = headers->buckets[b]; e; e = e->next) {
+                if (!e->key || !e->value) continue;
+                size_t kl = strlen((const char*)e->key);
+                size_t vl = strlen((const char*)e->value);
+                size_t need = kl + vl + 3; // ": " + NUL
+                char* buf = (char*)malloc(need);
+                if (!buf) continue;
+                snprintf(buf, need, "%s: %s", (const char*)e->key, (const char*)e->value);
+                header_list = curl_slist_append(header_list, buf);
+                free(buf);
+            }
+        }
     }
     if (header_list) {
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list);
@@ -6410,7 +6423,6 @@ static int omni_http_parse_url(const char* url, char* host, int* port, char* pat
 // Perform HTTP request using raw sockets
 static omni_http_response_t* omni_http_via_socket(const char* method, const char* url,
                                                    omni_map_t* headers, const char* body) {
-    (void)headers; // Headers not yet implemented in raw socket version
     char host[256];
     int port;
     char path[512];
@@ -6465,9 +6477,29 @@ static omni_http_response_t* omni_http_via_socket(const char* method, const char
         strcat(request, content_length);
     }
     
-    // Add custom headers
-    // Note: Full implementation would iterate headers map
-    
+    // Add custom headers — iterate the string-string headers map and
+    // append one "Name: value\r\n" line per entry. Skips Host /
+    // Content-Length / Connection collisions to avoid duplicating
+    // the framing headers we already wrote.
+    if (headers) {
+        for (int32_t b = 0; b < headers->bucket_count; b++) {
+            for (omni_map_entry_t* e = headers->buckets[b]; e; e = e->next) {
+                if (!e->key || !e->value) continue;
+                const char* k = (const char*)e->key;
+                if (strcasecmp(k, "Host") == 0 || strcasecmp(k, "Content-Length") == 0 || strcasecmp(k, "Connection") == 0) {
+                    continue;
+                }
+                size_t avail = sizeof(request) - strlen(request) - 1;
+                size_t need = strlen(k) + strlen((const char*)e->value) + 4; // ": " + "\r\n"
+                if (need >= avail) continue;
+                strncat(request, k, avail);
+                strncat(request, ": ", sizeof(request) - strlen(request) - 1);
+                strncat(request, (const char*)e->value, sizeof(request) - strlen(request) - 1);
+                strncat(request, "\r\n", sizeof(request) - strlen(request) - 1);
+            }
+        }
+    }
+
     strcat(request, "\r\n");
     
     if (body) {

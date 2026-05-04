@@ -1,0 +1,11 @@
+// Networked test driver: DELETE argv[1], return status_code.
+import std
+
+func main():int {
+    let url:string = std.os.positional_arg(0, "")
+    if std.string.equals(url, "") {
+        return 1
+    }
+    let resp:std.network.HTTPResponse = std.network.http_delete(url)
+    return resp.status_code
+}

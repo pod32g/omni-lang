@@ -1,0 +1,11 @@
+// Returns 0 if network_get_local_ip yields a non-empty address string.
+import std.network
+
+func main():int {
+    let ip:std.network.IPAddress = std.network.network_get_local_ip()
+    let s:string = std.network.ip_to_string(ip)
+    if s == "" {
+        return 1
+    }
+    return 0
+}

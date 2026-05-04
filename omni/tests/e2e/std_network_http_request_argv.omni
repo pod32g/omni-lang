@@ -1,0 +1,19 @@
+// Networked test driver: build an HTTPRequest with method/url/body
+// plus a custom header (X-Omni: chained), send it via http_request,
+// and return the response status_code. Exercises the chained-builder
+// surface end-to-end.
+import std
+
+func main():int {
+    let method:string = std.os.positional_arg(0, "")
+    let url:string = std.os.positional_arg(1, "")
+    let body:string = std.os.positional_arg(2, "")
+    if std.string.equals(url, "") {
+        return 1
+    }
+    let req0:std.network.HTTPRequest = std.network.http_request_create(method, url)
+    let req1:std.network.HTTPRequest = std.network.http_request_set_header(req0, "X-Omni", "chained")
+    let req2:std.network.HTTPRequest = std.network.http_request_set_body(req1, body)
+    let resp:std.network.HTTPResponse = std.network.http_request(req2)
+    return resp.status_code
+}

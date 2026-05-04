@@ -1,0 +1,12 @@
+// Networked test driver: PUT argv[2] to argv[1], return status_code.
+import std
+
+func main():int {
+    let url:string = std.os.positional_arg(0, "")
+    let body:string = std.os.positional_arg(1, "")
+    if std.string.equals(url, "") {
+        return 1
+    }
+    let resp:std.network.HTTPResponse = std.network.http_put(url, body)
+    return resp.status_code
+}
