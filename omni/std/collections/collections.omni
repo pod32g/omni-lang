@@ -82,6 +82,40 @@ func merge(a:map<string, int>, b:map<string, int>):map<string, int> {
     return a
 }
 
+// ----------------------------------------------------------------------------
+// String-valued map helpers (for map<string, string>)
+//
+// OmniLang doesn't support function overloading, so map<string, string>
+// needs a parallel surface. The runtime symbols
+// omni_map_put_string_string / omni_map_get_string_string already exist
+// — these wrappers route to them. has/remove/clear/size are key-typed
+// (the value type is not part of their runtime ABI), so they keep
+// working through the existing entry points.
+// ----------------------------------------------------------------------------
+
+// get_string retrieves a string value from the map by key
+// [INTRINSIC] wired to omni_map_get_string_string
+func get_string(m:map<string, string>, key:string):string {
+    return ""
+}
+
+// set_string stores a string key-value pair in the map
+// [INTRINSIC] wired to omni_map_put_string_string
+func set_string(m:map<string, string>, key:string, value:string) {
+}
+
+// has_string checks if a string-valued map contains the given key
+// [INTRINSIC] wired to omni_map_has_string (key-typed, value-agnostic)
+func has_string(m:map<string, string>, key:string):bool {
+    return false
+}
+
+// remove_string removes a key-value pair from a string-valued map
+// [INTRINSIC] wired to omni_map_remove_string (key-typed, value-agnostic)
+func remove_string(m:map<string, string>, key:string):bool {
+    return false
+}
+
 // ============================================================================
 // Set Functions (for set<int>)
 // ============================================================================

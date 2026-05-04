@@ -7293,6 +7293,15 @@ func (g *CGenerator) mapFunctionName(funcName string) string {
 		return "omni_map_copy_string_int"
 	case "std.collections.merge":
 		return "omni_map_merge_string_int"
+	// String-valued map helpers — parallel surface for map<string, string>.
+	case "std.collections.get_string":
+		return "omni_map_get_string_string"
+	case "std.collections.set_string":
+		return "omni_map_put_string_string"
+	case "std.collections.has_string":
+		return "omni_map_has_string"
+	case "std.collections.remove_string":
+		return "omni_map_remove_string"
 	// Set functions
 	case "std.collections.set_create":
 		return "omni_set_create"
@@ -8585,6 +8594,11 @@ func (g *CGenerator) hasRuntimeImplementation(funcName string) bool {
 		"std.collections.clear":  "omni_map_clear",
 		"std.collections.copy":   "omni_map_copy_string_int",
 		"std.collections.merge":  "omni_map_merge_string_int",
+		// String-valued map helpers (map<string, string>)
+		"std.collections.get_string":    "omni_map_get_string_string",
+		"std.collections.set_string":    "omni_map_put_string_string",
+		"std.collections.has_string":    "omni_map_has_string",
+		"std.collections.remove_string": "omni_map_remove_string",
 		// Set functions
 		"std.collections.set_create":       "omni_set_create",
 		"std.collections.set_add":          "omni_set_add",
@@ -9006,6 +9020,10 @@ func (g *CGenerator) isRuntimeProvidedFunction(funcName string) bool {
 		"std.collections.clear":                      true,
 		"std.collections.copy":                       true,
 		"std.collections.merge":                      true,
+		"std.collections.get_string":                 true,
+		"std.collections.set_string":                 true,
+		"std.collections.has_string":                 true,
+		"std.collections.remove_string":              true,
 		"std.collections.set_create":                 true,
 		"std.collections.set_add":                    true,
 		"std.collections.set_remove":                 true,

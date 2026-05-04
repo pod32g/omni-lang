@@ -280,7 +280,7 @@ func http_response_is_server_error(resp:HTTPResponse):bool {
 // [INTRINSIC-C] Wired to omni_http_response_get_header on C. The VM
 // falls through to the OmniLang body via std.collections.get.
 func http_response_get_header(resp:HTTPResponse, name:string):string {
-    return std.collections.get(resp.headers, name)
+    return std.collections.get_string(resp.headers, name)
 }
 
 // http_response_set_header sets a header on a response. Returns the
@@ -289,7 +289,7 @@ func http_response_get_header(resp:HTTPResponse, name:string):string {
 // falls through to the OmniLang body, which mutates resp.headers and
 // returns resp.
 func http_response_set_header(resp:HTTPResponse, name:string, value:string):HTTPResponse {
-    std.collections.set(resp.headers, name, value)
+    std.collections.set_string(resp.headers, name, value)
     return resp
 }
 
@@ -316,7 +316,7 @@ func http_request_create(method:string, url:string):HTTPRequest {
 // [INTRINSIC-C] Wired to omni_http_request_set_header on C. The VM
 // falls through and mutates req.headers in place.
 func http_request_set_header(req:HTTPRequest, name:string, value:string):HTTPRequest {
-    std.collections.set(req.headers, name, value)
+    std.collections.set_string(req.headers, name, value)
     return req
 }
 
@@ -338,7 +338,7 @@ func http_request_set_body(req:HTTPRequest, body:string):HTTPRequest {
 // [INTRINSIC-C] Wired to omni_http_request_get_header on C. The VM
 // falls through to std.collections.get on req.headers.
 func http_request_get_header(req:HTTPRequest, name:string):string {
-    return std.collections.get(req.headers, name)
+    return std.collections.get_string(req.headers, name)
 }
 
 // ============================================================================

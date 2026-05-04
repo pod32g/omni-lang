@@ -945,6 +945,10 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.collections.has",
 		"std.collections.remove",
 		"std.collections.clear",
+		"std.collections.get_string",
+		"std.collections.set_string",
+		"std.collections.has_string",
+		"std.collections.remove_string",
 		"std.collections.queue_create",
 		"std.collections.queue_enqueue",
 		"std.collections.queue_dequeue",
@@ -3720,7 +3724,7 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				return Result{Type: "int", Value: len(mp)}, true
 			}
 		}
-	case "std.collections.has":
+	case "std.collections.has", "std.collections.has_string":
 		if len(operands) == 2 {
 			m := operandValue(fr, operands[0])
 			k := operandValue(fr, operands[1])
@@ -3729,10 +3733,11 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				return Result{Type: "bool", Value: present}, true
 			}
 		}
-	case "std.collections.get":
+	case "std.collections.get", "std.collections.get_string":
 		if len(operands) == 2 {
 			m := operandValue(fr, operands[0])
 			k := operandValue(fr, operands[1])
+			stringResult := callee == "std.collections.get_string"
 			if mp, ok := m.Value.(map[interface{}]interface{}); ok {
 				if v, present := mp[k.Value]; present {
 					switch x := v.(type) {
@@ -3743,13 +3748,19 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 					case string:
 						return Result{Type: "string", Value: x}, true
 					default:
+						if stringResult {
+							return Result{Type: "string", Value: ""}, true
+						}
 						return Result{Type: "int", Value: v}, true
 					}
 				}
 			}
+			if stringResult {
+				return Result{Type: "string", Value: ""}, true
+			}
 			return Result{Type: "int", Value: 0}, true
 		}
-	case "std.collections.set":
+	case "std.collections.set", "std.collections.set_string":
 		if len(operands) == 3 {
 			m := operandValue(fr, operands[0])
 			k := operandValue(fr, operands[1])
@@ -3759,7 +3770,7 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 			}
 			return Result{Type: "void", Value: nil}, true
 		}
-	case "std.collections.remove":
+	case "std.collections.remove", "std.collections.remove_string":
 		if len(operands) == 2 {
 			m := operandValue(fr, operands[0])
 			k := operandValue(fr, operands[1])

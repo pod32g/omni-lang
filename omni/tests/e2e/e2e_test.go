@@ -637,6 +637,33 @@ func TestStdCollectionsMap(t *testing.T) {
 	}
 }
 
+// TestStdCollectionsStringMap pins the parallel string-valued map
+// surface (get_string/set_string/has_string/remove_string). Before
+// this surface existed, std.collections.set on map<string, string>
+// failed type-check at user-facing call sites and silently routed
+// to omni_map_put_string_int when called from std.network's hybrid
+// pattern, corrupting string values.
+func TestStdCollectionsStringMap(t *testing.T) {
+	testFile := "std_collections_string_map.omni"
+	expected := "63"
+
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("C backend execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("C backend: expected %s, got %s", expected, result)
+	}
+}
+
 // TestStdFileOps pins std.file handle operations on both backends.
 // The C backend keeps native FILE* handles in intptr_t slots while the
 // source-level API exposes them as int handles.

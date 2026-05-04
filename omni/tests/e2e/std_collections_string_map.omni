@@ -1,0 +1,53 @@
+// Regression: std.collections.{get,set,has,remove}_string handle
+// map<string, string> end-to-end. Before adding the parallel surface,
+// callers had to either special-case the map<string, int>-only set/get
+// or rely on std.network's namespaced-skip in the type checker, which
+// silently dispatched to omni_map_put_string_int and corrupted strings.
+//
+// Sequence:
+//   m starts empty
+//   set_string "name" → "alice", "lang" → "omni"
+//   has_string "name" → true (1)
+//   has_string "missing" → false (0)
+//   set_string "name" → "bob" (overwrite)
+//   get_string "name" → "bob"  → first char 'b' = 98
+//   get_string "lang" → "omni" → first char 'o' = 111
+//   remove_string "lang" → true (1)
+//   has_string "lang" → false (0)
+//
+// score = (got_b ? 1 : 0)*1   // 1
+//       + (got_o ? 1 : 0)*2   // 2
+//       + (had_name ? 1 : 0)*4   // 4
+//       + (missing_absent ? 1 : 0)*8   // 8
+//       + (removed ? 1 : 0)*16   // 16
+//       + (lang_gone ? 1 : 0)*32   // 32
+//                                  // total: 63
+import std
+
+func main():int {
+    var m:map<string, string> = {}
+    std.collections.set_string(m, "name", "alice")
+    std.collections.set_string(m, "lang", "omni")
+
+    let had_name:bool = std.collections.has_string(m, "name")
+    let missing_absent:bool = !std.collections.has_string(m, "missing")
+
+    std.collections.set_string(m, "name", "bob")
+
+    let name_v:string = std.collections.get_string(m, "name")
+    let lang_v:string = std.collections.get_string(m, "lang")
+    let got_b:bool = name_v == "bob"
+    let got_o:bool = lang_v == "omni"
+
+    let removed:bool = std.collections.remove_string(m, "lang")
+    let lang_gone:bool = !std.collections.has_string(m, "lang")
+
+    var score:int = 0
+    if got_b { score = score + 1 }
+    if got_o { score = score + 2 }
+    if had_name { score = score + 4 }
+    if missing_absent { score = score + 8 }
+    if removed { score = score + 16 }
+    if lang_gone { score = score + 32 }
+    return score
+}
