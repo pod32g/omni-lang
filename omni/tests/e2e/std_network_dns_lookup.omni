@@ -1,0 +1,19 @@
+// Exercises std.network.dns_lookup end-to-end on the C backend. Before
+// the ABI fix, the call linked short — the runtime takes an int32_t*
+// count out-pointer that the generic call dispatch never synthesized.
+//
+// localhost should resolve to at least one address (typically 127.0.0.1
+// and possibly ::1) on any system with a sane /etc/hosts.
+//
+// Gated by OMNI_NETWORK_TESTS — getaddrinfo can still hit DNS on some
+// systems, so we treat it as network-touching for CI hygiene.
+import std.network
+
+func main():int {
+    let ips = std.network.dns_lookup("localhost")
+    let n = len(ips)
+    if n <= 0 {
+        return 1
+    }
+    return 0
+}

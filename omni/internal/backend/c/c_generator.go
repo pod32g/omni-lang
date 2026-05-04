@@ -3734,6 +3734,31 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.declaredVariables[inst.ID] = true
 				}
 				return nil
+			} else if (funcName == "std.network.dns_lookup" || cFuncName == "omni_dns_lookup") && inst.ID != mir.InvalidValue && len(inst.Operands) >= 2 {
+				// omni_dns_lookup signature: omni_ip_address_t** omni_dns_lookup(
+				//   const char* hostname, int32_t* count). The generic call
+				//   dispatch only forwards user-visible operands, so the count
+				//   out-pointer would never be synthesized — calls would link
+				//   short. Mirror omni_string_split's variable-length array
+				//   pattern: stack-allocate a length companion, pass &len, and
+				//   register it so len(ips) and ips[i] resolve correctly.
+				varName := g.getVariableName(inst.ID)
+				lenVar := fmt.Sprintf("__omni_iparr_len_%d", inst.ID)
+				hostname := g.getOperandValue(inst.Operands[1])
+				g.output.WriteString(fmt.Sprintf("  int32_t %s = 0;\n", lenVar))
+				if g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  %s = omni_dns_lookup(%s, &%s);\n", varName, hostname, lenVar))
+				} else {
+					g.output.WriteString(fmt.Sprintf("  omni_ip_address_t** %s = omni_dns_lookup(%s, &%s);\n", varName, hostname, lenVar))
+					g.declaredVariables[inst.ID] = true
+				}
+				g.arrayLengthExprs[inst.ID] = lenVar
+				if inst.Type != "" {
+					g.valueTypes[inst.ID] = inst.Type
+				} else {
+					g.valueTypes[inst.ID] = "array<std.network.IPAddress>"
+				}
+				return nil
 			} else if isStringVarLenArrayFunc && inst.ID != mir.InvalidValue && len(inst.Operands) >= 2 {
 				// Variable-length string-array result. Allocate the
 				// companion length variable, pass its address to the
@@ -4299,16 +4324,6 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							g.output.WriteString(fmt.Sprintf("  %s[%s_len] = '\\0';\n", bufferVar, varName))
 							g.output.WriteString(fmt.Sprintf("  const char* %s = strdup(%s);\n", varName, bufferVar))
 							g.stringsToFree[inst.ID] = true
-						}
-					} else if funcName == "omni_dns_lookup" && inst.Type != "" && strings.HasPrefix(inst.Type, "array<") {
-						// DNS lookup returns array of IPAddress
-						// For now, return empty array (stub implementation)
-						varName := g.getVariableName(inst.ID)
-						if len(inst.Operands) >= 2 {
-							hostname := g.getOperandValue(inst.Operands[1])
-							g.output.WriteString(fmt.Sprintf("  // DNS lookup stub - returns empty array\n"))
-							g.output.WriteString(fmt.Sprintf("  int32_t %s_count = 0;\n", varName))
-							g.output.WriteString(fmt.Sprintf("  omni_ip_address_t** %s = omni_dns_lookup(%s, &%s_count);\n", varName, hostname, varName))
 						}
 					} else if funcName == "omni_map_keys_string_int" && inst.Type != "" && strings.HasPrefix(inst.Type, "array<") {
 						// Map keys returns array of strings

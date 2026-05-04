@@ -1823,6 +1823,26 @@ func TestStdNetworkHttpRequest(t *testing.T) {
 	}
 }
 
+// TestStdNetworkDnsLookup exercises std.network.dns_lookup on the C
+// backend. Before the ABI fix, the runtime symbol's int32_t* count
+// out-pointer wasn't synthesized at the call site, so the linker
+// rejected the call. Gated by OMNI_NETWORK_TESTS because getaddrinfo
+// can hit DNS on some systems even for "localhost".
+func TestStdNetworkDnsLookup(t *testing.T) {
+	if os.Getenv("OMNI_NETWORK_TESTS") != "1" {
+		t.Skip("set OMNI_NETWORK_TESTS=1 to enable network-touching tests")
+	}
+	testFile := "std_network_dns_lookup.omni"
+	expected := "0"
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStdNetworkHttpGetFixture exercises std.network.http_get end to
 // end against an in-process httptest.Server. The fixture serves
 // distinct responses on three paths so we can verify status_code,
