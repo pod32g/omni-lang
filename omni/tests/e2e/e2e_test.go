@@ -1848,6 +1848,26 @@ func TestStdNetworkHttpRequest(t *testing.T) {
 	}
 }
 
+// TestStdNetworkSocketReceive pins that socket_receive(socket, size)
+// links and runs on the C backend. The runtime symbol takes three
+// arguments (socket, char* buffer, int32_t buffer_size); the dispatch
+// has to allocate the buffer because the user-facing signature returns
+// a string. Before the fix the dispatch matched on
+// funcName == "omni_socket_receive" — never true, since funcName
+// carries the OmniLang qualified name — so the call fell through to
+// the generic 2-arg emission and the linker rejected it.
+func TestStdNetworkSocketReceive(t *testing.T) {
+	testFile := "std_network_socket_receive.omni"
+	expected := "0"
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}
+
 // TestStdNetworkDnsLookup exercises std.network.dns_lookup on the C
 // backend. Before the ABI fix, the runtime symbol's int32_t* count
 // out-pointer wasn't synthesized at the call site, so the linker

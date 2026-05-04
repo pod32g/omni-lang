@@ -3734,6 +3734,38 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.declaredVariables[inst.ID] = true
 				}
 				return nil
+			} else if (funcName == "std.network.socket_receive" || cFuncName == "omni_socket_receive") && inst.ID != mir.InvalidValue && len(inst.Operands) >= 3 {
+				// omni_socket_receive(socket, char* buffer, int32_t buffer_size).
+				// User-facing signature is socket_receive(socket, buffer_size):string,
+				// so the C call has to synthesize the buffer. Operands[1] is the
+				// socket FD, Operands[2] is the requested capacity. The dead
+				// funcName == "omni_socket_receive" branch below was unreachable
+				// because funcName carries the OmniLang qualified name; this
+				// one fires correctly and short-circuits before the generic
+				// 2-arg call dispatch.
+				// Heap-allocate the buffer rather than using a VLA — earlier
+				// `goto __omni_epilogue` paths can bypass a VLA declaration,
+				// which C disallows. The temp buffer is freed inline once
+				// we've duped its contents into the SSA-tracked string.
+				varName := g.getVariableName(inst.ID)
+				socketVar := g.getOperandValue(inst.Operands[1])
+				bufferSizeVar := g.getOperandValue(inst.Operands[2])
+				bufferVar := fmt.Sprintf("__omni_sockrecv_buf_%d", inst.ID)
+				lenVar := fmt.Sprintf("__omni_sockrecv_len_%d", inst.ID)
+				g.output.WriteString(fmt.Sprintf("  char* %s = (char*)malloc((size_t)(%s) + 1);\n", bufferVar, bufferSizeVar))
+				g.output.WriteString(fmt.Sprintf("  int32_t %s = %s ? omni_socket_receive(%s, %s, %s) : -1;\n", lenVar, bufferVar, socketVar, bufferVar, bufferSizeVar))
+				g.output.WriteString(fmt.Sprintf("  if (%s < 0) %s = 0;\n", lenVar, lenVar))
+				g.output.WriteString(fmt.Sprintf("  if (%s) { %s[%s] = '\\0'; }\n", bufferVar, bufferVar, lenVar))
+				if g.declaredVariables[inst.ID] {
+					g.output.WriteString(fmt.Sprintf("  %s = %s ? strdup(%s) : strdup(\"\");\n", varName, bufferVar, bufferVar))
+				} else {
+					g.output.WriteString(fmt.Sprintf("  const char* %s = %s ? strdup(%s) : strdup(\"\");\n", varName, bufferVar, bufferVar))
+					g.declaredVariables[inst.ID] = true
+				}
+				g.output.WriteString(fmt.Sprintf("  if (%s) free(%s);\n", bufferVar, bufferVar))
+				g.stringsToFree[inst.ID] = true
+				g.valueTypes[inst.ID] = "string"
+				return nil
 			} else if (funcName == "std.network.dns_lookup" || cFuncName == "omni_dns_lookup") && inst.ID != mir.InvalidValue && len(inst.Operands) >= 2 {
 				// omni_dns_lookup signature: omni_ip_address_t** omni_dns_lookup(
 				//   const char* hostname, int32_t* count). The generic call
@@ -4309,20 +4341,6 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 							reqVar := g.getOperandValue(inst.Operands[1])
 							headerName := g.getOperandValue(inst.Operands[2])
 							g.output.WriteString(fmt.Sprintf("  const char* %s = omni_http_request_get_header(%s, %s);\n", varName, reqVar, headerName))
-							g.stringsToFree[inst.ID] = true
-						}
-					} else if funcName == "omni_socket_receive" && inst.Type == "string" {
-						// Socket receive returns string
-						varName := g.getVariableName(inst.ID)
-						if len(inst.Operands) >= 3 {
-							socketVar := g.getOperandValue(inst.Operands[1])
-							bufferSizeVar := g.getOperandValue(inst.Operands[2])
-							// Allocate buffer
-							bufferVar := fmt.Sprintf("_buffer_%d", inst.ID)
-							g.output.WriteString(fmt.Sprintf("  char %s[%s + 1];\n", bufferVar, bufferSizeVar))
-							g.output.WriteString(fmt.Sprintf("  int32_t %s_len = omni_socket_receive(%s, %s, %s);\n", varName, socketVar, bufferVar, bufferSizeVar))
-							g.output.WriteString(fmt.Sprintf("  %s[%s_len] = '\\0';\n", bufferVar, varName))
-							g.output.WriteString(fmt.Sprintf("  const char* %s = strdup(%s);\n", varName, bufferVar))
 							g.stringsToFree[inst.ID] = true
 						}
 					} else if funcName == "omni_map_keys_string_int" && inst.Type != "" && strings.HasPrefix(inst.Type, "array<") {

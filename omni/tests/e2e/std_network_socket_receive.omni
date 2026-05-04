@@ -1,0 +1,16 @@
+// Regression: socket_receive(socket, buffer_size):string compiles on
+// the C backend without "too few arguments" — the runtime needs three
+// args (socket, char* buffer, int32_t buffer_size) and the dispatch
+// has to synthesize the buffer for the user-facing 2-arg signature.
+//
+// This is a compile-time test: we don't actually accept a connection.
+// Calling socket_receive on a stale FD returns -1 / "" at runtime,
+// which is fine — the goal is to prove the call links.
+import std
+
+func main():int {
+    let s:int = std.network.socket_create()
+    std.network.socket_close(s)
+    let _msg:string = std.network.socket_receive(s, 64)
+    return 0
+}
