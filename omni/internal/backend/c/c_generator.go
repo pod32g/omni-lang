@@ -59,6 +59,11 @@ type CGenerator struct {
 	returnedValueIDs map[mir.ValueID]bool
 	// Track which variables were declared at the top of the function
 	declaredVariables map[mir.ValueID]bool
+	// usedLabels marks block names that some terminator actually jumps to.
+	// generateBlock skips emitting the label header for blocks whose name
+	// isn't in this set, so falls-through-only entry blocks don't trigger
+	// -Wunused-label. Reset per function in generateFunction.
+	usedLabels map[string]bool
 	// currentDeferFn is the MIR function currently being generated. The defer
 	// emitters read it to name per-site context structs and thunks
 	// consistently between the pre-function thunk emission and the body
@@ -1902,6 +1907,23 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 	allVariables := make(map[mir.ValueID]string)
 	// Build a map from ValueID to Instruction for O(1) lookups (optimization: O(N) instead of O(N²))
 	instructionMap := make(map[mir.ValueID]*mir.Instruction)
+	// Track which SSA IDs are actually read as operands by another instruction
+	// or terminator. Pre-declared variables that nothing reads ("set but not
+	// used") get __attribute__((unused)) below to silence -Wunused-but-set-variable
+	// — typical when an OmniLang call's result is discarded (e.g. socket_send,
+	// socket_close at statement position). The call still has to run; only
+	// the dead temp annotation changes.
+	readIDs := make(map[mir.ValueID]bool)
+	// Track which block labels are actually goto-targets. Blocks that nothing
+	// jumps to (e.g. the implicit `entry:` label) are emitted without their
+	// label header to silence -Wunused-label. Fall-through into the first
+	// block is unaffected.
+	usedLabels := make(map[string]bool)
+	markOperandRead := func(op mir.Operand) {
+		if op.Kind == mir.OperandValue {
+			readIDs[op.Value] = true
+		}
+	}
 	for _, block := range fn.Blocks {
 		for i := range block.Instructions {
 			inst := &block.Instructions[i]
@@ -1910,9 +1932,49 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 				allVariables[inst.ID] = varName
 				instructionMap[inst.ID] = inst
 			}
+			for _, op := range inst.Operands {
+				markOperandRead(op)
+			}
 		}
-		// Terminators don't produce values, so we don't need to track them
+		// Terminators carry both jump targets (literals) and value reads.
+		// jmp/br: Operands[0] is the target literal. cbr: Operands[0] is
+		// the condition value, [1] and [2] are the target literals. ret:
+		// Operands[0] is the returned value (when present).
+		switch block.Terminator.Op {
+		case "jmp", "br":
+			if len(block.Terminator.Operands) > 0 {
+				usedLabels[block.Terminator.Operands[0].Literal] = true
+			}
+		case "cbr":
+			if len(block.Terminator.Operands) >= 3 {
+				markOperandRead(block.Terminator.Operands[0])
+				usedLabels[block.Terminator.Operands[1].Literal] = true
+				usedLabels[block.Terminator.Operands[2].Literal] = true
+			}
+		case "ret":
+			if len(block.Terminator.Operands) > 0 {
+				markOperandRead(block.Terminator.Operands[0])
+			}
+		}
 	}
+	// The epilogue label is always a goto target via emitReturnThroughEpilogue.
+	usedLabels["__omni_epilogue"] = true
+	// Self-recursive tail calls become `goto entry;` in emitTailCall, but
+	// that's emitted directly (not through a MIR jmp terminator), so we
+	// detect the pattern here and mark "entry" used so the label survives
+	// the unused-label suppression.
+	for _, block := range fn.Blocks {
+		if isTail, idx := tailCallIndex(block); isTail {
+			callInst := block.Instructions[idx]
+			if len(callInst.Operands) > 0 && callInst.Operands[0].Kind == mir.OperandLiteral {
+				if callInst.Operands[0].Literal == fn.Name && len(callInst.Operands)-1 == len(fn.Params) {
+					usedLabels["entry"] = true
+					break
+				}
+			}
+		}
+	}
+	g.usedLabels = usedLabels
 
 	// Declare all variables at the beginning of the function
 	for id, varName := range allVariables {
@@ -2378,14 +2440,25 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 					}
 				}
 				if !isStringConst {
+					// Annotate variables that nothing reads with __attribute__((unused))
+					// to silence -Wunused-but-set-variable. Common when an OmniLang
+					// call's result is discarded (statement-position calls like
+					// socket_send / socket_close); the call still has to run, only
+					// the dead temp's annotation changes. Pointer slots stay NULL-
+					// initialized so the cleanup epilogue's `if (v != NULL)` checks
+					// still work.
+					attr := ""
+					if !readIDs[id] {
+						attr = "__attribute__((unused)) "
+					}
 					// Check if this is a function pointer type (already includes variable name)
 					if strings.Contains(varType, "(*") && strings.Contains(varType, ")(") && strings.Contains(varType, varName) {
 						// Function pointer type already includes variable name, just output type with semicolon
-						g.output.WriteString(fmt.Sprintf("  %s;\n", varType))
+						g.output.WriteString(fmt.Sprintf("  %s%s;\n", attr, varType))
 					} else if strings.HasSuffix(strings.TrimSpace(varType), "*") {
-						g.output.WriteString(fmt.Sprintf("  %s %s = NULL;\n", varType, varName))
+						g.output.WriteString(fmt.Sprintf("  %s%s %s = NULL;\n", attr, varType, varName))
 					} else {
-						g.output.WriteString(fmt.Sprintf("  %s %s;\n", varType, varName))
+						g.output.WriteString(fmt.Sprintf("  %s%s %s;\n", attr, varType, varName))
 					}
 				}
 				// Mark this variable as declared
@@ -2444,12 +2517,19 @@ func (g *CGenerator) generateBlock(block *mir.BasicBlock, fn *mir.Function) erro
 	if funcName == "main" {
 		funcName = "omni_main"
 	}
-	// Generate block label. The entry block gets `entry:` too so self
-	// tail-calls can `goto entry;` after reassigning parameters; that's
-	// half of the TCO story (the other half is cross-function tail calls
-	// staying as `return f(args);` for clang's sibling-call optimization).
-	g.output.WriteString(fmt.Sprintf("  %s:\n", block.Name))
-	g.output.WriteString("  ;\n")
+	// Generate block label. The entry block historically got `entry:` too
+	// to enable self tail-calls via `goto entry;`. Now we only emit a label
+	// when something actually targets it (computed in generateFunction's
+	// usedLabels pass) — falls-through-only blocks like a typical entry
+	// no longer trigger -Wunused-label. The leading no-op statement is
+	// kept so the empty-block case (label followed immediately by another
+	// label) still parses.
+	if g.usedLabels != nil && !g.usedLabels[block.Name] {
+		g.output.WriteString("  ;\n")
+	} else {
+		g.output.WriteString(fmt.Sprintf("  %s:\n", block.Name))
+		g.output.WriteString("  ;\n")
+	}
 
 	// Pre-populate valueTypes for this block's instructions
 	// This ensures type information is available when processing struct.init
