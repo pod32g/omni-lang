@@ -773,6 +773,10 @@ int32_t omni_struct_get_int_field(omni_struct_t* struct_ptr, const char* field_n
 double omni_struct_get_float_field(omni_struct_t* struct_ptr, const char* field_name);
 int32_t omni_struct_get_bool_field(omni_struct_t* struct_ptr, const char* field_name);
 omni_struct_t* omni_struct_get_struct_field(omni_struct_t* struct_ptr, const char* field_name);
+// omni_struct_get_map_field returns the omni_map_t* stored at field_name,
+// or NULL if the field is missing or not a map. Pairs with
+// omni_struct_set_map_field; the struct retains ownership of the map.
+omni_map_t* omni_struct_get_map_field(omni_struct_t* struct_ptr, const char* field_name);
 
 double omni_pow(double x, double y);
 double omni_sqrt(double x);

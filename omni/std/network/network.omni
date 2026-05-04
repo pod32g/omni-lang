@@ -1,17 +1,49 @@
-// std.network - Basic networking utilities for OmniLang
+// std.network — IP, URL, DNS, HTTP, and socket primitives.
+//
+// API design / failure modes
+// --------------------------
+// Each function here is one of three categories, documented at the
+// declaration:
+//
+//   [INTRINSIC]    Lowered to a runtime symbol on BOTH backends. The
+//                  OmniLang body is unreachable on a correctly-wired
+//                  build — it deliberately panics via
+//                  `_intrinsic_not_wired` so a missing wiring fails
+//                  loudly instead of returning a plausible-looking
+//                  default the caller can't tell apart from a real
+//                  result. See `TestStdNetworkIntrinsicWiring` for
+//                  the static cross-check between this file and the
+//                  C-backend / VM dispatch tables.
+//
+//   [INTRINSIC-C]  Lowered to a runtime symbol on the C backend; the
+//                  OmniLang body is the actual implementation on the
+//                  VM. Both forms are real — the body must produce
+//                  the same observable result as the runtime
+//                  function, otherwise a program runs differently
+//                  under `omnir` and `omnic`. Where a real body isn't
+//                  possible (sockets, real network), the body fails
+//                  loud via `_intrinsic_not_wired`.
+//
+//   [PURE]         Implemented entirely in OmniLang. Same code runs
+//                  on both backends.
+//
+// Header maps for HTTPRequest/HTTPResponse use `map<string,string>`
+// consistently — no `string >` trailing-space variants.
+import std
 
 // ============================================================================
 // Network Structures
 // ============================================================================
 
-// IPAddress represents an IP address
+// IPAddress represents an IP address.
 struct IPAddress {
     address:string
     is_ipv4:bool
     is_ipv6:bool
 }
 
-// URL represents a URL
+// URL represents a parsed URL. Field meanings match the standard
+// `<scheme>://<host>[:port]<path>[?query][#fragment]` shape.
 struct URL {
     scheme:string
     host:string
@@ -21,112 +53,122 @@ struct URL {
     fragment:string
 }
 
-// HTTPRequest represents an HTTP request
+// HTTPRequest represents an HTTP request.
 struct HTTPRequest {
     method:string
     url:string
-    headers:map<string, string >
+    headers:map<string,string>
     body:string
 }
 
-// HTTPResponse represents an HTTP response
+// HTTPResponse represents an HTTP response.
 struct HTTPResponse {
     status_code:int
     status_text:string
-    headers:map<string, string >
+    headers:map<string,string>
     body:string
+}
+
+// ============================================================================
+// Internal: fail-loud panic used by intrinsic stub bodies.
+//
+// On a correctly-wired build [INTRINSIC] bodies are dead code — the
+// call site is rewritten to the runtime symbol on C and to the VM
+// intrinsic dispatch on omnir. If wiring drifts, the body runs; this
+// routine prints to stderr and exits with code 99 so the failure is
+// visible instead of returning a default that callers can't tell
+// apart from a real result.
+// ============================================================================
+
+func _intrinsic_not_wired(name:string) {
+    std.io.eprintln("FATAL: std.network." + name +
+                    " intrinsic body executed — runtime wiring missing")
+    std.os.exit(99)
 }
 
 // ============================================================================
 // IP Address Functions
 // ============================================================================
 
-// ip_parse parses an IP address string
-// [IMPLEMENTED] Implemented in runtime
+// ip_parse parses an IP address string.
+// [INTRINSIC] Wired to omni_ip_parse on C; VM intrinsic on omnir.
 func ip_parse(ip_str:string):IPAddress {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return IPAddress{
-        address: ip_str,
-        is_ipv4: true,
-        is_ipv6: false
-    }
+    _intrinsic_not_wired("ip_parse")
+    return IPAddress{address: "", is_ipv4: false, is_ipv6: false}
 }
 
-// ip_is_valid checks if an IP address string is valid
-// [IMPLEMENTED] Implemented in runtime
+// ip_is_valid checks if an IP address string is valid.
+// [INTRINSIC] Wired to omni_ip_is_valid on C; VM intrinsic on omnir.
 func ip_is_valid(ip_str:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("ip_is_valid")
     return false
 }
 
-// ip_is_private checks if an IP address is private
-// [IMPLEMENTED] Implemented in runtime
+// ip_is_private checks if an IP address is in a private range.
+// [INTRINSIC] Wired to omni_ip_is_private on C; VM intrinsic on omnir.
 func ip_is_private(ip:IPAddress):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("ip_is_private")
     return false
 }
 
-// ip_is_loopback checks if an IP address is loopback
-// [IMPLEMENTED] Implemented in runtime
+// ip_is_loopback checks if an IP address is loopback (127.0.0.0/8 or ::1).
+// [INTRINSIC] Wired to omni_ip_is_loopback on C; VM intrinsic on omnir.
 func ip_is_loopback(ip:IPAddress):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("ip_is_loopback")
     return false
 }
 
-// ip_to_string converts an IP address to a string
+// ip_to_string returns the textual form of an IPAddress. On C this
+// goes through omni_ip_to_string; on VM the intrinsic dispatch
+// short-circuits to the same result.
+// [INTRINSIC] Wired to omni_ip_to_string on C; VM intrinsic on omnir.
 func ip_to_string(ip:IPAddress):string {
-    return ip.address
+    _intrinsic_not_wired("ip_to_string")
+    return ""
 }
 
 // ============================================================================
 // URL Functions
 // ============================================================================
 
-// url_parse parses a URL string
-// [IMPLEMENTED] Implemented in runtime
+// url_parse decodes a URL string into its component fields.
+// [INTRINSIC] Wired to omni_url_parse on C; VM intrinsic on omnir.
 func url_parse(url_str:string):URL {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return URL{
-        scheme: "http",
-        host: "localhost",
-        port: 80,
-        path: "/",
-        query: "",
-        fragment: ""
-    }
+    _intrinsic_not_wired("url_parse")
+    return URL{scheme: "", host: "", port: 0, path: "", query: "", fragment: ""}
 }
 
-// url_to_string converts a URL to a string
+// url_to_string serializes a URL with default-port normalization
+// (port 80 dropped for http, port 443 dropped for https) so that
+// `url_to_string(url_parse(s))` round-trips stably.
+// [INTRINSIC-C] Wired to omni_url_to_string on C; the VM intrinsic
+// dispatch implements the same default-port-skip logic. Body is the
+// pure-OmniLang fallback.
 func url_to_string(url:URL):string {
     var result:string = url.scheme + "://" + url.host
-    
+
     if url.port > 0 && url.port != 80 && url.port != 443 {
         result = result + ":" + std.int_to_string(url.port)
     }
-    
+
     result = result + url.path
-    
+
     if url.query != "" {
         result = result + "?" + url.query
     }
-    
+
     if url.fragment != "" {
         result = result + "#" + url.fragment
     }
-    
+
     return result
 }
 
-// url_is_valid checks if a URL string is valid
-// [IMPLEMENTED] Implemented in runtime
+// url_is_valid checks if a URL string parses cleanly with a non-empty
+// scheme and host.
+// [INTRINSIC] Wired to omni_url_is_valid on C; VM intrinsic on omnir.
 func url_is_valid(url_str:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("url_is_valid")
     return false
 }
 
@@ -134,94 +176,66 @@ func url_is_valid(url_str:string):bool {
 // DNS Functions
 // ============================================================================
 
-// dns_lookup performs a DNS lookup for a hostname
-// [IMPLEMENTED] Implemented in runtime using getaddrinfo (supports IPv4 and IPv6)
+// dns_lookup resolves a hostname to one or more IP addresses
+// (IPv4 + IPv6 via getaddrinfo). Returns an empty array on failure.
+// [INTRINSIC] Wired to omni_dns_lookup on C; VM intrinsic on omnir.
 func dns_lookup(hostname:string):array<IPAddress> {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("dns_lookup")
     return []
 }
 
-// dns_reverse_lookup performs a reverse DNS lookup for an IP address
-// [IMPLEMENTED] Implemented in runtime using getnameinfo
+// dns_reverse_lookup returns the PTR record for an IP address via
+// getnameinfo, or "" on failure.
+// [INTRINSIC] Wired to omni_dns_reverse_lookup on C; VM intrinsic.
 func dns_reverse_lookup(ip:IPAddress):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("dns_reverse_lookup")
     return ""
 }
 
 // ============================================================================
 // HTTP Client Functions
+//
+// libcurl is preferred when available; the runtime falls back to a raw
+// socket implementation otherwise. Both backends route through the
+// same intrinsic name.
 // ============================================================================
 
-// http_get performs an HTTP GET request
-// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
+// http_get performs an HTTP GET request.
+// [INTRINSIC] Wired to omni_http_get on C; VM intrinsic on omnir.
 func http_get(url:string):HTTPResponse {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    let empty_headers: map<string, string > = {}
-    return HTTPResponse{
-        status_code: 200,
-        status_text: "OK",
-        headers: empty_headers,
-        body: ""
-    }
+    _intrinsic_not_wired("http_get")
+    return HTTPResponse{status_code: 0, status_text: "", headers: {}, body: ""}
 }
 
-// http_post performs an HTTP POST request
-// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
+// http_post performs an HTTP POST request with the given body.
+// [INTRINSIC] Wired to omni_http_post on C; VM intrinsic on omnir.
 func http_post(url:string, body:string):HTTPResponse {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    let empty_headers: map<string, string > = {}
-    return HTTPResponse{
-        status_code: 200,
-        status_text: "OK",
-        headers: empty_headers,
-        body: ""
-    }
+    _intrinsic_not_wired("http_post")
+    return HTTPResponse{status_code: 0, status_text: "", headers: {}, body: ""}
 }
 
-// http_put performs an HTTP PUT request
-// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
+// http_put performs an HTTP PUT request with the given body.
+// [INTRINSIC] Wired to omni_http_put on C; VM intrinsic on omnir.
 func http_put(url:string, body:string):HTTPResponse {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    let empty_headers: map<string, string > = {}
-    return HTTPResponse{
-        status_code: 200,
-        status_text: "OK",
-        headers: empty_headers,
-        body: ""
-    }
+    _intrinsic_not_wired("http_put")
+    return HTTPResponse{status_code: 0, status_text: "", headers: {}, body: ""}
 }
 
-// http_delete performs an HTTP DELETE request
-// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
+// http_delete performs an HTTP DELETE request.
+// [INTRINSIC] Wired to omni_http_delete on C; VM intrinsic on omnir.
 func http_delete(url:string):HTTPResponse {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    let empty_headers: map<string, string > = {}
-    return HTTPResponse{
-        status_code: 200,
-        status_text: "OK",
-        headers: empty_headers,
-        body: ""
-    }
+    _intrinsic_not_wired("http_delete")
+    return HTTPResponse{status_code: 0, status_text: "", headers: {}, body: ""}
 }
 
-// http_request performs a custom HTTP request
-// [IMPLEMENTED] Implemented in runtime (libcurl preferred, raw socket fallback)
+// http_request performs a custom HTTP request from a built HTTPRequest.
+// [INTRINSIC-C] Wired to omni_http_request on C; the VM has no
+// network stack, so the body fails loud rather than pretending to
+// succeed. (Differs from http_get/post/put/delete which the VM has
+// dedicated intrinsics for.)
 func http_request(req:HTTPRequest):HTTPResponse {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    let empty_headers: map<string, string > = {}
-    return HTTPResponse{
-        status_code: 200,
-        status_text: "OK",
-        headers: empty_headers,
-        body: ""
-    }
+    _intrinsic_not_wired("http_request")
+    return HTTPResponse{status_code: 0, status_text: "", headers: {}, body: ""}
 }
 
 // ============================================================================
@@ -229,44 +243,51 @@ func http_request(req:HTTPRequest):HTTPResponse {
 // ============================================================================
 
 // http_response_create constructs an HTTPResponse with the given status,
-// status text, and body. Use it to build a response offline (tests,
-// mocks, fixtures) without going through http_get/post/etc. The headers
-// map starts empty; populate it via http_response_set_header.
-//
-// [IMPLEMENTED] Wired to omni_http_response_create runtime function.
+// status text, and body. The headers map starts empty; populate it via
+// http_response_set_header. Use this to build mock responses in tests
+// without going through a real HTTP request.
+// [INTRINSIC-C] Wired to omni_http_response_create on C. The VM falls
+// through to the OmniLang body, which constructs the struct directly.
 func http_response_create(status_code:int, status_text:string, body:string):HTTPResponse {
-    // INTRINSIC. The body below is unused; the C backend rewrites the
-    // call into omni_http_response_create. The placeholder return only
-    // exists so the type checker has a HTTPResponse value to bind.
+    let empty_headers:map<string,string> = {}
     return HTTPResponse{
         status_code: status_code,
         status_text: status_text,
-        headers: {},
+        headers: empty_headers,
         body: body
     }
 }
 
-// http_response_is_success checks if an HTTP response indicates success
+// http_response_is_success returns true for 2xx status codes.
+// [PURE] Implemented in OmniLang on both backends.
 func http_response_is_success(resp:HTTPResponse):bool {
     return resp.status_code >= 200 && resp.status_code < 300
 }
 
-// http_response_is_client_error checks if an HTTP response indicates a client error
+// http_response_is_client_error returns true for 4xx status codes.
+// [PURE] Implemented in OmniLang on both backends.
 func http_response_is_client_error(resp:HTTPResponse):bool {
     return resp.status_code >= 400 && resp.status_code < 500
 }
 
-// http_response_is_server_error checks if an HTTP response indicates a server error
+// http_response_is_server_error returns true for 5xx status codes.
+// [PURE] Implemented in OmniLang on both backends.
 func http_response_is_server_error(resp:HTTPResponse):bool {
     return resp.status_code >= 500 && resp.status_code < 600
 }
 
-// http_response_get_header gets a header value from an HTTP response
+// http_response_get_header looks up a response header by name.
+// [INTRINSIC-C] Wired to omni_http_response_get_header on C. The VM
+// falls through to the OmniLang body via std.collections.get.
 func http_response_get_header(resp:HTTPResponse, name:string):string {
     return std.collections.get(resp.headers, name)
 }
 
-// http_response_set_header sets a header value in an HTTP response
+// http_response_set_header sets a header on a response. Returns the
+// same response so callers can chain.
+// [INTRINSIC-C] Wired to omni_http_response_set_header on C. The VM
+// falls through to the OmniLang body, which mutates resp.headers and
+// returns resp.
 func http_response_set_header(resp:HTTPResponse, name:string, value:string):HTTPResponse {
     std.collections.set(resp.headers, name, value)
     return resp
@@ -276,9 +297,12 @@ func http_response_set_header(resp:HTTPResponse, name:string, value:string):HTTP
 // HTTP Request Functions
 // ============================================================================
 
-// http_request_create creates a new HTTP request
+// http_request_create builds a new HTTPRequest with the given method
+// and URL. Headers start empty, body is "".
+// [INTRINSIC-C] Wired to omni_http_request_create on C. The VM falls
+// through to the OmniLang body, which constructs the struct directly.
 func http_request_create(method:string, url:string):HTTPRequest {
-    let empty_headers: map<string, string > = {}
+    let empty_headers:map<string,string> = {}
     return HTTPRequest{
         method: method,
         url: url,
@@ -287,15 +311,21 @@ func http_request_create(method:string, url:string):HTTPRequest {
     }
 }
 
-// http_request_set_header sets a header in an HTTP request
+// http_request_set_header sets a header on a request. Returns the same
+// request so callers can chain.
+// [INTRINSIC-C] Wired to omni_http_request_set_header on C. The VM
+// falls through and mutates req.headers in place.
 func http_request_set_header(req:HTTPRequest, name:string, value:string):HTTPRequest {
     std.collections.set(req.headers, name, value)
     return req
 }
 
-// http_request_set_body sets the body of an HTTP request
+// http_request_set_body sets the body of a request. Returns the same
+// request so callers can chain.
+// [INTRINSIC-C] Wired to omni_http_request_set_body on C. The VM
+// falls through to a body that returns a fresh request with the
+// updated body and the same headers.
 func http_request_set_body(req:HTTPRequest, body:string):HTTPRequest {
-    // Create a new request with the updated body
     return HTTPRequest{
         method: req.method,
         url: req.url,
@@ -304,76 +334,81 @@ func http_request_set_body(req:HTTPRequest, body:string):HTTPRequest {
     }
 }
 
-// http_request_get_header gets a header value from an HTTP request
+// http_request_get_header looks up a header by name.
+// [INTRINSIC-C] Wired to omni_http_request_get_header on C. The VM
+// falls through to std.collections.get on req.headers.
 func http_request_get_header(req:HTTPRequest, name:string):string {
     return std.collections.get(req.headers, name)
 }
 
 // ============================================================================
 // Socket Functions (Basic)
+//
+// All socket helpers are intrinsic on C. The VM has no socket stack,
+// so the bodies fail loud rather than pretending to succeed and
+// quietly returning -1 / false / "". Programs that exercise sockets
+// must run under omnic.
 // ============================================================================
 
-// socket_create creates a new socket
-// [IMPLEMENTED] Implemented in runtime
+// socket_create creates a new TCP socket and returns its file descriptor,
+// or -1 on failure.
+// [INTRINSIC-C] Wired to omni_socket_create on C; VM body fails loud.
 func socket_create():int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("socket_create")
     return -1
 }
 
-// socket_connect connects a socket to an address
-// [IMPLEMENTED] Implemented in runtime
+// socket_connect connects a socket to (address, port). Returns true on
+// success.
+// [INTRINSIC-C] Wired to omni_socket_connect on C; VM body fails loud.
 func socket_connect(socket:int, address:string, port:int):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("socket_connect")
     return false
 }
 
-// socket_bind binds a socket to an address and port
-// [IMPLEMENTED] Implemented in runtime
+// socket_bind binds a socket to (address, port). Returns true on success.
+// [INTRINSIC-C] Wired to omni_socket_bind on C; VM body fails loud.
 func socket_bind(socket:int, address:string, port:int):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("socket_bind")
     return false
 }
 
-// socket_listen starts listening on a socket
-// [IMPLEMENTED] Implemented in runtime
+// socket_listen marks a bound socket as listening with the given
+// connection backlog. Returns true on success.
+// [INTRINSIC-C] Wired to omni_socket_listen on C; VM body fails loud.
 func socket_listen(socket:int, backlog:int):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("socket_listen")
     return false
 }
 
-// socket_accept accepts a connection on a socket
-// [IMPLEMENTED] Implemented in runtime
+// socket_accept blocks until a connection arrives on a listening
+// socket and returns its descriptor (or -1 on failure).
+// [INTRINSIC-C] Wired to omni_socket_accept on C; VM body fails loud.
 func socket_accept(socket:int):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("socket_accept")
     return -1
 }
 
-// socket_send sends data on a socket
-// [IMPLEMENTED] Implemented in runtime
+// socket_send transmits `data` on a connected socket. Returns the
+// number of bytes sent, or -1 on failure.
+// [INTRINSIC-C] Wired to omni_socket_send on C; VM body fails loud.
 func socket_send(socket:int, data:string):int {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("socket_send")
     return -1
 }
 
-// socket_receive receives data from a socket
-// [IMPLEMENTED] Implemented in runtime
+// socket_receive reads up to `buffer_size` bytes from a connected
+// socket. Returns the bytes received as a string, or "" on failure.
+// [INTRINSIC-C] Wired to omni_socket_receive on C; VM body fails loud.
 func socket_receive(socket:int, buffer_size:int):string {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("socket_receive")
     return ""
 }
 
-// socket_close closes a socket
-// [IMPLEMENTED] Implemented in runtime
+// socket_close closes an open socket. Returns true on success.
+// [INTRINSIC-C] Wired to omni_socket_close on C; VM body fails loud.
 func socket_close(socket:int):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("socket_close")
     return false
 }
 
@@ -381,31 +416,28 @@ func socket_close(socket:int):bool {
 // Utility Functions
 // ============================================================================
 
-// network_is_connected checks if the network is connected
-// [IMPLEMENTED] Implemented in runtime (platform-specific network interface checking)
+// network_is_connected checks if the host has at least one
+// non-loopback network interface that's up.
+// [INTRINSIC-C] Wired to omni_network_is_connected on C; VM body
+// fails loud.
 func network_is_connected():bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("network_is_connected")
     return false
 }
 
-// network_get_local_ip returns the local IP address
-// [IMPLEMENTED] Implemented in runtime (returns first non-loopback IPv4 address)
+// network_get_local_ip returns the first non-loopback IPv4 address
+// available on the host.
+// [INTRINSIC-C] Wired to omni_network_get_local_ip on C; VM body
+// fails loud.
 func network_get_local_ip():IPAddress {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
-    return IPAddress{
-        address: "127.0.0.1",
-        is_ipv4: true,
-        is_ipv6: false
-    }
+    _intrinsic_not_wired("network_get_local_ip")
+    return IPAddress{address: "", is_ipv4: false, is_ipv6: false}
 }
 
-// network_ping pings a host
-// [IMPLEMENTED] Implemented in runtime (ICMP on Windows, TCP fallback on POSIX)
+// network_ping pings a host (ICMP on Windows, TCP fallback on POSIX).
+// [INTRINSIC-C] Wired to omni_network_ping on C; VM body fails loud.
 func network_ping(host:string):bool {
-    // This is an intrinsic function that will be wired to the runtime
-    // during compilation. The actual implementation is in the backend.
+    _intrinsic_not_wired("network_ping")
     return false
 }
 

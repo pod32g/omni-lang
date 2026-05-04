@@ -2169,7 +2169,14 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						case rt == "float" || rt == "double":
 							varType = "double"
 						case !g.isPrimitiveType(rt) && !strings.Contains(rt, "<") && !strings.Contains(rt, "("):
-							varType = "omni_struct_t*"
+							// Route through mapType so std.network's
+							// concrete struct types (HTTPResponse,
+							// HTTPRequest, URL, IPAddress) lower to
+							// their omni_*_t* runtime carriers instead
+							// of the opaque omni_struct_t*. mapType
+							// falls back to omni_struct_t* for plain
+							// user-defined structs.
+							varType = g.mapType(rt)
 						default:
 							varType = g.mapType(rt)
 						}
@@ -2190,6 +2197,13 @@ func (g *CGenerator) generateFunction(fn *mir.Function) error {
 						// method/url are inline char arrays in
 						// omni_http_request_t that decay to const char*.
 						varType = "const char*"
+					} else if fieldName == "headers" {
+						// HTTPRequest / HTTPResponse / user struct fields
+						// of type map<string,string> all share the runtime
+						// `omni_map_t*` carrier. The map-of-string-to-int
+						// vs string-to-string distinction is sorted out at
+						// the actual std.collections call site.
+						varType = "omni_map_t*"
 					} else if inst.Type != "" && inst.Type != inferTypePlaceholder {
 						// Use inst.Type if available
 						varType = g.mapType(inst.Type)
@@ -5591,6 +5605,12 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					fieldType = "bool"
 				case "request", "response":
 					fieldType = "omni_struct_t*"
+				case "headers":
+					// HTTPRequest / HTTPResponse / user struct fields all
+					// use map<string,string> for headers. Without this
+					// case the inferred type defaulted to "int" and the
+					// access went through omni_struct_get_int_field.
+					fieldType = "map<string,string>"
 				}
 			}
 
@@ -5824,27 +5844,34 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 					g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
 					g.valueTypes[inst.ID] = "int"
 				} else {
-					// Use appropriate getter based on field type
-					switch fieldType {
-					case "string":
-						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
-						g.valueTypes[inst.ID] = "string"
-					case "float", "double":
-						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_float_field(%s, \"%s\");\n", varName, structVar, fieldName))
+					// Use appropriate getter based on field type. Map fields
+					// are dispatched first because the switch below would
+					// otherwise hit the int-fallback for any compound type.
+					if strings.HasPrefix(fieldType, "map<") {
+						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_map_field(%s, \"%s\");\n", varName, structVar, fieldName))
 						g.valueTypes[inst.ID] = fieldType
-					case "bool":
-						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_bool_field(%s, \"%s\");\n", varName, structVar, fieldName))
-						g.valueTypes[inst.ID] = "bool"
-					case "omni_struct_t*":
-						g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_struct_field(%s, \"%s\");\n", varName, structVar, fieldName))
-						g.valueTypes[inst.ID] = "omni_struct_t*"
-					default:
-						if !g.isPrimitiveType(fieldType) && fieldType != "" && !strings.Contains(fieldType, "<") && !strings.Contains(fieldType, "(") {
+					} else {
+						switch fieldType {
+						case "string":
+							g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_string_field(%s, \"%s\");\n", varName, structVar, fieldName))
+							g.valueTypes[inst.ID] = "string"
+						case "float", "double":
+							g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_float_field(%s, \"%s\");\n", varName, structVar, fieldName))
+							g.valueTypes[inst.ID] = fieldType
+						case "bool":
+							g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_bool_field(%s, \"%s\");\n", varName, structVar, fieldName))
+							g.valueTypes[inst.ID] = "bool"
+						case "omni_struct_t*":
 							g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_struct_field(%s, \"%s\");\n", varName, structVar, fieldName))
 							g.valueTypes[inst.ID] = "omni_struct_t*"
-						} else {
-							g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
-							g.valueTypes[inst.ID] = "int"
+						default:
+							if !g.isPrimitiveType(fieldType) && fieldType != "" && !strings.Contains(fieldType, "<") && !strings.Contains(fieldType, "(") {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_struct_field(%s, \"%s\");\n", varName, structVar, fieldName))
+								g.valueTypes[inst.ID] = "omni_struct_t*"
+							} else {
+								g.output.WriteString(fmt.Sprintf("  %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
+								g.valueTypes[inst.ID] = "int"
+							}
 						}
 					}
 				}
@@ -5856,6 +5883,15 @@ func (g *CGenerator) generateInstruction(inst *mir.Instruction) error {
 				} else if fieldName == "status_code" {
 					g.output.WriteString(fmt.Sprintf("  int32_t %s = omni_struct_get_int_field(%s, \"%s\");\n", varName, structVar, fieldName))
 					g.valueTypes[inst.ID] = "int"
+				} else if strings.HasPrefix(fieldType, "map<") {
+					// User struct field declared as map<...>. Read it
+					// through omni_struct_get_map_field so the result has
+					// the correct omni_map_t* shape — without this every
+					// `c.headers` style access on a user-defined struct
+					// silently fell through to the int32 getter, which
+					// then crashed when callers indexed by string.
+					g.output.WriteString(fmt.Sprintf("  omni_map_t* %s = omni_struct_get_map_field(%s, \"%s\");\n", varName, structVar, fieldName))
+					g.valueTypes[inst.ID] = fieldType
 				} else {
 					// Use appropriate getter based on field type
 					switch fieldType {

@@ -1941,3 +1941,33 @@ func TestStdJson(t *testing.T) {
 		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
 	}
 }
+
+// TestStdNetworkABIReview pins the six failure shapes flagged in the
+// std.network API design review:
+//   1. URL parse/stringify across function boundaries.
+//   2. IP validation + IPAddress field access through helpers.
+//   3. DNS lookup returning array<IPAddress> (currently a no-op
+//      placeholder — see KNOWN BROKEN comment in the .omni file).
+//   4. HTTPResponse with map<string,string> headers crossing a
+//      function boundary.
+//   5. HTTPRequest returned from a builder helper with method/url/body
+//      and chained headers preserved.
+//   6. User-defined struct with a map field returned from a function
+//      (analogous to the returned-array length bug — exercises
+//      omni_struct_get_map_field, which used to fall through to the
+//      int32 getter).
+//
+// C-only because the VM has unrelated map-indexing limitations on
+// user struct fields; tracked in project_network_todo memory.
+func TestStdNetworkABIReview(t *testing.T) {
+	testFile := "std_network_abi_review.omni"
+	expected := "0"
+
+	result, err := runCBackend(testFile)
+	if err != nil {
+		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
+	}
+	if result != expected {
+		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
+	}
+}

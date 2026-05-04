@@ -4812,9 +4812,28 @@ void omni_struct_set_array_field(omni_struct_t* struct_ptr, const char* field_na
     struct_ptr->fields = field;
 }
 
+// Counterpart to omni_struct_set_map_field. Returns the omni_map_t*
+// stored at field_name, or NULL if the field is missing or its
+// recorded value type isn't OMNI_TYPE_MAP. The struct retains
+// ownership; callers must not free the returned map.
+omni_map_t* omni_struct_get_map_field(omni_struct_t* struct_ptr, const char* field_name) {
+    if (!struct_ptr || !field_name) return NULL;
+    omni_struct_field_t* field = struct_ptr->fields;
+    while (field) {
+        if (strcmp(field->name, field_name) == 0) {
+            if (field->value_type == OMNI_TYPE_MAP) {
+                return (omni_map_t*)field->value;
+            }
+            return NULL;
+        }
+        field = field->next;
+    }
+    return NULL;
+}
+
 void omni_struct_set_map_field(omni_struct_t* struct_ptr, const char* field_name, omni_map_t* map_value) {
     if (!struct_ptr) return;
-    
+
     // Check if field already exists
     omni_struct_field_t* field = struct_ptr->fields;
     while (field) {

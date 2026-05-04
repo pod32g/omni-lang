@@ -1,0 +1,113 @@
+// std.network ABI review: regression coverage for the failure shapes
+// flagged in the Network API design audit. Each section guards one
+// specific ABI lifetime/correctness invariant. Run on C — VM coverage
+// for these shapes is in TestStdNetwork* (basic, url_round_trip,
+// http_response, http_request).
+import std
+
+// ----- 1. URL parse/stringify round-trip across a function boundary --
+
+func parse_url(s:string):std.network.URL {
+    return std.network.url_parse(s)
+}
+
+func stringify_url(u:std.network.URL):string {
+    return std.network.url_to_string(u)
+}
+
+// ----- 4. HTTPResponse with headers crossing a function boundary -----
+
+func make_response_with_headers():std.network.HTTPResponse {
+    let r:std.network.HTTPResponse =
+        std.network.http_response_create(201, "Created", "{}")
+    let r2:std.network.HTTPResponse =
+        std.network.http_response_set_header(r, "Content-Type", "application/json")
+    return std.network.http_response_set_header(r2, "X-Trace-Id", "abc")
+}
+
+// ----- 5. HTTPRequest returned with headers preserved ----------------
+
+func build_request():std.network.HTTPRequest {
+    let req:std.network.HTTPRequest =
+        std.network.http_request_create("PUT", "http://example.com/r")
+    let req2:std.network.HTTPRequest =
+        std.network.http_request_set_header(req, "Authorization", "Bearer t")
+    let req3:std.network.HTTPRequest =
+        std.network.http_request_set_header(req2, "X-Trace-Id", "xyz")
+    return std.network.http_request_set_body(req3, "payload")
+}
+
+// ----- 6. User struct with a map field returned from a function ------
+
+struct ServiceConfig {
+    name:string
+    tags:map<string,string>
+}
+
+func make_config():ServiceConfig {
+    let t:map<string,string> = {"env": "prod", "region": "us-east-1"}
+    return ServiceConfig{name: "auth", tags: t}
+}
+
+func main():int {
+    // 1. URL parse/stringify across function boundaries.
+    let u:std.network.URL = parse_url("https://api.example.com/v1/users?id=42#top")
+    let back:string = stringify_url(u)
+    if !std.string.equals(back, "https://api.example.com/v1/users?id=42#top") {
+        return 1
+    }
+    // Default-port normalization survives the boundary too.
+    let u2:std.network.URL = parse_url("http://example.com:80/")
+    if !std.string.equals(stringify_url(u2), "http://example.com/") {
+        return 2
+    }
+
+    // 2. IP validation: cross-boundary IPAddress with field access.
+    if !std.network.ip_is_valid("10.0.0.1") { return 3 }
+    if std.network.ip_is_valid("not.an.ip.really") { return 4 }
+    let lo:std.network.IPAddress = std.network.ip_parse("127.0.0.1")
+    if !std.network.ip_is_loopback(lo) { return 5 }
+    if std.network.ip_is_private(lo) { return 6 }
+    if !std.string.equals(std.network.ip_to_string(lo), "127.0.0.1") { return 7 }
+
+    // 3. DNS lookup returning array<IPAddress> — KNOWN BROKEN.
+    //
+    // The runtime symbol `omni_dns_lookup(hostname, int32_t* count)`
+    // takes an out-pointer for the result length, but the C backend's
+    // generic call dispatch doesn't synthesize that argument; the
+    // emitted call has too few arguments and the program fails to
+    // link. Tracked separately. Until that's fixed, this section is
+    // intentionally a no-op so the rest of the regression coverage
+    // can land. Exercising dns_lookup belongs in the gated
+    // OMNI_NETWORK_TESTS=1 set once the ABI plumbing is in place.
+
+    // 4. HTTPResponse with headers preserved across a function call.
+    let resp:std.network.HTTPResponse = make_response_with_headers()
+    if resp.status_code != 201 { return 11 }
+    if !std.string.equals(resp.body, "{}") { return 12 }
+    let ct:string = std.network.http_response_get_header(resp, "Content-Type")
+    if !std.string.equals(ct, "application/json") { return 13 }
+    let trace:string = std.network.http_response_get_header(resp, "X-Trace-Id")
+    if !std.string.equals(trace, "abc") { return 14 }
+
+    // 5. HTTPRequest returned with headers + body preserved.
+    let req:std.network.HTTPRequest = build_request()
+    if !std.string.equals(req.method, "PUT") { return 15 }
+    if !std.string.equals(req.url, "http://example.com/r") { return 16 }
+    if !std.string.equals(req.body, "payload") { return 17 }
+    if !std.string.equals(std.network.http_request_get_header(req, "Authorization"),
+                          "Bearer t") { return 18 }
+    if !std.string.equals(std.network.http_request_get_header(req, "X-Trace-Id"),
+                          "xyz") { return 19 }
+
+    // 6. User struct with map field returned from a function. The map
+    // field must read back through omni_struct_get_map_field — without
+    // that wiring the access falls through to the int32 getter and the
+    // index lookup crashes on a non-int subscript.
+    let cfg:ServiceConfig = make_config()
+    if !std.string.equals(cfg.name, "auth") { return 20 }
+    if !std.string.equals(cfg.tags["env"], "prod") { return 21 }
+    if !std.string.equals(cfg.tags["region"], "us-east-1") { return 22 }
+
+    return 0
+}
