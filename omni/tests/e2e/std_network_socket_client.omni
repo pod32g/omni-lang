@@ -1,0 +1,36 @@
+// Networked test driver: connect to argv[1]:argv[2], send "ping",
+// read back up to 64 bytes, exit 0 if the response equals "pong"
+// and 1 otherwise. Used to prove socket_connect / send / receive /
+// close work end-to-end against a peer set up by the test harness.
+import std
+
+func main():int {
+    let host:string = std.os.positional_arg(0, "")
+    let port_str:string = std.os.positional_arg(1, "")
+    if std.string.equals(host, "") || std.string.equals(port_str, "") {
+        return 1
+    }
+    let port:int = std.string_to_int(port_str)
+
+    let s:int = std.network.socket_create()
+    if s < 0 { return 2 }
+
+    if !std.network.socket_connect(s, host, port) {
+        let _close:bool = std.network.socket_close(s)
+        return 3
+    }
+
+    let sent:int = std.network.socket_send(s, "ping")
+    if sent != 4 {
+        let _close:bool = std.network.socket_close(s)
+        return 4
+    }
+
+    let reply:string = std.network.socket_receive(s, 64)
+    let _close:bool = std.network.socket_close(s)
+
+    if std.string.equals(reply, "pong") {
+        return 0
+    }
+    return 5
+}

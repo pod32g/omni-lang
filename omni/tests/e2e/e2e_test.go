@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -146,6 +147,34 @@ func TestForEmpty(t *testing.T) {
 	if result != expected {
 		t.Errorf("Expected %s, got %s", expected, result)
 	}
+}
+
+// runVMWithArgs runs omnir against testFile with extra positional
+// arguments forwarded after the source path. Useful for fixture-driven
+// tests where the .omni program reads via std.os.positional_arg.
+func runVMWithArgs(testFile string, args ...string) (string, error) {
+	absTestFile, err := filepath.Abs(testFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path for test file: %v", err)
+	}
+	if _, err := os.Stat(absTestFile); os.IsNotExist(err) {
+		return "", fmt.Errorf("test file does not exist: %s", absTestFile)
+	}
+	cmdArgs := append([]string{absTestFile}, args...)
+	cmd := exec.Command("../../bin/omnir", cmdArgs...)
+	cmd.Env = append(os.Environ(),
+		"DYLD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+		"LD_LIBRARY_PATH=../../native/clift/target/release:../../runtime/posix",
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%w\nOutput: %s", err, string(output))
+	}
+	result := string(output)
+	if len(result) > 0 && result[len(result)-1] == '\n' {
+		result = result[:len(result)-1]
+	}
+	return result, nil
 }
 
 func runVM(testFile string) (string, error) {
@@ -1781,20 +1810,77 @@ func TestStdNetworkUrlRoundTrip(t *testing.T) {
 }
 
 // TestStdNetworkSocketSmoke pins the socket lifecycle (create / bind to
-// 127.0.0.1:0 / listen / close) on the C backend. Sockets aren't wired
-// on the VM (omnir's socket_create stub returns -1), so this is C-only;
-// when sockets land on the VM, add a runVM check here too.
+// 127.0.0.1:0 / listen / close) on both backends. The VM dispatch is
+// backed by the net package via vm_sockets.go; the C backend lowers to
+// the runtime's omni_socket_* family.
 func TestStdNetworkSocketSmoke(t *testing.T) {
 	testFile := "std_network_socket_smoke.omni"
 	expected := "0"
 
-	result, err := runCBackend(testFile)
+	result, err := runVM(testFile)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != expected {
+		t.Errorf("VM: expected %s, got %s", expected, result)
+	}
+
+	result, err = runCBackend(testFile)
 	if err != nil {
 		t.Fatalf("runCBackend(%q) failed: %v", testFile, err)
 	}
 	if result != expected {
 		t.Errorf("runCBackend(%q) = %s, want %s", testFile, result, expected)
 	}
+}
+
+// TestStdNetworkSocketRoundtripVM proves socket_connect / send / receive /
+// close work end-to-end on the VM. The test stands up a tiny TCP server
+// that reads "ping" and writes "pong"; the omnir-driven client program
+// asserts the round-trip on its own and signals success via exit code.
+//
+// C-side equivalent isn't here because the existing http_get/post
+// fixtures already cover the C send/receive paths at a higher level.
+func TestStdNetworkSocketRoundtripVM(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf := make([]byte, 64)
+		n, err := conn.Read(buf)
+		if err != nil {
+			return
+		}
+		if string(buf[:n]) != "ping" {
+			return
+		}
+		_, _ = conn.Write([]byte("pong"))
+	}()
+
+	host, portStr, err := net.SplitHostPort(ln.Addr().String())
+	if err != nil {
+		t.Fatalf("split host/port: %v", err)
+	}
+
+	testFile := "std_network_socket_client.omni"
+	result, err := runVMWithArgs(testFile, host, portStr)
+	if err != nil {
+		t.Fatalf("VM execution failed: %v", err)
+	}
+	if result != "0" {
+		t.Errorf("VM roundtrip: expected 0, got %s", result)
+	}
+	<-serverDone
 }
 
 // TestStdNetworkHttpResponse pins the offline HTTPResponse surface on

@@ -1033,7 +1033,15 @@ func isVMIntrinsicOverride(callee string) bool {
 		"std.json.new_array",
 		"std.json.new_object",
 		"std.json.array_push",
-		"std.json.object_set":
+		"std.json.object_set",
+		"std.network.socket_create",
+		"std.network.socket_bind",
+		"std.network.socket_listen",
+		"std.network.socket_accept",
+		"std.network.socket_connect",
+		"std.network.socket_send",
+		"std.network.socket_receive",
+		"std.network.socket_close":
 		return true
 	}
 	return false
@@ -4043,6 +4051,55 @@ func execIntrinsic(callee string, operands []mir.Operand, fr *frame) (Result, bo
 				}
 			}
 			return Result{Type: "void", Value: nil}, true
+		}
+	// std.network sockets — backed by Go's net package via vm_sockets.go.
+	// The Posix-shaped surface (create/bind/listen vs. connect, then
+	// send/receive/close) is bridged onto net.Listener / net.Conn through
+	// a per-id registry; bind stashes the address, listen commits via
+	// net.Listen.
+	case "std.network.socket_create":
+		return Result{Type: "int", Value: vmSocketCreate()}, true
+	case "std.network.socket_bind":
+		if len(operands) == 3 {
+			id, _ := toInt(operandValue(fr, operands[0]))
+			addr, _ := toString(operandValue(fr, operands[1]))
+			port, _ := toInt(operandValue(fr, operands[2]))
+			return Result{Type: "bool", Value: vmSocketBind(id, addr, port)}, true
+		}
+	case "std.network.socket_listen":
+		if len(operands) == 2 {
+			id, _ := toInt(operandValue(fr, operands[0]))
+			backlog, _ := toInt(operandValue(fr, operands[1]))
+			return Result{Type: "bool", Value: vmSocketListen(id, backlog)}, true
+		}
+	case "std.network.socket_accept":
+		if len(operands) == 1 {
+			id, _ := toInt(operandValue(fr, operands[0]))
+			return Result{Type: "int", Value: vmSocketAccept(id)}, true
+		}
+	case "std.network.socket_connect":
+		if len(operands) == 3 {
+			id, _ := toInt(operandValue(fr, operands[0]))
+			addr, _ := toString(operandValue(fr, operands[1]))
+			port, _ := toInt(operandValue(fr, operands[2]))
+			return Result{Type: "bool", Value: vmSocketConnect(id, addr, port)}, true
+		}
+	case "std.network.socket_send":
+		if len(operands) == 2 {
+			id, _ := toInt(operandValue(fr, operands[0]))
+			data, _ := toString(operandValue(fr, operands[1]))
+			return Result{Type: "int", Value: vmSocketSend(id, data)}, true
+		}
+	case "std.network.socket_receive":
+		if len(operands) == 2 {
+			id, _ := toInt(operandValue(fr, operands[0]))
+			size, _ := toInt(operandValue(fr, operands[1]))
+			return Result{Type: "string", Value: vmSocketReceive(id, size)}, true
+		}
+	case "std.network.socket_close":
+		if len(operands) == 1 {
+			id, _ := toInt(operandValue(fr, operands[0]))
+			return Result{Type: "bool", Value: vmSocketClose(id)}, true
 		}
 	case "std.string.split":
 		if len(operands) == 2 {
